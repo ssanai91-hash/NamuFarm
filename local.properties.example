@@ -1,0 +1,5 @@
+# Copy these values into local.properties and replace the placeholders.
+# Do not commit local.properties.
+
+JUSO_API_KEY=YOUR_JUSO_API_KEY
+GOOGLE_SCRIPT_URL=https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/
