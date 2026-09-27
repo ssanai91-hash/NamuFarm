@@ -63,13 +63,13 @@ class SyncManager(
 
                     // 이전 전송이 서버에서는 성공했지만 응답만 유실된 경우
                     // 같은 주문을 재업로드해 재고를 두 번 차감하지 않도록 1차 방어한다.
-                    if (orderExistsOnSheet(payload.order.orderNumber)) {
-                        true
-                    } else {
-                        uploadOrderToSheet(
+                    when (orderExistsOnSheet(payload.order.orderNumber)) {
+                        true -> true
+                        false -> uploadOrderToSheet(
                             orderEntity = payload.order,
                             itemsToDeduct = payload.items
                         )
+                        null -> false
                     }
                 }
 
@@ -388,15 +388,16 @@ class SyncManager(
 
     // ===== 주문 =====
 
-    private suspend fun orderExistsOnSheet(orderNumber: String): Boolean {
+    private suspend fun orderExistsOnSheet(orderNumber: String): Boolean? {
         return try {
             api.getOrdersData("get_orders").any {
                 it.order_number?.trim() == orderNumber.trim()
             }
         } catch (e: Exception) {
-            // 존재 여부 확인 자체가 실패하면 pending을 성공 처리하면 안 된다.
+            // 확인 실패를 "주문 없음"으로 취급하면 중복 주문을 만들 수 있으므로
+            // null을 반환해 이번 재전송 자체를 보류한다.
             Log.e("SyncManager", "주문 중복 확인 실패", e)
-            false
+            null
         }
     }
 
