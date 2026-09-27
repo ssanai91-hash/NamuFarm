@@ -5,6 +5,7 @@ import com.example.namufarm.BuildConfig
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import androidx.room.withTransaction
 import com.example.namufarm.data.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -57,6 +58,7 @@ data class ManagementUiState(
 )
 
 class ManagementViewModel(
+    private val database: AppDatabase,
     private val dao: ManagementDao,
     private val syncManager: SyncManager
 ) : ViewModel()
@@ -543,10 +545,13 @@ class ManagementViewModel(
                 }
             }
 
-            // 1) 로컬 DB 먼저 주문 확정
-            dao.insertOrder(newOrder)
-            dao.deleteQuote(quote)
-            deductLocalInventoryFromSummary(quote.itemSummary)
+            // 1) 로컬 주문확정은 하나의 트랜잭션으로 처리한다.
+            // 중간에 실패해 주문만 생기거나 재고만 차감되는 상태를 방지한다.
+            database.withTransaction {
+                dao.insertOrder(newOrder)
+                dao.deleteQuote(quote)
+                deductLocalInventoryFromSummary(quote.itemSummary)
+            }
 
             val quotes = dao.getQuotesForDate(todayDatePrefix())
             val orders = dao.getOrdersForDate(todayDatePrefix())
@@ -1232,8 +1237,10 @@ class ManagementViewModel(
 
     fun deleteFarm(farmId: Int) {
         viewModelScope.launch(Dispatchers.IO) {
-            dao.deleteInventoryByFarmId(farmId)
-            dao.deleteFarmById(farmId)
+            database.withTransaction {
+                dao.deleteInventoryByFarmId(farmId)
+                dao.deleteFarmById(farmId)
+            }
 
             val pendingId = enqueuePendingSync(
                 PendingSyncType.FARM_DELETE,
@@ -1354,11 +1361,12 @@ class ManagementViewModel(
 
 // 🚨 3. 수정됨: Factory 클래스에도 SyncManager 파라미터 추가
 class ManagementViewModelFactory(
+    private val database: AppDatabase,
     private val dao: ManagementDao,
-    private val syncManager: SyncManager // 👈 공장에도 엔진 부품 공급
+    private val syncManager: SyncManager
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         @Suppress("UNCHECKED_CAST")
-        return ManagementViewModel(dao, syncManager) as T // 👈 조립 완료
+        return ManagementViewModel(database, dao, syncManager) as T
     }
 }
