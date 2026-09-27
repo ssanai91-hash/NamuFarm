@@ -1,5 +1,11 @@
 import java.util.Properties
 
+plugins {
+    alias(libs.plugins.android.application)
+    alias(libs.plugins.kotlin.compose)
+    id("com.google.devtools.ksp")
+}
+
 val localProperties = Properties().apply {
     val file = rootProject.file("local.properties")
     if (file.exists()) {
@@ -11,12 +17,6 @@ fun localProperty(name: String, defaultValue: String = ""): String {
     return localProperties.getProperty(name, defaultValue)
         .replace("\\", "\\\\")
         .replace("\"", "\\\"")
-}
-
-plugins {
-    alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.compose)
-    id("com.google.devtools.ksp")
 }
 
 android {
