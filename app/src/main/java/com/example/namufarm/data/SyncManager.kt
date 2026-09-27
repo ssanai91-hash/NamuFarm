@@ -193,8 +193,8 @@ class SyncManager(
         return try {
             val farms = api.getFarmData("get_farms")
 
-            dao.clearAllFarms()
-
+            // 로컬 우선 정책: Pull 시 전체 삭제하지 않고 원격 항목만 upsert 한다.
+            // 오프라인에서 생성된 로컬 농원이 pending 상태일 수 있으므로 보존한다.
             farms.sortedBy { it.farm_id }.forEach { dto ->
                 dao.upsertFarm(
                     FarmEntity(
@@ -260,8 +260,7 @@ class SyncManager(
         return try {
             val speciesList = api.getSpeciesData("get_species")
 
-            dao.clearAllSpecies()
-
+            // 농원과 동일하게 로컬 미전송 데이터를 보호하기 위해 전체 삭제하지 않는다.
             speciesList.sortedBy { it.species_id }.forEach { dto ->
                 dao.upsertSpecies(
                     SpeciesEntity(
@@ -289,84 +288,59 @@ class SyncManager(
         return try {
             val remoteData = api.getInventoryData("get_inventory")
 
-            var insertedFarms = 0
-            var insertedSpecies = 0
             var upserted = 0
             var skipped = 0
 
+            // pending push가 모두 성공한 뒤에만 호출되는 Pull이므로,
+            // 원격 재고를 현재 스냅샷으로 보고 로컬 재고만 교체한다.
             dao.clearAllInventory()
 
             val farmMap = dao.getAllFarms()
                 .associateBy { it.farmName.trim() }
-                .toMutableMap()
 
             val speciesMap = dao.getAllSpecies()
                 .associateBy { it.speciesName.trim() }
-                .toMutableMap()
 
             remoteData.forEach { dto ->
                 val farmName = dto.farm_name.trim()
                 val speciesName = dto.species_name.trim()
-                val quality = dto.quality.trim()
-                val age = dto.age.trim()
-                val size = dto.size.trim()
-                val plantType = dto.plant_type.trim()
 
-                var farm = farmMap[farmName]
-                if (farm == null) {
-                    dao.upsertFarm(FarmEntity(farmName = farmName))
-                    insertedFarms++
-                    farm = dao.getFarmByName(farmName)
-                    if (farm != null) farmMap[farmName] = farm
-                }
+                val farmId = farmMap[farmName]?.farmId
+                val speciesId = speciesMap[speciesName]?.speciesId
 
-                var species = speciesMap[speciesName]
-                if (species == null) {
-                    dao.upsertSpecies(
-                        SpeciesEntity(
-                            speciesName = speciesName,
-                            chosung = speciesName.firstOrNull()?.toString(),
-                            isActive = 1
-                        )
-                    )
-                    insertedSpecies++
-                    species = dao.getSpeciesByName(speciesName)
-                    if (species != null) speciesMap[speciesName] = species
-                }
-
-                val farmId = farm?.farmId
-                val speciesId = species?.speciesId
-
-                if (farmId != null && speciesId != null) {
-                    dao.upsertInventory(
-                        FarmInventoryEntity(
-                            farmId = farmId,
-                            speciesId = speciesId,
-                            quality = quality,
-                            age = age,
-                            size = size,
-                            plantType = plantType,
-                            quantity = dto.quantity,
-                            wholesalePrice = dto.wholesale_price,
-                            retailPrice = dto.retail_price
-                        )
-                    )
-                    upserted++
-                } else {
+                // 재고 Pull이 농원/묘목 마스터를 임의 생성하지 않도록 한다.
+                // 마스터가 없으면 해당 행을 스킵하고 별도 마스터 동기화가 필요하다.
+                if (farmId == null || speciesId == null) {
                     skipped++
                     Log.w(
                         "SyncManager",
-                        "재고 스킵 farm='$farmName', species='$speciesName'"
+                        "재고 스킵: 마스터 없음 farm='$farmName', species='$speciesName'"
                     )
+                    return@forEach
                 }
+
+                dao.upsertInventory(
+                    FarmInventoryEntity(
+                        farmId = farmId,
+                        speciesId = speciesId,
+                        quality = dto.quality.trim(),
+                        age = dto.age.trim(),
+                        size = dto.size.trim(),
+                        plantType = dto.plant_type.trim(),
+                        quantity = dto.quantity,
+                        wholesalePrice = dto.wholesale_price,
+                        retailPrice = dto.retail_price
+                    )
+                )
+                upserted++
             }
 
             SyncResult(
                 total = remoteData.size,
                 upserted = upserted,
                 skipped = skipped,
-                insertedFarms = insertedFarms,
-                insertedSpecies = insertedSpecies
+                insertedFarms = 0,
+                insertedSpecies = 0
             )
         } catch (e: Exception) {
             Log.e("SyncManager", "재고 동기화 실패", e)
@@ -505,31 +479,51 @@ class SyncManager(
             if (remoteOrders.isEmpty()) return 0
 
             var syncedCount = 0
+
             remoteOrders.forEach { dto ->
-                val orderNumber = dto.order_number ?: return@forEach
+                val orderNumber = dto.order_number?.trim().orEmpty()
+                if (orderNumber.isBlank()) return@forEach
 
-                // 🚨 [핵심 해결] 무한 복제 방지!
-                // 새 데이터를 넣기 전에, 기존 DB에 같은 주문번호가 있으면 싹 지워버림 (완벽한 덮어쓰기 효과)
-                dao.deleteOrderByNumber(orderNumber)
+                val existing = dao.getOrderByNumber(orderNumber)
 
-                dao.insertOrder(
-                    OrderEntity(
-                        orderNumber = orderNumber,
-                        orderDate = dto.date ?: "",
-                        customerPhone = dto.customer_phone ?: "",
-                        totalQty = dto.total_qty ?: 0,
-                        totalPrice = dto.total_price ?: 0,
-                        itemSummary = dto.summary ?: "",
-                        receiverName = dto.receiver_name ?: "",
-                        zipNo = "",
-                        roadAddress = dto.address ?: "",
-                        detailAddress = "",
-                        note = dto.note ?: "",
-                        status = dto.status ?: "입금확인"
+                if (existing != null) {
+                    // 이미 폰에 존재하는 주문은 로컬의 구조화된 주문상세/배송비/주소를 보존한다.
+                    // 시트에서 안전하게 되가져올 수 있는 상태/기본 주문 정보만 반영한다.
+                    dao.upsertOrder(
+                        existing.copy(
+                            orderDate = dto.date ?: existing.orderDate,
+                            customerPhone = dto.customer_phone ?: existing.customerPhone,
+                            totalQty = dto.total_qty ?: existing.totalQty,
+                            totalPrice = dto.total_price ?: existing.totalPrice,
+                            receiverName = dto.receiver_name ?: existing.receiverName,
+                            note = dto.note ?: existing.note,
+                            status = dto.status?.takeIf { it.isNotBlank() } ?: existing.status
+                        )
                     )
-                )
+                } else {
+                    // 다른 기기/시트에서만 존재하는 주문은 새 주문으로 가져온다.
+                    // 현재 시트 API는 주소를 한 문자열로 내려주므로 roadAddress에 보관한다.
+                    dao.insertOrder(
+                        OrderEntity(
+                            orderNumber = orderNumber,
+                            orderDate = dto.date ?: "",
+                            customerPhone = dto.customer_phone ?: "",
+                            totalQty = dto.total_qty ?: 0,
+                            totalPrice = dto.total_price ?: 0,
+                            itemSummary = dto.summary ?: "",
+                            receiverName = dto.receiver_name ?: "",
+                            zipNo = "",
+                            roadAddress = dto.address ?: "",
+                            detailAddress = "",
+                            note = dto.note ?: "",
+                            status = dto.status?.takeIf { it.isNotBlank() } ?: "입금확인"
+                        )
+                    )
+                }
+
                 syncedCount++
             }
+
             syncedCount
         } catch (e: Exception) {
             Log.e("SyncManager", "주문내역 동기화 실패", e)
