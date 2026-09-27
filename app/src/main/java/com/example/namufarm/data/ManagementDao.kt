@@ -95,12 +95,6 @@ interface ManagementDao {
     @Query("SELECT MAX(order_id) FROM order_list")
     fun getLastOrderId(): Int?
 
-    @Query("SELECT * FROM quote_list ORDER BY quote_id DESC")
-    fun getTodayQuotes(): List<QuoteEntity>
-
-    @Query("SELECT * FROM order_list ORDER BY order_id DESC")
-    fun getTodayOrders(): List<OrderEntity>
-
     @Query("""
         SELECT * FROM quote_list
         WHERE save_date LIKE :datePrefix || '%'
@@ -145,9 +139,6 @@ interface ManagementDao {
 
     @Delete
     fun deleteQuote(quote: QuoteEntity)
-
-    @Delete
-    fun deleteOrder(order: OrderEntity)
 
     @Query("DELETE FROM farm_inventory")
     fun clearAllInventory()
@@ -209,19 +200,9 @@ interface ManagementDao {
     @Query("UPDATE species SET is_active = 0 WHERE species_id = :speciesId")
     fun deactivateSpecies(speciesId: Int)
 
-    @Query("DELETE FROM farm_info")
-    fun clearAllFarms()
-
-    @Query("DELETE FROM species")
-    fun clearAllSpecies()
-
     // 🚨 막힌 큐를 강제로 비우는 비상용 함수 (이스터에그용, 리턴 타입 : Int 필수!)
     @Query("DELETE FROM pending_sync")
     fun clearAllPendingSync(): Int
-
-    // 🚨 [추가] 중복 주문 방지용: 주문번호로 기존 주문 삭제하는 쿼리
-    @Query("DELETE FROM order_list WHERE order_number = :orderNumber")
-    fun deleteOrderByNumber(orderNumber: String)
 
     @Query("""
     UPDATE order_list
