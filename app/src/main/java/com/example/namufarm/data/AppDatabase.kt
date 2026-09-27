@@ -16,7 +16,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         OrderEntity::class,
         PendingSyncEntity::class
     ],
-    version = 12, // 🚨 [수정 완료] 버전 10으로 확실하게 올림!
+    version = 12, // 현재 스키마: 배송비/선불여부 + 주문상태 포함
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -311,6 +311,162 @@ abstract class AppDatabase : RoomDatabase() {
             """.trimIndent())
         }
 
+        /**
+         * v10/v11 계열 DB를 현재 v12 스키마로 안전하게 맞춘다.
+         * 기존 데이터를 보존하면서 견적/주문의 배송비 필드를 추가하고,
+         * 주문상태 기본값을 '입금확인'으로 통일한다.
+         */
+        private fun migrateCommerceSchemaToV12(db: SupportSQLiteDatabase) {
+            // =========================
+            // quote_list
+            // =========================
+            if (tableExists(db, "quote_list")) {
+                db.execSQL("ALTER TABLE quote_list RENAME TO quote_list_old_v12")
+
+                db.execSQL("""
+                    CREATE TABLE quote_list (
+                        quote_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        is_prepaid INTEGER NOT NULL,
+                        shipping_fee INTEGER NOT NULL,
+                        quote_number TEXT NOT NULL,
+                        save_date TEXT NOT NULL,
+                        customer_phone TEXT NOT NULL,
+                        total_qty INTEGER NOT NULL,
+                        total_price INTEGER NOT NULL,
+                        item_summary TEXT NOT NULL
+                    )
+                """.trimIndent())
+
+                val isPrepaidExpr =
+                    if (columnExists(db, "quote_list_old_v12", "is_prepaid")) "is_prepaid" else "0"
+                val shippingFeeExpr =
+                    if (columnExists(db, "quote_list_old_v12", "shipping_fee")) "shipping_fee" else "0"
+
+                db.execSQL("""
+                    INSERT INTO quote_list (
+                        quote_id, is_prepaid, shipping_fee,
+                        quote_number, save_date, customer_phone,
+                        total_qty, total_price, item_summary
+                    )
+                    SELECT
+                        quote_id, $isPrepaidExpr, $shippingFeeExpr,
+                        quote_number, save_date, customer_phone,
+                        total_qty, total_price, item_summary
+                    FROM quote_list_old_v12
+                """.trimIndent())
+
+                db.execSQL("DROP TABLE quote_list_old_v12")
+            } else {
+                db.execSQL("""
+                    CREATE TABLE quote_list (
+                        quote_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        is_prepaid INTEGER NOT NULL,
+                        shipping_fee INTEGER NOT NULL,
+                        quote_number TEXT NOT NULL,
+                        save_date TEXT NOT NULL,
+                        customer_phone TEXT NOT NULL,
+                        total_qty INTEGER NOT NULL,
+                        total_price INTEGER NOT NULL,
+                        item_summary TEXT NOT NULL
+                    )
+                """.trimIndent())
+            }
+
+            // =========================
+            // order_list
+            // =========================
+            if (tableExists(db, "order_list")) {
+                db.execSQL("ALTER TABLE order_list RENAME TO order_list_old_v12")
+
+                db.execSQL("""
+                    CREATE TABLE order_list (
+                        order_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        is_prepaid INTEGER NOT NULL,
+                        shipping_fee INTEGER NOT NULL,
+                        order_number TEXT NOT NULL,
+                        status TEXT NOT NULL DEFAULT '입금확인',
+                        order_date TEXT NOT NULL,
+                        customer_phone TEXT NOT NULL,
+                        total_qty INTEGER NOT NULL,
+                        total_price INTEGER NOT NULL,
+                        item_summary TEXT NOT NULL,
+                        receiver_name TEXT NOT NULL DEFAULT '',
+                        zip_no TEXT NOT NULL DEFAULT '',
+                        road_address TEXT NOT NULL DEFAULT '',
+                        detail_address TEXT NOT NULL DEFAULT '',
+                        note TEXT NOT NULL DEFAULT ''
+                    )
+                """.trimIndent())
+
+                val isPrepaidExpr =
+                    if (columnExists(db, "order_list_old_v12", "is_prepaid")) "is_prepaid" else "0"
+                val shippingFeeExpr =
+                    if (columnExists(db, "order_list_old_v12", "shipping_fee")) "shipping_fee" else "0"
+                val receiverExpr =
+                    if (columnExists(db, "order_list_old_v12", "receiver_name")) "receiver_name" else "''"
+                val zipExpr =
+                    if (columnExists(db, "order_list_old_v12", "zip_no")) "zip_no" else "''"
+                val roadExpr =
+                    if (columnExists(db, "order_list_old_v12", "road_address")) "road_address" else "''"
+                val detailExpr =
+                    if (columnExists(db, "order_list_old_v12", "detail_address")) "detail_address" else "''"
+                val noteExpr =
+                    if (columnExists(db, "order_list_old_v12", "note")) "note" else "''"
+                val statusExpr =
+                    if (columnExists(db, "order_list_old_v12", "status")) {
+                        """
+                        CASE
+                            WHEN status IS NULL
+                              OR status = ''
+                              OR status = '입금대기'
+                              OR status = '입금완료'
+                            THEN '입금확인'
+                            ELSE status
+                        END
+                        """.trimIndent()
+                    } else {
+                        "'입금확인'"
+                    }
+
+                db.execSQL("""
+                    INSERT INTO order_list (
+                        order_id, is_prepaid, shipping_fee,
+                        order_number, status, order_date, customer_phone,
+                        total_qty, total_price, item_summary,
+                        receiver_name, zip_no, road_address, detail_address, note
+                    )
+                    SELECT
+                        order_id, $isPrepaidExpr, $shippingFeeExpr,
+                        order_number, $statusExpr, order_date, customer_phone,
+                        total_qty, total_price, item_summary,
+                        $receiverExpr, $zipExpr, $roadExpr, $detailExpr, $noteExpr
+                    FROM order_list_old_v12
+                """.trimIndent())
+
+                db.execSQL("DROP TABLE order_list_old_v12")
+            } else {
+                db.execSQL("""
+                    CREATE TABLE order_list (
+                        order_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        is_prepaid INTEGER NOT NULL,
+                        shipping_fee INTEGER NOT NULL,
+                        order_number TEXT NOT NULL,
+                        status TEXT NOT NULL DEFAULT '입금확인',
+                        order_date TEXT NOT NULL,
+                        customer_phone TEXT NOT NULL,
+                        total_qty INTEGER NOT NULL,
+                        total_price INTEGER NOT NULL,
+                        item_summary TEXT NOT NULL,
+                        receiver_name TEXT NOT NULL DEFAULT '',
+                        zip_no TEXT NOT NULL DEFAULT '',
+                        road_address TEXT NOT NULL DEFAULT '',
+                        detail_address TEXT NOT NULL DEFAULT '',
+                        note TEXT NOT NULL DEFAULT ''
+                    )
+                """.trimIndent())
+            }
+        }
+
         private val MIGRATION_1_7 = object : Migration(1, 7) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 migrateLegacySchemaToV7(db)
@@ -426,6 +582,18 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_10_12 = object : Migration(10, 12) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                migrateCommerceSchemaToV12(db)
+            }
+        }
+
+        private val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                migrateCommerceSchemaToV12(db)
+            }
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return instance ?: synchronized(this) {
                 val newInstance = Room.databaseBuilder(
@@ -442,10 +610,10 @@ abstract class AppDatabase : RoomDatabase() {
                         MIGRATION_6_7,
                         MIGRATION_7_8,
                         MIGRATION_8_9,
-                        MIGRATION_9_10
+                        MIGRATION_9_10,
+                        MIGRATION_10_12,
+                        MIGRATION_11_12
                     )
-                    // 🚨 [수정 완료] 버전이 안 맞으면 에러 뱉지 말고 쿨하게 DB 초기화해라!
-                    .fallbackToDestructiveMigration()
                     .build()
 
                 instance = newInstance
