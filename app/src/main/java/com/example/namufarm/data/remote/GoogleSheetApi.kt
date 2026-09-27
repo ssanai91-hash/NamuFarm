@@ -69,16 +69,6 @@ interface GoogleSheetApi {
         @Body request: UpdateOrderDeliveryRequest
     ): SyncResponse
 
-    // 🚨 [추가] 주문 상태만 쏙 바꿔주는 통신 규격
-    @POST("exec")
-    suspend fun updateOrderStatus(
-        @Body request: UpdateOrderStatusRequest
-    ): SyncResponse
-
-    @POST("exec")
-    suspend fun deleteOrder(
-        @Body request: DeleteOrderRequest
-    ): SyncResponse
 }
 
 data class SyncResponse(
@@ -199,14 +189,3 @@ data class SheetOrderRemoteDto(
     val status: String?
 )
 
-data class UpdateOrderStatusRequest(
-    val action: String = "update_order_status",
-    val order_number: String,
-    val status: String
-)
-
-// 🚨 주문 완전 삭제 요청 객체 추가
-data class DeleteOrderRequest(
-    val action: String = "delete_order",
-    val order_number: String
-)
