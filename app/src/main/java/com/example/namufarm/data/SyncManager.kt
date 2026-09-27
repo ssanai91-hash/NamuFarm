@@ -121,15 +121,6 @@ class SyncManager(
                     deleteSpeciesOnSheet(payload.speciesId)
                 }
 
-                // 🚨 [추가] 주문 상태(입금완료/주문취소) 변경 택배 상자 처리!
-                /*PendingSyncType.UPDATE_ORDER_STATUS -> {
-                    val payload = gson.fromJson(
-                        item.payloadJson,
-                        PendingOrderStatusSyncPayload::class.java
-                    )
-                    updateOrderStatusOnSheet(payload.orderNumber, payload.status)
-                }*/
-
                 else -> false
             }
 
@@ -531,35 +522,5 @@ class SyncManager(
         }
     }
 
-    // 🚨 [추가] 구글 시트로 "이 주문 상태 이걸로 바꿔!" 라고 쏘는 함수
-    suspend fun updateOrderStatusOnSheet(orderNumber: String, status: String): Boolean {
-        return try {
-            val response = api.updateOrderStatus(
-                com.example.namufarm.data.remote.UpdateOrderStatusRequest(
-                    action = "update_order_status",
-                    order_number = orderNumber,
-                    status = status
-                )
-            )
-            response.result.equals("success", ignoreCase = true)
-        } catch (e: Exception) {
-            Log.e("SyncManager", "주문 상태 업데이트 시트 업로드 실패", e)
-            false
-        }
-    }
 
-    // 🚨 파일 맨 아래쯤 아무데나 추가
-    suspend fun deleteOrderOnSheet(orderNumber: String): Boolean {
-        return try {
-            val response = api.deleteOrder(
-                com.example.namufarm.data.remote.DeleteOrderRequest(
-                    order_number = orderNumber
-                )
-            )
-            response.result.equals("success", ignoreCase = true)
-        } catch (e: Exception) {
-            android.util.Log.e("SyncManager", "주문 삭제 업로드 실패", e)
-            false
-        }
-    }
 }
