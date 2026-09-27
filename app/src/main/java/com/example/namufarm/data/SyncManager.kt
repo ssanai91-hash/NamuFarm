@@ -15,10 +15,8 @@ import com.example.namufarm.data.remote.SheetSpeciesDto
 import com.example.namufarm.data.remote.SheetUploadRequest
 import com.example.namufarm.data.remote.SpeciesDeleteRequest
 import com.example.namufarm.data.remote.SpeciesUploadRequest
-import com.example.namufarm.data.remote.SyncResponse
 import com.example.namufarm.data.remote.UpdateOrderDeliveryRequest
 import com.google.gson.Gson
-import kotlin.jvm.java
 
 data class PendingSyncProcessResult(
     val success: Boolean,
