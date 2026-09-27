@@ -63,10 +63,10 @@ class MainActivity : ComponentActivity() {
 
         // 2. 동기화 엔진(API 통신망) 생성 및 조립
         val api = RetrofitClient.api
-        val syncManager = SyncManager(dao, api)
+        val syncManager = SyncManager(database, dao, api)
 
         // 3. 공장에 dao와 syncManager 둘 다 넘겨주기!
-        val factory = ManagementViewModelFactory(dao, syncManager)
+        val factory = ManagementViewModelFactory(database, dao, syncManager)
 
         // 🚨 위에서 선언한 전역 변수에 뷰모델 할당!
         viewModel = ViewModelProvider(this, factory)[ManagementViewModel::class.java]
