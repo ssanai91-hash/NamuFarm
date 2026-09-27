@@ -10,7 +10,6 @@ object PendingSyncType {
     const val CANCEL_ORDER = "cancel_order"
     const val DELIVERY = "delivery"
 
-    //const val UPDATE_ORDER_STATUS = "update_order_status"
 
     const val FARM_SAVE = "farm_save"
     const val FARM_DELETE = "farm_delete"
@@ -54,11 +53,6 @@ data class PendingOrderSyncPayload(
 
 data class PendingCancelOrderSyncPayload(
     val orderNumber: String
-)
-
-data class PendingOrderStatusSyncPayload(
-    val orderNumber: String,
-    val status: String // "입금완료" or "주문취소"
 )
 
 data class PendingDeliverySyncPayload(
