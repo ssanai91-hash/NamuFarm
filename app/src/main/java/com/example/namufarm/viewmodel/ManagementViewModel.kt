@@ -81,15 +81,23 @@ class ManagementViewModel(
                 _uiState.update { it.copy(message = "🔄 최초 실행: 전체 농원/묘목 마스터 데이터 가져오는 중...") }
 
                 // 마스터 데이터 강제 1회 다운로드
-                syncManager.syncFarmsWithGoogleSheet()
-                syncManager.syncSpeciesWithGoogleSheet()
+                val farmSyncCount = syncManager.syncFarmsWithGoogleSheet()
+                val speciesSyncCount = syncManager.syncSpeciesWithGoogleSheet()
 
                 // 다운로드 끝났으니 DB에서 다시 읽어오기
                 allSpecies = dao.getAllSpecies()
                 farms = dao.getAllFarms()
                 allInventory = dao.getAllSellingInventory()
 
-                _uiState.update { it.copy(message = "✅ 마스터 데이터 초기 세팅 완료!") }
+                _uiState.update {
+                    it.copy(
+                        message = if (farmSyncCount < 0 || speciesSyncCount < 0) {
+                            "⚠️ 최초 마스터 동기화 일부 실패. 네트워크 확인 후 다시 동기화하세요."
+                        } else {
+                            "✅ 마스터 데이터 초기 세팅 완료!"
+                        }
+                    )
+                }
             }
 
             android.util.Log.d("NamuFarm", "farms.size = ${farms.size}")
@@ -145,6 +153,10 @@ class ManagementViewModel(
 
     private val gson = Gson()
 
+    private fun todayDatePrefix(): String =
+        java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.KOREA)
+            .format(java.util.Date())
+
     private fun enqueuePendingSync(type: String, payload: Any): Int {
         return dao.insertPendingSync(
             PendingSyncEntity(
@@ -158,16 +170,28 @@ class ManagementViewModel(
         val farms = dao.getAllFarms()
         val allSpecies = dao.getAllSpecies()
         val allInventory = dao.getAllSellingInventory()
-        val quotes = dao.getTodayQuotes()
-        val orders = dao.getTodayOrders()
+        val quotes = dao.getQuotesForDate(todayDatePrefix())
+        val orders = dao.getOrdersForDate(todayDatePrefix())
 
         _uiState.update { current ->
+            val activeChosung = if (
+                hasSellingItemsForChosung(allInventory, current.selectedChosung)
+            ) {
+                current.selectedChosung
+            } else {
+                findFirstAvailableSellingChosung(allInventory)
+            }
+
             current.copy(
                 farmList = farms,
                 allSpeciesList = allSpecies,
+                speciesList = allSpecies.filter {
+                    checkChosung(it.speciesName, it.chosung, activeChosung)
+                },
+                selectedChosung = activeChosung,
                 allSellingInventory = allInventory,
                 filteredSellingInventory = allInventory.filter {
-                    checkChosung(it.speciesName, it.chosung, current.selectedChosung)
+                    checkChosung(it.speciesName, it.chosung, activeChosung)
                 },
                 todayQuotes = quotes,
                 todayOrders = orders
@@ -524,8 +548,8 @@ class ManagementViewModel(
             dao.deleteQuote(quote)
             deductLocalInventoryFromSummary(quote.itemSummary)
 
-            val quotes = dao.getTodayQuotes()
-            val orders = dao.getTodayOrders()
+            val quotes = dao.getQuotesForDate(todayDatePrefix())
+            val orders = dao.getOrdersForDate(todayDatePrefix())
             val allSellingInventory = dao.getAllSellingInventory()
             val selectedChosung = _uiState.value.selectedChosung
             val filteredSellingInventory = buildFilteredSellingInventory(
@@ -576,8 +600,8 @@ class ManagementViewModel(
 
     fun loadTodayData() {
         viewModelScope.launch(Dispatchers.IO) {
-            val quotes = dao.getTodayQuotes()
-            val orders = dao.getTodayOrders()
+            val quotes = dao.getQuotesForDate(todayDatePrefix())
+            val orders = dao.getOrdersForDate(todayDatePrefix())
             _uiState.update { it.copy(todayQuotes = quotes, todayOrders = orders) }
         }
     }
@@ -585,8 +609,8 @@ class ManagementViewModel(
     fun deleteQuote(quote: QuoteEntity) {
         viewModelScope.launch(Dispatchers.IO) {
             dao.deleteQuote(quote)
-            val quotes = dao.getTodayQuotes()
-            val orders = dao.getTodayOrders()
+            val quotes = dao.getQuotesForDate(todayDatePrefix())
+            val orders = dao.getOrdersForDate(todayDatePrefix())
             _uiState.update {
                 it.copy(
                     todayQuotes = quotes,
@@ -597,20 +621,23 @@ class ManagementViewModel(
         }
     }
 
-    // ManagementViewModel.kt
-
-    // 🚨 주문 상태 업데이트 (입금확인 / 주문취소)
+    // 주문 상태 업데이트: 현재 업무 상태는 입금확인 / 주문취소 두 가지만 허용
     fun updateOrderStatus(order: OrderEntity, newStatus: String) {
+        if (!OrderStatus.isValid(newStatus)) {
+            _uiState.update {
+                it.copy(message = "❌ 지원하지 않는 주문 상태입니다: $newStatus")
+            }
+            return
+        }
+
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                // 1) 로컬 DB는 INSERT 말고 UPDATE
                 dao.updateOrderStatus(
                     orderNumber = order.orderNumber,
                     status = newStatus
                 )
 
-                // 2) 주문취소만 별도 큐에 적재
-                if (newStatus == "주문취소") {
+                if (newStatus == OrderStatus.CANCELED) {
                     val pendingId = enqueuePendingSync(
                         PendingSyncType.CANCEL_ORDER,
                         PendingCancelOrderSyncPayload(order.orderNumber)
@@ -627,10 +654,10 @@ class ManagementViewModel(
 
                 _uiState.update {
                     it.copy(
-                        message = if (newStatus == "주문취소") {
+                        message = if (newStatus == OrderStatus.CANCELED) {
                             "✅ 주문이 취소 상태로 변경되었습니다."
                         } else {
-                            "✅ 주문 상태가 [$newStatus]로 변경되었습니다."
+                            "✅ 주문 상태가 [${OrderStatus.CONFIRMED}]로 변경되었습니다."
                         }
                     )
                 }
@@ -642,27 +669,16 @@ class ManagementViewModel(
             }
         }
     }
-
-    // 🚨 기존 updateOrderStatus 함수 밑에 이 함수를 통째로 추가해 줘!
+    /**
+     * 주문 영구 삭제는 업무 규칙상 지원하지 않는다.
+     * 주문 기록은 보존하고 상태를 '주문취소'로 관리한다.
+     * UI의 영구삭제 버튼은 다음 UI 정리 단계에서 제거한다.
+     */
     fun deleteOrder(order: OrderEntity) {
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                // 1) 구글 시트에 삭제 요청 먼저 쏨!
-                val isCloudSuccess = syncManager.deleteOrderOnSheet(order.orderNumber)
-
-                if (isCloudSuccess) {
-                    // 2) 시트 삭제 성공하면 로컬 DB에서도 완전 삭제!
-                    dao.deleteOrder(order)
-
-                    // 3) 화면 갱신
-                    refreshLocalState()
-                    _uiState.update { it.copy(message = "🗑️ 주문이 정상적으로 완전히 삭제되었습니다.") }
-                } else {
-                    _uiState.update { it.copy(message = "⚠️ 구글 시트 통신 실패. 삭제 취소됨.") }
-                }
-            } catch (e: Exception) {
-                _uiState.update { it.copy(message = "❌ 주문 삭제 중 오류 발생: ${e.message}") }
-            }
+        _uiState.update {
+            it.copy(
+                message = "ℹ️ 주문 영구삭제는 사용하지 않습니다. 주문취소로 상태를 관리해주세요."
+            )
         }
     }
 
