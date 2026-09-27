@@ -518,7 +518,7 @@ class ManagementViewModel(
                 roadAddress = "",
                 detailAddress = "",
                 note = "",
-                status = "입금확인",
+                status = OrderStatus.CONFIRMED,
                 isPrepaid = quote.isPrepaid,     // 🚨 추가됨: 견적서의 택배비 설정 그대로 복사
                 shippingFee = quote.shippingFee  // 🚨 추가됨: 견적서의 택배비 금액 그대로 복사
             )
