@@ -101,8 +101,28 @@ interface ManagementDao {
     @Query("SELECT * FROM order_list ORDER BY order_id DESC")
     fun getTodayOrders(): List<OrderEntity>
 
+    @Query("""
+        SELECT * FROM quote_list
+        WHERE save_date LIKE :datePrefix || '%'
+        ORDER BY quote_id DESC
+    """)
+    fun getQuotesForDate(datePrefix: String): List<QuoteEntity>
+
+    @Query("""
+        SELECT * FROM order_list
+        WHERE order_date LIKE :datePrefix || '%'
+        ORDER BY order_id DESC
+    """)
+    fun getOrdersForDate(datePrefix: String): List<OrderEntity>
+
     @Insert
     fun insertOrder(order: OrderEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun upsertOrder(order: OrderEntity)
+
+    @Query("SELECT * FROM order_list WHERE order_number = :orderNumber LIMIT 1")
+    fun getOrderByNumber(orderNumber: String): OrderEntity?
 
     // ✅ 추가: 주문서 배송정보 업데이트
     @Query("""
