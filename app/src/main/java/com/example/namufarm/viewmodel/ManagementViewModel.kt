@@ -1,6 +1,7 @@
 package com.example.namufarm.viewmodel
 
 import android.content.Context
+import com.example.namufarm.BuildConfig
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -1058,7 +1059,7 @@ class ManagementViewModel(
     }
 
     // 🚨 브로가 발급받은 승인키 (상수로 정의)
-    private val JUSO_API_KEY = ""
+    private val JUSO_API_KEY = BuildConfig.JUSO_API_KEY
 
     fun clearJusoResults() {
         _uiState.update { it.copy(jusoResults = emptyList()) }
