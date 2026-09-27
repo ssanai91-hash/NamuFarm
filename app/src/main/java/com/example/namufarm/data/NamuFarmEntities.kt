@@ -4,6 +4,14 @@ import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
+object OrderStatus {
+    const val CONFIRMED = "입금확인"
+    const val CANCELED = "주문취소"
+
+    fun isValid(value: String): Boolean =
+        value == CONFIRMED || value == CANCELED
+}
+
 // 1. 농원 정보 테이블
 @Entity(tableName = "farm_info")
 data class FarmEntity(
