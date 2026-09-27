@@ -507,7 +507,7 @@ class SyncManager(
                             roadAddress = dto.address ?: "",
                             detailAddress = "",
                             note = dto.note ?: "",
-                            status = dto.status?.takeIf { it.isNotBlank() } ?: "입금확인"
+                            status = dto.status?.takeIf { it.isNotBlank() } ?: OrderStatus.CONFIRMED
                         )
                     )
                 }
