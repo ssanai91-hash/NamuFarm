@@ -60,10 +60,17 @@ class SyncManager(
                         item.payloadJson,
                         PendingOrderSyncPayload::class.java
                     )
-                    uploadOrderToSheet(
-                        orderEntity = payload.order,
-                        itemsToDeduct = payload.items
-                    )
+
+                    // 이전 전송이 서버에서는 성공했지만 응답만 유실된 경우
+                    // 같은 주문을 재업로드해 재고를 두 번 차감하지 않도록 1차 방어한다.
+                    if (orderExistsOnSheet(payload.order.orderNumber)) {
+                        true
+                    } else {
+                        uploadOrderToSheet(
+                            orderEntity = payload.order,
+                            itemsToDeduct = payload.items
+                        )
+                    }
                 }
 
                 PendingSyncType.CANCEL_ORDER -> {
@@ -380,6 +387,18 @@ class SyncManager(
     }
 
     // ===== 주문 =====
+
+    private suspend fun orderExistsOnSheet(orderNumber: String): Boolean {
+        return try {
+            api.getOrdersData("get_orders").any {
+                it.order_number?.trim() == orderNumber.trim()
+            }
+        } catch (e: Exception) {
+            // 존재 여부 확인 자체가 실패하면 pending을 성공 처리하면 안 된다.
+            Log.e("SyncManager", "주문 중복 확인 실패", e)
+            false
+        }
+    }
 
     suspend fun uploadOrderToSheet(
         orderEntity: OrderEntity,
