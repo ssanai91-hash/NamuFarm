@@ -2183,315 +2183,624 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
         )
         val qualityOptions = listOf("", "특묘", "상묘", "중묘", "하묘")
         val plantTypes = listOf("", "실생", "접목", "삽목", "근삽")
-        val currentAgeInt = uiState.inputAge.replace(Regex("[^0-9]"), "").toIntOrNull() ?: 0
+        val currentAgeInt = uiState.inputAge
+            .replace(Regex("[^0-9]"), "")
+            .toIntOrNull() ?: 0
 
         Dialog(
             onDismissRequest = { showQuickQuoteDialog = false },
-            properties = DialogProperties(usePlatformDefaultWidth = false) // 꽉 찬 화면
+            properties = DialogProperties(usePlatformDefaultWidth = false)
         ) {
             Surface(
-                modifier = Modifier.fillMaxSize().padding(16.dp),
-                shape = RoundedCornerShape(16.dp),
-                color = Color(0xFFF2F4F7)
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(12.dp),
+                shape = RoundedCornerShape(22.dp),
+                color = MaterialTheme.colorScheme.background
             ) {
                 Column(modifier = Modifier.fillMaxSize()) {
-                    // 상단 헤더
-                    Row(
-                        modifier = Modifier.fillMaxWidth().background(Color(0xFF1976D2)).padding(16.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                    Surface(
+                        color = MaterialTheme.colorScheme.primaryContainer
                     ) {
-                        Text("✍️ 수기 견적 작성 (문자발송용)", color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
-                        IconButton(onClick = { showQuickQuoteDialog = false }) {
-                            Icon(Icons.Default.Close, "닫기", tint = Color.White)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "빠른 견적",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                                Text(
+                                    text = "재고 등록 없이 묘목과 단가를 직접 입력합니다.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.72f)
+                                )
+                            }
+                            IconButton(onClick = { showQuickQuoteDialog = false }) {
+                                Icon(
+                                    Icons.Default.Close,
+                                    contentDescription = "닫기",
+                                    tint = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                            }
                         }
                     }
 
-                    Column(modifier = Modifier.padding(12.dp).verticalScroll(rememberScrollState())) {
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .verticalScroll(rememberScrollState())
+                            .padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Card(
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surface
+                            ),
+                            border = BorderStroke(
+                                1.dp,
+                                MaterialTheme.colorScheme.outlineVariant
+                            ),
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(14.dp),
+                                verticalArrangement = Arrangement.spacedBy(11.dp)
+                            ) {
+                                Text(
+                                    text = "묘목 선택",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.ExtraBold
+                                )
 
-                        // [1] 초성 및 묘목 선택
-                        Card(colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(12.dp)) {
-                            Column(modifier = Modifier.padding(14.dp)) {
-                                Text("1. 묘목 선택", color = Color(0xFF388E3C), fontWeight = FontWeight.ExtraBold, fontSize = 15.sp)
-                                Spacer(modifier = Modifier.height(10.dp))
+                                chosungRows.forEach { rowItems ->
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        rowItems.forEach { chosung ->
+                                            val selected = uiState.selectedChosung == chosung
 
-                                // 초성 버튼들
-                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    chosungRows.forEach { rowItems ->
-                                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            rowItems.forEach { chosung ->
-                                                val isSelected = uiState.selectedChosung == chosung
-                                                Button(
-                                                    onClick = { viewModel.selectChosung(chosung) },
-                                                    modifier = Modifier.weight(1f).height(40.dp),
-                                                    colors = ButtonDefaults.buttonColors(
-                                                        containerColor = if (isSelected) Color(0xFF388E3C) else Color(0xFFF1F8E9)
-                                                    ),
-                                                    contentPadding = PaddingValues(0.dp)
-                                                ) { Text(chosung, color = if (isSelected) Color.White else Color(0xFF2E7D32), fontWeight = FontWeight.Bold) }
+                                            Surface(
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .height(38.dp)
+                                                    .clickable {
+                                                        viewModel.selectChosung(chosung)
+                                                    },
+                                                shape = RoundedCornerShape(19.dp),
+                                                color = if (selected) {
+                                                    MaterialTheme.colorScheme.primary
+                                                } else {
+                                                    MaterialTheme.colorScheme.surfaceVariant
+                                                },
+                                                border = BorderStroke(
+                                                    1.dp,
+                                                    if (selected) {
+                                                        MaterialTheme.colorScheme.primary
+                                                    } else {
+                                                        MaterialTheme.colorScheme.outlineVariant
+                                                    }
+                                                )
+                                            ) {
+                                                Box(contentAlignment = Alignment.Center) {
+                                                    Text(
+                                                        text = chosung,
+                                                        style = MaterialTheme.typography.labelLarge,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = if (selected) {
+                                                            MaterialTheme.colorScheme.onPrimary
+                                                        } else {
+                                                            MaterialTheme.colorScheme.onSurfaceVariant
+                                                        }
+                                                    )
+                                                }
                                             }
                                         }
                                     }
                                 }
 
-                                Spacer(modifier = Modifier.height(12.dp))
+                                if (uiState.speciesList.isEmpty()) {
+                                    Surface(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = MaterialTheme.colorScheme.surfaceVariant
+                                    ) {
+                                        Text(
+                                            text = "선택한 초성의 묘목이 없습니다.",
+                                            modifier = Modifier.padding(14.dp),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            textAlign = TextAlign.Center
+                                        )
+                                    }
+                                } else {
+                                    uiState.speciesList.chunked(4).forEach { rowItems ->
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            rowItems.forEach { species ->
+                                                val selected =
+                                                    uiState.selectedSpecies?.speciesId == species.speciesId
 
-                                // 🚨 [수기 견적창 안쪽 묘목 리스트 버튼 부분 교체]
-                                val speciesRows = uiState.speciesList.chunked(4)
-                                speciesRows.forEach { rowItems ->
-                                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                        rowItems.forEach { species ->
-                                            val isSelected = uiState.selectedSpecies?.speciesId == species.speciesId
-                                            val speciesName = species.speciesName
-
-                                            // 🚨 2. 여기도 똑같이 글자 수별 크기 조절!
-                                            val dynamicFontSize = when {
-                                                speciesName.length >= 7 -> 9.sp
-                                                speciesName.length >= 5 -> 10.sp
-                                                else -> 12.sp
+                                                Surface(
+                                                    modifier = Modifier
+                                                        .weight(1f)
+                                                        .heightIn(min = 46.dp)
+                                                        .clickable {
+                                                            viewModel.selectSpecies(species)
+                                                        },
+                                                    shape = RoundedCornerShape(11.dp),
+                                                    color = if (selected) {
+                                                        MaterialTheme.colorScheme.primaryContainer
+                                                    } else {
+                                                        MaterialTheme.colorScheme.surfaceVariant
+                                                    },
+                                                    border = BorderStroke(
+                                                        1.dp,
+                                                        if (selected) {
+                                                            MaterialTheme.colorScheme.primary
+                                                        } else {
+                                                            MaterialTheme.colorScheme.outlineVariant
+                                                        }
+                                                    )
+                                                ) {
+                                                    Box(
+                                                        modifier = Modifier.padding(
+                                                            horizontal = 5.dp,
+                                                            vertical = 8.dp
+                                                        ),
+                                                        contentAlignment = Alignment.Center
+                                                    ) {
+                                                        Text(
+                                                            text = species.speciesName,
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            maxLines = 2,
+                                                            textAlign = TextAlign.Center,
+                                                            fontWeight = if (selected) {
+                                                                FontWeight.ExtraBold
+                                                            } else {
+                                                                FontWeight.Medium
+                                                            },
+                                                            color = if (selected) {
+                                                                MaterialTheme.colorScheme.onPrimaryContainer
+                                                            } else {
+                                                                MaterialTheme.colorScheme.onSurfaceVariant
+                                                            }
+                                                        )
+                                                    }
+                                                }
                                             }
 
-                                            OutlinedButton(
-                                                onClick = { viewModel.selectSpecies(species) },
-                                                modifier = Modifier.weight(1f).height(44.dp),
-                                                colors = ButtonDefaults.outlinedButtonColors(containerColor = if (isSelected) Color(0xFFE8F5E9) else Color.White),
-                                                border = BorderStroke(1.dp, if (isSelected) Color(0xFF2E7D32) else Color(0xFFE0E0E0)),
-                                                contentPadding = PaddingValues(0.dp)
-                                            ) {
-                                                Text(
-                                                    text = speciesName,
-                                                    fontSize = dynamicFontSize,
-                                                    maxLines = 1,          // 🚨 강제 1줄
-                                                    softWrap = false,      // 🚨 줄바꿈 차단
-                                                    letterSpacing = (-0.5).sp, // 🚨 자간 축소
-                                                    color = if (isSelected) Color(0xFF2E7D32) else Color.DarkGray,
-                                                    fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Normal
-                                                )
+                                            repeat(4 - rowItems.size) {
+                                                Spacer(modifier = Modifier.weight(1f))
                                             }
-                                        }
-                                        if (rowItems.size < 4) {
-                                            repeat(4 - rowItems.size) { Spacer(modifier = Modifier.weight(1f)) }
                                         }
                                     }
-                                    Spacer(modifier = Modifier.height(6.dp))
                                 }
                             }
                         }
 
-                        // [2] 묘목이 선택되었을 때만 열리는 스펙/가격 입력창
                         if (uiState.selectedSpecies != null) {
-                            Spacer(modifier = Modifier.height(12.dp))
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.surface
+                                ),
+                                border = BorderStroke(
+                                    1.dp,
+                                    MaterialTheme.colorScheme.outlineVariant
+                                ),
+                                shape = RoundedCornerShape(16.dp)
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(14.dp),
+                                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = "규격 · 단가",
+                                                style = MaterialTheme.typography.titleMedium,
+                                                fontWeight = FontWeight.ExtraBold
+                                            )
+                                            Text(
+                                                text = uiState.selectedSpecies!!.speciesName,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.primary,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                    }
 
-                            Card(colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth()) {
-                                Column(modifier = Modifier.padding(14.dp)) {
-                                    Text("2. 스펙 및 단가 입력", color = Color(0xFF0288D1), fontWeight = FontWeight.ExtraBold, fontSize = 15.sp)
-                                    Spacer(modifier = Modifier.height(14.dp))
-
-                                    // 🚨 1. 년생
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text("년생", modifier = Modifier.width(46.dp), fontWeight = FontWeight.Bold)
-
-                                        // 🚨 너비를 46.dp로 늘리고 줄바꿈 원천 차단!
-                                        Text(
-                                            text = if (currentAgeInt > 0) "${currentAgeInt}년" else "-",
-                                            modifier = Modifier.width(46.dp),
-                                            color = Color(0xFF673AB7),
-                                            fontWeight = FontWeight.ExtraBold,
-                                            textAlign = TextAlign.Center,
-                                            maxLines = 1,
-                                            softWrap = false
-                                        )
-                                        Spacer(modifier = Modifier.width(4.dp))
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(7.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Surface(
+                                            modifier = Modifier.width(72.dp).height(42.dp),
+                                            shape = RoundedCornerShape(10.dp),
+                                            color = MaterialTheme.colorScheme.primaryContainer
+                                        ) {
+                                            Box(contentAlignment = Alignment.Center) {
+                                                Text(
+                                                    text = if (currentAgeInt > 0) {
+                                                        "${currentAgeInt}년생"
+                                                    } else {
+                                                        "연생 없음"
+                                                    },
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                                )
+                                            }
+                                        }
 
                                         OutlinedButton(
                                             onClick = { viewModel.updateAge("") },
-                                            modifier = Modifier.weight(1f).height(38.dp),
-                                            contentPadding = PaddingValues(0.dp)
+                                            modifier = Modifier.weight(1f).height(42.dp),
+                                            shape = RoundedCornerShape(10.dp),
+                                            contentPadding = PaddingValues(horizontal = 5.dp)
                                         ) {
-                                            Text("선택안함", fontSize = 11.sp, maxLines = 1, softWrap = false, letterSpacing = (-0.5).sp)
+                                            Text("미지정", style = MaterialTheme.typography.labelMedium)
                                         }
 
-                                        Spacer(modifier = Modifier.width(4.dp))
-
-                                        Button(
-                                            onClick = { viewModel.updateAge("${currentAgeInt + 1}년생") },
-                                            modifier = Modifier.weight(1.2f).height(38.dp),
-                                            colors = ButtonDefaults.buttonColors(Color(0xFF4CAF50)),
-                                            contentPadding = PaddingValues(0.dp)
+                                        FilledTonalButton(
+                                            onClick = {
+                                                viewModel.updateAge("${currentAgeInt + 1}년생")
+                                            },
+                                            modifier = Modifier.weight(1f).height(42.dp),
+                                            shape = RoundedCornerShape(10.dp),
+                                            contentPadding = PaddingValues(horizontal = 5.dp)
                                         ) {
-                                            Text("${currentAgeInt + 1}년생 (+)", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false, letterSpacing = (-0.5).sp)
+                                            Text("+1년", fontWeight = FontWeight.Bold)
                                         }
                                     }
 
-                                    Spacer(modifier = Modifier.height(10.dp))
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(7.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Surface(
+                                            modifier = Modifier.width(72.dp).height(42.dp),
+                                            shape = RoundedCornerShape(10.dp),
+                                            color = MaterialTheme.colorScheme.primaryContainer
+                                        ) {
+                                            Box(contentAlignment = Alignment.Center) {
+                                                Text(
+                                                    text = if (uiState.inputSizeMeters > 0f) {
+                                                        String.format(
+                                                            "%.1fm",
+                                                            uiState.inputSizeMeters
+                                                        )
+                                                    } else {
+                                                        "크기 없음"
+                                                    },
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                                )
+                                            }
+                                        }
 
-                                    // 🚨 2. 크기 (0.0m 공간 확보 & 버튼 압축!)
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text("크기", modifier = Modifier.width(46.dp), fontWeight = FontWeight.Bold)
-
-                                        // 🚨 0.0m가 짤리지 않게 너비를 46.dp로 넉넉하게!
-                                        Text(
-                                            text = String.format("%.1fm", uiState.inputSizeMeters),
-                                            modifier = Modifier.width(46.dp),
-                                            color = Color.Blue,
-                                            fontWeight = FontWeight.ExtraBold,
-                                            textAlign = TextAlign.Center,
-                                            maxLines = 1,
-                                            softWrap = false
-                                        )
-                                        Spacer(modifier = Modifier.width(4.dp))
-
-                                        Button(
+                                        OutlinedButton(
                                             onClick = { viewModel.updateSize(0f) },
-                                            modifier = Modifier.weight(0.9f).height(38.dp),
-                                            colors = ButtonDefaults.buttonColors(Color.Gray),
-                                            contentPadding = PaddingValues(0.dp)
+                                            modifier = Modifier.weight(1f).height(42.dp),
+                                            shape = RoundedCornerShape(10.dp),
+                                            contentPadding = PaddingValues(horizontal = 5.dp)
                                         ) {
-                                            Text("초기화", fontSize = 11.sp, maxLines = 1, softWrap = false, letterSpacing = (-0.5).sp)
+                                            Text("초기화", style = MaterialTheme.typography.labelMedium)
                                         }
 
-                                        // 🚨 버튼 사이 간격을 4.dp -> 2.dp 로 줄여서 공간 확보!
-                                        Spacer(modifier = Modifier.width(2.dp))
-
-                                        Button(
-                                            onClick = { viewModel.updateSize(uiState.inputSizeMeters + 0.1f) },
-                                            modifier = Modifier.weight(1f).height(38.dp),
-                                            contentPadding = PaddingValues(0.dp)
+                                        FilledTonalButton(
+                                            onClick = {
+                                                viewModel.updateSize(
+                                                    uiState.inputSizeMeters + 0.1f
+                                                )
+                                            },
+                                            modifier = Modifier.weight(1f).height(42.dp),
+                                            shape = RoundedCornerShape(10.dp),
+                                            contentPadding = PaddingValues(horizontal = 5.dp)
                                         ) {
-                                            Text("+10cm", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false, letterSpacing = (-0.5).sp)
+                                            Text("+10cm", fontWeight = FontWeight.Bold)
                                         }
 
-                                        Spacer(modifier = Modifier.width(2.dp))
-
-                                        Button(
-                                            onClick = { viewModel.updateSize(uiState.inputSizeMeters + 1.0f) },
-                                            modifier = Modifier.weight(0.9f).height(38.dp),
-                                            colors = ButtonDefaults.buttonColors(Color(0xFF0288D1)),
-                                            contentPadding = PaddingValues(0.dp)
+                                        FilledTonalButton(
+                                            onClick = {
+                                                viewModel.updateSize(
+                                                    uiState.inputSizeMeters + 1f
+                                                )
+                                            },
+                                            modifier = Modifier.weight(1f).height(42.dp),
+                                            shape = RoundedCornerShape(10.dp),
+                                            contentPadding = PaddingValues(horizontal = 5.dp)
                                         ) {
-                                            Text("+1m", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false, letterSpacing = (-0.5).sp)
+                                            Text("+1m", fontWeight = FontWeight.Bold)
                                         }
                                     }
-                                    Spacer(modifier = Modifier.height(10.dp))
 
-                                    // 타입
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text("타입", modifier = Modifier.width(50.dp), fontWeight = FontWeight.Bold)
+                                    Text(
+                                        text = "재배 타입",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
                                         plantTypes.forEach { type ->
-                                            val label = if (type.isEmpty()) "없음" else type
-                                            val isSelected = uiState.inputPlantType == type
-                                            Button(
-                                                onClick = { viewModel.updatePlantType(type) },
-                                                modifier = Modifier.weight(1f).height(36.dp).padding(end = 4.dp),
-                                                colors = ButtonDefaults.buttonColors(if (isSelected) Color(0xFF8D6E63) else Color.LightGray),
-                                                contentPadding = PaddingValues(0.dp)
-                                            ) { Text(label, fontSize = 11.sp) }
+                                            val selected = uiState.inputPlantType == type
+                                            Surface(
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .height(40.dp)
+                                                    .clickable {
+                                                        viewModel.updatePlantType(type)
+                                                    },
+                                                shape = RoundedCornerShape(10.dp),
+                                                color = if (selected) {
+                                                    MaterialTheme.colorScheme.primaryContainer
+                                                } else {
+                                                    MaterialTheme.colorScheme.surfaceVariant
+                                                },
+                                                border = BorderStroke(
+                                                    1.dp,
+                                                    if (selected) {
+                                                        MaterialTheme.colorScheme.primary
+                                                    } else {
+                                                        MaterialTheme.colorScheme.outlineVariant
+                                                    }
+                                                )
+                                            ) {
+                                                Box(contentAlignment = Alignment.Center) {
+                                                    Text(
+                                                        text = if (type.isBlank()) "미지정" else type,
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        fontWeight = if (selected) {
+                                                            FontWeight.Bold
+                                                        } else {
+                                                            FontWeight.Medium
+                                                        }
+                                                    )
+                                                }
+                                            }
                                         }
                                     }
-                                    Spacer(modifier = Modifier.height(10.dp))
 
-                                    // 품질
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text("품질", modifier = Modifier.width(50.dp), fontWeight = FontWeight.Bold)
-                                        qualityOptions.forEach { q ->
-                                            val label = if (q.isEmpty()) "없음" else q
-                                            val isSelected = uiState.inputQuality == q
-                                            Button(
-                                                onClick = { viewModel.updateQuality(q) },
-                                                modifier = Modifier.weight(1f).height(36.dp).padding(end = 4.dp),
-                                                colors = ButtonDefaults.buttonColors(if (isSelected) Color(0xFF009688) else Color.LightGray),
-                                                contentPadding = PaddingValues(0.dp)
-                                            ) { Text(label, fontSize = 11.sp) }
+                                    Text(
+                                        text = "품질",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        qualityOptions.forEach { quality ->
+                                            val selected = uiState.inputQuality == quality
+                                            Surface(
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .height(40.dp)
+                                                    .clickable {
+                                                        viewModel.updateQuality(quality)
+                                                    },
+                                                shape = RoundedCornerShape(10.dp),
+                                                color = if (selected) {
+                                                    MaterialTheme.colorScheme.primaryContainer
+                                                } else {
+                                                    MaterialTheme.colorScheme.surfaceVariant
+                                                },
+                                                border = BorderStroke(
+                                                    1.dp,
+                                                    if (selected) {
+                                                        MaterialTheme.colorScheme.primary
+                                                    } else {
+                                                        MaterialTheme.colorScheme.outlineVariant
+                                                    }
+                                                )
+                                            ) {
+                                                Box(contentAlignment = Alignment.Center) {
+                                                    Text(
+                                                        text = if (quality.isBlank()) {
+                                                            "미지정"
+                                                        } else {
+                                                            quality
+                                                        },
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        fontWeight = if (selected) {
+                                                            FontWeight.Bold
+                                                        } else {
+                                                            FontWeight.Medium
+                                                        }
+                                                    )
+                                                }
+                                            }
                                         }
                                     }
 
-                                    Divider(modifier = Modifier.padding(vertical = 12.dp))
+                                    HorizontalDivider(
+                                        color = MaterialTheme.colorScheme.outlineVariant
+                                    )
 
-                                    // 🚨 수량 (0 버튼 축소, +1, +10 추가)
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text("수량(주)", modifier = Modifier.width(60.dp), fontWeight = FontWeight.Bold)
-                                        Text("${uiState.inputQuantity}", fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, color = Color.Red, modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
-
-                                        Button(onClick = { viewModel.resetQuantityToSoldOut() }, modifier = Modifier.width(42.dp).height(40.dp), colors = ButtonDefaults.buttonColors(Color.Gray), contentPadding = PaddingValues(0.dp)) { Text("0", fontSize = 13.sp) }
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Button(onClick = { viewModel.addQuantity(1) }, modifier = Modifier.weight(1f).height(40.dp), contentPadding = PaddingValues(0.dp)) { Text("+1", fontSize = 13.sp) }
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Button(onClick = { viewModel.addQuantity(10) }, modifier = Modifier.weight(1f).height(40.dp), contentPadding = PaddingValues(0.dp)) { Text("+10", fontSize = 13.sp) }
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = "수량",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                            Text(
+                                                text = "${String.format("%,d", uiState.inputQuantity)}주",
+                                                style = MaterialTheme.typography.titleLarge,
+                                                fontWeight = FontWeight.ExtraBold
+                                            )
+                                        }
+                                        OutlinedButton(
+                                            onClick = { viewModel.resetQuantityToSoldOut() },
+                                            modifier = Modifier.height(42.dp),
+                                            shape = RoundedCornerShape(10.dp)
+                                        ) {
+                                            Text("0")
+                                        }
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        FilledTonalButton(
+                                            onClick = { viewModel.addQuantity(1) },
+                                            modifier = Modifier.height(42.dp),
+                                            shape = RoundedCornerShape(10.dp)
+                                        ) {
+                                            Text("+1")
+                                        }
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        FilledTonalButton(
+                                            onClick = { viewModel.addQuantity(10) },
+                                            modifier = Modifier.height(42.dp),
+                                            shape = RoundedCornerShape(10.dp)
+                                        ) {
+                                            Text("+10")
+                                        }
                                     }
-                                    Spacer(modifier = Modifier.height(10.dp))
 
-                                    // 🚨 소매가/단가 (0 버튼 축소, +100, +1000 추가 & 잘림 방지용 Padding 제거)
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text("단가(원)", modifier = Modifier.width(60.dp), fontWeight = FontWeight.Bold)
-                                        Text("${String.format("%,d", uiState.inputRetail)}", fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, color = Color.Blue, modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
-
-                                        Button(onClick = { viewModel.resetRetail() }, modifier = Modifier.width(42.dp).height(40.dp), colors = ButtonDefaults.buttonColors(Color.Gray), contentPadding = PaddingValues(0.dp)) { Text("0", fontSize = 13.sp) }
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Button(onClick = { viewModel.addRetail(100) }, modifier = Modifier.weight(1f).height(40.dp), contentPadding = PaddingValues(0.dp)) { Text("+100", fontSize = 13.sp) }
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Button(onClick = { viewModel.addRetail(1000) }, modifier = Modifier.weight(1f).height(40.dp), contentPadding = PaddingValues(0.dp)) { Text("+1,000", fontSize = 13.sp) }
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = "판매 단가",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                            Text(
+                                                text = "${String.format("%,d", uiState.inputRetail)}원",
+                                                style = MaterialTheme.typography.titleLarge,
+                                                fontWeight = FontWeight.ExtraBold
+                                            )
+                                        }
+                                        OutlinedButton(
+                                            onClick = { viewModel.resetRetail() },
+                                            modifier = Modifier.height(42.dp),
+                                            shape = RoundedCornerShape(10.dp)
+                                        ) {
+                                            Text("0")
+                                        }
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        FilledTonalButton(
+                                            onClick = { viewModel.addRetail(100) },
+                                            modifier = Modifier.height(42.dp),
+                                            shape = RoundedCornerShape(10.dp)
+                                        ) {
+                                            Text("+100")
+                                        }
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        FilledTonalButton(
+                                            onClick = { viewModel.addRetail(1000) },
+                                            modifier = Modifier.height(42.dp),
+                                            shape = RoundedCornerShape(10.dp)
+                                        ) {
+                                            Text("+1,000")
+                                        }
                                     }
                                 }
                             }
+                        }
+                    }
 
-                            Spacer(modifier = Modifier.height(16.dp))
-
-                            // 🚨 하단 2버튼 (담기 계속하기 / 장바구니 확인)
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    Surface(
+                        color = MaterialTheme.colorScheme.surface,
+                        tonalElevation = 3.dp,
+                        shadowElevation = 8.dp
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .navigationBarsPadding()
+                                .padding(12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(9.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = {
+                                    showQuickQuoteDialog = false
+                                    showCartDialog = true
+                                },
+                                modifier = Modifier.weight(1f).height(50.dp),
+                                shape = RoundedCornerShape(12.dp)
                             ) {
-                                // [담기] 버튼 (왼쪽)
-                                Button(
-                                    onClick = {
-                                        if (uiState.inputQuantity > 0 && uiState.inputRetail > 0) {
-                                            val dummyItem = SellingDisplayRow(
-                                                farmId = -1,
-                                                speciesId = uiState.selectedSpecies!!.speciesId ?: -1,
-                                                farmName = "수기견적",
-                                                speciesName = uiState.selectedSpecies!!.speciesName,
-                                                quality = uiState.inputQuality,
-                                                age = uiState.inputAge,
-                                                size = if (uiState.inputSizeMeters > 0) "${String.format("%.1f", uiState.inputSizeMeters)}m" else "",
-                                                plantType = uiState.inputPlantType,
-                                                quantity = 999999,
-                                                wholesalePrice = 0,
-                                                retailPrice = uiState.inputRetail,
-                                                chosung = uiState.selectedSpecies!!.chosung
-                                            )
+                                Text(
+                                    "견적 확인",
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
 
-                                            viewModel.addToCart(dummyItem, uiState.inputQuantity)
+                            Button(
+                                onClick = {
+                                    if (
+                                        uiState.selectedSpecies != null &&
+                                        uiState.inputQuantity > 0 &&
+                                        uiState.inputRetail > 0
+                                    ) {
+                                        val dummyItem = SellingDisplayRow(
+                                            farmId = -1,
+                                            speciesId =
+                                                uiState.selectedSpecies!!.speciesId ?: -1,
+                                            farmName = "수기견적",
+                                            speciesName =
+                                                uiState.selectedSpecies!!.speciesName,
+                                            quality = uiState.inputQuality,
+                                            age = uiState.inputAge,
+                                            size = if (
+                                                uiState.inputSizeMeters > 0f
+                                            ) {
+                                                "${String.format("%.1f", uiState.inputSizeMeters)}m"
+                                            } else {
+                                                ""
+                                            },
+                                            plantType = uiState.inputPlantType,
+                                            quantity = 999999,
+                                            wholesalePrice = 0,
+                                            retailPrice = uiState.inputRetail,
+                                            chosung = uiState.selectedSpecies!!.chosung
+                                        )
 
-                                            // 🚨 입력창 싹 초기화 (창은 안 닫히고 다음 묘목 고를 수 있음!)
-                                            viewModel.resetInput()
-                                            viewModel.updateAge("")
-                                            viewModel.updateSize(0f)
-                                            viewModel.updatePlantType("")
-                                            viewModel.updateQuality("")
-                                            viewModel.showMessage("✅ 담기 완료! 다른 묘목을 선택하세요.")
-                                        } else {
-                                            viewModel.showMessage("⚠️ 수량과 단가를 입력해주세요.")
-                                        }
-                                    },
-                                    modifier = Modifier.weight(1f).height(56.dp),
-                                    colors = ButtonDefaults.buttonColors(Color(0xFFE91E63)),
-                                    shape = RoundedCornerShape(12.dp)
-                                ) {
-                                    Text("🛒 담기", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
-                                }
-
-                                // [장바구니 확인] 버튼 (오른쪽)
-                                Button(
-                                    onClick = {
-                                        showQuickQuoteDialog = false // 수기 창 닫고
-                                        showCartDialog = true  // 메인 장바구니 창 띄우기
-                                    },
-                                    modifier = Modifier.weight(1f).height(56.dp),
-                                    colors = ButtonDefaults.buttonColors(Color(0xFF1976D2)),
-                                    shape = RoundedCornerShape(12.dp)
-                                ) {
-                                    Text("📝 장바구니 확인", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
-                                }
+                                        viewModel.addToCart(
+                                            dummyItem,
+                                            uiState.inputQuantity
+                                        )
+                                        viewModel.resetInput()
+                                        viewModel.updateAge("")
+                                        viewModel.updateSize(0f)
+                                        viewModel.updatePlantType("")
+                                        viewModel.updateQuality("")
+                                        viewModel.showMessage(
+                                            "견적에 담았습니다. 다음 묘목을 선택하세요."
+                                        )
+                                    } else {
+                                        viewModel.showMessage(
+                                            "묘목, 수량, 단가를 확인해주세요."
+                                        )
+                                    }
+                                },
+                                modifier = Modifier.weight(1.2f).height(50.dp),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Text(
+                                    "견적에 담기",
+                                    fontWeight = FontWeight.ExtraBold
+                                )
                             }
                         }
                     }
