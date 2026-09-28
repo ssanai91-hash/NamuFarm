@@ -1157,171 +1157,173 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
 
     // 🚨 [수정] 오늘 저장된 견적서 목록 팝업 (초경량 1줄 리스트)
     if (showTodayQuotesDialog) {
-        val todayDate = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.KOREA)
-            .format(java.util.Date())
+        val todayDate = java.text.SimpleDateFormat(
+            "yyyy-MM-dd",
+            java.util.Locale.KOREA
+        ).format(java.util.Date())
 
         Dialog(
             onDismissRequest = { showTodayQuotesDialog = false },
             properties = DialogProperties(usePlatformDefaultWidth = false)
         ) {
             Surface(
-                shape = RoundedCornerShape(16.dp),
-                color = Color.White,
-                modifier = Modifier.fillMaxWidth(0.95f).heightIn(max = 700.dp)
+                shape = RoundedCornerShape(22.dp),
+                color = MaterialTheme.colorScheme.surface,
+                modifier = Modifier
+                    .fillMaxWidth(0.94f)
+                    .heightIn(max = 760.dp),
+                tonalElevation = 2.dp,
+                shadowElevation = 14.dp
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = "${todayDate}_총 견적서",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = Color(0xFF1B5E20),
+                Column(
+                    modifier = Modifier.padding(18.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    Row(
                         modifier = Modifier.fillMaxWidth(),
-                        textAlign = TextAlign.Center
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "오늘 견적",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.ExtraBold
+                            )
+                            Text(
+                                text = "${todayDate} · ${uiState.todayQuotes.size}건",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        IconButton(onClick = { showTodayQuotesDialog = false }) {
+                            Icon(Icons.Default.Close, contentDescription = "닫기")
+                        }
+                    }
 
                     LazyColumn(
                         modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                        verticalArrangement = Arrangement.spacedBy(9.dp),
+                        contentPadding = PaddingValues(bottom = 4.dp)
                     ) {
                         items(uiState.todayQuotes) { quote ->
-                            Card(
-                                modifier = Modifier.fillMaxWidth().clickable {
-                                    selectedQuote = quote
-                                    // 🚨 상세창 열기 전에 기존 저장된 번호를 ViewModel에 동기화!
-                                    viewModel.updateCustomerPhone(quote.customerPhone)
-                                    showQuoteDetailDialog = true
-                                }
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        selectedQuote = quote
+                                        viewModel.updateCustomerPhone(quote.customerPhone)
+                                        showQuoteDetailDialog = true
+                                    },
+                                shape = RoundedCornerShape(15.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant,
+                                border = BorderStroke(
+                                    1.dp,
+                                    MaterialTheme.colorScheme.outlineVariant
+                                )
                             ) {
-                                Column(modifier = Modifier.padding(14.dp)) {
-                                    // 🚨 1열: 견적서 번호 (구역 구분용 배경)
-                                    Surface(
-                                        color = Color(0xFFF5F5F5),
-                                        shape = RoundedCornerShape(4.dp),
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Text(
-                                            text = "견적번호 : ${quote.quoteNumber}",
-                                            fontSize = 14.sp,
-                                            color = Color.Black,
-                                            fontWeight = FontWeight.ExtraBold,
-                                            modifier = Modifier.padding(
-                                                horizontal = 8.dp,
-                                                vertical = 6.dp
-                                            )
-                                        )
-                                    }
-
-                                    Spacer(modifier = Modifier.height(8.dp))
-
-                                    // 🚨 2열: 전화번호 (있을 때만 렌더링)
-                                    if (quote.customerPhone.isNotBlank()) {
-                                        Text(
-                                            text = "📱 ${quote.customerPhone}",
-                                            fontSize = 13.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = Color.DarkGray
-                                        )
-                                        Spacer(modifier = Modifier.height(6.dp))
-                                    }
-
-                                    // 🚨 3열: 묘목명 + 수량 (1줄씩 심플하게 쫙!)
-                                    val summaryLines =
-                                        quote.itemSummary.split("\n").filter { it.isNotBlank() }
-                                    Column(modifier = Modifier.fillMaxWidth()) {
-                                        summaryLines.forEach { line ->
-                                            if (line.contains("|")) {
-                                                val item = parseSummaryLine(line) ?: return@forEach
-
-                                                Row(
-                                                    modifier = Modifier
-                                                        .fillMaxWidth()
-                                                        .padding(vertical = 2.dp),
-                                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                                    verticalAlignment = Alignment.CenterVertically
-                                                ) {
-                                                    Column(modifier = Modifier.weight(1f)) {
-                                                        Text(
-                                                            text = "🌱 ${item.species}",
-                                                            fontSize = 14.sp,
-                                                            fontWeight = FontWeight.Bold,
-                                                            color = Color.Black
-                                                        )
-                                                        Text(
-                                                            text = buildSpecText(
-                                                                quality = item.quality,
-                                                                age = item.age,
-                                                                size = item.size,
-                                                                plantType = item.plantType
-                                                            ),
-                                                            fontSize = 11.sp,
-                                                            color = Color.Gray
-                                                        )
-                                                    }
-
-                                                    Text(
-                                                        text = "${item.qty}주",
-                                                        fontSize = 14.sp,
-                                                        fontWeight = FontWeight.ExtraBold,
-                                                        color = Color(0xFF1976D2)
-                                                    )
-                                                }
-                                            }
-                                        }
-                                    }
-
-                                    Divider(
-                                        modifier = Modifier.padding(vertical = 8.dp),
-                                        color = Color(0xFFF5F5F5)
-                                    )
-
-                                    // 🚨 4열: 배송비 & 최종 합계 (한 줄에 나란히 배치)
+                                Column(
+                                    modifier = Modifier.padding(14.dp),
+                                    verticalArrangement = Arrangement.spacedBy(9.dp)
+                                ) {
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.Bottom // 글자 바닥선 맞춤
+                                        verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        // 배송비 텍스트 로직
-                                        val shippingText = if (quote.isPrepaid && quote.shippingFee > 0) {
-                                            "선불 ${String.format("%,d", quote.shippingFee)}원"
-                                        } else {
-                                            "후불 (착불)"
-                                        }
-                                        val shippingColor = if (quote.isPrepaid) Color(0xFF1976D2) else Color(0xFFD32F2F)
-
-                                        Column {
-                                            Text(
-                                                text = "배송비",
-                                                fontSize = 11.sp,
-                                                color = Color.Gray,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                            Text(
-                                                text = shippingText,
-                                                fontSize = 13.sp,
-                                                color = shippingColor,
-                                                fontWeight = FontWeight.ExtraBold
-                                            )
-                                        }
-
                                         Text(
-                                            text = "최종 합계: ${String.format("%,d", quote.totalPrice)}원",
-                                            fontSize = 16.sp,
+                                            text = quote.quoteNumber,
+                                            style = MaterialTheme.typography.labelLarge,
                                             fontWeight = FontWeight.ExtraBold,
-                                            color = Color.Black
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                        Text(
+                                            text = "${String.format("%,d", quote.totalPrice)}원",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.ExtraBold
                                         )
                                     }
+
+                                    if (quote.customerPhone.isNotBlank()) {
+                                        Text(
+                                            text = quote.customerPhone,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+
+                                    val summaryLines = quote.itemSummary
+                                        .split("\n")
+                                        .filter { it.isNotBlank() }
+
+                                    summaryLines.take(3).forEach { line ->
+                                        val item = parseSummaryLine(line) ?: return@forEach
+
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text(
+                                                    text = item.species,
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                                Text(
+                                                    text = buildSpecText(
+                                                        quality = item.quality,
+                                                        age = item.age,
+                                                        size = item.size,
+                                                        plantType = item.plantType,
+                                                        separator = " · "
+                                                    ),
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                            Text(
+                                                text = "${item.qty}주",
+                                                style = MaterialTheme.typography.labelLarge,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                        }
+                                    }
+
+                                    if (summaryLines.size > 3) {
+                                        Text(
+                                            text = "외 ${summaryLines.size - 3}개 품목",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+
+                                    HorizontalDivider(
+                                        color = MaterialTheme.colorScheme.outlineVariant
+                                    )
+
+                                    val shippingText =
+                                        if (quote.isPrepaid && quote.shippingFee > 0) {
+                                            "배송비 선불 ${String.format("%,d", quote.shippingFee)}원"
+                                        } else {
+                                            "배송비 착불"
+                                        }
+
+                                    Text(
+                                        text = shippingText,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
                                 }
                             }
                         }
                     }
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Button(
+
+                    OutlinedButton(
                         onClick = { showTodayQuotesDialog = false },
-                        modifier = Modifier.fillMaxWidth().height(50.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF455A64)),
-                        shape = RoundedCornerShape(8.dp)
-                    ) { Text("닫기", color = Color.White, fontWeight = FontWeight.Bold) }
+                        modifier = Modifier.fillMaxWidth().height(48.dp),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("닫기", fontWeight = FontWeight.Bold)
+                    }
                 }
             }
         }
@@ -1329,164 +1331,177 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
 
     // 🚨 [수정] 오늘 확정된 주문내역 목록 팝업 (1줄 압축 버전)
     if (showTodayOrdersDialog) {
-        val todayDate = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.KOREA)
-            .format(java.util.Date())
+        val todayDate = java.text.SimpleDateFormat(
+            "yyyy-MM-dd",
+            java.util.Locale.KOREA
+        ).format(java.util.Date())
 
         Dialog(
             onDismissRequest = { showTodayOrdersDialog = false },
             properties = DialogProperties(usePlatformDefaultWidth = false)
         ) {
             Surface(
-                shape = RoundedCornerShape(16.dp),
-                color = Color.White,
-                modifier = Modifier.fillMaxWidth(0.95f).heightIn(max = 700.dp)
+                shape = RoundedCornerShape(22.dp),
+                color = MaterialTheme.colorScheme.surface,
+                modifier = Modifier
+                    .fillMaxWidth(0.94f)
+                    .heightIn(max = 760.dp),
+                tonalElevation = 2.dp,
+                shadowElevation = 14.dp
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = "${todayDate}_주문내역",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = Color(0xFF2E7D32),
+                Column(
+                    modifier = Modifier.padding(18.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    Row(
                         modifier = Modifier.fillMaxWidth(),
-                        textAlign = TextAlign.Center
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "오늘 주문",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.ExtraBold
+                            )
+                            Text(
+                                text = "${todayDate} · ${uiState.todayOrders.size}건",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        IconButton(onClick = { showTodayOrdersDialog = false }) {
+                            Icon(Icons.Default.Close, contentDescription = "닫기")
+                        }
+                    }
 
                     LazyColumn(
                         modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                        verticalArrangement = Arrangement.spacedBy(9.dp),
+                        contentPadding = PaddingValues(bottom = 4.dp)
                     ) {
                         items(uiState.todayOrders) { order ->
-                            Card(
-                                border = BorderStroke(1.dp, Color(0xFFE0E0E0)),
-                                colors = CardDefaults.cardColors(Color.White),
-                                modifier = Modifier.fillMaxWidth().clickable {
-                                    selectedOrder = order
-                                    showOrderDetailDialog = true
-                                }
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        selectedOrder = order
+                                        showOrderDetailDialog = true
+                                    },
+                                shape = RoundedCornerShape(15.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant,
+                                border = BorderStroke(
+                                    1.dp,
+                                    MaterialTheme.colorScheme.outlineVariant
+                                )
                             ) {
-                                Column(modifier = Modifier.padding(14.dp)) {
-                                    // 1열: 주문번호
-                                    Surface(
-                                        color = Color(0xFFE8F5E9),
-                                        shape = RoundedCornerShape(4.dp),
-                                        modifier = Modifier.fillMaxWidth()
+                                Column(
+                                    modifier = Modifier.padding(14.dp),
+                                    verticalArrangement = Arrangement.spacedBy(9.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically
                                     ) {
+                                        Text(
+                                            text = order.orderNumber,
+                                            style = MaterialTheme.typography.labelLarge,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            modifier = Modifier.weight(1f)
+                                        )
+
+                                        val canceled = order.status == "주문취소"
+                                        Surface(
+                                            shape = RoundedCornerShape(9.dp),
+                                            color = if (canceled) {
+                                                MaterialTheme.colorScheme.errorContainer
+                                            } else {
+                                                MaterialTheme.colorScheme.primaryContainer
+                                            }
+                                        ) {
+                                            Text(
+                                                text = if (canceled) "주문취소" else "입금확인",
+                                                modifier = Modifier.padding(
+                                                    horizontal = 9.dp,
+                                                    vertical = 5.dp
+                                                ),
+                                                style = MaterialTheme.typography.labelMedium,
+                                                fontWeight = FontWeight.Bold,
+                                                color = if (canceled) {
+                                                    MaterialTheme.colorScheme.error
+                                                } else {
+                                                    MaterialTheme.colorScheme.primary
+                                                }
+                                            )
+                                        }
+                                    }
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = order.customerPhone.ifBlank { "전화번호 미입력" },
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                fontWeight = FontWeight.Medium
+                                            )
+                                            Text(
+                                                text = order.receiverName.ifBlank { "주문자 미입력" },
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                        Text(
+                                            text = "${String.format("%,d", order.totalPrice)}원",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.ExtraBold
+                                        )
+                                    }
+
+                                    val summaryLines = order.itemSummary
+                                        .split("\n")
+                                        .filter { it.isNotBlank() }
+
+                                    summaryLines.take(3).forEach { line ->
+                                        val item = parseSummaryLine(line) ?: return@forEach
                                         Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                                            modifier = Modifier.fillMaxWidth(),
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             Text(
-                                                text = "주문번호 : ${order.orderNumber}",
-                                                fontSize = 13.sp,
-                                                color = Color.Black,
-                                                fontWeight = FontWeight.Bold
+                                                text = item.species,
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                fontWeight = FontWeight.Bold,
+                                                modifier = Modifier.weight(1f)
                                             )
-
-                                            Spacer(modifier = Modifier.weight(1f))
-
-                                            val statusText = if (order.status == "주문취소") "주문취소됨" else "입금확인완료"
-
                                             Text(
-                                                text = statusText,
-                                                fontSize = 13.sp,
-                                                color = if (order.status == "주문취소") Color(0xFFD32F2F) else Color(0xFF2E7D32),
-                                                fontWeight = FontWeight.Bold
+                                                text = "${item.qty}주",
+                                                style = MaterialTheme.typography.labelLarge,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.primary
                                             )
                                         }
                                     }
 
-                                    Spacer(modifier = Modifier.height(8.dp))
-
-                                    // 2열: 전화번호 및 주소 (추가됨)
-                                    Column {
+                                    if (summaryLines.size > 3) {
                                         Text(
-                                            text = "📱 ${order.customerPhone}",
-                                            fontSize = 13.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = Color.DarkGray
-                                        )
-                                        // 🚨 주소 필드 (추후 DB 연동 대비 UI 배치)
-                                        Text(
-                                            text = if (order.receiverName.isBlank()) {
-                                                "👤 받는사람: 미입력"
-                                            } else {
-                                                "👤 받는사람: ${order.receiverName}"
-                                            },
-                                            fontSize = 12.sp,
-                                            color = Color.DarkGray
+                                            text = "외 ${summaryLines.size - 3}개 품목",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
-
-                                    Spacer(modifier = Modifier.height(8.dp))
-
-                                    // 3열: 묘목 정보 (한 줄로 압축!)
-                                    val summaryLines =
-                                        order.itemSummary.split("\n").filter { it.isNotBlank() }
-                                    Column(modifier = Modifier.fillMaxWidth()) {
-                                        summaryLines.forEach { line ->
-                                            val item = parseSummaryLine(line) ?: return@forEach
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth()
-                                                    .padding(vertical = 2.dp),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Text(
-                                                    text = "🌱 ${item.species}",
-                                                    fontSize = 14.sp,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = Color.Black
-                                                )
-                                                Spacer(modifier = Modifier.width(6.dp))
-                                                // 상세 정보를 묘목명 바로 옆에 작게 배치
-                                                Text(
-                                                    text = buildSpecText(
-                                                        quality = item.quality,
-                                                        age = item.age,
-                                                        size = item.size,
-                                                        plantType = item.plantType,
-                                                        separator = " / "
-                                                    ),
-                                                    fontSize = 11.sp,
-                                                    color = Color.Gray
-                                                )
-                                                Spacer(modifier = Modifier.weight(1f))
-                                                Text(
-                                                    text = "${item.qty}주",
-                                                    fontSize = 16.sp,
-                                                    fontWeight = FontWeight.ExtraBold,
-                                                    color = Color(0xFF2E7D32)
-                                                )
-                                            }
-                                        }
-                                    }
-
-                                    Divider(
-                                        modifier = Modifier.padding(vertical = 8.dp),
-                                        color = Color(0xFFF5F5F5)
-                                    )
-
-                                    Text(
-                                        text = "합계: ${String.format("%,d", order.totalPrice)}원",
-                                        fontSize = 14.sp,
-                                        fontWeight = FontWeight.ExtraBold,
-                                        color = Color.Black,
-                                        modifier = Modifier.fillMaxWidth(),
-                                        textAlign = TextAlign.End
-                                    )
                                 }
                             }
                         }
                     }
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Button(
+
+                    OutlinedButton(
                         onClick = { showTodayOrdersDialog = false },
-                        modifier = Modifier.fillMaxWidth().height(50.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
-                        shape = RoundedCornerShape(8.dp)
-                    ) { Text("닫기", color = Color.White, fontWeight = FontWeight.Bold) }
+                        modifier = Modifier.fillMaxWidth().height(48.dp),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("닫기", fontWeight = FontWeight.Bold)
+                    }
                 }
             }
         }
