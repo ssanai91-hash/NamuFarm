@@ -34,6 +34,18 @@ import com.example.namufarm.viewmodel.ManagementViewModel
 fun ManagementModeScreen(viewModel: ManagementViewModel, onBack: () -> Unit) {
     val uiState by viewModel.uiState.collectAsState()
     val scrollState = rememberScrollState()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(uiState.message) {
+        uiState.message?.let { message ->
+            snackbarHostState.showSnackbar(
+                message = message,
+                withDismissAction = true,
+                duration = SnackbarDuration.Short
+            )
+            viewModel.clearMessage()
+        }
+    }
 
     var showConfirmDialog by remember { mutableStateOf(false) }
     var pendingAction by remember { mutableStateOf<(() -> Unit)?>(null) }
@@ -56,6 +68,9 @@ fun ManagementModeScreen(viewModel: ManagementViewModel, onBack: () -> Unit) {
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
+        snackbarHost = {
+            SnackbarHost(hostState = snackbarHostState)
+        },
         topBar = {
             TopAppBar(
                 title = {
