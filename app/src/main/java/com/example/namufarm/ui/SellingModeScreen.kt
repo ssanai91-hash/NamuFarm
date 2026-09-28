@@ -1429,29 +1429,16 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                                         )
 
                                         val canceled = order.status == "주문취소"
-                                        Surface(
-                                            shape = RoundedCornerShape(9.dp),
+                                        Text(
+                                            text = if (canceled) "주문취소" else "입금확인",
+                                            style = MaterialTheme.typography.labelLarge,
+                                            fontWeight = FontWeight.ExtraBold,
                                             color = if (canceled) {
-                                                MaterialTheme.colorScheme.errorContainer
+                                                MaterialTheme.colorScheme.error
                                             } else {
-                                                MaterialTheme.colorScheme.primaryContainer
+                                                MaterialTheme.colorScheme.primary
                                             }
-                                        ) {
-                                            Text(
-                                                text = if (canceled) "주문취소" else "입금확인",
-                                                modifier = Modifier.padding(
-                                                    horizontal = 9.dp,
-                                                    vertical = 5.dp
-                                                ),
-                                                style = MaterialTheme.typography.labelMedium,
-                                                fontWeight = FontWeight.Bold,
-                                                color = if (canceled) {
-                                                    MaterialTheme.colorScheme.error
-                                                } else {
-                                                    MaterialTheme.colorScheme.primary
-                                                }
-                                            )
-                                        }
+                                        )
                                     }
 
                                     Row(
