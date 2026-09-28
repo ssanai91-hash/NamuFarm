@@ -27,6 +27,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.namufarm.data.AppDatabase
 import com.example.namufarm.data.SyncManager
+import com.example.namufarm.data.local.LocalDataSource
+import com.example.namufarm.data.repository.NamuFarmRepository
 import com.example.namufarm.data.remote.RetrofitClient
 import com.example.namufarm.ui.ManagementModeScreen
 import com.example.namufarm.ui.SellingModeScreen
@@ -61,12 +63,14 @@ class MainActivity : ComponentActivity() {
         val database = AppDatabase.getDatabase(this)
         val dao = database.managementDao()
 
-        // 2. 동기화 엔진(API 통신망) 생성 및 조립
+        // 2. 데이터 계층 조립
         val api = RetrofitClient.api
-        val syncManager = SyncManager(database, dao, api)
+        val localDataSource = LocalDataSource(database, dao)
+        val syncManager = SyncManager(localDataSource, api)
+        val repository = NamuFarmRepository(localDataSource, syncManager)
 
-        // 3. 공장에 dao와 syncManager 둘 다 넘겨주기!
-        val factory = ManagementViewModelFactory(database, dao, syncManager)
+        // 3. ViewModel은 Repository만 바라본다.
+        val factory = ManagementViewModelFactory(repository)
 
         // 🚨 위에서 선언한 전역 변수에 뷰모델 할당!
         viewModel = ViewModelProvider(this, factory)[ManagementViewModel::class.java]
