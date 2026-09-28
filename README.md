@@ -47,9 +47,21 @@ NamuFarmRepository
 ```properties
 JUSO_API_KEY=...
 GOOGLE_SCRIPT_URL=https://script.google.com/macros/s/.../
+PAYMENT_ACCOUNT_TEXT=은행 계좌번호 예금주
 ```
 
 `local.properties`는 `.gitignore`에 포함되어 있습니다.
+
+## 빠른 견적
+
+빠른 견적에서 만든 품목은 실제 재고와 분리된 **수기 견적 품목**으로 저장됩니다.
+
+- 견적 저장/주문 전환 가능
+- Google Sheet 주문 이력에는 포함
+- 실제 농원 재고 차감은 하지 않음
+- 주문취소 시 실제 재고 복원도 하지 않음
+
+실제 판매재고에서 고른 품목만 주문확정 시 재고가 차감되고, 주문취소 시 자동 복원됩니다.
 
 ## 주문 상태 정책
 
@@ -67,4 +79,6 @@ GOOGLE_SCRIPT_URL=https://script.google.com/macros/s/.../
 
 ## 개발 원칙
 
-UI 개선 전에는 데이터 무결성, 오프라인 동작, 동기화 안정성을 우선합니다.
+데이터 무결성, 오프라인 동작, 동기화 안정성을 우선하고 UI에서는 죽은 버튼이나 가짜 데이터 경로를 두지 않습니다.
+
+사진 기능은 현재 범위에서 제외합니다.
