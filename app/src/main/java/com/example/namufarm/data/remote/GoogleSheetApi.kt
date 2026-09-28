@@ -185,6 +185,9 @@ data class UpdateOrderDeliveryRequest(
     val action: String = "update_delivery",
     val order_number: String,
     val receiver_name: String,
+    val zip_no: String,
+    val road_address: String,
+    val detail_address: String,
     val address: String,
     val note: String
 )
