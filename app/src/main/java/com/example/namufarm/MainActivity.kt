@@ -67,7 +67,7 @@ class MainActivity : ComponentActivity() {
         val api = RetrofitClient.api
         val localDataSource = LocalDataSource(database, dao)
         val syncManager = SyncManager(localDataSource, api)
-        val repository = NamuFarmRepository(localDataSource, syncManager)
+        val repository = NamuFarmRepository(localDataSource, syncManager, RetrofitClient.jusoApi)
 
         // 3. ViewModel은 Repository만 바라본다.
         val factory = ManagementViewModelFactory(repository)
