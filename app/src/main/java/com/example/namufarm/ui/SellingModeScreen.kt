@@ -213,7 +213,6 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
     var showDeleteOrderConfirm by remember { mutableStateOf(false) }
     var quoteToDelete by remember { mutableStateOf<QuoteEntity?>(null) }
     var orderToDelete by remember { mutableStateOf<OrderEntity?>(null) }
-    var showRealDeleteOrderConfirm by remember { mutableStateOf(false) }
 
     var showNegotiationDialog by remember { mutableStateOf(false) } // 🚨 결재(협상) 창 띄우기용 ㅋㅋㅋ
 
@@ -1642,47 +1641,25 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                 modifier = Modifier.fillMaxWidth(0.95f).heightIn(max = 880.dp)
             ) {
                 Column(modifier = Modifier.padding(16.dp).verticalScroll(rememberScrollState())) {
-                    Box(
-                        modifier = Modifier.fillMaxWidth().background(Color(0xFFE3F2FD))
-                            .padding(12.dp), contentAlignment = Alignment.Center
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer
                     ) {
-                        // 🚨 [수정] 주문 상세 상단 타이틀 (높이 축소 & 휴지통 디자인 개선)
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(Color(0xFFE3F2FD), RoundedCornerShape(8.dp)) // 둥근 모서리 추가
-                                .padding(horizontal = 14.dp, vertical = 8.dp), // 🚨 위아래 여백을 8.dp로 확 줄임!
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                        Column(
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 13.dp)
                         ) {
                             Text(
-                                text = "📦 주문내역 상세",
-                                fontSize = 17.sp, // 글자 크기도 살짝 컴팩트하게
+                                text = "주문 상세",
+                                style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.ExtraBold,
-                                color = Color(0xFF1565C0)
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
                             )
-
-                            // 🚨 예쁘게 단장한 휴지통 버튼 (배경 + 테두리 추가)
-                            Surface(
-                                modifier = Modifier
-                                    .size(34.dp) // 아담한 사이즈
-                                    .clickable {
-                                        orderToDelete = order
-                                        showRealDeleteOrderConfirm = true
-                                    },
-                                color = Color(0xFFFFF1F0), // 아주 연한 빨간색 배경
-                                shape = RoundedCornerShape(8.dp), // 둥근 버튼
-                                border = BorderStroke(1.dp, Color(0xFFFFCDD2)) // 얇은 빨간 테두리
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        Icons.Default.Delete,
-                                        contentDescription = "주문 영구 삭제",
-                                        tint = Color(0xFFD32F2F),
-                                        modifier = Modifier.size(18.dp) // 아이콘 크기도 박스에 맞게 축소
-                                    )
-                                }
-                            }
+                            Text(
+                                text = "주문 기록은 삭제하지 않고 상태로 관리합니다.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.72f)
+                            )
                         }
                     }
 
@@ -1739,17 +1716,6 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                             fontSize = 14.sp,
                             color = Color.DarkGray,
                             fontWeight = FontWeight.Bold
-                        )
-
-                        Text(
-                            text = if (order.roadAddress.isBlank()) {
-                                "📍 배송주소: 미입력"
-                            } else {
-                                "📍 배송주소: [${order.zipNo}] ${order.roadAddress} ${order.detailAddress}".trim()
-                            },
-                            fontSize = 14.sp,
-                            color = if (order.roadAddress.isBlank()) Color(0xFFD32F2F) else Color.Black,
-                            fontWeight = FontWeight.Medium
                         )
 
                         Spacer(modifier = Modifier.height(16.dp))
@@ -1914,8 +1880,9 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                             val parts = line.split("|")
 
                             // 🚨 여기도 직관적인 배열 체크로 교체!
-                            val species = if (parts.isNotEmpty()) parts[0] else ""
-                            val qty = if (parts.size > 3) parts[3] else "0"
+                            val parsed = parseSummaryLine(line)
+                            val species = parsed?.species.orEmpty()
+                            val qty = parsed?.qty ?: 0
 
                             Text(
                                 "🌱 $species (${qty}주)",
@@ -2021,8 +1988,9 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                             val parts = line.split("|")
 
                             // 🚨 [핵심 해결] 확장함수 다 빼고 직관적인 if문으로 컴파일러 뇌정지 원천 차단!
-                            val species = if (parts.isNotEmpty()) parts[0] else ""
-                            val qty = if (parts.size > 3) parts[3] else "0"
+                            val parsed = parseSummaryLine(line)
+                            val species = parsed?.species.orEmpty()
+                            val qty = parsed?.qty ?: 0
 
                             Text(
                                 "🌱 $species (${qty}주)",
@@ -2070,41 +2038,6 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                     showDeleteOrderConfirm = false
                     orderToDelete = null
                 }) { Text("닫기") }
-            }
-        )
-    }
-
-    // 🚨 [추가] 진짜 영구 삭제용 확인 팝업
-    if (showRealDeleteOrderConfirm && orderToDelete != null) {
-        AlertDialog(
-            onDismissRequest = { showRealDeleteOrderConfirm = false },
-            title = { Text("🗑️ 주문 영구 삭제", fontWeight = FontWeight.Bold, color = Color.Red) },
-            text = {
-                Text(
-                    "이 작업은 되돌릴 수 없으며,\n구글 시트와 앱에서 이 주문 번호(${orderToDelete!!.orderNumber})가 완전히 사라집니다.\n정말 삭제하시겠습니까?",
-                    fontWeight = FontWeight.Bold
-                )
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        orderToDelete?.let { order ->
-                            // 🚨 뷰모델에 아까 만든 영구삭제 함수 호출!
-                            viewModel.deleteOrder(order)
-                        }
-                        showRealDeleteOrderConfirm = false
-                        showOrderDetailDialog = false
-                        selectedOrder = null
-                        orderToDelete = null
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
-                ) { Text("영구 삭제", color = Color.White, fontWeight = FontWeight.Bold) }
-            },
-            dismissButton = {
-                OutlinedButton(onClick = {
-                    showRealDeleteOrderConfirm = false
-                    orderToDelete = null
-                }) { Text("취소") }
             }
         )
     }
