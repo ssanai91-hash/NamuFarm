@@ -1101,73 +1101,86 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
     if (showCallLogDialog && uiState.recentCallList.isNotEmpty()) {
         Dialog(onDismissRequest = { showCallLogDialog = false }) {
             Surface(
-                shape = RoundedCornerShape(12.dp),
-                color = Color.White,
-                modifier = Modifier.fillMaxWidth().heightIn(max = 500.dp)
+                shape = RoundedCornerShape(20.dp),
+                color = MaterialTheme.colorScheme.surface,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 560.dp),
+                tonalElevation = 2.dp,
+                shadowElevation = 14.dp
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        "최근 통화 기록",
-                        fontWeight = FontWeight.ExtraBold,
-                        fontSize = 18.sp,
-                        color = Color(0xFF1B5E20)
-                    )
-                    Divider(
-                        modifier = Modifier.padding(vertical = 12.dp),
-                        color = Color(0xFFEEEEEE)
-                    )
+                Column(
+                    modifier = Modifier.padding(18.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "최근 통화",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.ExtraBold
+                            )
+                            Text(
+                                text = "견적을 보낼 고객을 선택하세요.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        IconButton(onClick = { showCallLogDialog = false }) {
+                            Icon(Icons.Default.Close, contentDescription = "닫기")
+                        }
+                    }
 
-                    androidx.compose.foundation.lazy.LazyColumn {
+                    LazyColumn(
+                        verticalArrangement = Arrangement.spacedBy(7.dp)
+                    ) {
                         items(uiState.recentCallList) { callItem ->
-                            Column(
+                            Surface(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clickable {
-                                        viewModel.updateCustomerPhone(callItem.number) // 선택 시 번호만 꽂아줌
+                                        viewModel.updateCustomerPhone(callItem.number)
                                         showCallLogDialog = false
-                                    }
-                                    .padding(vertical = 12.dp, horizontal = 8.dp)
+                                    },
+                                shape = RoundedCornerShape(13.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant,
+                                border = BorderStroke(
+                                    1.dp,
+                                    MaterialTheme.colorScheme.outlineVariant
+                                )
                             ) {
-                                // 🚨 폰에 이름이 저장되어 있는 경우
-                                if (!callItem.name.isNullOrBlank()) {
-                                    Text(
-                                        text = callItem.name,
-                                        fontSize = 18.sp,
-                                        fontWeight = FontWeight.ExtraBold,
-                                        color = Color.Black
+                                Column(
+                                    modifier = Modifier.padding(
+                                        horizontal = 14.dp,
+                                        vertical = 11.dp
                                     )
-                                    Spacer(modifier = Modifier.height(2.dp))
+                                ) {
                                     Text(
-                                        text = callItem.number,
-                                        fontSize = 14.sp,
-                                        color = Color.DarkGray
+                                        text = callItem.name?.takeIf { it.isNotBlank() }
+                                            ?: callItem.number,
+                                        style = MaterialTheme.typography.labelLarge,
+                                        fontWeight = FontWeight.Bold
                                     )
-                                }
-                                // 🚨 저장되지 않은 모르는 번호인 경우
-                                else {
-                                    Text(
-                                        text = callItem.number,
-                                        fontSize = 18.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color.Black
-                                    )
-                                    Spacer(modifier = Modifier.height(2.dp))
-                                    Text(
-                                        text = "저장되지 않은 번호",
-                                        fontSize = 12.sp,
-                                        color = Color(0xFF9E9E9E)
-                                    )
+
+                                    if (!callItem.name.isNullOrBlank()) {
+                                        Text(
+                                            text = callItem.number,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    } else {
+                                        Text(
+                                            text = "저장되지 않은 번호",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
                                 }
                             }
-                            Divider(color = Color(0xFFF5F5F5))
                         }
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    TextButton(
-                        onClick = { showCallLogDialog = false },
-                        modifier = Modifier.align(Alignment.End)
-                    ) {
-                        Text("닫기", color = Color.Gray, fontWeight = FontWeight.Bold)
                     }
                 }
             }
