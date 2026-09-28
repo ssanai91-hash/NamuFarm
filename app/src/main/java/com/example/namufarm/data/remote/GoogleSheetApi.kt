@@ -140,8 +140,21 @@ data class SheetOrderDto(
     val customer_phone: String,
     val total_qty: Int,
     val total_price: Int,
+
+    // 사람이 읽는 기존 필드와 앱 복원용 원본 필드를 같이 보낸다.
     val summary: String,
+    val raw_summary: String,
+    val status: String,
+
+    val is_prepaid: Boolean,
+    val shipping_fee: Int,
+
     val receiver_name: String,
+    val zip_no: String,
+    val road_address: String,
+    val detail_address: String,
+
+    // 기존 Apps Script 호환용 합쳐진 주소
     val address: String,
     val note: String
 )
@@ -186,6 +199,15 @@ data class SheetOrderRemoteDto(
     val receiver_name: String?,
     val address: String?,
     val note: String?,
-    val status: String?
+    val status: String?,
+
+    // 새 Apps Script가 지원하면 완전 왕복에 사용한다.
+    // 기존 응답에는 필드가 없어도 모두 nullable이라 호환된다.
+    val raw_summary: String? = null,
+    val is_prepaid: Boolean? = null,
+    val shipping_fee: Int? = null,
+    val zip_no: String? = null,
+    val road_address: String? = null,
+    val detail_address: String? = null
 )
 
