@@ -487,106 +487,148 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
         }
     ) { padding ->
         Column(
-            modifier = Modifier.fillMaxSize().padding(padding).background(Color(0xFFF2F4F7))
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .background(MaterialTheme.colorScheme.background)
                 .verticalScroll(scrollState)
+                .padding(top = 10.dp, bottom = 110.dp)
         ) {
             val chosungRows = listOf(
                 listOf("ㄱ", "ㄴ", "ㄷ", "ㄹ", "ㅁ", "ㅂ", "ㅅ"),
                 listOf("ㅇ", "ㅈ", "ㅊ", "ㅋ", "ㅌ", "ㅍ", "ㅎ")
             )
 
-            // 🚨 여기서부터 교체! 기존 Column을 Surface 컨테이너로 변경
-            Surface(
+            Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(8.dp), // 바깥쪽 배경과 분리되는 여백
-                shape = RoundedCornerShape(12.dp), // 둥근 모서리
-                color = Color.White,
-                border = BorderStroke(1.dp, Color(0xFFE0E0E0)) // 깔끔한 연회색 테두리
+                    .padding(horizontal = 12.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                ),
+                border = BorderStroke(
+                    1.dp,
+                    MaterialTheme.colorScheme.outlineVariant
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
             ) {
                 Column(
-                    modifier = Modifier.padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "판매 재고",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.ExtraBold
+                            )
+                            Text(
+                                text = "초성을 선택하면 판매 가능한 묘목만 보여줍니다.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Text(
+                            text = "${uiState.filteredSellingInventory.size}종",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+
                     chosungRows.forEach { rowItems ->
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             rowItems.forEach { chosung ->
-                                val isSelected = uiState.selectedChosung == chosung
-                                val hasItems = hasSellingItemsForChosung(uiState.allSellingInventory, chosung)
+                                val selected = uiState.selectedChosung == chosung
+                                val available = hasSellingItemsForChosung(
+                                    uiState.allSellingInventory,
+                                    chosung
+                                )
 
-                                Button(
-                                    onClick = {
-                                        if (hasItems) {
-                                            viewModel.selectChosung(chosung)
-                                        }
-                                    },
-                                    enabled = hasItems,
+                                Surface(
                                     modifier = Modifier
                                         .weight(1f)
-                                        .height(42.dp),
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = when {
-                                            isSelected -> Color(0xFF2E7D32)
-                                            else -> Color.White
+                                        .height(38.dp)
+                                        .clickable(enabled = available) {
+                                            viewModel.selectChosung(chosung)
                                         },
-                                        contentColor = when {
-                                            isSelected -> Color.White
-                                            hasItems -> Color(0xFF2E7D32)
-                                            else -> Color(0xFFBDBDBD)
-                                        },
-                                        disabledContainerColor = Color(0xFFF5F5F5),
-                                        disabledContentColor = Color(0xFFBDBDBD)
-                                    ),
+                                    shape = RoundedCornerShape(19.dp),
+                                    color = when {
+                                        selected -> MaterialTheme.colorScheme.primary
+                                        available -> MaterialTheme.colorScheme.surfaceVariant
+                                        else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+                                    },
                                     border = BorderStroke(
-                                        width = if (hasItems) 1.5.dp else 1.dp,
-                                        color = when {
-                                            isSelected -> Color(0xFF2E7D32)
-                                            hasItems -> Color(0xFF2E7D32)
-                                            else -> Color(0xFFE0E0E0)
+                                        1.dp,
+                                        when {
+                                            selected -> MaterialTheme.colorScheme.primary
+                                            available -> MaterialTheme.colorScheme.outlineVariant
+                                            else -> MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)
                                         }
-                                    ),
-                                    shape = RoundedCornerShape(20.dp),
-                                    contentPadding = PaddingValues(0.dp)
-                                ) {
-                                    Text(
-                                        text = chosung,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 15.sp
                                     )
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Text(
+                                            text = chosung,
+                                            style = MaterialTheme.typography.labelLarge,
+                                            fontWeight = FontWeight.Bold,
+                                            color = when {
+                                                selected -> MaterialTheme.colorScheme.onPrimary
+                                                available -> MaterialTheme.colorScheme.onSurfaceVariant
+                                                else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
+                                            }
+                                        )
+                                    }
                                 }
                             }
                         }
                     }
                 }
             }
-            // 🚨 여기까지 교체!
-
-            Spacer(modifier = Modifier.height(8.dp))
-            // ... (이후 if (uiState.filteredSellingInventory.isEmpty()) 부분은 그대로 유지)
 
             Spacer(modifier = Modifier.height(8.dp))
 
             if (uiState.filteredSellingInventory.isEmpty()) {
-                Text(
-                    "현재 초성에 해당하는 재고가 없습니다.",
-                    modifier = Modifier.fillMaxWidth().padding(30.dp),
-                    textAlign = TextAlign.Center,
-                    color = Color.Gray
-                )
-            } else {
-                uiState.filteredSellingInventory.forEach { item ->
-                    SellingItemRow(item) { qtyToAdd ->
-                        viewModel.addToCart(
-                            item,
-                            qtyToAdd
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant
+                ) {
+                    Column(
+                        modifier = Modifier.padding(vertical = 30.dp, horizontal = 18.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(5.dp)
+                    ) {
+                        Text(
+                            text = "판매 가능한 재고가 없습니다",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "다른 초성을 선택하거나 관리 화면에서 재고를 등록해주세요.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center
                         )
                     }
                 }
+            } else {
+                uiState.filteredSellingInventory.forEach { item ->
+                    SellingItemRow(item) { qtyToAdd ->
+                        viewModel.addToCart(item, qtyToAdd)
+                    }
+                }
             }
-            Spacer(modifier = Modifier.height(100.dp))
         }
     }
 
