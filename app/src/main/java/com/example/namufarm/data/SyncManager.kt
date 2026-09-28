@@ -1,7 +1,7 @@
 package com.example.namufarm.data
 
 import android.util.Log
-import androidx.room.withTransaction
+import com.example.namufarm.data.local.LocalDataSource
 import com.example.namufarm.data.remote.CancelOrderRequest
 import com.example.namufarm.data.remote.FarmDeleteRequest
 import com.example.namufarm.data.remote.FarmUploadRequest
@@ -33,8 +33,7 @@ data class SyncResult(
 )
 
 class SyncManager(
-    private val database: AppDatabase,
-    private val dao: ManagementDao,
+    private val local: LocalDataSource,
     private val api: GoogleSheetApi
 ) {
     private val gson = Gson()
@@ -191,11 +190,11 @@ class SyncManager(
         return try {
             val farms = api.getFarmData("get_farms")
 
-            database.withTransaction {
+            local.transaction {
                 // 로컬 우선 정책: Pull 시 전체 삭제하지 않고 원격 항목만 upsert 한다.
                 // 오프라인에서 생성된 로컬 농원이 pending 상태일 수 있으므로 보존한다.
                 farms.sortedBy { it.farm_id }.forEach { dto ->
-                    dao.upsertFarm(
+                    local.upsertFarm(
                         FarmEntity(
                             farmId = dto.farm_id,
                             farmName = dto.farm_name,
@@ -260,10 +259,10 @@ class SyncManager(
         return try {
             val speciesList = api.getSpeciesData("get_species")
 
-            database.withTransaction {
+            local.transaction {
                 // 농원과 동일하게 로컬 미전송 데이터를 보호하기 위해 전체 삭제하지 않는다.
                 speciesList.sortedBy { it.species_id }.forEach { dto ->
-                    dao.upsertSpecies(
+                    local.upsertSpecies(
                         SpeciesEntity(
                             speciesId = dto.species_id,
                             speciesName = dto.species_name,
@@ -293,15 +292,15 @@ class SyncManager(
             var upserted = 0
             var skipped = 0
 
-            database.withTransaction {
+            local.transaction {
                 // pending push가 모두 성공한 뒤에만 호출되는 Pull이므로,
                 // 원격 재고를 현재 스냅샷으로 보고 로컬 재고만 교체한다.
-                dao.clearAllInventory()
+                local.clearAllInventory()
     
-                val farmMap = dao.getAllFarms()
+                val farmMap = local.getAllFarms()
                     .associateBy { it.farmName.trim() }
     
-                val speciesMap = dao.getAllSpecies()
+                val speciesMap = local.getAllSpecies()
                     .associateBy { it.speciesName.trim() }
     
                 remoteData.forEach { dto ->
@@ -322,7 +321,7 @@ class SyncManager(
                         return@forEach
                     }
     
-                    dao.upsertInventory(
+                    local.upsertInventory(
                         FarmInventoryEntity(
                             farmId = farmId,
                             speciesId = speciesId,
@@ -499,17 +498,17 @@ class SyncManager(
 
             var syncedCount = 0
 
-            database.withTransaction {
+            local.transaction {
                 remoteOrders.forEach { dto ->
                     val orderNumber = dto.order_number?.trim().orEmpty()
                     if (orderNumber.isBlank()) return@forEach
     
-                    val existing = dao.getOrderByNumber(orderNumber)
+                    val existing = local.getOrderByNumber(orderNumber)
     
                     if (existing != null) {
                         // 이미 폰에 존재하는 주문은 로컬의 구조화된 주문상세/배송비/주소를 보존한다.
                         // 시트에서 안전하게 되가져올 수 있는 상태/기본 주문 정보만 반영한다.
-                        dao.upsertOrder(
+                        local.upsertOrder(
                             existing.copy(
                                 orderDate = dto.date ?: existing.orderDate,
                                 customerPhone = dto.customer_phone ?: existing.customerPhone,
@@ -523,7 +522,7 @@ class SyncManager(
                     } else {
                         // 다른 기기/시트에서만 존재하는 주문은 새 주문으로 가져온다.
                         // 현재 시트 API는 주소를 한 문자열로 내려주므로 roadAddress에 보관한다.
-                        dao.insertOrder(
+                        local.insertOrder(
                             OrderEntity(
                                 orderNumber = orderNumber,
                                 orderDate = dto.date ?: "",
