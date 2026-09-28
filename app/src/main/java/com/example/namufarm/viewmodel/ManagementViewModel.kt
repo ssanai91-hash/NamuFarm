@@ -826,25 +826,32 @@ class ManagementViewModel(
         }
     }
 
-    private fun buildDetailedItemSummary(cart: List<CartItem>): String {
-        return cart.joinToString(separator = "\n") { cartItem ->
-            "${cartItem.item.speciesName} ${cartItem.item.age} ${cartItem.item.quality} ${cartItem.orderQuantity}주"
+    // 🚨 [수정] 빈칸인 스펙은 문자에서 아예 지워지도록 스마트 문자열(buildSpecText) 적용!
+    private fun appendPaymentAccountText(sb: StringBuilder) {
+        val paymentText = BuildConfig.PAYMENT_ACCOUNT_TEXT.trim()
+        if (paymentText.isNotBlank()) {
+            sb.append("[입금 계좌]\n")
+            sb.append(paymentText)
+            sb.append("\n\n")
         }
     }
 
-    // 🚨 [수정] 빈칸인 스펙은 문자에서 아예 지워지도록 스마트 문자열(buildSpecText) 적용!
-    fun generateQuoteText(isPrepaid: Boolean = true, shippingFee: Int = 0): String {
+    fun generateQuoteText(
+        isPrepaid: Boolean = true,
+        shippingFee: Int = 0
+    ): String {
         val cart = _uiState.value.estimateCart
         if (cart.isEmpty()) return ""
 
         val sb = StringBuilder()
         sb.append("[나무팜 견적서]\n\n")
-        var totalRetail = 0
-        cart.forEach { cartItem ->
-            val price = cartItem.item.retailPrice * cartItem.orderQuantity
-            totalRetail += price
 
-            // 🚨 바로 여기! 무식한 슬래시(/) 조합을 빼고, 비어있는 값은 알아서 날려주는 buildSpecText 적용!
+        var totalRetail = 0
+
+        cart.forEach { cartItem ->
+            val lineTotal = cartItem.item.retailPrice * cartItem.orderQuantity
+            totalRetail += lineTotal
+
             val specText = buildSpecText(
                 quality = cartItem.item.quality,
                 age = cartItem.item.age,
@@ -853,27 +860,30 @@ class ManagementViewModel(
                 separator = " / "
             )
 
-            sb.append("🌱 ${cartItem.item.speciesName} ($specText)\n")
+            sb.append("🌱 ${cartItem.item.speciesName}")
+            if (specText.isNotBlank()) sb.append(" ($specText)")
+            sb.append("\n")
             sb.append(" - 수량: ${String.format("%,d", cartItem.orderQuantity)}주\n")
             sb.append(" - 단가: ${String.format("%,d", cartItem.item.retailPrice)}원\n")
-            sb.append(" - 금액: ${String.format("%,d", price)}원\n\n")
+            sb.append(" - 금액: ${String.format("%,d", lineTotal)}원\n\n")
         }
+
         sb.append("================\n")
 
-        // 택배비 선불/후불 분기 처리
         if (isPrepaid && shippingFee > 0) {
             sb.append("상품 합계: ${String.format("%,d", totalRetail)}원\n")
             sb.append("배송비(선불): ${String.format("%,d", shippingFee)}원\n")
-            sb.append("총 견적 금액: ${String.format("%,d", totalRetail + shippingFee)}원\n\n")
+            sb.append(
+                "총 견적 금액: ${String.format("%,d", totalRetail + shippingFee)}원\n\n"
+            )
         } else {
             sb.append("배송비: 후불(착불)\n")
             sb.append("총 견적 금액: ${String.format("%,d", totalRetail)}원\n\n")
         }
 
-        sb.append("[입금 계좌]\n")
-        sb.append("농협 328-12-035671 오진웅\n\n")
-        sb.append("입금하시고 주소와 성함 문자주세요.\n\n")
-        sb.append("감사합니다. ^^")
+        appendPaymentAccountText(sb)
+        sb.append("입금 후 주소와 성함을 보내주세요.\n\n")
+        sb.append("감사합니다.")
 
         return sb.toString()
     }
@@ -883,41 +893,26 @@ class ManagementViewModel(
         val sb = StringBuilder()
         sb.append("[나무팜 견적서]\n\n")
 
-        val lines = quote.itemSummary.split("\n").filter { it.isNotBlank() }
-        lines.forEach { line ->
-            val parts = line.split("|")
+        OrderSummaryCodec.parseStrict(quote.itemSummary).forEach { line ->
+            val specText = buildSpecText(
+                quality = line.quality,
+                age = line.age,
+                size = line.size,
+                plantType = line.plantType,
+                separator = " / "
+            )
+            val lineTotal = line.orderQty * line.retailPrice
 
-            if (parts.size >= 9) {
-                val species = parts[0]
-                val quality = parts[1]
-                val age = parts[2]
-                val size = parts[3]
-                val plantType = parts[4]
-                val qty = parts[5].toIntOrNull() ?: 0
-                val price = parts[6].toIntOrNull() ?: 0
-
-                sb.append("🌱 $species ($quality / $age / $size / $plantType)\n")
-                sb.append(" - 수량: ${String.format("%,d", qty)}주\n")
-                sb.append(" - 단가: ${String.format("%,d", price)}원\n")
-                sb.append(" - 금액: ${String.format("%,d", qty * price)}원\n\n")
-            } else if (parts.size >= 7) {
-                // 예전 저장 포맷도 호환
-                val species = parts[0]
-                val quality = parts[1]
-                val age = parts[2]
-                val qty = parts[3].toIntOrNull() ?: 0
-                val price = parts[4].toIntOrNull() ?: 0
-
-                sb.append("🌱 $species ($quality / $age)\n")
-                sb.append(" - 수량: ${String.format("%,d", qty)}주\n")
-                sb.append(" - 단가: ${String.format("%,d", price)}원\n")
-                sb.append(" - 금액: ${String.format("%,d", qty * price)}원\n\n")
-            }
+            sb.append("🌱 ${line.speciesName}")
+            if (specText.isNotBlank()) sb.append(" ($specText)")
+            sb.append("\n")
+            sb.append(" - 수량: ${String.format("%,d", line.orderQty)}주\n")
+            sb.append(" - 단가: ${String.format("%,d", line.retailPrice)}원\n")
+            sb.append(" - 금액: ${String.format("%,d", lineTotal)}원\n\n")
         }
 
         sb.append("================\n")
 
-        // 🚨 택배비 선불/후불 분기 처리
         if (quote.isPrepaid && quote.shippingFee > 0) {
             val itemTotal = quote.totalPrice - quote.shippingFee
             sb.append("상품 합계: ${String.format("%,d", itemTotal)}원\n")
@@ -927,14 +922,13 @@ class ManagementViewModel(
         }
 
         sb.append("총 견적 금액: ${String.format("%,d", quote.totalPrice)}원\n\n")
-        sb.append("[입금 계좌]\n")
-        sb.append("농협 328-12-035671 오진웅\n\n")
-        sb.append("감사합니다. ^^")
+        appendPaymentAccountText(sb)
+        sb.append("감사합니다.")
 
         return sb.toString()
     }
 
-    // 🚨 브로가 발급받은 승인키 (상수로 정의)
+    // 주소 검색 API 설정
     private val JUSO_API_KEY = BuildConfig.JUSO_API_KEY
 
     fun clearJusoResults() {
