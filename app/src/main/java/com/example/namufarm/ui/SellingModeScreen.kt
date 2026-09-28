@@ -215,7 +215,6 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
     var quoteToDelete by remember { mutableStateOf<QuoteEntity?>(null) }
     var orderToDelete by remember { mutableStateOf<OrderEntity?>(null) }
 
-    var showNegotiationDialog by remember { mutableStateOf(false) } // 🚨 결재(협상) 창 띄우기용 ㅋㅋㅋ
 
     // 🚨 2. 변수들이 다 만들어진 [그 다음에] 런처를 달아야 에러가 안 나!
     val callLogPermissionLauncher = rememberLauncherForActivityResult(
@@ -443,7 +442,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(7.dp)
                     ) {
                         NamuFarmQuickAction(
                             label = "빠른 견적",
@@ -453,17 +452,6 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                                 showQuickQuoteDialog = true
                             }
                         )
-                        NamuFarmQuickAction(
-                            label = "거래명세",
-                            modifier = Modifier.weight(1f),
-                            onClick = { showNegotiationDialog = true }
-                        )
-                    }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
                         NamuFarmQuickAction(
                             label = "오늘 견적 ${uiState.todayQuotes.size}",
                             modifier = Modifier.weight(1f),
@@ -2513,38 +2501,6 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
     }
 
     // 🚨 [추가] 오현주 님과 협상 전용 팝업창 ㅋㅋㅋㅋ
-    if (showNegotiationDialog) {
-        AlertDialog(
-            onDismissRequest = { showNegotiationDialog = false },
-            title = {
-                Text("🚨 권한 부족 (접근 제한)", fontWeight = FontWeight.ExtraBold, color = Color(0xFFD32F2F))
-            },
-            text = {
-                Text(
-                    "오현주와 협상!! 💬\n\n이 기능을 사용하려면\n먼저 협상을 완료해야 합니다 ㅎㅎ",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
-                )
-            },
-            confirmButton = {
-                Button(
-                    onClick = { showNegotiationDialog = false },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1976D2))
-                ) {
-                    Text("협상하러 가기 🏃‍♂️💨", color = Color.White, fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = {
-                OutlinedButton(
-                    onClick = { showNegotiationDialog = false }
-                ) {
-                    Text("깨갱... (닫기)")
-                }
-            }
-        )
-    }
 }
 
 // 🚨 개별 묘목 전시 UI & 커스텀 수량 입력 다이얼로그 (브로의 확정 레이아웃 적용!)
