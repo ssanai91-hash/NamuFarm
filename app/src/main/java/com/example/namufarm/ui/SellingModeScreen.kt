@@ -1645,9 +1645,41 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(24.dp))
+                    Spacer(modifier = Modifier.height(20.dp))
 
-                    // 하단 3버튼 (입금확인, 견적삭제, 닫기)
+                    OutlinedButton(
+                        onClick = {
+                            if (quote.customerPhone.isBlank()) {
+                                viewModel.showMessage("전화번호가 없어 문자를 보낼 수 없습니다.")
+                            } else {
+                                val smsIntent = Intent(Intent.ACTION_SENDTO).apply {
+                                    data = Uri.parse("smsto:${quote.customerPhone}")
+                                    putExtra(
+                                        "sms_body",
+                                        viewModel.generateQuoteTextFromEntity(quote)
+                                    )
+                                }
+
+                                try {
+                                    context.startActivity(smsIntent)
+                                } catch (e: Exception) {
+                                    viewModel.showMessage("문자 앱을 찾을 수 없습니다.")
+                                }
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text(
+                            "견적 문자 다시 보내기",
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
