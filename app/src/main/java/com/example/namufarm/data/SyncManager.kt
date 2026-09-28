@@ -521,6 +521,9 @@ class SyncManager(
                     action = "update_delivery",
                     order_number = orderNumber,
                     receiver_name = receiverName,
+                    zip_no = zipNo,
+                    road_address = roadAddress,
+                    detail_address = detailAddress,
                     address = fullAddress,
                     note = note
                 )
