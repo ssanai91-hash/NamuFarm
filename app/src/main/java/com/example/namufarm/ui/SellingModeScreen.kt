@@ -2819,127 +2819,96 @@ fun QuoteOrderItemCard(
 ) {
     val itemTotal = qty * retailPrice
 
-    Card(
+    Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(bottom = 10.dp),
-        colors = CardDefaults.cardColors(Color(0xFFFAFAFA)),
-        border = BorderStroke(1.dp, Color(0xFFE0E0E0)),
-        shape = RoundedCornerShape(10.dp)
+            .padding(bottom = 8.dp),
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        border = BorderStroke(
+            1.dp,
+            MaterialTheme.colorScheme.outlineVariant
+        )
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp)
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(9.dp)
         ) {
-            // 1~2행 통합: 왼쪽 정보 / 오른쪽 주문수량
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.Top
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    // 1행
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = "🌱 $species",
-                            fontWeight = FontWeight.ExtraBold,
-                            fontSize = 15.sp,
-                            color = Color.Black
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = quality,
-                            fontSize = 11.sp,
-                            color = Color(0xFFE65100),
-                            fontWeight = FontWeight.ExtraBold,
-                            modifier = Modifier
-                                .background(Color(0xFFFFF3E0), RoundedCornerShape(4.dp))
-                                .padding(horizontal = 5.dp, vertical = 2.dp)
-                        )
-                        if (specText.isNotBlank()) {
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = specText,
-                                fontSize = 11.sp,
-                                color = Color(0xFF455A64),
-                                fontWeight = FontWeight.ExtraBold,
-                                modifier = Modifier
-                                    .background(Color(0xFFCFD8DC), RoundedCornerShape(4.dp))
-                                    .padding(horizontal = 5.dp, vertical = 2.dp)
-                            )
-                        }
-                    }
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = species,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                    val detail = listOf(quality, specText)
+                        .filter { it.isNotBlank() }
+                        .joinToString(" · ")
 
-                    // 2행
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (detail.isNotBlank()) {
                         Text(
-                            text = farmName,
-                            fontSize = 10.sp,
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier
-                                .background(Color(0xFF1976D2), RoundedCornerShape(4.dp))
-                                .padding(horizontal = 6.dp, vertical = 2.dp)
-                        )
-
-                        Spacer(modifier = Modifier.width(8.dp))
-
-                        Text(
-                            text = "도매가: ${String.format("%,d", wholesalePrice)}원",
-                            fontSize = 12.sp,
-                            color = Color.Gray,
-                            fontWeight = FontWeight.Medium
+                            text = detail,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
+
+                    Text(
+                        text = farmName,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
                 }
+
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer
+                ) {
+                    Text(
+                        text = "${qty}주",
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
+            }
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.Bottom
+            ) {
+                Text(
+                    text = "도매 ${String.format("%,d", wholesalePrice)}원",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f)
+                )
 
                 Column(horizontalAlignment = Alignment.End) {
                     Text(
-                        text = "주문수량",
-                        fontSize = 11.sp,
-                        color = Color.Gray
+                        text = "판매가 ${String.format("%,d", retailPrice)}원",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        text = "${qty}주",
-                        fontSize = 22.sp,
+                        text = "${String.format("%,d", itemTotal)}원",
+                        style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.ExtraBold,
-                        color = qtyColor
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 }
-            }
-
-            Spacer(modifier = Modifier.height(6.dp))
-
-            // 3행: 판매가 오른쪽 정렬
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "판매가: ${String.format("%,d", retailPrice)}원",
-                    fontSize = 13.sp,
-                    color = retailColor,
-                    fontWeight = FontWeight.ExtraBold
-                )
-            }
-
-            Spacer(modifier = Modifier.height(4.dp))
-
-            // 4행: 합계 오른쪽 정렬
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "합계: ${String.format("%,d", itemTotal)}원",
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = Color.Black
-                )
             }
         }
     }
@@ -2955,8 +2924,9 @@ fun AddressSearchDialog(
     val uiState by mViewModel.uiState.collectAsState()
 
     var keyword by remember { mutableStateOf("") }
-    var selectedJuso by remember { mutableStateOf<com.example.namufarm.data.remote.JusoItem?>(null) }
-
+    var selectedJuso by remember {
+        mutableStateOf<com.example.namufarm.data.remote.JusoItem?>(null)
+    }
     var detailAddress by remember { mutableStateOf("") }
     var receiverName by remember { mutableStateOf("") }
     var note by remember { mutableStateOf("") }
@@ -2974,162 +2944,234 @@ fun AddressSearchDialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
-        Surface(modifier = Modifier.fillMaxSize(), color = Color.White) {
-            Column(modifier = Modifier.padding(16.dp)) {
-
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = onDismiss) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "뒤로")
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.background
+        ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                Surface(
+                    color = MaterialTheme.colorScheme.surface,
+                    tonalElevation = 2.dp,
+                    shadowElevation = 4.dp
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .statusBarsPadding()
+                            .padding(horizontal = 8.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(onClick = onDismiss) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "뒤로"
+                            )
+                        }
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "배송정보",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.ExtraBold
+                            )
+                            Text(
+                                text = targetOrder.orderNumber,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
-                    Text(
-                        text = "배송정보 입력",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = Color(0xFF1565C0)
-                    )
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
-
                 if (selectedJuso == null) {
-                    OutlinedTextField(
-                        value = keyword,
-                        onValueChange = {
-                            keyword = it
-                            mViewModel.searchAddress(it)
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text("도로명 또는 지번 입력") },
-                        singleLine = true,
-                        shape = RoundedCornerShape(12.dp)
-                    )
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(16.dp)
+                    ) {
+                        Text(
+                            text = "주소 검색",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                        Text(
+                            text = "도로명, 건물명 또는 지번을 입력하세요.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(14.dp))
 
-                    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(uiState.jusoResults) { juso ->
-                            Card(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { selectedJuso = juso },
-                                colors = CardDefaults.cardColors(Color(0xFFF8F9FA))
+                        OutlinedTextField(
+                            value = keyword,
+                            onValueChange = {
+                                keyword = it
+                                mViewModel.searchAddress(it)
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            placeholder = { Text("예: 테헤란로 123") },
+                            singleLine = true,
+                            shape = RoundedCornerShape(13.dp)
+                        )
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        if (keyword.length >= 2 && uiState.jusoResults.isEmpty()) {
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(14.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant
                             ) {
-                                Column(modifier = Modifier.padding(12.dp)) {
-                                    Text(
-                                        text = "[${juso.zipNo}]",
-                                        fontSize = 12.sp,
-                                        color = Color(0xFF2E7D32),
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Text(
-                                        text = juso.roadAddr,
-                                        fontSize = 14.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Text(
-                                        text = "지번: ${juso.jibunAddr}",
-                                        fontSize = 12.sp,
-                                        color = Color.Gray
-                                    )
+                                Text(
+                                    text = "검색 결과가 없습니다.",
+                                    modifier = Modifier.padding(18.dp),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        } else {
+                            LazyColumn(
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                                contentPadding = PaddingValues(bottom = 20.dp)
+                            ) {
+                                items(uiState.jusoResults) { juso ->
+                                    Surface(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable { selectedJuso = juso },
+                                        shape = RoundedCornerShape(14.dp),
+                                        color = MaterialTheme.colorScheme.surface,
+                                        border = BorderStroke(
+                                            1.dp,
+                                            MaterialTheme.colorScheme.outlineVariant
+                                        )
+                                    ) {
+                                        Column(
+                                            modifier = Modifier.padding(14.dp),
+                                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            Text(
+                                                text = juso.roadAddr,
+                                                style = MaterialTheme.typography.labelLarge,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                            Text(
+                                                text = "지번 ${juso.jibunAddr}",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                            Text(
+                                                text = "우편번호 ${juso.zipNo}",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
                     }
                 } else {
-                    Surface(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        color = Color(0xFFF5F5F5)
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState())
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Column(modifier = Modifier.padding(12.dp)) {
-                            Text(
-                                text = "[${selectedJuso!!.zipNo}]",
-                                fontSize = 12.sp,
-                                color = Color(0xFF2E7D32),
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                text = selectedJuso!!.roadAddr,
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = Color.Black
-                            )
-                            Text(
-                                text = selectedJuso!!.jibunAddr,
-                                fontSize = 12.sp,
-                                color = Color.Gray
-                            )
-                        }
-                    }
+                        Text(
+                            text = "배송지 확인",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.ExtraBold
+                        )
 
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    OutlinedTextField(
-                        value = detailAddress,
-                        onValueChange = { detailAddress = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        label = { Text("상세주소") },
-                        placeholder = { Text("예: 101동 1203호") },
-                        shape = RoundedCornerShape(12.dp)
-                    )
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    OutlinedTextField(
-                        value = receiverName,
-                        onValueChange = { receiverName = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        label = { Text("받는사람 이름") },
-                        shape = RoundedCornerShape(12.dp)
-                    )
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    // ✅ 비고란 2줄
-                    OutlinedTextField(
-                        value = note,
-                        onValueChange = { note = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        label = { Text("비고 / 요청사항") },
-                        placeholder = { Text("예: 경비실 보관, 오전 배송 요청") },
-                        minLines = 2,
-                        maxLines = 2,
-                        shape = RoundedCornerShape(12.dp)
-                    )
-
-                    Spacer(modifier = Modifier.height(20.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        OutlinedButton(
-                            onClick = {
-                                selectedJuso = null
-                                keyword = ""
-                                mViewModel.clearJusoResults()
-                            },
-                            modifier = Modifier.weight(1f).height(50.dp)
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(14.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer
                         ) {
-                            Text("주소 다시검색")
-                        }
-
-                        Button(
-                            onClick = {
-                                onSaveDelivery(
-                                    receiverName.trim(),
-                                    selectedJuso!!.zipNo,
-                                    selectedJuso!!.roadAddr,
-                                    detailAddress.trim(),
-                                    note.trim()
+                            Column(
+                                modifier = Modifier.padding(14.dp),
+                                verticalArrangement = Arrangement.spacedBy(3.dp)
+                            ) {
+                                Text(
+                                    text = selectedJuso!!.roadAddr,
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
                                 )
-                            },
-                            modifier = Modifier.weight(1f).height(50.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1976D2))
+                                Text(
+                                    text = "우편번호 ${selectedJuso!!.zipNo}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.72f)
+                                )
+                            }
+                        }
+
+                        OutlinedTextField(
+                            value = detailAddress,
+                            onValueChange = { detailAddress = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            label = { Text("상세주소") },
+                            placeholder = { Text("예: 101동 1203호") },
+                            shape = RoundedCornerShape(13.dp)
+                        )
+
+                        OutlinedTextField(
+                            value = receiverName,
+                            onValueChange = { receiverName = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            label = { Text("받는사람") },
+                            shape = RoundedCornerShape(13.dp)
+                        )
+
+                        OutlinedTextField(
+                            value = note,
+                            onValueChange = { note = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { Text("배송 메모") },
+                            placeholder = { Text("예: 경비실 보관") },
+                            minLines = 3,
+                            maxLines = 4,
+                            shape = RoundedCornerShape(13.dp)
+                        )
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Text("저장", color = Color.White, fontWeight = FontWeight.Bold)
+                            OutlinedButton(
+                                onClick = {
+                                    selectedJuso = null
+                                    keyword = ""
+                                    mViewModel.clearJusoResults()
+                                },
+                                modifier = Modifier.weight(1f).height(50.dp),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Text("다시 검색")
+                            }
+
+                            Button(
+                                onClick = {
+                                    onSaveDelivery(
+                                        receiverName.trim(),
+                                        selectedJuso!!.zipNo,
+                                        selectedJuso!!.roadAddr,
+                                        detailAddress.trim(),
+                                        note.trim()
+                                    )
+                                },
+                                enabled = receiverName.isNotBlank(),
+                                modifier = Modifier.weight(1.3f).height(50.dp),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Text("배송정보 저장", fontWeight = FontWeight.ExtraBold)
+                            }
                         }
                     }
                 }
