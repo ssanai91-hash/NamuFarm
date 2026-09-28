@@ -122,29 +122,35 @@ class NamuFarmRepository(
         phone: String,
         memo: String
     ): FarmSaveResult {
-        val savedId = local.upsertFarm(
-            FarmEntity(
-                farmId = farmId,
+        val localWork = local.transaction {
+            val savedId = upsertFarm(
+                FarmEntity(
+                    farmId = farmId,
+                    farmName = farmName,
+                    address = address.ifBlank { null },
+                    phone = phone.ifBlank { null },
+                    memo = memo.ifBlank { null }
+                )
+            ).toInt()
+
+            val target = FarmEntity(
+                farmId = farmId ?: savedId,
                 farmName = farmName,
                 address = address.ifBlank { null },
                 phone = phone.ifBlank { null },
                 memo = memo.ifBlank { null }
             )
-        ).toInt()
 
-        val target = FarmEntity(
-            farmId = farmId ?: savedId,
-            farmName = farmName,
-            address = address.ifBlank { null },
-            phone = phone.ifBlank { null },
-            memo = memo.ifBlank { null }
-        )
+            val pendingId = enqueue(
+                PendingSyncType.FARM_SAVE,
+                PendingFarmSyncPayload(target)
+            )
 
-        val pendingId = enqueue(
-            PendingSyncType.FARM_SAVE,
-            PendingFarmSyncPayload(target)
-        )
+            target to pendingId
+        }
 
+        val target = localWork.first
+        val pendingId = localWork.second
         val cloudSynced = syncManager.uploadFarmToSheet(target)
         if (cloudSynced) local.deletePendingSync(pendingId)
 
@@ -152,15 +158,15 @@ class NamuFarmRepository(
     }
 
     suspend fun deleteFarm(farmId: Int): CloudWriteResult {
-        local.transaction {
+        val pendingId = local.transaction {
             deleteInventoryByFarmId(farmId)
             deleteFarmById(farmId)
-        }
 
-        val pendingId = enqueue(
-            PendingSyncType.FARM_DELETE,
-            PendingDeleteFarmSyncPayload(farmId)
-        )
+            enqueue(
+                PendingSyncType.FARM_DELETE,
+                PendingDeleteFarmSyncPayload(farmId)
+            )
+        }
 
         val cloudSynced = syncManager.deleteFarmOnSheet(farmId)
         if (cloudSynced) local.deletePendingSync(pendingId)
@@ -177,9 +183,21 @@ class NamuFarmRepository(
         memo: String,
         isActive: Int
     ): SpeciesSaveResult {
-        val savedId = local.upsertSpecies(
-            SpeciesEntity(
-                speciesId = speciesId,
+        val localWork = local.transaction {
+            val savedId = upsertSpecies(
+                SpeciesEntity(
+                    speciesId = speciesId,
+                    speciesName = speciesName,
+                    nameFarm = nameFarm.ifBlank { null },
+                    chosung = chosung.ifBlank { null },
+                    category = category.ifBlank { null },
+                    memo = memo.ifBlank { null },
+                    isActive = isActive
+                )
+            ).toInt()
+
+            val target = SpeciesEntity(
+                speciesId = speciesId ?: savedId,
                 speciesName = speciesName,
                 nameFarm = nameFarm.ifBlank { null },
                 chosung = chosung.ifBlank { null },
@@ -187,23 +205,17 @@ class NamuFarmRepository(
                 memo = memo.ifBlank { null },
                 isActive = isActive
             )
-        ).toInt()
 
-        val target = SpeciesEntity(
-            speciesId = speciesId ?: savedId,
-            speciesName = speciesName,
-            nameFarm = nameFarm.ifBlank { null },
-            chosung = chosung.ifBlank { null },
-            category = category.ifBlank { null },
-            memo = memo.ifBlank { null },
-            isActive = isActive
-        )
+            val pendingId = enqueue(
+                PendingSyncType.SPECIES_SAVE,
+                PendingSpeciesSyncPayload(target)
+            )
 
-        val pendingId = enqueue(
-            PendingSyncType.SPECIES_SAVE,
-            PendingSpeciesSyncPayload(target)
-        )
+            target to pendingId
+        }
 
+        val target = localWork.first
+        val pendingId = localWork.second
         val cloudSynced = syncManager.uploadSpeciesToSheet(target)
         if (cloudSynced) local.deletePendingSync(pendingId)
 
@@ -211,12 +223,13 @@ class NamuFarmRepository(
     }
 
     suspend fun deleteSpecies(speciesId: Int): CloudWriteResult {
-        local.deactivateSpecies(speciesId)
-
-        val pendingId = enqueue(
-            PendingSyncType.SPECIES_DELETE,
-            PendingDeleteSpeciesSyncPayload(speciesId)
-        )
+        val pendingId = local.transaction {
+            deactivateSpecies(speciesId)
+            enqueue(
+                PendingSyncType.SPECIES_DELETE,
+                PendingDeleteSpeciesSyncPayload(speciesId)
+            )
+        }
 
         val cloudSynced = syncManager.deleteSpeciesOnSheet(speciesId)
         if (cloudSynced) local.deletePendingSync(pendingId)
@@ -232,28 +245,30 @@ class NamuFarmRepository(
         val isDelete = entity.quantity <= 0
         val action = if (isDelete) "delete" else "save"
 
-        if (isDelete) {
-            local.deleteInventory(
-                entity.farmId,
-                entity.speciesId,
-                entity.quality,
-                entity.age,
-                entity.size,
-                entity.plantType
-            )
-        } else {
-            local.upsertInventory(entity)
-        }
+        val pendingId = local.transaction {
+            if (isDelete) {
+                deleteInventory(
+                    entity.farmId,
+                    entity.speciesId,
+                    entity.quality,
+                    entity.age,
+                    entity.size,
+                    entity.plantType
+                )
+            } else {
+                upsertInventory(entity)
+            }
 
-        val pendingId = enqueue(
-            PendingSyncType.INVENTORY,
-            PendingInventorySyncPayload(
-                action = action,
-                entity = entity,
-                farmName = farmName,
-                speciesName = speciesName
+            enqueue(
+                PendingSyncType.INVENTORY,
+                PendingInventorySyncPayload(
+                    action = action,
+                    entity = entity,
+                    farmName = farmName,
+                    speciesName = speciesName
+                )
             )
-        )
+        }
 
         val cloudSynced = syncManager.uploadToSheet(
             action = action,
@@ -448,26 +463,28 @@ class NamuFarmRepository(
         detailAddress: String,
         note: String
     ): CloudWriteResult {
-        local.updateOrderDeliveryInfo(
-            orderNumber,
-            receiverName,
-            zipNo,
-            roadAddress,
-            detailAddress,
-            note
-        )
-
-        val pendingId = enqueue(
-            PendingSyncType.DELIVERY,
-            PendingDeliverySyncPayload(
-                orderNumber = orderNumber,
-                receiverName = receiverName,
-                zipNo = zipNo,
-                roadAddress = roadAddress,
-                detailAddress = detailAddress,
-                note = note
+        val pendingId = local.transaction {
+            updateOrderDeliveryInfo(
+                orderNumber,
+                receiverName,
+                zipNo,
+                roadAddress,
+                detailAddress,
+                note
             )
-        )
+
+            enqueue(
+                PendingSyncType.DELIVERY,
+                PendingDeliverySyncPayload(
+                    orderNumber = orderNumber,
+                    receiverName = receiverName,
+                    zipNo = zipNo,
+                    roadAddress = roadAddress,
+                    detailAddress = detailAddress,
+                    note = note
+                )
+            )
+        }
 
         val cloudSynced = syncManager.updateOrderDeliveryOnSheet(
             orderNumber,
