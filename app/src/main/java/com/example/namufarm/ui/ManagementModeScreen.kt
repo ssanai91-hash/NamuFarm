@@ -589,31 +589,71 @@ fun FarmManageDialog(
 fun InventoryListSection(viewModel: ManagementViewModel) {
     val uiState by viewModel.uiState.collectAsState()
 
-    Column(modifier = Modifier.padding(horizontal = 8.dp)) {
-        SelectionSection("${uiState.selectedSpecies?.speciesName} 재고 목록 (클릭 시 수정)", color = Color(0xFFE65100)) {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                Row(modifier = Modifier.fillMaxWidth().background(Color(0xFFF5F5F5)).padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    // 🚨 2. 헤더 수정 (스펙 한눈에 보기)
-                    Text("묘목 스펙", modifier = Modifier.weight(2f), fontSize = 11.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
-                    Text("재고", modifier = Modifier.weight(1f), fontSize = 11.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
-                    Text("도매가", modifier = Modifier.weight(1.2f), fontSize = 11.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
-                    Text("소매가", modifier = Modifier.weight(1.2f), fontSize = 11.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
-                }
-
-                uiState.inventoryList.forEach { row ->
-                    HorizontalDivider(color = Color(0xFFEEEEEE), thickness = 0.5.dp)
+    SelectionSection(
+        title = "재고 현황",
+        color = MaterialTheme.colorScheme.primary
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            uiState.inventoryList.forEach { row ->
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            viewModel.loadExistingRowToInput(
+                                row,
+                                uiState.allSpeciesList
+                            )
+                        },
+                    shape = RoundedCornerShape(13.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    border = BorderStroke(
+                        1.dp,
+                        MaterialTheme.colorScheme.outlineVariant
+                    )
+                ) {
                     Row(
-                        modifier = Modifier.fillMaxWidth().clickable { viewModel.loadExistingRowToInput(row, uiState.allSpeciesList) }.padding(vertical = 12.dp),
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // 🚨 3. 내용 수정 (크기와 타입 표시)
-                        Column(modifier = Modifier.weight(2f).padding(start = 8.dp)) {
-                            Text("${row.age} / ${row.size}", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.Black)
-                            Text("${row.plantType} / ${row.quality}", fontSize = 11.sp, color = Color.Gray)
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(3.dp)
+                        ) {
+                            val spec = listOf(
+                                row.age,
+                                row.size,
+                                row.plantType,
+                                row.quality
+                            ).filter { it.isNotBlank() }.joinToString(" · ")
+
+                            Text(
+                                text = spec.ifBlank { "규격 미지정" },
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "도매 ${String.format("%,d", row.wholesalePrice)}원 · 소매 ${String.format("%,d", row.retailPrice)}원",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
-                        Text("${String.format("%,d", row.quantity)}주", modifier = Modifier.weight(1f), fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFFD32F2F), textAlign = TextAlign.Center)
-                        Text(String.format("%,d", row.wholesalePrice), modifier = Modifier.weight(1.2f), fontSize = 13.sp, color = Color(0xFF1976D2), textAlign = TextAlign.End)
-                        Text(String.format("%,d", row.retailPrice), modifier = Modifier.weight(1.2f).padding(end = 8.dp), fontSize = 13.sp, color = Color(0xFF388E3C), textAlign = TextAlign.End)
+
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer
+                        ) {
+                            Text(
+                                text = "${String.format("%,d", row.quantity)}주",
+                                modifier = Modifier.padding(
+                                    horizontal = 10.dp,
+                                    vertical = 6.dp
+                                ),
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
                     }
                 }
             }
@@ -677,7 +717,7 @@ fun InventoryInputPane(viewModel: ManagementViewModel) {
 
     Column(modifier = Modifier.padding(8.dp)) {
 
-        SelectionSection("3. 년생 선택", color = Color(0xFF673AB7)) {
+        SelectionSection("연생", color = Color(0xFF673AB7)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -711,7 +751,7 @@ fun InventoryInputPane(viewModel: ManagementViewModel) {
             }
         }
 
-        SelectionSection("4. 묘목 크기", color = Color(0xFF0288D1)) {
+        SelectionSection("크기", color = Color(0xFF0288D1)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -755,7 +795,7 @@ fun InventoryInputPane(viewModel: ManagementViewModel) {
             }
         }
 
-        SelectionSection("5. 재배 타입", color = Color(0xFF8D6E63)) {
+        SelectionSection("재배 타입", color = Color(0xFF8D6E63)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -784,7 +824,7 @@ fun InventoryInputPane(viewModel: ManagementViewModel) {
             }
         }
 
-        SelectionSection("6. 품질 선택", color = Color(0xFF009688)) {
+        SelectionSection("품질", color = Color(0xFF009688)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -804,7 +844,7 @@ fun InventoryInputPane(viewModel: ManagementViewModel) {
             }
         }
 
-        SelectionSection("7. 수량 및 가격 설정", color = Color(0xFFE91E63)) {
+        SelectionSection("수량 · 가격", color = Color(0xFFE91E63)) {
             ValueAdjuster("수량(주)", uiState.inputQuantity, listOf(1, 10, 100), resetLabel = "품절", onAdd = { viewModel.addQuantity(it) }, onReset = { viewModel.resetQuantityToSoldOut() })
             Divider(modifier = Modifier.padding(vertical = 12.dp), color = Color(0xFFF0F0F0))
             ValueAdjuster("도매가(원)", uiState.inputWholesale, listOf(100, 1000, 10000), resetLabel = "초기화", onAdd = { viewModel.addWholesale(it) }, onReset = { viewModel.resetWholesale() })
@@ -841,66 +881,68 @@ fun <T> GridSelectionMenu(
     itemContent: (T) -> String,
     isSelected: (T) -> Boolean,
     onSelect: (T) -> Unit,
-    selectedBorderColor: Color = Color(0xFF2196F3),
+    selectedBorderColor: Color = Color(0xFF245C49),
     selectedBorderWidth: Dp = 1.dp,
     selectedTextWeight: FontWeight = FontWeight.Bold
 ) {
     Column(
         modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(6.dp)
+        verticalArrangement = Arrangement.spacedBy(7.dp)
     ) {
-        val rows = items.chunked(columns)
-
-        rows.forEach { rowItems ->
+        items.chunked(columns).forEach { rowItems ->
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                horizontalArrangement = Arrangement.spacedBy(7.dp)
             ) {
                 rowItems.forEach { item ->
                     val selected = isSelected(item)
 
-                    // 🚨 [기존 Box 안쪽 내용 교체]
-                    Box(
+                    Surface(
                         modifier = Modifier
                             .weight(1f)
-                            .height(48.dp)
-                            .background(
-                                if (selected) Color(0xFFE3F2FD) else Color.White,
-                                RoundedCornerShape(8.dp)
-                            )
-                            .border(
-                                width = if (selected) selectedBorderWidth else 1.dp,
-                                color = if (selected) selectedBorderColor else Color(0xFFE0E0E0),
-                                shape = RoundedCornerShape(8.dp)
-                            )
+                            .heightIn(min = 48.dp)
                             .clickable { onSelect(item) },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        // 🚨 1. 글자 길이에 따라 폰트 크기를 다르게 줍니다!
-                        val textStr = itemContent(item)
-                        val dynamicFontSize = when {
-                            textStr.length >= 7 -> 9.sp    // 가이즈까향나무 (아주 작게)
-                            textStr.length >= 5 -> 10.sp   // 5~6글자
-                            else -> 12.sp                  // 감, 사과나무 (기본 크기)
-                        }
-
-                        Text(
-                            text = textStr,
-                            fontSize = dynamicFontSize,
-                            textAlign = TextAlign.Center,
-                            maxLines = 1, // 🚨 무조건 1줄로 강제!
-                            softWrap = false, // 🚨 자동 줄바꿈 금지!
-                            letterSpacing = (-0.5).sp, // 🚨 자간을 살짝 좁혀서 공간 확보
-                            color = if (selected) Color(0xFF1565C0) else Color.DarkGray,
-                            fontWeight = if (selected) selectedTextWeight else FontWeight.Normal
+                        shape = RoundedCornerShape(11.dp),
+                        color = if (selected) {
+                            MaterialTheme.colorScheme.primaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.surfaceVariant
+                        },
+                        border = BorderStroke(
+                            width = if (selected) selectedBorderWidth else 1.dp,
+                            color = if (selected) {
+                                selectedBorderColor
+                            } else {
+                                MaterialTheme.colorScheme.outlineVariant
+                            }
                         )
+                    ) {
+                        Box(
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 10.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = itemContent(item),
+                                style = MaterialTheme.typography.labelMedium,
+                                textAlign = TextAlign.Center,
+                                maxLines = 2,
+                                color = if (selected) {
+                                    MaterialTheme.colorScheme.onPrimaryContainer
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                },
+                                fontWeight = if (selected) {
+                                    selectedTextWeight
+                                } else {
+                                    FontWeight.Medium
+                                }
+                            )
+                        }
                     }
                 }
 
-                if (rowItems.size < columns) {
-                    repeat(columns - rowItems.size) {
-                        Spacer(modifier = Modifier.weight(1f))
-                    }
+                repeat(columns - rowItems.size) {
+                    Spacer(modifier = Modifier.weight(1f))
                 }
             }
         }
@@ -915,56 +957,147 @@ fun SelectionSection(
     content: @Composable () -> Unit
 ) {
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 6.dp),
-        colors = CardDefaults.cardColors(Color.White),
-        elevation = CardDefaults.cardElevation(2.dp),
-        shape = RoundedCornerShape(12.dp)
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        border = BorderStroke(
+            1.dp,
+            MaterialTheme.colorScheme.outlineVariant
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        shape = RoundedCornerShape(16.dp)
     ) {
-        Column(modifier = Modifier.padding(14.dp)) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(13.dp)
+        ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                Box(
+                    modifier = Modifier
+                        .width(4.dp)
+                        .height(20.dp)
+                        .background(color, RoundedCornerShape(2.dp))
+                )
+                Spacer(modifier = Modifier.width(9.dp))
                 Text(
                     text = title,
-                    color = color,
+                    color = MaterialTheme.colorScheme.onSurface,
                     fontWeight = FontWeight.ExtraBold,
-                    fontSize = 15.sp,
+                    style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.weight(1f)
                 )
-
                 headerAction?.invoke()
             }
-
-            Spacer(modifier = Modifier.height(14.dp))
             content()
         }
     }
 }
 
 @Composable
-fun SelectionButton(text: String, isSelected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    Surface(modifier = modifier.height(44.dp).clickable { onClick() }, shape = RoundedCornerShape(8.dp), color = if (isSelected) Color(0xFFE3F2FD) else Color(0xFFF8F9FA), border = BorderStroke(1.dp, if (isSelected) Color(0xFF2196F3) else Color(0xFFE0E0E0))) {
-        Box(contentAlignment = Alignment.Center) { Text(text = text, fontSize = 13.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal, color = if (isSelected) Color(0xFF1976D2) else Color.DarkGray) }
+fun SelectionButton(
+    text: String,
+    isSelected: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = modifier
+            .height(44.dp)
+            .clickable { onClick() },
+        shape = RoundedCornerShape(11.dp),
+        color = if (isSelected) {
+            MaterialTheme.colorScheme.primaryContainer
+        } else {
+            MaterialTheme.colorScheme.surfaceVariant
+        },
+        border = BorderStroke(
+            1.dp,
+            if (isSelected) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.outlineVariant
+            }
+        )
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Text(
+                text = text,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                color = if (isSelected) {
+                    MaterialTheme.colorScheme.onPrimaryContainer
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                }
+            )
+        }
     }
 }
 
 @Composable
-fun ValueAdjuster(label: String, value: Int, steps: List<Int>, resetLabel: String = "초기화", onAdd: (Int) -> Unit, onReset: () -> Unit) {
-    Column {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(label, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.Black, modifier = Modifier.width(70.dp))
-            Text(String.format("%,d", value), fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF1976D2), modifier = Modifier.weight(1f))
+fun ValueAdjuster(
+    label: String,
+    value: Int,
+    steps: List<Int>,
+    resetLabel: String = "초기화",
+    onAdd: (Int) -> Unit,
+    onReset: () -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.Bottom
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f)
+            )
+            Text(
+                text = String.format("%,d", value),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.ExtraBold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
         }
-        Row(modifier = Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = onReset, modifier = Modifier.weight(1f).height(46.dp), colors = ButtonDefaults.buttonColors(Color(0xFFFFEBEE)), shape = RoundedCornerShape(8.dp), contentPadding = PaddingValues(0.dp)) {
-                Text(resetLabel, color = Color(0xFFD32F2F), fontSize = 13.sp, fontWeight = FontWeight.Bold)
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(7.dp)
+        ) {
+            OutlinedButton(
+                onClick = onReset,
+                modifier = Modifier.weight(1f).height(44.dp),
+                shape = RoundedCornerShape(11.dp),
+                contentPadding = PaddingValues(0.dp),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = MaterialTheme.colorScheme.error
+                )
+            ) {
+                Text(
+                    text = resetLabel,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold
+                )
             }
+
             steps.forEach { step ->
-                Button(onClick = { onAdd(step) }, modifier = Modifier.weight(1f).height(46.dp), colors = ButtonDefaults.buttonColors(Color(0xFFF1F8E9)), shape = RoundedCornerShape(8.dp), contentPadding = PaddingValues(0.dp)) {
-                    Text("+$step", color = Color(0xFF388E3C), fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                FilledTonalButton(
+                    onClick = { onAdd(step) },
+                    modifier = Modifier.weight(1f).height(44.dp),
+                    shape = RoundedCornerShape(11.dp),
+                    contentPadding = PaddingValues(0.dp)
+                ) {
+                    Text(
+                        text = "+$step",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
         }
