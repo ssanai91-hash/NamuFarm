@@ -22,6 +22,7 @@ import com.example.namufarm.data.SyncManager
 import com.example.namufarm.data.SyncResult
 import com.example.namufarm.data.local.LocalDataSource
 import com.example.namufarm.data.remote.SheetOrderItemDto
+import com.example.namufarm.domain.order.OrderSummaryCodec
 import com.google.gson.Gson
 
 data class CloudWriteResult(
@@ -55,18 +56,6 @@ data class OrderCancelResult(
     val inventoryCloudSynced: Int = 0,
     val inventoryPending: Int = 0,
     val errorMessage: String? = null
-)
-
-private data class OrderLine(
-    val speciesName: String,
-    val quality: String,
-    val age: String,
-    val size: String,
-    val plantType: String,
-    val orderQty: Int,
-    val retailPrice: Int,
-    val farmName: String,
-    val wholesalePrice: Int
 )
 
 private data class InventoryPendingTask(
@@ -321,7 +310,7 @@ class NamuFarmRepository(
                     return@transaction LocalCancelWork(alreadyCanceled = true)
                 }
 
-                val lines = parseOrderLinesStrict(currentOrder.itemSummary)
+                val lines = OrderSummaryCodec.parseStrict(currentOrder.itemSummary)
 
                 // 원격에서도 주문취소가 재고복원보다 먼저 처리되도록 먼저 큐에 적재한다.
                 val cancelPendingId = enqueue(
@@ -559,7 +548,7 @@ class NamuFarmRepository(
         )
 
     private fun deductInventoryStrict(summary: String) {
-        val lines = parseOrderLinesStrict(summary)
+        val lines = OrderSummaryCodec.parseStrict(summary)
 
         lines.forEach { line ->
             if (line.orderQty <= 0) return@forEach
@@ -605,44 +594,5 @@ class NamuFarmRepository(
         }
     }
 
-    private fun parseOrderLinesStrict(summary: String): List<OrderLine> {
-        val rawLines = summary.lines().filter { it.isNotBlank() }
-        if (rawLines.isEmpty()) error("주문 품목 정보가 비어 있습니다.")
 
-        return rawLines.mapIndexed { index, raw ->
-            val parts = raw.split("|")
-
-            when {
-                parts.size >= 9 -> OrderLine(
-                    speciesName = parts[0].trim(),
-                    quality = parts[1].trim(),
-                    age = parts[2].trim(),
-                    size = parts[3].trim(),
-                    plantType = parts[4].trim(),
-                    orderQty = parts[5].toIntOrNull()
-                        ?: error((index + 1).toString() + "번째 품목 수량 오류"),
-                    retailPrice = parts[6].toIntOrNull() ?: 0,
-                    farmName = parts[7].trim(),
-                    wholesalePrice = parts[8].toIntOrNull() ?: 0
-                )
-
-                // 초기 저장 포맷 호환:
-                // species|quality|age|qty|retail|farm|wholesale
-                parts.size >= 7 -> OrderLine(
-                    speciesName = parts[0].trim(),
-                    quality = parts[1].trim(),
-                    age = parts[2].trim(),
-                    size = "0.0m",
-                    plantType = "실생",
-                    orderQty = parts[3].toIntOrNull()
-                        ?: error((index + 1).toString() + "번째 품목 수량 오류"),
-                    retailPrice = parts[4].toIntOrNull() ?: 0,
-                    farmName = parts[5].trim(),
-                    wholesalePrice = parts[6].toIntOrNull() ?: 0
-                )
-
-                else -> error((index + 1).toString() + "번째 주문 품목 형식을 읽을 수 없습니다.")
-            }
-        }
-    }
 }
