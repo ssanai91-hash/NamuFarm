@@ -61,7 +61,7 @@ internal class FakeSheetApi : GoogleSheetApi {
                 o.raw_summary, o.is_prepaid, o.shipping_fee, o.zip_no, o.road_address, o.detail_address
             )
             inventory = inventory.map { row ->
-                row.copy(quantity = row.quantity - request.items.filter {
+                row.copy(quantity = checkNotNull(row.quantity) - request.items.filter {
                     it.farm_name == row.farm_name && it.species_name == row.species_name &&
                         it.quality == row.quality && it.age == row.age && it.size == row.size && it.plant_type == row.plant_type
                 }.sumOf { it.order_qty })

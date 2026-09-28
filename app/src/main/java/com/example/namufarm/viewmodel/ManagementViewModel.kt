@@ -749,7 +749,7 @@ class ManagementViewModel(
             if (result.pendingFailureCount > 0) {
                 _uiState.update {
                     it.copy(
-                        message = "⚠️ 미동기화 항목 전송 실패. Pull을 중단했습니다. 네트워크 확인 후 다시 동기화하세요."
+                        message = "⚠️ Pull 중단: ${result.errorMessage ?: "미동기화 항목을 다시 전송해주세요."}"
                     )
                 }
                 return@launchOperation

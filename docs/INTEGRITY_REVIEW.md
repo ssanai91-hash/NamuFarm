@@ -12,7 +12,7 @@ Apps Script 서버 소스는 저장소에 없음. 실제 사용자 Sheets에 테
 | 동시 동기화가 같은 작업을 중복 전송 | AppDatabase / LocalDataSource | DB 공유 네트워크 mutex. 로컬 transaction은 네트워크를 기다리지 않음 |
 | Pull 도중 로컬 저장을 원격으로 덮어씀 | SyncManager | 적용 transaction 안에서 pending 재확인, 있으면 전체 중단 |
 | 재고만 Pull 후 주문 Pull 실패 | SyncManager | 두 응답 검증 후 재고/주문을 하나의 transaction으로 반영 |
-| 마스터 누락 행을 skip하면서 기존 재고 삭제 | SyncManager | 전체 실패로 처리하고 기존 재고 보존. 중복 키/음수 데이터도 거부 |
+| 마스터 누락 행을 skip하면서 기존 재고 삭제 | SyncManager | 전체 실패로 처리하고 기존 재고 보존. 중복 키/누락 수량·가격/음수 데이터도 거부 |
 | 같은 견적 반복 확정/중복 주문번호 | Repository / DAO | transaction에서 저장된 견적 존재·동일성·주문번호 확인 |
 | 로컬 차감 품목과 전송 품목이 다를 수 있음 | Repository / SyncManager | 저장된 summary에서 일관되게 생성·검증, MANUAL 제외 |
 | 수량/단가 파싱 실패를 0으로 저장 | OrderSummaryCodec | 정확한 7/9/10필드만 수용, 잘못된 수량·단가·출처·구분자 거부 |
@@ -48,7 +48,10 @@ Apps Script 서버 소스는 저장소에 없음. 실제 사용자 Sheets에 테
 느린 Pull 도중 저장, 잘못된 원격 스냅샷, v10/v11 migration과 Room schema validation을 다룸.
 
 로컬 실행 환경은 Gradle 배포본 다운로드 시 `Network is unreachable`로 실행이 차단됨.
-GitHub Android CI에서 `testDebugUnitTest assembleDebug` 실행 결과를 별도로 확인해야 함.
+첫 수정 커밋 `d5c27026`은 [GitHub Android CI](https://github.com/ssanai91-hash/NamuFarm/actions/runs/36499593712)에서
+`testDebugUnitTest assembleDebug` 성공: 테스트 49개, 실패 0, 오류 0, 건너뛰기 0.
+추가로 원격 수량·가격 필드 누락과 첫 복원 전송 실패에 대한 회귀 테스트 2개를 보강해 총 51개이며,
+최종 커밋의 실행 결과는 [PR #1 checks](https://github.com/ssanai91-hash/NamuFarm/pull/1/checks)에서 확인할 수 있음.
 실폰, 사용자 Apps Script/Sheets와 종단 간 테스트는 미실행.
 
 ## 서버 소스가 있어야 완료할 과제

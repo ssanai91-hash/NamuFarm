@@ -11,7 +11,7 @@ internal object MasterReferenceGuard {
             "재고와 연결된 농원명은 변경할 수 없습니다. 주소·연락처는 수정할 수 있습니다."
         }
         check(local.getOpenCommerceSummaries().none { summary ->
-            OrderSummaryCodec.parseStrict(summary).any { it.isInventoryBacked && it.farmName == farm.farmName }
+            OrderSummaryCodec.parseStrict(summary).any { it.isInventoryBacked && it.farmName == farm.farmName.trim() }
         }) { "견적/취소 가능한 주문이 연결된 농원은 이름 변경·삭제할 수 없습니다." }
     }
 
@@ -21,7 +21,7 @@ internal object MasterReferenceGuard {
             "재고와 연결된 묘목명은 변경할 수 없습니다."
         }
         check(local.getOpenCommerceSummaries().none { summary ->
-            OrderSummaryCodec.parseStrict(summary).any { it.isInventoryBacked && it.speciesName == species.speciesName }
+            OrderSummaryCodec.parseStrict(summary).any { it.isInventoryBacked && it.speciesName == species.speciesName.trim() }
         }) { "견적/취소 가능한 주문이 연결된 묘목명은 변경할 수 없습니다." }
     }
 }

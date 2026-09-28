@@ -210,28 +210,9 @@ class SyncManager(
                 require(it.farm_id > 0 && it.farm_name.isNotBlank() &&
                     it.farm_name.trim() != OrderSummaryCodec.MANUAL_FARM_LABEL) { "원격 농원 정보 오류" }
             }
-            val protectedFarmIds = local.getAllPendingSync().mapNotNull { pending ->
-                when (pending.syncType) {
-                    PendingSyncType.FARM_SAVE -> gson.fromJson(
-                        pending.payloadJson,
-                        PendingFarmSyncPayload::class.java
-                    ).farm.farmId
-
-                    PendingSyncType.FARM_DELETE -> gson.fromJson(
-                        pending.payloadJson,
-                        PendingDeleteFarmSyncPayload::class.java
-                    ).farmId
-
-                    else -> null
-                }
-            }.toSet()
-
             local.transaction {
                 requireNoPending()
-                // 아직 시트로 못 보낸 로컬 농원 변경은 Pull로 덮어쓰지 않는다.
                 farms.sortedBy { it.farm_id }.forEach { dto ->
-                    if (dto.farm_id in protectedFarmIds) return@forEach
-
                     val existing = getAllFarms().singleOrNull { it.farmId == dto.farm_id }
                     if (existing != null && existing.farmName != dto.farm_name.trim()) {
                         MasterReferenceGuard.farm(this, dto.farm_id)
@@ -316,28 +297,9 @@ class SyncManager(
                 OrderSummaryCodec.validateText(it.species_name)
                 require(it.species_id > 0 && it.species_name.isNotBlank() && it.is_active in 0..1) { "원격 묘목 정보 오류" }
             }
-            val protectedSpeciesIds = local.getAllPendingSync().mapNotNull { pending ->
-                when (pending.syncType) {
-                    PendingSyncType.SPECIES_SAVE -> gson.fromJson(
-                        pending.payloadJson,
-                        PendingSpeciesSyncPayload::class.java
-                    ).species.speciesId
-
-                    PendingSyncType.SPECIES_DELETE -> gson.fromJson(
-                        pending.payloadJson,
-                        PendingDeleteSpeciesSyncPayload::class.java
-                    ).speciesId
-
-                    else -> null
-                }
-            }.toSet()
-
             local.transaction {
                 requireNoPending()
-                // 아직 시트로 못 보낸 로컬 묘목 변경은 Pull로 덮어쓰지 않는다.
                 speciesList.sortedBy { it.species_id }.forEach { dto ->
-                    if (dto.species_id in protectedSpeciesIds) return@forEach
-
                     val existing = getAllSpeciesIncludingInactive().singleOrNull { it.speciesId == dto.species_id }
                     if (existing != null && existing.speciesName != dto.species_name.trim()) {
                         MasterReferenceGuard.species(this, dto.species_id)
@@ -384,15 +346,18 @@ class SyncManager(
                         ?: error("농원 마스터 누락/중복: ${dto.farm_name}. 기존 재고를 보존했습니다.")
                     val plant = species[dto.species_name.trim()]?.singleOrNull()
                         ?: error("묘목 마스터 누락/중복: ${dto.species_name}. 기존 재고를 보존했습니다.")
-                    require(dto.quantity >= 0 && dto.wholesale_price >= 0 && dto.retail_price >= 0) {
+                    val quantity = requireNotNull(dto.quantity) { "원격 재고 수량 필드 누락" }
+                    val wholesale = requireNotNull(dto.wholesale_price) { "원격 재고 원가 필드 누락" }
+                    val retail = requireNotNull(dto.retail_price) { "원격 재고 판매가 필드 누락" }
+                    require(quantity >= 0 && wholesale >= 0 && retail >= 0) {
                         "원격 재고 수량/단가 오류"
                     }
                     listOf(dto.quality, dto.age, dto.size, dto.plant_type).forEach(OrderSummaryCodec::validateText)
                     FarmInventoryEntity(
                         farmId = checkNotNull(farm.farmId), speciesId = checkNotNull(plant.speciesId),
                         quality = dto.quality.trim(), age = dto.age.trim(), size = dto.size.trim(),
-                        plantType = dto.plant_type.trim(), quantity = dto.quantity,
-                        wholesalePrice = dto.wholesale_price, retailPrice = dto.retail_price
+                        plantType = dto.plant_type.trim(), quantity = quantity,
+                        wholesalePrice = wholesale, retailPrice = retail
                     )
                 }
                 val keys = rows.map { listOf(it.farmId, it.speciesId, it.quality, it.age, it.size, it.plantType) }

@@ -124,9 +124,9 @@ data class SheetInventoryDto(
     val age: String,
     val size: String,
     val plant_type: String,
-    val quantity: Int,
-    val wholesale_price: Int,
-    val retail_price: Int
+    val quantity: Int?,
+    val wholesale_price: Int?,
+    val retail_price: Int?
 )
 
 data class SheetUploadRequest(

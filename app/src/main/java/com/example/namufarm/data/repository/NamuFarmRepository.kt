@@ -48,7 +48,8 @@ data class GeneralSyncResult(
     val resentSuccess: Int,
     val pendingFailureCount: Int,
     val inventoryResult: SyncResult? = null,
-    val orderSyncCount: Int? = null
+    val orderSyncCount: Int? = null,
+    val errorMessage: String? = null
 )
 
 data class OrderCancelResult(
@@ -549,7 +550,10 @@ class NamuFarmRepository(
         val drained = drainPending()
         val remaining = local.getAllPendingSync().size
         if (drained.error != null || remaining > 0) {
-            return@serializedSync GeneralSyncResult(drained.sent, remaining.coerceAtLeast(1))
+            return@serializedSync GeneralSyncResult(
+                drained.sent, remaining.coerceAtLeast(1),
+                errorMessage = drained.error ?: "동기화 중 새 로컬 변경이 생겼습니다. 다시 동기화해주세요."
+            )
         }
         val snapshot = syncManager.syncSnapshot()
         GeneralSyncResult(drained.sent, 0, snapshot.inventoryResult, snapshot.orderCount)

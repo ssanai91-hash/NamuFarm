@@ -288,18 +288,44 @@ class LocalFirstIntegrityTest {
     }
 
     @Test fun referencedMasterCannotBeDeletedOrRenamedAndDetailsRemainEditable() = runBlocking {
-        val q = quote()
+        val q = quote(inventoryLine.replace("|3|", "|10|"))
         repository.confirmOrder(q, order(q))
         assertTrue(runCatching { repository.deleteFarm(1) }.isFailure)
         assertTrue(runCatching { repository.saveFarm(1, "새이름", "", "", "") }.isFailure)
         repository.saveFarm(1, "농원", "주소 수정", "", "")
         assertEquals("주소 수정", dao.getAllFarms().single().address)
-        assertEquals(7, quantity())
+        assertEquals(0, quantity())
     }
 
     @Test fun missingOrderCannotCreatePhantomDeliveryPending() = runBlocking {
         assertTrue(runCatching { repository.updateOrderDeliveryInfo("missing", "이름", "", "주소", "", "") }.isFailure)
         assertTrue(dao.getAllPendingSync().isEmpty())
+    }
+
+    @Test fun missingRemoteQuantityNeverMeansZeroStock() = runBlocking {
+        api.online = true
+        for (field in listOf("quantity", "wholesale_price", "retail_price")) {
+            val json = Gson().toJsonTree(remoteStock(2)).asJsonObject
+            json.remove(field)
+            api.inventory = listOf(Gson().fromJson(json, SheetInventoryDto::class.java))
+            assertNotNull(repository.syncAll().inventoryResult!!.errorMessage)
+            assertEquals(10, quantity())
+        }
+    }
+
+    @Test fun failedFirstRestoreDoesNotSendALaterRestore() = runBlocking {
+        val q = quote("$inventoryLine\n$inventoryLine")
+        repository.confirmOrder(q, order(q))
+        api.online = true
+        api.failAction = "save"
+        api.events.clear()
+        val result = repository.cancelOrder("O")
+        assertTrue(result.success)
+        assertTrue(result.cancelCloudSynced)
+        assertEquals(2, result.inventoryPending)
+        assertEquals(1, api.events.count { it == "save" })
+        assertEquals(10, quantity())
+        assertEquals(listOf("inventory", "inventory"), dao.getAllPendingSync().map { it.syncType })
     }
 
     private fun remoteOrder(o: OrderEntity) = SheetOrderRemoteDto(
