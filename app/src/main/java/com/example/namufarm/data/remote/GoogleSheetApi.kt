@@ -4,6 +4,7 @@ import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.Query
+import com.google.gson.annotations.SerializedName
 
 interface GoogleSheetApi {
 
@@ -206,6 +207,7 @@ data class SheetOrderRemoteDto(
 
     // 새 Apps Script가 지원하면 완전 왕복에 사용한다.
     // 기존 응답에는 필드가 없어도 모두 nullable이라 호환된다.
+    @SerializedName(value = "raw_summary", alternate = ["item_summary"])
     val raw_summary: String? = null,
     val is_prepaid: Boolean? = null,
     val shipping_fee: Int? = null,
@@ -213,4 +215,3 @@ data class SheetOrderRemoteDto(
     val road_address: String? = null,
     val detail_address: String? = null
 )
-

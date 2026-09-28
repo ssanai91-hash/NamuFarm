@@ -63,40 +63,13 @@ data class ParsedSummaryItem(
     val wholesalePrice: Int
 )
 
-fun parseSummaryLine(line: String): ParsedSummaryItem? {
-    val parts = line.split("|")
-
-    return when {
-        parts.size >= 9 -> {
-            ParsedSummaryItem(
-                species = parts[0],
-                quality = parts[1],
-                age = parts[2],
-                size = parts[3],
-                plantType = parts[4],
-                qty = parts[5].toIntOrNull() ?: 0,
-                retailPrice = parts[6].toIntOrNull() ?: 0,
-                farmName = parts[7],
-                wholesalePrice = parts[8].toIntOrNull() ?: 0
-            )
-        }
-        parts.size >= 7 -> {
-            // 예전 저장 포맷 호환
-            ParsedSummaryItem(
-                species = parts[0],
-                quality = parts[1],
-                age = parts[2],
-                size = "",
-                plantType = "",
-                qty = parts[3].toIntOrNull() ?: 0,
-                retailPrice = parts[4].toIntOrNull() ?: 0,
-                farmName = parts[5],
-                wholesalePrice = parts[6].toIntOrNull() ?: 0
-            )
-        }
-        else -> null
-    }
-}
+fun parseSummaryLine(line: String): ParsedSummaryItem? = runCatching {
+    val item = com.example.namufarm.domain.order.OrderSummaryCodec.parseStrict(line).single()
+    ParsedSummaryItem(
+        item.speciesName, item.quality, item.age, item.size, item.plantType,
+        item.orderQty, item.retailPrice, item.farmName, item.wholesalePrice
+    )
+}.getOrNull()
 
 private fun isSellingItemInChosung(
     name: String,
@@ -252,32 +225,6 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
         }
     }
 
-    DisposableEffect(context) {
-        val receiver = object : android.content.BroadcastReceiver() {
-            override fun onReceive(ctx: android.content.Context?, intent: android.content.Intent?) {
-                if (intent?.action == android.telephony.TelephonyManager.ACTION_PHONE_STATE_CHANGED) {
-                    val state = intent.getStringExtra(android.telephony.TelephonyManager.EXTRA_STATE)
-
-                    if (state == android.telephony.TelephonyManager.EXTRA_STATE_RINGING ||
-                        state == android.telephony.TelephonyManager.EXTRA_STATE_OFFHOOK) {
-
-                        val number = intent.getStringExtra(android.telephony.TelephonyManager.EXTRA_INCOMING_NUMBER)
-
-                        if (!number.isNullOrBlank()) {
-                            viewModel.updateCustomerPhone(number)
-                        }
-                    }
-                }
-            }
-        }
-
-        val filter = android.content.IntentFilter(android.telephony.TelephonyManager.ACTION_PHONE_STATE_CHANGED)
-        context.registerReceiver(receiver, filter)
-
-        onDispose {
-            context.unregisterReceiver(receiver)
-        }
-    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -364,7 +311,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                 ) {
                     if (uiState.estimateCart.isNotEmpty()) {
                         val totalRetail = uiState.estimateCart.sumOf {
-                            it.item.retailPrice * it.orderQuantity
+                            it.item.retailPrice.toLong() * it.orderQuantity
                         }
 
                         Surface(
@@ -680,7 +627,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                             .padding(16.dp)
                     ) {
                         uiState.estimateCart.forEachIndexed { index, cartItem ->
-                            val itemPrice = cartItem.item.retailPrice * cartItem.orderQuantity
+                            val itemPrice = cartItem.item.retailPrice.toLong() * cartItem.orderQuantity
 
                             val showAge = shouldShowAge(cartItem.item.age)
                             val showSize = shouldShowSize(cartItem.item.size)
@@ -934,7 +881,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                                     Button(
                                         onClick = {
                                             isPrepaid = true
-                                            shippingFee += 1000
+                                            shippingFee = (shippingFee.toLong() + 1000).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
                                         },
                                         modifier = Modifier.weight(1f).height(42.dp),
                                         shape = RoundedCornerShape(10.dp),
@@ -957,7 +904,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                         }
 
                         val finalRetail = uiState.estimateCart.sumOf {
-                            it.item.retailPrice * it.orderQuantity
+                            it.item.retailPrice.toLong() * it.orderQuantity
                         } + if (isPrepaid) shippingFee else 0
 
                         Surface(
@@ -1687,7 +1634,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                     ) {
                         Button(
                             onClick = {
-                                viewModel.convertQuoteToOrder(quote, context)
+                                viewModel.convertQuoteToOrder(quote)
                                 showQuoteDetailDialog = false
                                 showTodayOrdersDialog = true
                             },
@@ -2792,7 +2739,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                                             size = if (
                                                 uiState.inputSizeMeters > 0f
                                             ) {
-                                                "${String.format("%.1f", uiState.inputSizeMeters)}m"
+                                                "${String.format(java.util.Locale.US, "%.1f", uiState.inputSizeMeters)}m"
                                             } else {
                                                 ""
                                             },
@@ -2984,7 +2931,7 @@ fun SellingItemRow(item: SellingDisplayRow, onAddToCart: (Int) -> Unit) {
                         listOf(1, 10, 100).forEach { step ->
                             FilledTonalButton(
                                 onClick = {
-                                    inputQty = (inputQty + step).coerceAtMost(item.quantity)
+                                    inputQty = (inputQty.toLong() + step).coerceAtMost(item.quantity.toLong()).toInt()
                                 },
                                 modifier = Modifier.weight(1f).height(46.dp),
                                 shape = RoundedCornerShape(11.dp),
@@ -3134,7 +3081,7 @@ fun QuoteOrderItemCard(
     qtyColor: Color,
     retailColor: Color
 ) {
-    val itemTotal = qty * retailPrice
+    val itemTotal = qty.toLong() * retailPrice
 
     Surface(
         modifier = Modifier

@@ -31,12 +31,12 @@ NamuFarmRepository
 앱은 **local-first** 방식입니다.
 
 1. 사용자 변경사항과 `pending_sync` 기록을 Room 트랜잭션으로 함께 저장
-2. Google Sheet 전송 즉시 시도
+2. 기존 pending부터 순서대로 Google Sheet 전송 시도
 3. 성공하면 pending 삭제
 4. 실패하면 pending 유지
 5. 다음 동기화 때 pending을 순서대로 재전송
 6. 앞선 pending이 하나라도 실패하면 뒤 작업 및 Pull을 중단
-7. pending이 모두 처리된 뒤 원격 데이터를 Pull
+7. pending이 모두 처리된 뒤 재고/주문을 받아 검증하고 함께 로컬 반영
 
 자세한 설계와 동기화 규칙은 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)를 참고하세요.
 
@@ -82,3 +82,11 @@ PAYMENT_ACCOUNT_TEXT=은행 계좌번호 예금주
 데이터 무결성, 오프라인 동작, 동기화 안정성을 우선하고 UI에서는 죽은 버튼이나 가짜 데이터 경로를 두지 않습니다.
 
 사진 기능은 현재 범위에서 제외합니다.
+
+## 무결성 검증
+
+`bash gradlew testDebugUnitTest assembleDebug`로 summary/금액 계산 단위 테스트와
+Robolectric 기반 실제 Room transaction·동기화·migration 회귀 테스트를 실행합니다.
+
+새 견적/주문번호는 날짜와 UUID를 사용합니다. 기존 번호와 DB v12는 유지합니다.
+수정 범위와 서버 측 남은 과제는 [검토 보고서](docs/INTEGRITY_REVIEW.md)를 참고하세요.

@@ -6,6 +6,7 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import kotlinx.coroutines.sync.Mutex
 
 @Database(
     entities = [
@@ -20,6 +21,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
+
+    // Serialize network work across repositories sharing this DB, never local writes.
+    internal val syncMutex = Mutex()
 
     abstract fun managementDao(): ManagementDao
 
@@ -594,30 +598,22 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        internal val ALL_MIGRATIONS = arrayOf(
+            MIGRATION_1_7, MIGRATION_2_7, MIGRATION_3_7,
+            MIGRATION_4_7, MIGRATION_5_7, MIGRATION_6_7,
+            MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10,
+            MIGRATION_10_12, MIGRATION_11_12
+        )
+
         fun getDatabase(context: Context): AppDatabase {
             return instance ?: synchronized(this) {
-                val newInstance = Room.databaseBuilder(
+                instance ?: Room.databaseBuilder(
                     context.applicationContext,
                     AppDatabase::class.java,
                     "NamuFarm.db"
                 )
-                    .addMigrations(
-                        MIGRATION_1_7,
-                        MIGRATION_2_7,
-                        MIGRATION_3_7,
-                        MIGRATION_4_7,
-                        MIGRATION_5_7,
-                        MIGRATION_6_7,
-                        MIGRATION_7_8,
-                        MIGRATION_8_9,
-                        MIGRATION_9_10,
-                        MIGRATION_10_12,
-                        MIGRATION_11_12
-                    )
-                    .build()
-
-                instance = newInstance
-                newInstance
+                    .addMigrations(*ALL_MIGRATIONS)
+                    .build().also { instance = it }
             }
         }
     }

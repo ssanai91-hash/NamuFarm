@@ -142,7 +142,6 @@ class MainActivity : ComponentActivity() {
                         if (!incomingNumber.isNullOrBlank()) {
                             // 뷰모델의 전화번호 업데이트 함수를 쏴버림! -> UI에 마법처럼 촥 꽂힘
                             viewModel.updateCustomerPhone(incomingNumber)
-                            android.util.Log.d("NamuFarm", "통화 감지됨! 번호: $incomingNumber")
                         }
                     }
                 }

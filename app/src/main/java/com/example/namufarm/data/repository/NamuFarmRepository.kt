@@ -26,6 +26,8 @@ import com.example.namufarm.data.remote.JusoItem
 import com.example.namufarm.data.remote.SheetOrderItemDto
 import com.example.namufarm.domain.order.OrderSummaryCodec
 import com.google.gson.Gson
+import com.example.namufarm.domain.order.OrderAmounts
+import kotlinx.coroutines.CancellationException
 
 data class CloudWriteResult(
     val cloudSynced: Boolean,
@@ -115,7 +117,15 @@ class NamuFarmRepository(
         return response.results.juso ?: emptyList()
     }
 
-    fun insertQuote(quote: QuoteEntity) = local.insertQuote(quote)
+    fun insertQuote(quote: QuoteEntity) {
+        val totals = OrderAmounts.calculate(
+            OrderSummaryCodec.parseStrict(quote.itemSummary), quote.isPrepaid, quote.shippingFee
+        )
+        require(quote.totalQty == totals.quantity && quote.totalPrice == totals.price) {
+            "견적 합계와 품목 합계가 일치하지 않습니다."
+        }
+        local.insertQuote(quote)
+    }
     fun deleteQuote(quote: QuoteEntity) = local.deleteQuote(quote)
 
     suspend fun saveFarm(
@@ -125,11 +135,23 @@ class NamuFarmRepository(
         phone: String,
         memo: String
     ): FarmSaveResult {
+        OrderSummaryCodec.validateText(farmName)
+        require(farmName.isNotBlank() && farmName.trim() != OrderSummaryCodec.MANUAL_FARM_LABEL) {
+            "농원명을 확인해주세요. 수기견적은 예약 이름입니다."
+        }
         val localWork = local.transaction {
+            require(getAllFarms().none { it.farmName.trim() == farmName.trim() && it.farmId != farmId }) {
+                "같은 이름의 농원이 이미 있습니다."
+            }
+            if (farmId != null) {
+                val old = getAllFarms().singleOrNull { it.farmId == farmId }
+                    ?: error("수정할 농원이 없습니다.")
+                if (old.farmName != farmName.trim()) MasterReferenceGuard.farm(this, farmId)
+            }
             val savedId = upsertFarm(
                 FarmEntity(
                     farmId = farmId,
-                    farmName = farmName,
+                    farmName = farmName.trim(),
                     address = address.ifBlank { null },
                     phone = phone.ifBlank { null },
                     memo = memo.ifBlank { null }
@@ -138,7 +160,7 @@ class NamuFarmRepository(
 
             val target = FarmEntity(
                 farmId = farmId ?: savedId,
-                farmName = farmName,
+                farmName = farmName.trim(),
                 address = address.ifBlank { null },
                 phone = phone.ifBlank { null },
                 memo = memo.ifBlank { null }
@@ -154,14 +176,14 @@ class NamuFarmRepository(
 
         val target = localWork.first
         val pendingId = localWork.second
-        val cloudSynced = syncManager.uploadFarmToSheet(target)
-        if (cloudSynced) local.deletePendingSync(pendingId)
+        val cloudSynced = flushThrough(pendingId).cloudSynced
 
         return FarmSaveResult(target, cloudSynced)
     }
 
     suspend fun deleteFarm(farmId: Int): CloudWriteResult {
         val pendingId = local.transaction {
+            MasterReferenceGuard.farm(this, farmId, deleting = true)
             deleteInventoryByFarmId(farmId)
             deleteFarmById(farmId)
 
@@ -171,10 +193,7 @@ class NamuFarmRepository(
             )
         }
 
-        val cloudSynced = syncManager.deleteFarmOnSheet(farmId)
-        if (cloudSynced) local.deletePendingSync(pendingId)
-
-        return CloudWriteResult(cloudSynced)
+        return flushThrough(pendingId)
     }
 
     suspend fun saveSpecies(
@@ -186,11 +205,22 @@ class NamuFarmRepository(
         memo: String,
         isActive: Int
     ): SpeciesSaveResult {
+        OrderSummaryCodec.validateText(speciesName)
+        require(speciesName.isNotBlank()) { "묘목명을 입력해주세요." }
+        require(isActive == 0 || isActive == 1) { "묘목 활성 상태 오류" }
         val localWork = local.transaction {
+            require(getAllSpeciesIncludingInactive().none {
+                it.speciesName.trim() == speciesName.trim() && it.speciesId != speciesId
+            }) { "같은 이름의 묘목이 이미 있습니다." }
+            if (speciesId != null) {
+                val old = getAllSpeciesIncludingInactive().singleOrNull { it.speciesId == speciesId }
+                    ?: error("수정할 묘목이 없습니다.")
+                if (old.speciesName != speciesName.trim()) MasterReferenceGuard.species(this, speciesId)
+            }
             val savedId = upsertSpecies(
                 SpeciesEntity(
                     speciesId = speciesId,
-                    speciesName = speciesName,
+                    speciesName = speciesName.trim(),
                     nameFarm = nameFarm.ifBlank { null },
                     chosung = chosung.ifBlank { null },
                     category = category.ifBlank { null },
@@ -201,7 +231,7 @@ class NamuFarmRepository(
 
             val target = SpeciesEntity(
                 speciesId = speciesId ?: savedId,
-                speciesName = speciesName,
+                speciesName = speciesName.trim(),
                 nameFarm = nameFarm.ifBlank { null },
                 chosung = chosung.ifBlank { null },
                 category = category.ifBlank { null },
@@ -219,8 +249,7 @@ class NamuFarmRepository(
 
         val target = localWork.first
         val pendingId = localWork.second
-        val cloudSynced = syncManager.uploadSpeciesToSheet(target)
-        if (cloudSynced) local.deletePendingSync(pendingId)
+        val cloudSynced = flushThrough(pendingId).cloudSynced
 
         return SpeciesSaveResult(target, cloudSynced)
     }
@@ -234,10 +263,7 @@ class NamuFarmRepository(
             )
         }
 
-        val cloudSynced = syncManager.deleteSpeciesOnSheet(speciesId)
-        if (cloudSynced) local.deletePendingSync(pendingId)
-
-        return CloudWriteResult(cloudSynced)
+        return flushThrough(pendingId)
     }
 
     suspend fun saveInventory(
@@ -245,10 +271,20 @@ class NamuFarmRepository(
         farmName: String,
         speciesName: String
     ): CloudWriteResult {
-        val isDelete = entity.quantity <= 0
+        require(entity.quantity >= 0 && entity.wholesalePrice >= 0 && entity.retailPrice >= 0) {
+            "재고 수량과 단가는 음수일 수 없습니다."
+        }
+        listOf(entity.quality, entity.age, entity.size, entity.plantType).forEach(OrderSummaryCodec::validateText)
+        val isDelete = entity.quantity == 0
         val action = if (isDelete) "delete" else "save"
 
         val pendingId = local.transaction {
+            require(getAllFarms().any { it.farmId == entity.farmId && it.farmName == farmName }) {
+                "농원 정보가 변경되었습니다. 다시 선택해주세요."
+            }
+            require(getAllSpecies().any { it.speciesId == entity.speciesId && it.speciesName == speciesName }) {
+                "묘목 정보가 변경되었습니다. 다시 선택해주세요."
+            }
             if (isDelete) {
                 deleteInventory(
                     entity.farmId,
@@ -267,47 +303,52 @@ class NamuFarmRepository(
                 PendingInventorySyncPayload(
                     action = action,
                     entity = entity,
-                    farmName = farmName,
+                    farmName = farmName.trim(),
                     speciesName = speciesName
                 )
             )
         }
 
-        val cloudSynced = syncManager.uploadToSheet(
-            action = action,
-            entity = entity,
-            farmName = farmName,
-            speciesName = speciesName
-        )
-
-        if (cloudSynced) local.deletePendingSync(pendingId)
-
-        return CloudWriteResult(cloudSynced)
+        return flushThrough(pendingId)
     }
 
-    suspend fun confirmOrder(
-        quote: QuoteEntity,
-        newOrder: OrderEntity,
-        itemsToDeduct: List<SheetOrderItemDto>
-    ): CloudWriteResult {
+    suspend fun confirmOrder(quote: QuoteEntity, newOrder: OrderEntity): CloudWriteResult {
         val pendingId = local.transaction {
-            insertOrder(newOrder)
-            deleteQuote(quote)
-            deductInventoryStrict(quote.itemSummary)
-
+            val stored = getQuoteById(quote.quoteId ?: error("저장된 견적이 아닙니다."))
+                ?: error("이미 주문으로 확정되었거나 삭제된 견적입니다.")
+            require(stored == quote) { "견적이 변경되었습니다. 다시 열어주세요." }
+            require(newOrder.orderId == null && newOrder.orderNumber.isNotBlank()) {
+                "새 주문번호가 필요합니다."
+            }
+            check(getOrderByNumber(newOrder.orderNumber) == null) { "이미 존재하는 주문번호입니다." }
+            val lines = OrderSummaryCodec.parseStrict(stored.itemSummary)
+            val totals = OrderAmounts.calculate(lines, stored.isPrepaid, stored.shippingFee)
+            require(stored.totalQty == totals.quantity && stored.totalPrice == totals.price) {
+                "견적 합계와 품목 합계가 일치하지 않습니다."
+            }
+            // Stored quote is the authority for both local deduction and the wire payload.
+            val order = newOrder.copy(
+                itemSummary = stored.itemSummary, customerPhone = stored.customerPhone,
+                totalQty = totals.quantity, totalPrice = totals.price,
+                isPrepaid = stored.isPrepaid, shippingFee = stored.shippingFee,
+                status = OrderStatus.CONFIRMED
+            )
+            insertOrder(order)
+            deleteQuote(stored)
+            deductInventoryStrict(stored.itemSummary)
             enqueue(
                 PendingSyncType.ORDER,
-                PendingOrderSyncPayload(
-                    order = newOrder,
-                    items = itemsToDeduct
-                )
+                PendingOrderSyncPayload(order, lines.filter { it.isInventoryBacked }.map { line ->
+                    SheetOrderItemDto(
+                        farm_name = line.farmName, species_name = line.speciesName,
+                        quality = line.quality, age = line.age, size = line.size,
+                        plant_type = line.plantType, order_qty = line.orderQty,
+                        retail_price = line.retailPrice
+                    )
+                })
             )
         }
-
-        val cloudSynced = syncManager.uploadOrderToSheet(newOrder, itemsToDeduct)
-        if (cloudSynced) local.deletePendingSync(pendingId)
-
-        return CloudWriteResult(cloudSynced)
+        return flushThrough(pendingId)
     }
 
     /**
@@ -324,6 +365,7 @@ class NamuFarmRepository(
                     return@transaction LocalCancelWork(alreadyCanceled = true)
                 }
 
+                check(currentOrder.status == OrderStatus.CONFIRMED) { "지원하지 않는 주문 상태입니다." }
                 val lines = OrderSummaryCodec.parseStrict(currentOrder.itemSummary)
 
                 // 원격에서도 주문취소가 재고복원보다 먼저 처리되도록 먼저 큐에 적재한다.
@@ -358,7 +400,7 @@ class NamuFarmRepository(
                     )
 
                     val restored = if (existing != null) {
-                        existing.copy(quantity = existing.quantity + line.orderQty)
+                        existing.copy(quantity = Math.addExact(existing.quantity, line.orderQty))
                     } else {
                         FarmInventoryEntity(
                             farmId = farmId,
@@ -374,7 +416,7 @@ class NamuFarmRepository(
                     }
 
                     upsertInventory(restored)
-                    restoredQuantity += line.orderQty
+                    restoredQuantity = Math.addExact(restoredQuantity, line.orderQty)
 
                     val inventoryPendingId = enqueue(
                         PendingSyncType.INVENTORY,
@@ -411,45 +453,23 @@ class NamuFarmRepository(
                 )
             }
 
-            val cancelCloudSynced = syncManager.cancelOrderOnSheet(orderNumber)
-
-            if (cancelCloudSynced) {
-                localWork.cancelPendingId?.let(local::deletePendingSync)
-            } else {
-                return OrderCancelResult(
-                    success = true,
-                    restoredQuantity = localWork.restoredQuantity,
-                    restoredLines = localWork.inventoryTasks.size,
-                    cancelCloudSynced = false,
-                    inventoryCloudSynced = 0,
-                    inventoryPending = localWork.inventoryTasks.size
-                )
+            val lastId = localWork.inventoryTasks.lastOrNull()?.pendingId
+                ?: checkNotNull(localWork.cancelPendingId)
+            flushThrough(lastId)
+            val cancelCloudSynced = local.getPendingSyncById(checkNotNull(localWork.cancelPendingId)) == null
+            val inventorySynced = localWork.inventoryTasks.count {
+                local.getPendingSyncById(it.pendingId) == null
             }
-
-            var inventorySynced = 0
-
-            localWork.inventoryTasks.forEach { task ->
-                val ok = syncManager.uploadToSheet(
-                    action = "save",
-                    entity = task.entity,
-                    farmName = task.farmName,
-                    speciesName = task.speciesName
-                )
-
-                if (ok) {
-                    local.deletePendingSync(task.pendingId)
-                    inventorySynced++
-                }
-            }
-
             OrderCancelResult(
                 success = true,
                 restoredQuantity = localWork.restoredQuantity,
                 restoredLines = localWork.inventoryTasks.size,
-                cancelCloudSynced = true,
+                cancelCloudSynced = cancelCloudSynced,
                 inventoryCloudSynced = inventorySynced,
                 inventoryPending = localWork.inventoryTasks.size - inventorySynced
             )
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             OrderCancelResult(
                 success = false,
@@ -467,6 +487,7 @@ class NamuFarmRepository(
         note: String
     ): CloudWriteResult {
         val pendingId = local.transaction {
+            check(getOrderByNumber(orderNumber) != null) { "주문을 찾을 수 없습니다." }
             updateOrderDeliveryInfo(
                 orderNumber,
                 receiverName,
@@ -489,69 +510,58 @@ class NamuFarmRepository(
             )
         }
 
-        val cloudSynced = syncManager.updateOrderDeliveryOnSheet(
-            orderNumber,
-            receiverName,
-            zipNo,
-            roadAddress,
-            detailAddress,
-            note
-        )
-
-        if (cloudSynced) local.deletePendingSync(pendingId)
-
-        return CloudWriteResult(cloudSynced)
+        return flushThrough(pendingId)
     }
 
-    suspend fun syncAll(): GeneralSyncResult {
-        var resentSuccess = 0
-        var pendingFailureCount = 0
+    private data class DrainResult(val sent: Int, val error: String? = null)
 
-        // pending_sync는 단순 목록이 아니라 업무 순서다.
-        // 앞 항목 실패 시 뒤 항목을 먼저 보내지 않는다.
-        for (pending in local.getAllPendingSync()) {
+    // Called only while holding the database's shared network mutex. New local writes
+    // can commit immediately; each invocation processes a bounded snapshot of the queue.
+    private suspend fun drainPending(throughId: Int = Int.MAX_VALUE): DrainResult {
+        var sent = 0
+        for (pending in local.getAllPendingSync().filter { checkNotNull(it.syncId) <= throughId }) {
+            val id = checkNotNull(pending.syncId)
             val result = syncManager.processPendingSync(pending)
-
-            if (result.success) {
-                pending.syncId?.let(local::deletePendingSync)
-                resentSuccess++
-            } else {
-                pending.syncId?.let {
-                    local.markPendingSyncFailed(
-                        it,
-                        result.errorMessage ?: "알 수 없는 오류"
-                    )
-                }
-                pendingFailureCount++
-                break
+            if (!result.success) {
+                val error = result.errorMessage ?: "시트 응답 실패"
+                local.markPendingSyncFailed(id, error)
+                return DrainResult(sent, error)
             }
+            local.deletePendingSync(id)
+            sent++
         }
-
-        if (pendingFailureCount > 0) {
-            return GeneralSyncResult(
-                resentSuccess = resentSuccess,
-                pendingFailureCount = pendingFailureCount
-            )
-        }
-
-        val inventoryResult = syncManager.syncWithGoogleSheet()
-        val orderSyncCount =
-            if (inventoryResult.errorMessage == null) {
-                syncManager.syncOrdersWithGoogleSheet()
-            } else {
-                -1
-            }
-
-        return GeneralSyncResult(
-            resentSuccess = resentSuccess,
-            pendingFailureCount = 0,
-            inventoryResult = inventoryResult,
-            orderSyncCount = orderSyncCount
-        )
+        return DrainResult(sent)
     }
 
-    suspend fun syncFarmMaster(): Int = syncManager.syncFarmsWithGoogleSheet()
-    suspend fun syncSpeciesMaster(): Int = syncManager.syncSpeciesWithGoogleSheet()
+    private suspend fun flushThrough(pendingId: Int): CloudWriteResult = local.serializedSync {
+        try {
+            val result = drainPending(pendingId)
+            CloudWriteResult(local.getPendingSyncById(pendingId) == null, result.error)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // The local transaction has already committed. Keep its outbox for retry.
+            CloudWriteResult(false, e.message ?: "동기화 대기")
+        }
+    }
+
+    suspend fun syncAll(): GeneralSyncResult = local.serializedSync {
+        val drained = drainPending()
+        val remaining = local.getAllPendingSync().size
+        if (drained.error != null || remaining > 0) {
+            return@serializedSync GeneralSyncResult(drained.sent, remaining.coerceAtLeast(1))
+        }
+        val snapshot = syncManager.syncSnapshot()
+        GeneralSyncResult(drained.sent, 0, snapshot.inventoryResult, snapshot.orderCount)
+    }
+
+    suspend fun syncFarmMaster(): Int = local.serializedSync {
+        if (drainPending().error != null) -1 else syncManager.syncFarmsWithGoogleSheet()
+    }
+
+    suspend fun syncSpeciesMaster(): Int = local.serializedSync {
+        if (drainPending().error != null) -1 else syncManager.syncSpeciesWithGoogleSheet()
+    }
 
     private fun enqueue(type: String, payload: Any): Int =
         local.insertPendingSync(

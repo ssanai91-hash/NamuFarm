@@ -36,6 +36,8 @@ object RetrofitClient {
     private val BASE_URL = BuildConfig.GOOGLE_SCRIPT_URL
 
     private val okHttpClient = OkHttpClient.Builder()
+        // Retrying a mutating POST is the durable outbox's responsibility.
+        .retryOnConnectionFailure(false)
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
         .writeTimeout(30, TimeUnit.SECONDS)

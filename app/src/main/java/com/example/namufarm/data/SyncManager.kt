@@ -17,6 +17,10 @@ import com.example.namufarm.data.remote.SpeciesDeleteRequest
 import com.example.namufarm.data.remote.SpeciesUploadRequest
 import com.example.namufarm.data.remote.UpdateOrderDeliveryRequest
 import com.google.gson.Gson
+import kotlinx.coroutines.CancellationException
+import com.example.namufarm.data.remote.OrderRemoteMapper
+import com.example.namufarm.data.repository.MasterReferenceGuard
+import com.example.namufarm.domain.order.OrderSummaryCodec
 
 data class PendingSyncProcessResult(
     val success: Boolean,
@@ -31,6 +35,8 @@ data class SyncResult(
     val insertedSpecies: Int,
     val errorMessage: String? = null
 )
+
+data class SnapshotSyncResult(val inventoryResult: SyncResult, val orderCount: Int)
 
 class SyncManager(
     private val local: LocalDataSource,
@@ -60,15 +66,16 @@ class SyncManager(
                         PendingOrderSyncPayload::class.java
                     )
 
-                    // 이전 전송이 서버에서는 성공했지만 응답만 유실된 경우
-                    // 같은 주문을 재업로드해 재고를 두 번 차감하지 않도록 1차 방어한다.
-                    when (orderExistsOnSheet(payload.order.orderNumber)) {
-                        true -> true
-                        false -> uploadOrderToSheet(
-                            orderEntity = payload.order,
-                            itemsToDeduct = payload.items
-                        )
-                        null -> false
+                    val matching = api.getOrdersData("get_orders").filter {
+                        it.order_number?.trim() == payload.order.orderNumber
+                    }
+                    check(matching.size <= 1) { "서버에 중복 주문번호가 있습니다." }
+                    val existing = matching.singleOrNull()
+                    if (existing != null) {
+                        OrderRemoteMapper.requireSameOrder(payload.order, existing)
+                        true
+                    } else {
+                        uploadOrderToSheet(payload.order, payload.items)
                     }
                 }
 
@@ -138,6 +145,8 @@ class SyncManager(
                     errorMessage = "시트 응답 실패"
                 )
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             PendingSyncProcessResult(
                 success = false,
@@ -165,6 +174,8 @@ class SyncManager(
                 )
             )
             response.result.equals("success", ignoreCase = true)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.e("SyncManager", "농원 저장 시트 업로드 실패", e)
             false
@@ -180,6 +191,8 @@ class SyncManager(
                 )
             )
             response.result.equals("success", ignoreCase = true)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.e("SyncManager", "농원 삭제 시트 업로드 실패", e)
             false
@@ -190,6 +203,13 @@ class SyncManager(
         return try {
             val farms = api.getFarmData("get_farms")
 
+            require(farms.map { it.farm_id }.distinct().size == farms.size &&
+                farms.map { it.farm_name.trim() }.distinct().size == farms.size) { "원격 농원 ID/이름 중복" }
+            farms.forEach {
+                OrderSummaryCodec.validateText(it.farm_name)
+                require(it.farm_id > 0 && it.farm_name.isNotBlank() &&
+                    it.farm_name.trim() != OrderSummaryCodec.MANUAL_FARM_LABEL) { "원격 농원 정보 오류" }
+            }
             val protectedFarmIds = local.getAllPendingSync().mapNotNull { pending ->
                 when (pending.syncType) {
                     PendingSyncType.FARM_SAVE -> gson.fromJson(
@@ -207,14 +227,22 @@ class SyncManager(
             }.toSet()
 
             local.transaction {
+                requireNoPending()
                 // 아직 시트로 못 보낸 로컬 농원 변경은 Pull로 덮어쓰지 않는다.
                 farms.sortedBy { it.farm_id }.forEach { dto ->
                     if (dto.farm_id in protectedFarmIds) return@forEach
 
+                    val existing = getAllFarms().singleOrNull { it.farmId == dto.farm_id }
+                    if (existing != null && existing.farmName != dto.farm_name.trim()) {
+                        MasterReferenceGuard.farm(this, dto.farm_id)
+                    }
+                    check(getAllFarms().none { it.farmName.trim() == dto.farm_name.trim() && it.farmId != dto.farm_id }) {
+                        "농원 ID/이름 충돌. 다중 기기 마스터를 확인해주세요."
+                    }
                     local.upsertFarm(
                         FarmEntity(
                             farmId = dto.farm_id,
-                            farmName = dto.farm_name,
+                            farmName = dto.farm_name.trim(),
                             address = dto.address.ifBlank { null },
                             phone = dto.phone.ifBlank { null },
                             memo = dto.memo.ifBlank { null }
@@ -224,6 +252,8 @@ class SyncManager(
             }
 
             farms.size
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.e("SyncManager", "농원 동기화 실패", e)
             -1
@@ -251,6 +281,8 @@ class SyncManager(
                 )
             )
             response.result.equals("success", ignoreCase = true)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.e("SyncManager", "묘목 저장 시트 업로드 실패", e)
             false
@@ -266,6 +298,8 @@ class SyncManager(
                 )
             )
             response.result.equals("success", ignoreCase = true)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.e("SyncManager", "묘목 삭제(비활성화) 시트 업로드 실패", e)
             false
@@ -276,6 +310,12 @@ class SyncManager(
         return try {
             val speciesList = api.getSpeciesData("get_species")
 
+            require(speciesList.map { it.species_id }.distinct().size == speciesList.size &&
+                speciesList.map { it.species_name.trim() }.distinct().size == speciesList.size) { "원격 묘목 ID/이름 중복" }
+            speciesList.forEach {
+                OrderSummaryCodec.validateText(it.species_name)
+                require(it.species_id > 0 && it.species_name.isNotBlank() && it.is_active in 0..1) { "원격 묘목 정보 오류" }
+            }
             val protectedSpeciesIds = local.getAllPendingSync().mapNotNull { pending ->
                 when (pending.syncType) {
                     PendingSyncType.SPECIES_SAVE -> gson.fromJson(
@@ -293,14 +333,22 @@ class SyncManager(
             }.toSet()
 
             local.transaction {
+                requireNoPending()
                 // 아직 시트로 못 보낸 로컬 묘목 변경은 Pull로 덮어쓰지 않는다.
                 speciesList.sortedBy { it.species_id }.forEach { dto ->
                     if (dto.species_id in protectedSpeciesIds) return@forEach
 
+                    val existing = getAllSpeciesIncludingInactive().singleOrNull { it.speciesId == dto.species_id }
+                    if (existing != null && existing.speciesName != dto.species_name.trim()) {
+                        MasterReferenceGuard.species(this, dto.species_id)
+                    }
+                    check(getAllSpeciesIncludingInactive().none {
+                        it.speciesName.trim() == dto.species_name.trim() && it.speciesId != dto.species_id
+                    }) { "묘목 ID/이름 충돌. 다중 기기 마스터를 확인해주세요." }
                     local.upsertSpecies(
                         SpeciesEntity(
                             speciesId = dto.species_id,
-                            speciesName = dto.species_name,
+                            speciesName = dto.species_name.trim(),
                             nameFarm = dto.name_farm.ifBlank { null },
                             chosung = dto.chosung.ifBlank { null },
                             category = dto.category.ifBlank { null },
@@ -312,6 +360,8 @@ class SyncManager(
             }
 
             speciesList.size
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.e("SyncManager", "묘목 동기화 실패", e)
             -1
@@ -320,78 +370,49 @@ class SyncManager(
 
     // ===== 재고 =====
 
-    suspend fun syncWithGoogleSheet(): SyncResult {
+    /** Fetch both collections first. Any bad row or concurrent local write aborts the whole apply. */
+    suspend fun syncSnapshot(): SnapshotSyncResult {
         return try {
-            val remoteData = api.getInventoryData("get_inventory")
-
-            var upserted = 0
-            var skipped = 0
-
+            val inventory = api.getInventoryData("get_inventory")
+            val orders = api.getOrdersData("get_orders")
             local.transaction {
-                // pending push가 모두 성공한 뒤에만 호출되는 Pull이므로,
-                // 원격 재고를 현재 스냅샷으로 보고 로컬 재고만 교체한다.
-                local.clearAllInventory()
-    
-                val farmMap = local.getAllFarms()
-                    .associateBy { it.farmName.trim() }
-    
-                val speciesMap = local.getAllSpecies()
-                    .associateBy { it.speciesName.trim() }
-    
-                remoteData.forEach { dto ->
-                    val farmName = dto.farm_name.trim()
-                    val speciesName = dto.species_name.trim()
-    
-                    val farmId = farmMap[farmName]?.farmId
-                    val speciesId = speciesMap[speciesName]?.speciesId
-    
-                    // 재고 Pull이 농원/묘목 마스터를 임의 생성하지 않도록 한다.
-                    // 마스터가 없으면 해당 행을 스킵하고 별도 마스터 동기화가 필요하다.
-                    if (farmId == null || speciesId == null) {
-                        skipped++
-                        Log.w(
-                            "SyncManager",
-                            "재고 스킵: 마스터 없음 farm='$farmName', species='$speciesName'"
-                        )
-                        return@forEach
+                requireNoPending()
+                val farms = getAllFarms().groupBy { it.farmName.trim() }
+                val species = getAllSpeciesIncludingInactive().groupBy { it.speciesName.trim() }
+                val rows = inventory.map { dto ->
+                    val farm = farms[dto.farm_name.trim()]?.singleOrNull()
+                        ?: error("농원 마스터 누락/중복: ${dto.farm_name}. 기존 재고를 보존했습니다.")
+                    val plant = species[dto.species_name.trim()]?.singleOrNull()
+                        ?: error("묘목 마스터 누락/중복: ${dto.species_name}. 기존 재고를 보존했습니다.")
+                    require(dto.quantity >= 0 && dto.wholesale_price >= 0 && dto.retail_price >= 0) {
+                        "원격 재고 수량/단가 오류"
                     }
-    
-                    local.upsertInventory(
-                        FarmInventoryEntity(
-                            farmId = farmId,
-                            speciesId = speciesId,
-                            quality = dto.quality.trim(),
-                            age = dto.age.trim(),
-                            size = dto.size.trim(),
-                            plantType = dto.plant_type.trim(),
-                            quantity = dto.quantity,
-                            wholesalePrice = dto.wholesale_price,
-                            retailPrice = dto.retail_price
-                        )
+                    listOf(dto.quality, dto.age, dto.size, dto.plant_type).forEach(OrderSummaryCodec::validateText)
+                    FarmInventoryEntity(
+                        farmId = checkNotNull(farm.farmId), speciesId = checkNotNull(plant.speciesId),
+                        quality = dto.quality.trim(), age = dto.age.trim(), size = dto.size.trim(),
+                        plantType = dto.plant_type.trim(), quantity = dto.quantity,
+                        wholesalePrice = dto.wholesale_price, retailPrice = dto.retail_price
                     )
-                    upserted++
                 }
-    
-    
+                val keys = rows.map { listOf(it.farmId, it.speciesId, it.quality, it.age, it.size, it.plantType) }
+                check(keys.distinct().size == keys.size) { "원격 재고 키 중복. 기존 재고를 보존했습니다." }
+                val numbers = orders.map { it.order_number?.trim().orEmpty() }
+                check(numbers.none { it.isBlank() } && numbers.distinct().size == numbers.size) {
+                    "원격 주문번호 누락/중복. 기존 데이터를 보존했습니다."
+                }
+                val merged = orders.map { dto -> OrderRemoteMapper.merge(getOrderByNumber(dto.order_number!!.trim()), dto) }
+                // This transaction owns both stock and order status, including remote cancellations.
+                clearAllInventory()
+                rows.forEach { upsertInventory(it) }
+                merged.forEach { upsertOrder(it) }
             }
-
-            SyncResult(
-                total = remoteData.size,
-                upserted = upserted,
-                skipped = skipped,
-                insertedFarms = 0,
-                insertedSpecies = 0
-            )
+            SnapshotSyncResult(SyncResult(inventory.size, inventory.size, 0, 0, 0), orders.size)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
-            Log.e("SyncManager", "재고 동기화 실패", e)
-            SyncResult(
-                total = 0,
-                upserted = 0,
-                skipped = 0,
-                insertedFarms = 0,
-                insertedSpecies = 0,
-                errorMessage = e.message
-            )
+            Log.e("SyncManager", "재고/주문 동기화 실패", e)
+            SnapshotSyncResult(SyncResult(0, 0, 0, 0, 0, e.message ?: "원격 데이터 동기화 실패"), -1)
         }
     }
 
@@ -422,6 +443,8 @@ class SyncManager(
             )
 
             response.result.equals("success", ignoreCase = true)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.e("SyncManager", "재고 업로드 실패", e)
             false
@@ -430,24 +453,17 @@ class SyncManager(
 
     // ===== 주문 =====
 
-    private suspend fun orderExistsOnSheet(orderNumber: String): Boolean? {
-        return try {
-            api.getOrdersData("get_orders").any {
-                it.order_number?.trim() == orderNumber.trim()
-            }
-        } catch (e: Exception) {
-            // 확인 실패를 "주문 없음"으로 취급하면 중복 주문을 만들 수 있으므로
-            // null을 반환해 이번 재전송 자체를 보류한다.
-            Log.e("SyncManager", "주문 중복 확인 실패", e)
-            null
-        }
-    }
-
     suspend fun uploadOrderToSheet(
         orderEntity: OrderEntity,
         itemsToDeduct: List<SheetOrderItemDto>
     ): Boolean {
         return try {
+            val expectedItems = OrderSummaryCodec.parseStrict(orderEntity.itemSummary)
+                .filter { it.isInventoryBacked }.map { line ->
+                    SheetOrderItemDto(line.farmName, line.speciesName, line.quality, line.age,
+                        line.size, line.plantType, line.orderQty, line.retailPrice)
+                }
+            check(itemsToDeduct == expectedItems) { "pending 주문 품목과 원본이 일치하지 않습니다." }
             val orderDto = SheetOrderDto(
                 order_number = orderEntity.orderNumber,
                 date = orderEntity.orderDate,
@@ -480,6 +496,8 @@ class SyncManager(
             )
 
             response.result.equals("success", ignoreCase = true)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.e("SyncManager", "주문 업로드 실패", e)
             false
@@ -495,6 +513,8 @@ class SyncManager(
                 )
             )
             response.result.equals("success", ignoreCase = true)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.e("SyncManager", "주문 취소 업로드 실패", e)
             false
@@ -530,83 +550,12 @@ class SyncManager(
             )
 
             response.result.equals("success", ignoreCase = true)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.e("SyncManager", "배송정보 업로드 실패", e)
             false
         }
     }
-
-    suspend fun syncOrdersWithGoogleSheet(): Int {
-        return try {
-            val remoteOrders = api.getOrdersData("get_orders")
-            if (remoteOrders.isEmpty()) return 0
-
-            var syncedCount = 0
-
-            local.transaction {
-                remoteOrders.forEach { dto ->
-                    val orderNumber = dto.order_number?.trim().orEmpty()
-                    if (orderNumber.isBlank()) return@forEach
-    
-                    val existing = local.getOrderByNumber(orderNumber)
-    
-                    if (existing != null) {
-                        // 이미 폰에 존재하는 주문은 로컬의 구조화된 주문상세/배송비/주소를 보존한다.
-                        // 시트에서 안전하게 되가져올 수 있는 상태/기본 주문 정보만 반영한다.
-                        local.upsertOrder(
-                            existing.copy(
-                                orderDate = dto.date ?: existing.orderDate,
-                                customerPhone = dto.customer_phone ?: existing.customerPhone,
-                                totalQty = dto.total_qty ?: existing.totalQty,
-                                totalPrice = dto.total_price ?: existing.totalPrice,
-                                receiverName = dto.receiver_name ?: existing.receiverName,
-                                zipNo = dto.zip_no?.takeIf { it.isNotBlank() } ?: existing.zipNo,
-                                roadAddress = dto.road_address?.takeIf { it.isNotBlank() }
-                                    ?: existing.roadAddress,
-                                detailAddress = dto.detail_address?.takeIf { it.isNotBlank() }
-                                    ?: existing.detailAddress,
-                                note = dto.note ?: existing.note,
-                                status = dto.status?.takeIf { it.isNotBlank() } ?: existing.status,
-                                isPrepaid = dto.is_prepaid ?: existing.isPrepaid,
-                                shippingFee = dto.shipping_fee ?: existing.shippingFee
-                            )
-                        )
-                    } else {
-                        // 다른 기기/시트에서만 존재하는 주문은 새 주문으로 가져온다.
-                        // 현재 시트 API는 주소를 한 문자열로 내려주므로 roadAddress에 보관한다.
-                        local.insertOrder(
-                            OrderEntity(
-                                orderNumber = orderNumber,
-                                orderDate = dto.date ?: "",
-                                customerPhone = dto.customer_phone ?: "",
-                                totalQty = dto.total_qty ?: 0,
-                                totalPrice = dto.total_price ?: 0,
-                                itemSummary = dto.raw_summary?.takeIf { it.isNotBlank() }
-                                    ?: dto.summary.orEmpty(),
-                                receiverName = dto.receiver_name ?: "",
-                                zipNo = dto.zip_no ?: "",
-                                roadAddress = dto.road_address?.takeIf { it.isNotBlank() }
-                                    ?: dto.address.orEmpty(),
-                                detailAddress = dto.detail_address ?: "",
-                                note = dto.note ?: "",
-                                status = dto.status?.takeIf { it.isNotBlank() }
-                                    ?: OrderStatus.CONFIRMED,
-                                isPrepaid = dto.is_prepaid ?: false,
-                                shippingFee = dto.shipping_fee ?: 0
-                            )
-                        )
-                    }
-    
-                    syncedCount++
-                }
-            }
-
-            syncedCount
-        } catch (e: Exception) {
-            Log.e("SyncManager", "주문내역 동기화 실패", e)
-            -1
-        }
-    }
-
 
 }

@@ -15,6 +15,15 @@ interface ManagementDao {
     @Query("SELECT * FROM species WHERE is_active = 1 ORDER BY species_name ASC")
     fun getAllSpecies(): List<SpeciesEntity>
 
+    @Query("SELECT * FROM species ORDER BY species_id ASC")
+    fun getAllSpeciesIncludingInactive(): List<SpeciesEntity>
+
+    @Query("SELECT * FROM farm_inventory")
+    fun getAllInventoryEntities(): List<FarmInventoryEntity>
+
+    @Query("SELECT item_summary FROM quote_list UNION ALL SELECT item_summary FROM order_list WHERE status != '주문취소'")
+    fun getOpenCommerceSummaries(): List<String>
+
     // 🚨 1. 수정됨: size, plantType(AS plantType) Select 추가!
     @Query("""
         SELECT 
@@ -53,7 +62,7 @@ interface ManagementDao {
         FROM farm_inventory AS f
         INNER JOIN species AS s ON f.species_id = s.species_id
         INNER JOIN farm_info AS fm ON f.farm_id = fm.farm_id
-        WHERE f.quantity > 0
+        WHERE f.quantity > 0 AND s.is_active = 1
         ORDER BY s.species_name ASC, f.age ASC, 
             CASE f.quality WHEN '특묘' THEN 1 WHEN '상묘' THEN 2 WHEN '중묘' THEN 3 WHEN '하묘' THEN 4 ELSE 5 END ASC
     """)
@@ -89,6 +98,9 @@ interface ManagementDao {
     @Insert
     fun insertQuote(quote: QuoteEntity)
 
+    @Query("SELECT * FROM quote_list WHERE quote_id = :quoteId")
+    fun getQuoteById(quoteId: Int): QuoteEntity?
+
     @Query("SELECT MAX(quote_id) FROM quote_list")
     fun getLastQuoteId(): Int?
 
@@ -117,6 +129,9 @@ interface ManagementDao {
 
     @Query("SELECT * FROM order_list WHERE order_number = :orderNumber LIMIT 1")
     fun getOrderByNumber(orderNumber: String): OrderEntity?
+
+    @Query("SELECT COUNT(*) FROM order_list WHERE order_number = :orderNumber")
+    fun countOrdersByNumber(orderNumber: String): Int
 
     // ✅ 추가: 주문서 배송정보 업데이트
     @Query("""
@@ -173,6 +188,9 @@ interface ManagementDao {
 
     @Query("SELECT * FROM pending_sync ORDER BY sync_id ASC")
     fun getAllPendingSync(): List<PendingSyncEntity>
+
+    @Query("SELECT * FROM pending_sync WHERE sync_id = :syncId")
+    fun getPendingSyncById(syncId: Int): PendingSyncEntity?
 
     @Query("DELETE FROM pending_sync WHERE sync_id = :syncId")
     fun deletePendingSync(syncId: Int)
