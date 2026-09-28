@@ -455,7 +455,14 @@ class SyncManager(
                 total_qty = orderEntity.totalQty,
                 total_price = orderEntity.totalPrice,
                 summary = orderEntity.itemSummary,
+                raw_summary = orderEntity.itemSummary,
+                status = orderEntity.status,
+                is_prepaid = orderEntity.isPrepaid,
+                shipping_fee = orderEntity.shippingFee,
                 receiver_name = orderEntity.receiverName,
+                zip_no = orderEntity.zipNo,
+                road_address = orderEntity.roadAddress,
+                detail_address = orderEntity.detailAddress,
                 address = buildString {
                     if (orderEntity.zipNo.isNotBlank()) append("[${orderEntity.zipNo}] ")
                     append(orderEntity.roadAddress)
@@ -550,8 +557,15 @@ class SyncManager(
                                 totalQty = dto.total_qty ?: existing.totalQty,
                                 totalPrice = dto.total_price ?: existing.totalPrice,
                                 receiverName = dto.receiver_name ?: existing.receiverName,
+                                zipNo = dto.zip_no?.takeIf { it.isNotBlank() } ?: existing.zipNo,
+                                roadAddress = dto.road_address?.takeIf { it.isNotBlank() }
+                                    ?: existing.roadAddress,
+                                detailAddress = dto.detail_address?.takeIf { it.isNotBlank() }
+                                    ?: existing.detailAddress,
                                 note = dto.note ?: existing.note,
-                                status = dto.status?.takeIf { it.isNotBlank() } ?: existing.status
+                                status = dto.status?.takeIf { it.isNotBlank() } ?: existing.status,
+                                isPrepaid = dto.is_prepaid ?: existing.isPrepaid,
+                                shippingFee = dto.shipping_fee ?: existing.shippingFee
                             )
                         )
                     } else {
@@ -564,13 +578,18 @@ class SyncManager(
                                 customerPhone = dto.customer_phone ?: "",
                                 totalQty = dto.total_qty ?: 0,
                                 totalPrice = dto.total_price ?: 0,
-                                itemSummary = dto.summary ?: "",
+                                itemSummary = dto.raw_summary?.takeIf { it.isNotBlank() }
+                                    ?: dto.summary.orEmpty(),
                                 receiverName = dto.receiver_name ?: "",
-                                zipNo = "",
-                                roadAddress = dto.address ?: "",
-                                detailAddress = "",
+                                zipNo = dto.zip_no ?: "",
+                                roadAddress = dto.road_address?.takeIf { it.isNotBlank() }
+                                    ?: dto.address.orEmpty(),
+                                detailAddress = dto.detail_address ?: "",
                                 note = dto.note ?: "",
-                                status = dto.status?.takeIf { it.isNotBlank() } ?: OrderStatus.CONFIRMED
+                                status = dto.status?.takeIf { it.isNotBlank() }
+                                    ?: OrderStatus.CONFIRMED,
+                                isPrepaid = dto.is_prepaid ?: false,
+                                shippingFee = dto.shipping_fee ?: 0
                             )
                         )
                     }
