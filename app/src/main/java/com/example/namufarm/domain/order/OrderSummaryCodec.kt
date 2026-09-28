@@ -24,12 +24,11 @@ data class OrderLine(
 /**
  * DB/Sheet에 저장되는 주문 품목 summary의 단일 코덱.
  *
- * 현재 포맷:
- * species|quality|age|size|plantType|qty|retail|farm|wholesale|source
+ * 현재 저장 포맷(서버 호환 유지):
+ * species|quality|age|size|plantType|qty|retail|farm|wholesale
  *
- * source:
- * - INVENTORY: 실제 재고에서 선택한 품목
- * - MANUAL: 빠른 견적에서 수기로 만든 품목
+ * 빠른 견적 품목은 farm 값에 예약 라벨인 "수기견적"을 사용해 구분한다.
+ * 파서는 향후 확장을 위해 선택적인 10번째 source 필드도 읽을 수 있다.
  *
  * 기존 9필드/7필드 데이터도 계속 읽을 수 있다.
  */
@@ -47,9 +46,12 @@ object OrderSummaryCodec {
                 line.plantType,
                 line.orderQty.toString(),
                 line.retailPrice.toString(),
-                line.farmName,
-                line.wholesalePrice.toString(),
-                line.source.name
+                if (line.source == OrderLineSource.MANUAL) {
+                    MANUAL_FARM_LABEL
+                } else {
+                    line.farmName
+                },
+                line.wholesalePrice.toString()
             ).joinToString("|")
         }
 
