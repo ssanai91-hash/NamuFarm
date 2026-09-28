@@ -8,6 +8,7 @@
 - 규격(품질, 연생, 크기, 재배타입)별 수량과 원가/판매가 관리
 - 전화번호를 기준으로 빠른 견적 작성
 - 견적을 주문으로 확정하면서 재고 차감
+- 주문취소 시 차감 재고 자동 복원
 - 주문상태를 `입금확인` / `주문취소`로 보존
 - 배송정보 저장
 - 인터넷이 불안정해도 로컬 DB에서 계속 작업
@@ -19,19 +20,23 @@
 Compose UI
     ↓
 ManagementViewModel
-    ├─ Room / ManagementDao
+    ↓
+NamuFarmRepository
+    ├─ LocalDataSource
+    │    └─ Room / ManagementDao
     └─ SyncManager
          └─ Retrofit / Google Apps Script
 ```
 
 앱은 **local-first** 방식입니다.
 
-1. 사용자 변경사항을 Room DB에 먼저 저장
-2. `pending_sync`에 전송 작업을 기록
-3. Google Sheet 전송 즉시 시도
-4. 실패하면 pending 항목을 남김
-5. 다음 동기화 때 pending을 먼저 재전송
-6. pending이 모두 처리된 뒤 원격 데이터를 Pull
+1. 사용자 변경사항과 `pending_sync` 기록을 Room 트랜잭션으로 함께 저장
+2. Google Sheet 전송 즉시 시도
+3. 성공하면 pending 삭제
+4. 실패하면 pending 유지
+5. 다음 동기화 때 pending을 순서대로 재전송
+6. 앞선 pending이 하나라도 실패하면 뒤 작업 및 Pull을 중단
+7. pending이 모두 처리된 뒤 원격 데이터를 Pull
 
 자세한 설계와 동기화 규칙은 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)를 참고하세요.
 
@@ -52,6 +57,11 @@ GOOGLE_SCRIPT_URL=https://script.google.com/macros/s/.../
 
 - `입금확인`
 - `주문취소`
+
+주문취소 시 주문 이력은 남기고, 해당 주문이 차감했던 재고는 로컬에서 자동 복원한 뒤
+복원된 재고를 Google Sheet에 다시 동기화합니다.
+
+같은 주문을 여러 번 취소해도 재고가 중복 복원되지 않도록 현재 주문상태를 확인합니다.
 
 주문 기록은 회계/업무 이력으로 남기기 때문에 앱의 핵심 업무 흐름에서는 **영구삭제하지 않습니다**.
 
