@@ -190,10 +190,27 @@ class SyncManager(
         return try {
             val farms = api.getFarmData("get_farms")
 
+            val protectedFarmIds = local.getAllPendingSync().mapNotNull { pending ->
+                when (pending.syncType) {
+                    PendingSyncType.FARM_SAVE -> gson.fromJson(
+                        pending.payloadJson,
+                        PendingFarmSyncPayload::class.java
+                    ).farm.farmId
+
+                    PendingSyncType.FARM_DELETE -> gson.fromJson(
+                        pending.payloadJson,
+                        PendingDeleteFarmSyncPayload::class.java
+                    ).farmId
+
+                    else -> null
+                }
+            }.toSet()
+
             local.transaction {
-                // 로컬 우선 정책: Pull 시 전체 삭제하지 않고 원격 항목만 upsert 한다.
-                // 오프라인에서 생성된 로컬 농원이 pending 상태일 수 있으므로 보존한다.
+                // 아직 시트로 못 보낸 로컬 농원 변경은 Pull로 덮어쓰지 않는다.
                 farms.sortedBy { it.farm_id }.forEach { dto ->
+                    if (dto.farm_id in protectedFarmIds) return@forEach
+
                     local.upsertFarm(
                         FarmEntity(
                             farmId = dto.farm_id,
@@ -259,9 +276,27 @@ class SyncManager(
         return try {
             val speciesList = api.getSpeciesData("get_species")
 
+            val protectedSpeciesIds = local.getAllPendingSync().mapNotNull { pending ->
+                when (pending.syncType) {
+                    PendingSyncType.SPECIES_SAVE -> gson.fromJson(
+                        pending.payloadJson,
+                        PendingSpeciesSyncPayload::class.java
+                    ).species.speciesId
+
+                    PendingSyncType.SPECIES_DELETE -> gson.fromJson(
+                        pending.payloadJson,
+                        PendingDeleteSpeciesSyncPayload::class.java
+                    ).speciesId
+
+                    else -> null
+                }
+            }.toSet()
+
             local.transaction {
-                // 농원과 동일하게 로컬 미전송 데이터를 보호하기 위해 전체 삭제하지 않는다.
+                // 아직 시트로 못 보낸 로컬 묘목 변경은 Pull로 덮어쓰지 않는다.
                 speciesList.sortedBy { it.species_id }.forEach { dto ->
+                    if (dto.species_id in protectedSpeciesIds) return@forEach
+
                     local.upsertSpecies(
                         SpeciesEntity(
                             speciesId = dto.species_id,
