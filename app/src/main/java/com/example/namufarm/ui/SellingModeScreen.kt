@@ -2580,15 +2580,14 @@ private fun NamuFarmQuickAction(
 @Composable
 fun SellingItemRow(item: SellingDisplayRow, onAddToCart: (Int) -> Unit) {
     var showDialog by remember { mutableStateOf(false) }
-    var inputQty by remember { mutableStateOf(0) }
+    var inputQty by remember { mutableIntStateOf(0) }
 
-    val showAge = shouldShowAge(item.age)
-    val showSize = shouldShowSize(item.size)
-    val dialogSpecText = buildSpecText(
+    val specText = buildSpecText(
         quality = item.quality,
         age = item.age,
         size = item.size,
-        plantType = item.plantType
+        plantType = item.plantType,
+        separator = " · "
     )
 
     if (showDialog) {
@@ -2599,140 +2598,124 @@ fun SellingItemRow(item: SellingDisplayRow, onAddToCart: (Int) -> Unit) {
             }
         ) {
             Surface(
-                shape = RoundedCornerShape(16.dp),
-                color = Color.White,
-                shadowElevation = 8.dp
+                shape = RoundedCornerShape(22.dp),
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 3.dp,
+                shadowElevation = 16.dp
             ) {
                 Column(
-                    modifier = Modifier.padding(20.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
+                    modifier = Modifier.padding(22.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    Text(
-                        text = "장바구니 담기",
-                        fontSize = 14.sp,
-                        color = Color.Gray,
-                        fontWeight = FontWeight.Bold
-                    )
-
-                    Text(
-                        text = item.speciesName,
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = Color(0xFF1B5E20)
-                    )
-
-                    Spacer(modifier = Modifier.height(6.dp))
-
-                    Text(
-                        text = dialogSpecText,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.Gray
-                    )
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Text(
-                        text = "현재 재고: ${String.format("%,d", item.quantity)}주",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = Color(0xFFD32F2F)
-                    )
-
-                    Divider(
-                        modifier = Modifier.padding(vertical = 16.dp),
-                        color = Color(0xFFEEEEEE)
-                    )
-
-                    Row(verticalAlignment = Alignment.Bottom) {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(
-                            text = String.format("%,d", inputQty),
-                            fontSize = 40.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = Color(0xFF1976D2)
+                            text = "수량 선택",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-
                         Text(
-                            text = " 주",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(bottom = 6.dp, start = 4.dp)
+                            text = item.speciesName,
+                            style = MaterialTheme.typography.headlineSmall,
+                            color = MaterialTheme.colorScheme.onSurface
                         )
+                        if (specText.isNotBlank()) {
+                            Text(
+                                text = specText,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
 
-                    Spacer(modifier = Modifier.height(20.dp))
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 14.dp, vertical = 12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text(
+                                    text = item.farmName,
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = "재고 ${String.format("%,d", item.quantity)}주",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Text(
+                                text = "${String.format("%,d", item.retailPrice)}원",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = String.format("%,d", inputQty),
+                            style = MaterialTheme.typography.displaySmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                        Text(
+                            text = "주",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Button(
+                        OutlinedButton(
                             onClick = { inputQty = 0 },
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(48.dp),
-                            colors = ButtonDefaults.buttonColors(Color(0xFFFFEBEE)),
-                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.weight(1f).height(46.dp),
+                            shape = RoundedCornerShape(11.dp),
                             contentPadding = PaddingValues(0.dp)
                         ) {
-                            Text(
-                                text = "초기화",
-                                color = Color(0xFFD32F2F),
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold
-                            )
+                            Text("초기화")
                         }
 
                         listOf(1, 10, 100).forEach { step ->
-                            Button(
+                            FilledTonalButton(
                                 onClick = {
-                                    inputQty =
-                                        if (inputQty + step <= item.quantity) {
-                                            inputQty + step
-                                        } else {
-                                            item.quantity
-                                        }
+                                    inputQty = (inputQty + step).coerceAtMost(item.quantity)
                                 },
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(48.dp),
-                                colors = ButtonDefaults.buttonColors(Color(0xFFE8F5E9)),
-                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.weight(1f).height(46.dp),
+                                shape = RoundedCornerShape(11.dp),
                                 contentPadding = PaddingValues(0.dp)
                             ) {
-                                Text(
-                                    text = "+$step",
-                                    color = Color(0xFF2E7D32),
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
+                                Text("+$step", fontWeight = FontWeight.Bold)
                             }
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(24.dp))
-
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         OutlinedButton(
                             onClick = {
                                 showDialog = false
                                 inputQty = 0
                             },
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(54.dp),
-                            shape = RoundedCornerShape(12.dp),
-                            border = BorderStroke(1.dp, Color(0xFFBDBDBD))
+                            modifier = Modifier.weight(1f).height(50.dp),
+                            shape = RoundedCornerShape(12.dp)
                         ) {
-                            Text(
-                                text = "취소",
-                                fontSize = 16.sp,
-                                color = Color.DarkGray,
-                                fontWeight = FontWeight.Bold
-                            )
+                            Text("취소", fontWeight = FontWeight.Bold)
                         }
 
                         Button(
@@ -2743,19 +2726,11 @@ fun SellingItemRow(item: SellingDisplayRow, onAddToCart: (Int) -> Unit) {
                                     inputQty = 0
                                 }
                             },
-                            modifier = Modifier
-                                .weight(1.5f)
-                                .height(54.dp),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = Color(0xFF1976D2)
-                            )
+                            enabled = inputQty > 0,
+                            modifier = Modifier.weight(1.6f).height(50.dp),
+                            shape = RoundedCornerShape(12.dp)
                         ) {
-                            Text(
-                                text = "장바구니 담기",
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.ExtraBold
-                            )
+                            Text("견적에 담기", fontWeight = FontWeight.ExtraBold)
                         }
                     }
                 }
@@ -2766,122 +2741,90 @@ fun SellingItemRow(item: SellingDisplayRow, onAddToCart: (Int) -> Unit) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 8.dp, vertical = 4.dp)
+            .padding(horizontal = 12.dp, vertical = 5.dp)
             .clickable { showDialog = true },
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
-        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
-            // 🚨 1행: 묘목명(굵게) + 품질뱃지 + 년생뱃지(옅은녹색) / 우측: 재고량(빨강 굵게)
+        Column(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 15.dp),
+            verticalArrangement = Arrangement.spacedBy(11.dp)
+        ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.Top
             ) {
-                // 묘목명
-                Text(
-                    text = item.speciesName,
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = Color.Black
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-
-                // 품질 뱃지
-                Text(
-                    text = item.quality,
-                    fontSize = 11.sp,
-                    color = Color(0xFFE65100),
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier
-                        .background(Color(0xFFFFF3E0), RoundedCornerShape(4.dp))
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                )
-
-                if (showAge) {
-                    Spacer(modifier = Modifier.width(6.dp))
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(5.dp)
+                ) {
                     Text(
-                        text = item.age,
-                        fontSize = 11.sp,
-                        color = Color(0xFF2E7D32),
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier
-                            .background(Color(0xFFE8F5E9), RoundedCornerShape(4.dp))
-                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                        text = item.speciesName,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = MaterialTheme.colorScheme.onSurface
                     )
+
+                    if (specText.isNotBlank()) {
+                        Text(
+                            text = specText,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
 
-                if (showSize) {
-                    Spacer(modifier = Modifier.width(6.dp))
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer
+                ) {
                     Text(
-                        text = item.size,
-                        fontSize = 11.sp,
-                        color = Color(0xFF1565C0),
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier
-                            .background(Color(0xFFE3F2FD), RoundedCornerShape(4.dp))
-                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                        text = "${String.format("%,d", item.quantity)}주",
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                 }
-
-                Spacer(modifier = Modifier.width(6.dp))
-
-                Text(
-                    text = item.plantType,
-                    fontSize = 11.sp,
-                    color = Color(0xFF6A1B9A),
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier
-                        .background(Color(0xFFF3E5F5), RoundedCornerShape(4.dp))
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                )
-
-                Spacer(modifier = Modifier.weight(1f))
-
-                // 재고량
-                Text(
-                    text = "재고량: ${String.format("%,d", item.quantity)}주",
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = Color(0xFFD32F2F)
-                )
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
-            // 🚨 2행: 농원뱃지 + 도매가(회색) / 우측: 판매가(검정)
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.Bottom
             ) {
-                // 농원 뱃지
-                Text(
-                    text = item.farmName,
-                    fontSize = 10.sp,
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier
-                        .background(Color(0xFF1976D2), RoundedCornerShape(4.dp))
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = item.farmName,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        text = "도매 ${String.format("%,d", item.wholesalePrice)}원",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
 
-                // 🚨 도매가 (플랫폼 입장에서 눈에 덜 띄게 회색으로 처리!)
-                Text(
-                    text = "도매가: ${String.format("%,d", item.wholesalePrice)}원",
-                    color = Color.Gray, // 기존 파란색에서 회색으로 변경
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium
-                )
-
-                Spacer(modifier = Modifier.weight(1f))
-
-                // 판매가 (검정색)
-                Text(
-                    text = "판매가: ${String.format("%,d", item.retailPrice)}원",
-                    color = Color.Black,
-                    fontWeight = FontWeight.ExtraBold,
-                    fontSize = 16.sp
-                )
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        text = "판매가",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "${String.format("%,d", item.retailPrice)}원",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
             }
         }
     }
