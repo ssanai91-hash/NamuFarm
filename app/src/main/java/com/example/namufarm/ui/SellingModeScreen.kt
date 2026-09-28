@@ -302,7 +302,6 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                         )
                     }
                 },
-                modifier = Modifier.statusBarsPadding(),
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primary,
                     actionIconContentColor = MaterialTheme.colorScheme.onPrimary
