@@ -647,30 +647,42 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
             properties = DialogProperties(usePlatformDefaultWidth = false) // 화면 꽉 차게
         ) {
             Surface(
-                modifier = Modifier.fillMaxSize().padding(16.dp),
-                shape = RoundedCornerShape(16.dp),
-                color = Color.White
+                modifier = Modifier.fillMaxSize().padding(12.dp),
+                shape = RoundedCornerShape(22.dp),
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 2.dp,
+                shadowElevation = 12.dp
             ) {
                 Column(modifier = Modifier.fillMaxSize()) {
-                    // 상단 헤더
-                    Row(
-                        modifier = Modifier.fillMaxWidth().background(Color(0xFFE8F5E9))
-                            .padding(16.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                    Surface(
+                        color = MaterialTheme.colorScheme.primaryContainer
                     ) {
-                        Text(
-                            "📝 나무팜 견적서",
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = Color(0xFF1B5E20)
-                        )
-                        IconButton(onClick = { showCartDialog = false }) {
-                            Icon(
-                                Icons.Default.Close,
-                                contentDescription = "닫기",
-                                tint = Color.Black
-                            )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "견적 작성",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                                Text(
+                                    text = "${uiState.estimateCart.size}개 품목을 확인하고 저장합니다.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.72f)
+                                )
+                            }
+                            IconButton(onClick = { showCartDialog = false }) {
+                                Icon(
+                                    Icons.Default.Close,
+                                    contentDescription = "닫기",
+                                    tint = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                            }
                         }
                     }
 
@@ -845,183 +857,195 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                             .background(Color(0xFFFAFAFA))
                             .padding(16.dp)
                     ) {
-                        // 🚨 [추가] 택배비 설정 구역
                         Surface(
-                            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
-                            color = Color.White,
-                            shape = RoundedCornerShape(12.dp),
-                            border = BorderStroke(1.dp, Color(0xFFEEEEEE))
+                            modifier = Modifier.fillMaxWidth(),
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            shape = RoundedCornerShape(14.dp),
+                            border = BorderStroke(
+                                1.dp,
+                                MaterialTheme.colorScheme.outlineVariant
+                            )
                         ) {
-                            Column(modifier = Modifier.padding(12.dp)) {
-                                Text("📦 배송비 설정", fontWeight = FontWeight.ExtraBold, color = Color.DarkGray, fontSize = 14.sp)
-                                Spacer(modifier = Modifier.height(8.dp))
+                            Column(
+                                modifier = Modifier.padding(14.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "배송비",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    if (isPrepaid && shippingFee > 0) {
+                                        Text(
+                                            text = "${String.format("%,d", shippingFee)}원",
+                                            style = MaterialTheme.typography.labelLarge,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    } else if (!isPrepaid) {
+                                        Text(
+                                            text = "착불",
+                                            style = MaterialTheme.typography.labelLarge,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
 
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    verticalAlignment = Alignment.CenterVertically
+                                    horizontalArrangement = Arrangement.spacedBy(7.dp)
                                 ) {
-                                    // 선불 버튼
-                                    OutlinedButton(
-                                        onClick = { isPrepaid = true },
-                                        colors = ButtonDefaults.outlinedButtonColors(
-                                            containerColor = if (isPrepaid) Color(0xFFE8F5E9) else Color.White,
-                                            contentColor = if (isPrepaid) Color(0xFF2E7D32) else Color.Gray
-                                        ),
-                                        border = BorderStroke(1.dp, if (isPrepaid) Color(0xFF2E7D32) else Color(0xFFE0E0E0)),
-                                        modifier = Modifier.weight(1f).height(40.dp),
-                                        contentPadding = PaddingValues(0.dp)
-                                    ) { Text("선불", fontWeight = FontWeight.Bold, fontSize = 13.sp) }
+                                    if (isPrepaid) {
+                                        FilledTonalButton(
+                                            onClick = { isPrepaid = true },
+                                            modifier = Modifier.weight(1f).height(42.dp),
+                                            shape = RoundedCornerShape(10.dp)
+                                        ) {
+                                            Text("선불", fontWeight = FontWeight.Bold)
+                                        }
+                                    } else {
+                                        OutlinedButton(
+                                            onClick = { isPrepaid = true },
+                                            modifier = Modifier.weight(1f).height(42.dp),
+                                            shape = RoundedCornerShape(10.dp)
+                                        ) {
+                                            Text("선불")
+                                        }
+                                    }
 
-                                    // 후불 버튼
-                                    OutlinedButton(
-                                        onClick = {
-                                            isPrepaid = false
-                                            shippingFee = 0 // 후불 선택 시 금액 자동 초기화
-                                        },
-                                        colors = ButtonDefaults.outlinedButtonColors(
-                                            containerColor = if (!isPrepaid) Color(0xFFFFEBEE) else Color.White,
-                                            contentColor = if (!isPrepaid) Color(0xFFD32F2F) else Color.Gray
-                                        ),
-                                        border = BorderStroke(1.dp, if (!isPrepaid) Color(0xFFD32F2F) else Color(0xFFE0E0E0)),
-                                        modifier = Modifier.weight(1.2f).height(40.dp),
-                                        contentPadding = PaddingValues(0.dp)
-                                    ) { Text("후불(착불)", fontWeight = FontWeight.Bold, fontSize = 13.sp) }
+                                    if (!isPrepaid) {
+                                        FilledTonalButton(
+                                            onClick = {
+                                                isPrepaid = false
+                                                shippingFee = 0
+                                            },
+                                            modifier = Modifier.weight(1f).height(42.dp),
+                                            shape = RoundedCornerShape(10.dp)
+                                        ) {
+                                            Text("착불", fontWeight = FontWeight.Bold)
+                                        }
+                                    } else {
+                                        OutlinedButton(
+                                            onClick = {
+                                                isPrepaid = false
+                                                shippingFee = 0
+                                            },
+                                            modifier = Modifier.weight(1f).height(42.dp),
+                                            shape = RoundedCornerShape(10.dp)
+                                        ) {
+                                            Text("착불")
+                                        }
+                                    }
 
-                                    // +1,000원 버튼
                                     Button(
                                         onClick = {
-                                            isPrepaid = true // 요금 추가 시 자동으로 선불 모드로 변경!
+                                            isPrepaid = true
                                             shippingFee += 1000
                                         },
-                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1976D2)),
-                                        modifier = Modifier.weight(1.2f).height(40.dp),
-                                        shape = RoundedCornerShape(8.dp),
-                                        contentPadding = PaddingValues(0.dp)
-                                    ) { Text("+1,000원", fontWeight = FontWeight.Bold, fontSize = 13.sp) }
+                                        modifier = Modifier.weight(1f).height(42.dp),
+                                        shape = RoundedCornerShape(10.dp),
+                                        contentPadding = PaddingValues(horizontal = 4.dp)
+                                    ) {
+                                        Text("+1,000", fontWeight = FontWeight.Bold)
+                                    }
 
-                                    // 초기화 버튼 (새로고침 아이콘)
-                                    Button(
+                                    IconButton(
                                         onClick = { shippingFee = 0 },
-                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF757575)),
-                                        modifier = Modifier.width(48.dp).height(40.dp),
-                                        shape = RoundedCornerShape(8.dp),
-                                        contentPadding = PaddingValues(0.dp)
-                                    ) { Icon(Icons.Default.Refresh, contentDescription = "초기화", tint = Color.White, modifier = Modifier.size(20.dp)) }
-                                }
-
-                                // 선불 금액이 0원보다 클 때만 텍스트 표시
-                                if (isPrepaid && shippingFee > 0) {
-                                    Text(
-                                        text = "선불 배송비: ${String.format("%,d", shippingFee)}원",
-                                        color = Color(0xFF1976D2),
-                                        fontWeight = FontWeight.ExtraBold,
-                                        modifier = Modifier.align(Alignment.End).padding(top = 8.dp)
-                                    )
+                                        modifier = Modifier.size(42.dp)
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Refresh,
+                                            contentDescription = "배송비 초기화"
+                                        )
+                                    }
                                 }
                             }
                         }
 
-                        // 🚨 [수정] 선불일 때만 총 견적 금액에 택배비 합산!
-                        val finalRetail = uiState.estimateCart.sumOf { it.item.retailPrice * it.orderQuantity } + (if(isPrepaid) shippingFee else 0)
+                        val finalRetail = uiState.estimateCart.sumOf {
+                            it.item.retailPrice * it.orderQuantity
+                        } + if (isPrepaid) shippingFee else 0
 
-                        // 파란 박스: 총액 + 전화번호 입력칸
                         Surface(
                             modifier = Modifier.fillMaxWidth(),
-                            color = Color(0xFFE3F2FD),
-                            shape = RoundedCornerShape(14.dp)
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            shape = RoundedCornerShape(16.dp)
                         ) {
                             Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(14.dp)
+                                modifier = Modifier.padding(14.dp),
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.End,
-                                    verticalAlignment = Alignment.CenterVertically
+                                    verticalAlignment = Alignment.Bottom
                                 ) {
                                     Text(
-                                        text = "총 견적 금액: ${String.format("%,d", finalRetail)}원",
-                                        fontSize = 24.sp,
+                                        text = "최종 견적",
+                                        style = MaterialTheme.typography.labelLarge,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.72f),
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    Text(
+                                        text = "${String.format("%,d", finalRetail)}원",
+                                        style = MaterialTheme.typography.headlineSmall,
                                         fontWeight = FontWeight.ExtraBold,
-                                        color = Color.Black,
-                                        textAlign = TextAlign.End
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer
                                     )
                                 }
-
-                                Spacer(modifier = Modifier.height(12.dp))
 
                                 OutlinedTextField(
                                     value = uiState.customerPhone,
                                     onValueChange = { viewModel.updateCustomerPhone(it) },
-                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(60.dp),
+                                    keyboardOptions = KeyboardOptions(
+                                        keyboardType = KeyboardType.Phone
+                                    ),
+                                    modifier = Modifier.fillMaxWidth(),
                                     singleLine = true,
                                     shape = RoundedCornerShape(12.dp),
-                                    textStyle = androidx.compose.ui.text.TextStyle(
-                                        fontSize = 20.sp,
-                                        fontWeight = FontWeight.ExtraBold,
-                                        color = Color.Black,
-                                        textAlign = TextAlign.Center
-                                    ),
-                                    placeholder = {
-                                        Text(
-                                            text = "수신자 전화번호 입력",
-                                            modifier = Modifier.fillMaxWidth(),
-                                            textAlign = TextAlign.Center,
-                                            fontSize = 16.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = Color.Gray
-                                        )
-                                    },
+                                    label = { Text("고객 전화번호") },
+                                    placeholder = { Text("전화번호 입력 또는 최근 통화에서 선택") },
                                     colors = OutlinedTextFieldDefaults.colors(
-                                        focusedBorderColor = Color(0xFF90CAF9),
-                                        unfocusedBorderColor = Color(0xFF90CAF9),
-                                        focusedContainerColor = Color.White,
-                                        unfocusedContainerColor = Color.White,
-                                        cursorColor = Color.Black
+                                        focusedContainerColor = MaterialTheme.colorScheme.surface,
+                                        unfocusedContainerColor = MaterialTheme.colorScheme.surface
                                     )
                                 )
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(14.dp))
-
-                        // 버튼 2개를 가로 한 줄
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            horizontalArrangement = Arrangement.spacedBy(9.dp)
                         ) {
-                            // 🚨 1. 견적서 문자발송 버튼 (스마트 분기 처리)
-                            Button(
+                            OutlinedButton(
                                 onClick = {
                                     val phoneNum = uiState.customerPhone
 
                                     if (phoneNum.isNotBlank()) {
-                                        // 🚨 괄호 안에 택배비 상태 변수를 쏙 넣어줘!!!
-                                        val smsText = viewModel.generateQuoteText(isPrepaid, shippingFee)
+                                        val smsText = viewModel.generateQuoteText(
+                                            isPrepaid,
+                                            shippingFee
+                                        )
 
                                         val smsIntent = Intent(Intent.ACTION_SENDTO).apply {
                                             data = Uri.parse("smsto:$phoneNum")
                                             putExtra("sms_body", smsText)
                                         }
+
                                         try {
                                             context.startActivity(smsIntent)
                                         } catch (e: Exception) {
-                                            Toast.makeText(
-                                                context,
-                                                "문자 앱을 찾을 수 없습니다.",
-                                                Toast.LENGTH_SHORT
-                                            ).show()
+                                            viewModel.showMessage("문자 앱을 찾을 수 없습니다.")
                                         }
-                                    }
-                                    // 번호가 비어있다면? -> 통화기록 목록 띄우기! (권한 체크 필수)
-                                    else {
+                                    } else {
                                         val permission = Manifest.permission.READ_CALL_LOG
-                                        if (ContextCompat.checkSelfPermission(
+                                        if (
+                                            ContextCompat.checkSelfPermission(
                                                 context,
                                                 permission
                                             ) == PackageManager.PERMISSION_GRANTED
@@ -1033,50 +1057,37 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                                         }
                                     }
                                 },
-                                modifier = Modifier.weight(1f).height(56.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = Color(
-                                        0xFF4CAF50
-                                    )
-                                ),
+                                modifier = Modifier.weight(1f).height(52.dp),
                                 shape = RoundedCornerShape(12.dp)
                             ) {
                                 Text(
-                                    "견적서 문자발송",
-                                    fontSize = 17.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White
+                                    "문자 보내기",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.Bold
                                 )
                             }
 
-                            // 🚨 2. 견적서 저장 버튼 (번호 필수 검증)
                             Button(
                                 onClick = {
-                                    val phoneNum = uiState.customerPhone
-
-                                    // 번호가 있어야만 저장 통과!
-                                    if (phoneNum.isNotBlank()) {
-                                        viewModel.saveCurrentQuote(isPrepaid, shippingFee)
+                                    if (uiState.customerPhone.isNotBlank()) {
+                                        viewModel.saveCurrentQuote(
+                                            isPrepaid,
+                                            shippingFee
+                                        )
                                         showCartDialog = false
-                                    }
-                                    // 번호가 없으면 경고 메시지 띄우고 빠꾸!
-                                    else {
-                                        viewModel.showMessage("⚠️ 견적서를 저장하려면 전화번호를 입력해주세요.")
+                                    } else {
+                                        viewModel.showMessage(
+                                            "견적서를 저장하려면 전화번호를 입력해주세요."
+                                        )
                                     }
                                 },
-                                modifier = Modifier.weight(1f).height(56.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = Color(
-                                        0xFF1976D2
-                                    )
-                                ),
+                                modifier = Modifier.weight(1.15f).height(52.dp),
                                 shape = RoundedCornerShape(12.dp)
                             ) {
                                 Text(
-                                    "견적서 저장",
-                                    fontSize = 17.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White
+                                    "견적 저장",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.ExtraBold
                                 )
                             }
                         }
