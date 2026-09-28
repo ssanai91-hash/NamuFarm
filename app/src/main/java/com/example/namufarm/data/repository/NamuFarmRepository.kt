@@ -336,7 +336,7 @@ class NamuFarmRepository(
                 var restoredQuantity = 0
 
                 lines.forEach { line ->
-                    if (line.orderQty <= 0) return@forEach
+                    if (!line.isInventoryBacked || line.orderQty <= 0) return@forEach
 
                     val farm = getFarmByName(line.farmName)
                         ?: error("재고 복원 실패: 농원 '" + line.farmName + "' 없음")
@@ -565,7 +565,7 @@ class NamuFarmRepository(
         val lines = OrderSummaryCodec.parseStrict(summary)
 
         lines.forEach { line ->
-            if (line.orderQty <= 0) return@forEach
+            if (!line.isInventoryBacked || line.orderQty <= 0) return@forEach
 
             val farm = local.getFarmByName(line.farmName)
                 ?: error("주문확정 실패: 농원 '" + line.farmName + "' 없음")
