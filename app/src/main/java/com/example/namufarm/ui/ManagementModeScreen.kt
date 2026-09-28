@@ -406,9 +406,9 @@ fun FarmManageDialog(
     if (showDeleteConfirm && editingFarmId != null) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
-            title = { Text("농원 삭제", fontWeight = FontWeight.Bold) },
+            title = { Text("농원을 삭제할까요?", fontWeight = FontWeight.Bold) },
             text = {
-                Text("선택한 농원을 삭제할까요?\n해당 농원의 묘목 재고도 모두 삭제됩니다.")
+                Text("이 농원과 연결된 재고도 함께 삭제됩니다. 주문 기록은 유지됩니다.")
             },
             confirmButton = {
                 Button(
@@ -416,13 +416,15 @@ fun FarmManageDialog(
                         onDelete(editingFarmId!!)
                         showDeleteConfirm = false
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F))
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error
+                    )
                 ) {
-                    Text("삭제", color = Color.White, fontWeight = FontWeight.Bold)
+                    Text("삭제")
                 }
             },
             dismissButton = {
-                OutlinedButton(onClick = { showDeleteConfirm = false }) {
+                TextButton(onClick = { showDeleteConfirm = false }) {
                     Text("취소")
                 }
             }
@@ -434,13 +436,16 @@ fun FarmManageDialog(
             onDismissRequest = { showSaveConfirm = false },
             title = { Text("농원 저장", fontWeight = FontWeight.Bold) },
             text = {
-                Column {
-                    Text("다음 정보로 저장할까요?")
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Text("농원명: $farmName")
-                    if (farmAddress.isNotBlank()) Text("주소: $farmAddress")
-                    if (farmPhone.isNotBlank()) Text("전화: $farmPhone")
-                    if (farmMemo.isNotBlank()) Text("메모: $farmMemo")
+                Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                    Text("입력한 정보로 저장할까요?")
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = farmName,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    if (farmAddress.isNotBlank()) Text(farmAddress)
+                    if (farmPhone.isNotBlank()) Text(farmPhone)
                 }
             },
             confirmButton = {
@@ -454,14 +459,13 @@ fun FarmManageDialog(
                             farmMemo.trim()
                         )
                         showSaveConfirm = false
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1976D2))
+                    }
                 ) {
-                    Text("저장", color = Color.White, fontWeight = FontWeight.Bold)
+                    Text("저장")
                 }
             },
             dismissButton = {
-                OutlinedButton(onClick = { showSaveConfirm = false }) {
+                TextButton(onClick = { showSaveConfirm = false }) {
                     Text("취소")
                 }
             }
@@ -470,114 +474,123 @@ fun FarmManageDialog(
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(
-            shape = RoundedCornerShape(16.dp),
-            color = Color.White,
-            modifier = Modifier.fillMaxWidth()
+            shape = RoundedCornerShape(20.dp),
+            color = MaterialTheme.colorScheme.surface,
+            modifier = Modifier.fillMaxWidth(),
+            tonalElevation = 3.dp,
+            shadowElevation = 14.dp
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
+            Column(
+                modifier = Modifier.padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "농원관리",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = Color(0xFF1976D2),
-                        modifier = Modifier.weight(1f)
-                    )
-
-                    TextButton(
-                        onClick = {
-                            editingFarmId = null
-                            farmName = ""
-                            farmAddress = ""
-                            farmPhone = ""
-                            farmMemo = ""
-                        }
-                    ) {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "신규추가",
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF2E7D32)
+                            text = if (editingFarmId == null) "새 농원" else "농원 정보",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                        Text(
+                            text = "판매와 재고에 사용할 기본 정보를 관리합니다.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                    if (editingFarmId != null) {
+                        TextButton(
+                            onClick = {
+                                editingFarmId = null
+                                farmName = ""
+                                farmAddress = ""
+                                farmPhone = ""
+                                farmMemo = ""
+                            }
+                        ) {
+                            Text("새로 등록", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
 
                 OutlinedTextField(
                     value = farmName,
                     onValueChange = { farmName = it },
                     label = { Text("농원명") },
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
                 )
-
-                Spacer(modifier = Modifier.height(10.dp))
 
                 OutlinedTextField(
                     value = farmAddress,
                     onValueChange = { farmAddress = it },
-                    label = { Text("농원주소") },
+                    label = { Text("주소") },
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
                 )
-
-                Spacer(modifier = Modifier.height(10.dp))
 
                 OutlinedTextField(
                     value = farmPhone,
                     onValueChange = { farmPhone = it },
                     label = { Text("전화번호") },
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
                 )
-
-                Spacer(modifier = Modifier.height(10.dp))
 
                 OutlinedTextField(
                     value = farmMemo,
                     onValueChange = { farmMemo = it },
                     label = { Text("메모") },
                     minLines = 3,
-                    maxLines = 3,
-                    modifier = Modifier.fillMaxWidth()
+                    maxLines = 4,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
                 )
-
-                Spacer(modifier = Modifier.height(18.dp))
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     if (editingFarmId != null) {
-                        Button(
+                        OutlinedButton(
                             onClick = { showDeleteConfirm = true },
-                            modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F))
+                            modifier = Modifier.weight(1f).height(48.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = MaterialTheme.colorScheme.error
+                            ),
+                            border = BorderStroke(
+                                1.dp,
+                                MaterialTheme.colorScheme.error.copy(alpha = 0.45f)
+                            )
                         ) {
-                            Text("삭제", color = Color.White, fontWeight = FontWeight.Bold)
+                            Text("삭제", fontWeight = FontWeight.Bold)
                         }
                     }
 
                     OutlinedButton(
                         onClick = onDismiss,
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f).height(48.dp),
+                        shape = RoundedCornerShape(12.dp)
                     ) {
-                        Text("취소")
+                        Text("닫기")
                     }
 
                     Button(
                         onClick = {
-                            if (farmName.isNotBlank()) {
-                                showSaveConfirm = true
-                            }
+                            if (farmName.isNotBlank()) showSaveConfirm = true
                         },
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1976D2))
+                        enabled = farmName.isNotBlank(),
+                        modifier = Modifier.weight(1.2f).height(48.dp),
+                        shape = RoundedCornerShape(12.dp)
                     ) {
-                        Text("저장", color = Color.White, fontWeight = FontWeight.Bold)
+                        Text("저장", fontWeight = FontWeight.ExtraBold)
                     }
                 }
             }
@@ -1111,59 +1124,131 @@ fun SpeciesManageDialog(
     onSave: (Int?, String) -> Unit,
     onDelete: (Int) -> Unit
 ) {
-    var editingSpeciesId by remember(selectedSpecies) { mutableStateOf(selectedSpecies?.speciesId) }
-    var speciesName by remember(selectedSpecies) { mutableStateOf(selectedSpecies?.speciesName.orEmpty()) }
-
+    var editingSpeciesId by remember(selectedSpecies) {
+        mutableStateOf(selectedSpecies?.speciesId)
+    }
+    var speciesName by remember(selectedSpecies) {
+        mutableStateOf(selectedSpecies?.speciesName.orEmpty())
+    }
     var showDeleteConfirm by remember { mutableStateOf(false) }
 
     if (showDeleteConfirm && editingSpeciesId != null) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
-            title = { Text("묘목 삭제(비활성)", fontWeight = FontWeight.Bold) },
-            text = { Text("이 묘목을 목록에서 삭제하시겠습니까?") },
+            title = { Text("묘목을 목록에서 숨길까요?", fontWeight = FontWeight.Bold) },
+            text = { Text("묘목은 비활성 처리되며 기존 주문 기록은 유지됩니다.") },
             confirmButton = {
                 Button(
                     onClick = {
                         onDelete(editingSpeciesId!!)
                         showDeleteConfirm = false
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F))
-                ) { Text("삭제", color = Color.White, fontWeight = FontWeight.Bold) }
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    Text("비활성")
+                }
             },
-            dismissButton = { OutlinedButton(onClick = { showDeleteConfirm = false }) { Text("취소") } }
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) {
+                    Text("취소")
+                }
+            }
         )
     }
 
     Dialog(onDismissRequest = onDismiss) {
-        Surface(shape = RoundedCornerShape(16.dp), color = Color.White, modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text("묘목관리", fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF388E3C), modifier = Modifier.weight(1f))
-                    TextButton(onClick = { editingSpeciesId = null; speciesName = "" }) {
-                        Text("신규추가", fontWeight = FontWeight.Bold, color = Color(0xFF1976D2))
+        Surface(
+            shape = RoundedCornerShape(20.dp),
+            color = MaterialTheme.colorScheme.surface,
+            modifier = Modifier.fillMaxWidth(),
+            tonalElevation = 3.dp,
+            shadowElevation = 14.dp
+        ) {
+            Column(
+                modifier = Modifier.padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = if (editingSpeciesId == null) "새 묘목" else "묘목 정보",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                        Text(
+                            text = "묘목명으로 초성이 자동 분류됩니다.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    if (editingSpeciesId != null) {
+                        TextButton(
+                            onClick = {
+                                editingSpeciesId = null
+                                speciesName = ""
+                            }
+                        ) {
+                            Text("새로 등록", fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
-                Spacer(modifier = Modifier.height(16.dp))
+
                 OutlinedTextField(
                     value = speciesName,
                     onValueChange = { speciesName = it },
                     label = { Text("묘목명") },
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
                 )
-                Spacer(modifier = Modifier.height(18.dp))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     if (editingSpeciesId != null) {
-                        Button(onClick = { showDeleteConfirm = true }, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F))) {
-                            Text("삭제", color = Color.White, fontWeight = FontWeight.Bold)
+                        OutlinedButton(
+                            onClick = { showDeleteConfirm = true },
+                            modifier = Modifier.weight(1f).height(48.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = MaterialTheme.colorScheme.error
+                            ),
+                            border = BorderStroke(
+                                1.dp,
+                                MaterialTheme.colorScheme.error.copy(alpha = 0.45f)
+                            )
+                        ) {
+                            Text("비활성", fontWeight = FontWeight.Bold)
                         }
                     }
-                    OutlinedButton(onClick = onDismiss, modifier = Modifier.weight(1f)) { Text("취소") }
+
+                    OutlinedButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.weight(1f).height(48.dp),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("닫기")
+                    }
+
                     Button(
-                        onClick = { if (speciesName.isNotBlank()) onSave(editingSpeciesId, speciesName.trim()) },
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF388E3C))
-                    ) { Text("저장", color = Color.White, fontWeight = FontWeight.Bold) }
+                        onClick = {
+                            if (speciesName.isNotBlank()) {
+                                onSave(editingSpeciesId, speciesName.trim())
+                            }
+                        },
+                        enabled = speciesName.isNotBlank(),
+                        modifier = Modifier.weight(1.2f).height(48.dp),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("저장", fontWeight = FontWeight.ExtraBold)
+                    }
                 }
             }
         }
