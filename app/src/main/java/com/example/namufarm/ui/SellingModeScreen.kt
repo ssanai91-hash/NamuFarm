@@ -2753,13 +2753,8 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                                         uiState.inputQuantity > 0 &&
                                         uiState.inputRetail > 0
                                     ) {
-                                        val dummyItem = SellingDisplayRow(
-                                            farmId = -1,
-                                            speciesId =
-                                                uiState.selectedSpecies!!.speciesId ?: -1,
-                                            farmName = "수기견적",
-                                            speciesName =
-                                                uiState.selectedSpecies!!.speciesName,
+                                        viewModel.addManualQuoteItem(
+                                            species = uiState.selectedSpecies!!,
                                             quality = uiState.inputQuality,
                                             age = uiState.inputAge,
                                             size = if (
@@ -2770,15 +2765,8 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                                                 ""
                                             },
                                             plantType = uiState.inputPlantType,
-                                            quantity = 999999,
-                                            wholesalePrice = 0,
-                                            retailPrice = uiState.inputRetail,
-                                            chosung = uiState.selectedSpecies!!.chosung
-                                        )
-
-                                        viewModel.addToCart(
-                                            dummyItem,
-                                            uiState.inputQuantity
+                                            quantity = uiState.inputQuantity,
+                                            retailPrice = uiState.inputRetail
                                         )
                                         viewModel.resetInput()
                                         viewModel.updateAge("")
@@ -2809,10 +2797,8 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
         }
     }
 
-    // 🚨 [추가] 오현주 님과 협상 전용 팝업창 ㅋㅋㅋㅋ
 }
 
-// 🚨 개별 묘목 전시 UI & 커스텀 수량 입력 다이얼로그 (브로의 확정 레이아웃 적용!)
 @Composable
 private fun NamuFarmQuickAction(
     label: String,
