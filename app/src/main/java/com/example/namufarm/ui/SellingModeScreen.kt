@@ -187,6 +187,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
     val uiState by viewModel.uiState.collectAsState()
     val scrollState = rememberScrollState()
     val context = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
 
     var showAddressSearch by remember { mutableStateOf(false) }
 
@@ -230,8 +231,12 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
 
     // 🚨 3. 이제 원래 있던 LaunchedEffect들이 이어지면 됨
     LaunchedEffect(uiState.message) {
-        uiState.message?.let {
-            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+        uiState.message?.let { message ->
+            snackbarHostState.showSnackbar(
+                message = message,
+                withDismissAction = true,
+                duration = SnackbarDuration.Short
+            )
             viewModel.clearMessage()
         }
     }
@@ -276,6 +281,10 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
     }
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
+        snackbarHost = {
+            SnackbarHost(hostState = snackbarHostState)
+        },
         topBar = {
             TopAppBar(
                 title = {
