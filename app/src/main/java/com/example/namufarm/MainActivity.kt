@@ -32,6 +32,7 @@ import com.example.namufarm.data.repository.NamuFarmRepository
 import com.example.namufarm.data.remote.RetrofitClient
 import com.example.namufarm.ui.ManagementModeScreen
 import com.example.namufarm.ui.SellingModeScreen
+import com.example.namufarm.ui.theme.NamuFarmTheme
 import com.example.namufarm.viewmodel.ManagementViewModel
 import com.example.namufarm.viewmodel.ManagementViewModelFactory
 import kotlinx.coroutines.delay
@@ -79,19 +80,29 @@ class MainActivity : ComponentActivity() {
         checkAndRequestPermissions()
 
         setContent {
-            val navController = rememberNavController()
+            NamuFarmTheme {
+                val navController = rememberNavController()
 
-            NavHost(navController = navController, startDestination = "splash") {
-                composable("splash") {
-                    SplashScreen {
-                        navController.navigate("selling") { popUpTo("splash") { inclusive = true } }
+                NavHost(navController = navController, startDestination = "splash") {
+                    composable("splash") {
+                        SplashScreen {
+                            navController.navigate("selling") {
+                                popUpTo("splash") { inclusive = true }
+                            }
+                        }
                     }
-                }
-                composable("selling") {
-                    SellingModeScreen(viewModel = viewModel, onNavigateToManagement = { navController.navigate("management") })
-                }
-                composable("management") {
-                    ManagementModeScreen(viewModel = viewModel, onBack = { navController.popBackStack() })
+                    composable("selling") {
+                        SellingModeScreen(
+                            viewModel = viewModel,
+                            onNavigateToManagement = { navController.navigate("management") }
+                        )
+                    }
+                    composable("management") {
+                        ManagementModeScreen(
+                            viewModel = viewModel,
+                            onBack = { navController.popBackStack() }
+                        )
+                    }
                 }
             }
         }
