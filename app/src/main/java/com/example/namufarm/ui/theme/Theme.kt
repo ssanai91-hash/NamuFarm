@@ -1,58 +1,73 @@
 package com.example.namufarm.ui.theme
 
-import android.app.Activity
-import android.os.Build
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.platform.LocalContext
-
-private val DarkColorScheme = darkColorScheme(
-    primary = Purple80,
-    secondary = PurpleGrey80,
-    tertiary = Pink80
-)
 
 private val LightColorScheme = lightColorScheme(
-    primary = Purple40,
-    secondary = PurpleGrey40,
-    tertiary = Pink40
-
-    /* Other default colors to override
-    background = Color(0xFFFFFBFE),
-    surface = Color(0xFFFFFBFE),
-    onPrimary = Color.White,
-    onSecondary = Color.White,
-    onTertiary = Color.White,
-    onBackground = Color(0xFF1C1B1F),
-    onSurface = Color(0xFF1C1B1F),
-    */
+    primary = Forest700,
+    onPrimary = White,
+    primaryContainer = Forest100,
+    onPrimaryContainer = Forest900,
+    secondary = Leaf600,
+    onSecondary = White,
+    secondaryContainer = Leaf100,
+    onSecondaryContainer = Forest900,
+    tertiary = Amber600,
+    onTertiary = White,
+    tertiaryContainer = Amber100,
+    onTertiaryContainer = Ink900,
+    error = Red600,
+    onError = White,
+    errorContainer = Red100,
+    onErrorContainer = Ink900,
+    background = Canvas,
+    onBackground = Ink900,
+    surface = White,
+    onSurface = Ink900,
+    surfaceVariant = SurfaceSoft,
+    onSurfaceVariant = Ink700,
+    outline = Line,
+    outlineVariant = Line
 )
+
+private val DarkColorScheme = darkColorScheme(
+    primary = ColorTokens.primaryDark,
+    onPrimary = Forest900,
+    primaryContainer = Forest800,
+    onPrimaryContainer = Forest50,
+    secondary = ColorTokens.secondaryDark,
+    onSecondary = Forest900,
+    background = ColorTokens.darkBackground,
+    onBackground = ColorTokens.darkOnBackground,
+    surface = ColorTokens.darkSurface,
+    onSurface = ColorTokens.darkOnBackground,
+    surfaceVariant = ColorTokens.darkSurfaceVariant,
+    onSurfaceVariant = ColorTokens.darkOnSurfaceVariant,
+    outline = ColorTokens.darkOutline
+)
+
+private object ColorTokens {
+    val primaryDark = androidx.compose.ui.graphics.Color(0xFF9BCDB8)
+    val secondaryDark = androidx.compose.ui.graphics.Color(0xFFB7CCBA)
+    val darkBackground = androidx.compose.ui.graphics.Color(0xFF101713)
+    val darkSurface = androidx.compose.ui.graphics.Color(0xFF17201B)
+    val darkSurfaceVariant = androidx.compose.ui.graphics.Color(0xFF202B25)
+    val darkOnBackground = androidx.compose.ui.graphics.Color(0xFFE4EBE7)
+    val darkOnSurfaceVariant = androidx.compose.ui.graphics.Color(0xFFBEC9C3)
+    val darkOutline = androidx.compose.ui.graphics.Color(0xFF45524B)
+}
 
 @Composable
 fun NamuFarmTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
-    // Dynamic color is available on Android 12+
-    dynamicColor: Boolean = true,
+    darkTheme: Boolean = false,
     content: @Composable () -> Unit
 ) {
-    val colorScheme = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-            val context = LocalContext.current
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        }
-
-        darkTheme -> DarkColorScheme
-        else -> LightColorScheme
-    }
-
     MaterialTheme(
-        colorScheme = colorScheme,
+        colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme,
         typography = Typography,
+        shapes = NamuFarmShapes,
         content = content
     )
 }
