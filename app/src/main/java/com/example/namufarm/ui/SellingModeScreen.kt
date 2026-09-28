@@ -280,40 +280,42 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
         topBar = {
             TopAppBar(
                 title = {
-                    Text(
-                        text = "나무팜 매매모드",
-                        fontWeight = FontWeight.ExtraBold,
-                        color = Color.White,
-                        modifier = Modifier.clickable { viewModel.forceResetSyncQueue() } // 🚨 요 방아쇠 한 줄만 추가!
-                    )
+                    Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                        Text(
+                            text = "나무팜",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                        Text(
+                            text = "판매 · 견적/주문",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.76f)
+                        )
+                    }
                 },
                 modifier = Modifier.statusBarsPadding(),
-                // 🚨 상단바 전체 배경을 빨간색(0xFFD32F2F)으로 변경!
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFFD32F2F)),
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    actionIconContentColor = MaterialTheme.colorScheme.onPrimary
+                ),
                 actions = {
-                    // 🚨 2. 구글 시트 동기화 버튼 (아이콘 형태) 추가!
-                    Button(
+                    FilledTonalIconButton(
                         onClick = { viewModel.syncDataWithGoogleSheet() },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.18f)),
-                        shape = RoundedCornerShape(10.dp),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                        colors = IconButtonDefaults.filledTonalIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.14f),
+                            contentColor = MaterialTheme.colorScheme.onPrimary
+                        )
                     ) {
                         Icon(
                             imageVector = Icons.Default.CloudSync,
-                            contentDescription = "동기화",
-                            tint = Color.White
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = "동기화",
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 12.sp
+                            contentDescription = "Google Sheet 동기화"
                         )
                     }
 
-                    // 🚨 흰색 바탕에 검정 글씨로 깔끔하게 튜닝!
-                    Button(
+                    Spacer(modifier = Modifier.width(6.dp))
+
+                    OutlinedButton(
                         onClick = {
                             if (uiState.estimateCart.isNotEmpty()) {
                                 showMoveToManagementConfirm = true
@@ -321,234 +323,165 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                                 onNavigateToManagement()
                             }
                         },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color.White),
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.padding(end = 8.dp),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                        border = BorderStroke(
+                            1.dp,
+                            MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.55f)
+                        ),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = MaterialTheme.colorScheme.onPrimary
+                        ),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.padding(end = 10.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                     ) {
-                        Text("관리모드", color = Color.Black, fontWeight = FontWeight.ExtraBold)
+                        Text(
+                            "관리",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                 }
             )
         },
         bottomBar = {
-            Column(modifier = Modifier.navigationBarsPadding()) {
-                // 장바구니 있을 때만 표시
-                // 🚨 [수정] 콤팩트 장바구니: 리스트를 숨기고 숫자 카운트로 변경
-                if (uiState.estimateCart.isNotEmpty()) {
-                    val totalRetail =
-                        uiState.estimateCart.sumOf { it.item.retailPrice * it.orderQuantity }
+            Surface(
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 4.dp,
+                shadowElevation = 10.dp,
+                modifier = Modifier.navigationBarsPadding()
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    if (uiState.estimateCart.isNotEmpty()) {
+                        val totalRetail = uiState.estimateCart.sumOf {
+                            it.item.retailPrice * it.orderQuantity
+                        }
 
-                    Surface(
-                        color = Color(0xFF1976D2),
-                        shadowElevation = 16.dp
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 14.dp, vertical = 12.dp)
+                        Surface(
+                            shape = RoundedCornerShape(16.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            border = BorderStroke(
+                                1.dp,
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                            )
                         ) {
-                            // ✅ 타이틀에 주문량 숫자 표시: 장바구니 (N)
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
+                            Column(
+                                modifier = Modifier.padding(14.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
-                                Text(
-                                    text = "장바구니 (${uiState.estimateCart.size})",
-                                    color = Color.White,
-                                    fontSize = 17.sp,
-                                    fontWeight = FontWeight.ExtraBold
-                                )
-
-                                Text(
-                                    text = "${String.format("%,d", totalRetail)}원",
-                                    color = Color.White,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    fontSize = 20.sp
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.height(12.dp))
-
-                            // 하단 버튼 2개 - 이름 변경 및 레이아웃 유지
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                // 기존 "주문내역 보기 📝" 버튼 찾아서 onClick 수정!
-                                Button(
-                                    onClick = {
-                                        viewModel.updateCustomerPhone("") // 🚨 1. 전화번호 초기화
-                                        shippingFee = 0 // 🚨 2. 택배비 초기화
-                                        isPrepaid = true // 🚨 3. 기본값 후불로 설정
-                                        showCartDialog = true
-                                    },
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .height(44.dp),
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color.White),
-                                    shape = RoundedCornerShape(8.dp),
-                                    contentPadding = PaddingValues(0.dp)
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            "견적 바구니",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.72f)
+                                        )
+                                        Text(
+                                            "${uiState.estimateCart.size}개 품목",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                                        )
+                                    }
                                     Text(
-                                        "주문내역 보기 📝",
-                                        color = Color(0xFF1976D2),
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 14.sp
+                                        "${String.format("%,d", totalRetail)}원",
+                                        style = MaterialTheme.typography.titleLarge,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = MaterialTheme.colorScheme.primary
                                     )
                                 }
 
-                                Button(
-                                    onClick = { showClearCartConfirm = true },
-                                    modifier = Modifier
-                                        .weight(0.7f) // 비우기 버튼은 살짝 작게
-                                        .height(44.dp),
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = Color(
-                                            0xFFD32F2F
-                                        )
-                                    ),
-                                    shape = RoundedCornerShape(8.dp),
-                                    contentPadding = PaddingValues(0.dp)
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    Text(
-                                        "비우기 🗑️", // 🚨 이름 변경
-                                        color = Color.White,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 14.sp
-                                    )
+                                    Button(
+                                        onClick = {
+                                            viewModel.updateCustomerPhone("")
+                                            shippingFee = 0
+                                            isPrepaid = true
+                                            showCartDialog = true
+                                        },
+                                        modifier = Modifier.weight(1f).height(46.dp),
+                                        shape = RoundedCornerShape(11.dp)
+                                    ) {
+                                        Text("견적 확인", fontWeight = FontWeight.Bold)
+                                    }
+
+                                    OutlinedButton(
+                                        onClick = { showClearCartConfirm = true },
+                                        modifier = Modifier.height(46.dp),
+                                        shape = RoundedCornerShape(11.dp),
+                                        border = BorderStroke(
+                                            1.dp,
+                                            MaterialTheme.colorScheme.error.copy(alpha = 0.42f)
+                                        ),
+                                        colors = ButtonDefaults.outlinedButtonColors(
+                                            contentColor = MaterialTheme.colorScheme.error
+                                        )
+                                    ) {
+                                        Text("비우기", fontWeight = FontWeight.Bold)
+                                    }
                                 }
                             }
                         }
                     }
-                }
 
-                // 항상 고정 하단 버튼
-                // 🚨 [수정] 항상 고정 하단 버튼 구역 (테두리 박스 컨테이너 + 2줄 레이아웃으로 변경!)
-                Surface(
-                    color = Color.White,
-                    shadowElevation = 10.dp,
-                    border = BorderStroke(1.dp, Color(0xFFE0E0E0)) // 하단 바 전체 구분선
-                ) {
-                    // 초성 영역과 통일감을 주는 둥근 테두리 박스 추가
-                    Surface(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 10.dp),
-                        shape = RoundedCornerShape(12.dp),
-                        color = Color(0xFFF8F9FA), // 박스 내부 연회색 배경
-                        border = BorderStroke(1.dp, Color(0xFFEEEEEE))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        // 🚨 Row에서 Column으로 변경하여 2줄로 배치!
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            // 🚨 [1열 - 새로 추가된 상단 버튼 2개]
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                // ✉️ 견적문자 발송 버튼
-                                Button(
-                                    onClick = {
-                                        // 🚨 2. 입력창 싹 초기화하고 빠른 견적창 띄우기!
-                                        viewModel.resetInput()
-                                        showQuickQuoteDialog = true
-                                    },
-                                    modifier = Modifier.weight(1f).height(48.dp),
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = Color(0xFF1976D2), // 파란색
-                                        contentColor = Color.White
-                                    ),
-                                    shape = RoundedCornerShape(8.dp)
-                                ) {
-                                    Text(
-                                        text = "✉️ 견적문자 발송",
-                                        fontWeight = FontWeight.ExtraBold,
-                                        fontSize = 13.sp
-                                    )
-                                }
+                        NamuFarmQuickAction(
+                            label = "빠른 견적",
+                            modifier = Modifier.weight(1f),
+                            onClick = {
+                                viewModel.resetInput()
+                                showQuickQuoteDialog = true
+                            }
+                        )
+                        NamuFarmQuickAction(
+                            label = "거래명세",
+                            modifier = Modifier.weight(1f),
+                            onClick = { showNegotiationDialog = true }
+                        )
+                    }
 
-                                // 🧾 거래명세서 발송 버튼
-                                // 🧾 거래명세서 발송 버튼
-                                Button(
-                                    onClick = {
-                                        // 🚨 누르는 순간 협상창 팝업 온!
-                                        showNegotiationDialog = true
-                                    },
-                                    modifier = Modifier.weight(1f).height(48.dp),
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = Color(0xFF00897B),
-                                        contentColor = Color.White
-                                    ),
-                                    shape = RoundedCornerShape(8.dp)
-                                ) {
-                                    Text(
-                                        text = "🧾 거래명세서 발송",
-                                        fontWeight = FontWeight.ExtraBold,
-                                        fontSize = 13.sp
-                                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        NamuFarmQuickAction(
+                            label = "오늘 견적 ${uiState.todayQuotes.size}",
+                            modifier = Modifier.weight(1f),
+                            onClick = {
+                                viewModel.loadTodayData()
+                                if (uiState.todayQuotes.isEmpty()) {
+                                    viewModel.showMessage("오늘 저장된 견적서가 없습니다.")
+                                } else {
+                                    showTodayQuotesDialog = true
                                 }
                             }
-
-                            // 🚨 [2열 - 기존 하단 버튼 2개]
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                // 📄 오늘 견적서 버튼
-                                Button(
-                                    onClick = {
-                                        viewModel.loadTodayData()
-                                        if (uiState.todayQuotes.isEmpty()) {
-                                            viewModel.showMessage("📄 오늘 저장된 견적서가 없습니다.")
-                                        } else {
-                                            showTodayQuotesDialog = true
-                                        }
-                                    },
-                                    modifier = Modifier.weight(1f).height(48.dp),
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = Color(0xFF455A64), // 견적서 진회색 배경
-                                        contentColor = Color.White
-                                    ),
-                                    shape = RoundedCornerShape(8.dp)
-                                ) {
-                                    Text(
-                                        text = "📄 오늘 견적서 (${uiState.todayQuotes.size})",
-                                        fontWeight = FontWeight.ExtraBold,
-                                        fontSize = 13.sp
-                                    )
-                                }
-
-                                // 📦 오늘 주문내역 버튼
-                                Button(
-                                    onClick = {
-                                        viewModel.loadTodayData()
-                                        if (uiState.todayOrders.isEmpty()) {
-                                            viewModel.showMessage("📦 오늘 확정된 주문내역이 없습니다.")
-                                        } else {
-                                            showTodayOrdersDialog = true
-                                        }
-                                    },
-                                    modifier = Modifier.weight(1f).height(48.dp),
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = Color(0xFF2E7D32), // 주문내역 초록색 배경
-                                        contentColor = Color.White
-                                    ),
-                                    shape = RoundedCornerShape(8.dp)
-                                ) {
-                                    Text(
-                                        text = "📦 오늘 주문내역 (${uiState.todayOrders.size})",
-                                        fontWeight = FontWeight.ExtraBold,
-                                        fontSize = 13.sp
-                                    )
+                        )
+                        NamuFarmQuickAction(
+                            label = "오늘 주문 ${uiState.todayOrders.size}",
+                            modifier = Modifier.weight(1f),
+                            emphasized = true,
+                            onClick = {
+                                viewModel.loadTodayData()
+                                if (uiState.todayOrders.isEmpty()) {
+                                    viewModel.showMessage("오늘 확정된 주문내역이 없습니다.")
+                                } else {
+                                    showTodayOrdersDialog = true
                                 }
                             }
-                        }
+                        )
                     }
                 }
             }
@@ -2606,6 +2539,44 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
 }
 
 // 🚨 개별 묘목 전시 UI & 커스텀 수량 입력 다이얼로그 (브로의 확정 레이아웃 적용!)
+@Composable
+private fun NamuFarmQuickAction(
+    label: String,
+    modifier: Modifier = Modifier,
+    emphasized: Boolean = false,
+    onClick: () -> Unit
+) {
+    if (emphasized) {
+        FilledTonalButton(
+            onClick = onClick,
+            modifier = modifier.height(44.dp),
+            shape = RoundedCornerShape(11.dp),
+            contentPadding = PaddingValues(horizontal = 8.dp)
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold
+            )
+        }
+    } else {
+        OutlinedButton(
+            onClick = onClick,
+            modifier = modifier.height(44.dp),
+            shape = RoundedCornerShape(11.dp),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+            contentPadding = PaddingValues(horizontal = 8.dp)
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+    }
+}
+
 @Composable
 fun SellingItemRow(item: SellingDisplayRow, onAddToCart: (Int) -> Unit) {
     var showDialog by remember { mutableStateOf(false) }
