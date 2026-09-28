@@ -37,119 +37,136 @@ fun ManagementModeScreen(viewModel: ManagementViewModel, onBack: () -> Unit) {
 
     var showConfirmDialog by remember { mutableStateOf(false) }
     var pendingAction by remember { mutableStateOf<(() -> Unit)?>(null) }
-    val hasUnsavedChanges = uiState.inputQuantity > 0 || uiState.inputWholesale > 0 || uiState.inputRetail > 0
-
-    val handleSelection = { action: () -> Unit ->
-        if (hasUnsavedChanges) { pendingAction = action; showConfirmDialog = true } else { action() }
-    }
-
-    val isSpeciesEnabled = uiState.selectedFarm != null
     var showFarmManageDialog by remember { mutableStateOf(false) }
-
-    // 기존 변수들 밑에 이거 하나 추가!
     var showSpeciesManageDialog by remember { mutableStateOf(false) }
 
-    // (기존 isSpeciesEnabled 변수는 지우거나 그냥 둬도 돼. 이제 무조건 true로 쓸 거니까!)
-    val isInputEnabled = uiState.selectedSpecies != null // 농원 조건 제거!
+    val hasUnsavedChanges =
+        uiState.inputQuantity > 0 || uiState.inputWholesale > 0 || uiState.inputRetail > 0
+
+    val handleSelection = { action: () -> Unit ->
+        if (hasUnsavedChanges && uiState.isInputActive) {
+            pendingAction = action
+            showConfirmDialog = true
+        } else {
+            action()
+        }
+    }
+
+    val canManageInventory = uiState.selectedSpecies != null
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
                 title = {
-                    Text(
-                        text = "나무팜 관리모드",
-                        fontWeight = FontWeight.ExtraBold,
-                        color = Color.White
-                    )
+                    Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                        Text(
+                            text = "재고 관리",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                        Text(
+                            text = "농원 · 묘목 · 가격",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.76f)
+                        )
+                    }
                 },
-                // 🚨 1. 왼쪽 뒤로가기 화살표(navigationIcon) 완전 삭제!
-
-                // 🚨 2. 우측(actions)에 매매모드와 완벽하게 동일한 스타일의 버튼 배치
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    actionIconContentColor = MaterialTheme.colorScheme.onPrimary
+                ),
                 actions = {
-                    // (아까 추가했던 마스터 동기화 버튼 유지)
-                    IconButton(onClick = {
-                        viewModel.syncFarmMasterFromGoogleSheet()
-                        viewModel.syncSpeciesMasterFromGoogleSheet()
-                    }) {
+                    FilledTonalIconButton(
+                        onClick = {
+                            viewModel.syncFarmMasterFromGoogleSheet()
+                            viewModel.syncSpeciesMasterFromGoogleSheet()
+                        },
+                        colors = IconButtonDefaults.filledTonalIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.14f),
+                            contentColor = MaterialTheme.colorScheme.onPrimary
+                        )
+                    ) {
                         Icon(
                             imageVector = Icons.Default.Refresh,
-                            contentDescription = "마스터 동기화",
-                            tint = Color.White
+                            contentDescription = "농원/묘목 마스터 동기화"
                         )
                     }
 
-                    // 🚨 [새로 추가된 매매모드 전환 버튼]
-                    Button(
-                        onClick = onBack, // onBack 파라미터가 매매모드로 돌아가는 역할을 함
-                        colors = ButtonDefaults.buttonColors(containerColor = Color.White),
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.padding(end = 8.dp),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                    Spacer(modifier = Modifier.width(6.dp))
+
+                    OutlinedButton(
+                        onClick = onBack,
+                        border = BorderStroke(
+                            1.dp,
+                            MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.55f)
+                        ),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = MaterialTheme.colorScheme.onPrimary
+                        ),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.padding(end = 10.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                     ) {
-                        Text("매매모드", color = Color.Black, fontWeight = FontWeight.ExtraBold)
+                        Text(
+                            "판매",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
-                modifier = Modifier.background(
-                    brush = Brush.horizontalGradient(
-                        colors = listOf(Color(0xFF4CAF50), Color(0xFF2E7D32))
-                    )
-                )
+                }
             )
         }
     ) { padding ->
-        // ... 아래 화면 내용은 기존 코드 그대로 유지 ... { padding ->
-        Column(modifier = Modifier.fillMaxSize().padding(padding).background(Color(0xFFF2F4F7)).verticalScroll(scrollState)) {
-
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .verticalScroll(scrollState)
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
             SelectionSection(
-                title = "1. 농원 선택",
-                color = Color(0xFF1976D2),
+                title = "농원",
+                color = MaterialTheme.colorScheme.primary,
                 headerAction = {
-                    OutlinedButton(
-                        onClick = { showFarmManageDialog = true },
-                        shape = RoundedCornerShape(8.dp),
-                        border = BorderStroke(1.5.dp, Color(0xFF1976D2)),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
-                        modifier = Modifier.height(34.dp)
-                    ) {
+                    TextButton(onClick = { showFarmManageDialog = true }) {
                         Text(
-                            text = "농원관리",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF1976D2)
+                            text = "농원 관리",
+                            fontWeight = FontWeight.Bold
                         )
                     }
                 }
             ) {
-                GridSelectionMenu(
-                    items = uiState.farmList,
-                    columns = 5,
-                    itemContent = { farm -> farm.farmName.trim() },
-                    isSelected = { farm -> farm.farmId == uiState.selectedFarm?.farmId },
-                    onSelect = { farm -> handleSelection { viewModel.selectFarm(farm) } },
-                    selectedBorderColor = Color(0xFF1565C0),
-                    selectedBorderWidth = 2.dp,
-                    selectedTextWeight = FontWeight.ExtraBold
-                )
+                if (uiState.farmList.isEmpty()) {
+                    ManagementEmptyHint("등록된 농원이 없습니다. 농원 관리에서 추가해주세요.")
+                } else {
+                    GridSelectionMenu(
+                        items = uiState.farmList,
+                        columns = 4,
+                        itemContent = { farm -> farm.farmName.trim() },
+                        isSelected = { farm ->
+                            farm.farmId == uiState.selectedFarm?.farmId
+                        },
+                        onSelect = { farm ->
+                            handleSelection { viewModel.selectFarm(farm) }
+                        },
+                        selectedBorderColor = MaterialTheme.colorScheme.primary,
+                        selectedBorderWidth = 2.dp,
+                        selectedTextWeight = FontWeight.ExtraBold
+                    )
+                }
             }
 
-            // 🚨 여기서부터 복사! (기존 Box 껍데기는 완전히 지워버리세요)
             SelectionSection(
-                title = "2. 묘목 선택",
-                color = Color(0xFF388E3C),
+                title = "묘목",
+                color = MaterialTheme.colorScheme.primary,
                 headerAction = {
-                    OutlinedButton(
-                        onClick = { showSpeciesManageDialog = true },
-                        shape = RoundedCornerShape(8.dp),
-                        border = BorderStroke(1.5.dp, Color(0xFF388E3C)),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
-                        modifier = Modifier.height(34.dp)
-                    ) {
+                    TextButton(onClick = { showSpeciesManageDialog = true }) {
                         Text(
-                            text = "묘목관리",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF388E3C)
+                            text = "묘목 관리",
+                            fontWeight = FontWeight.Bold
                         )
                     }
                 }
@@ -159,41 +176,54 @@ fun ManagementModeScreen(viewModel: ManagementViewModel, onBack: () -> Unit) {
                     listOf("ㅇ", "ㅈ", "ㅊ", "ㅋ", "ㅌ", "ㅍ", "ㅎ")
                 )
 
-                Surface(
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    color = Color.White,
-                    border = BorderStroke(1.dp, Color(0xFFE0E0E0))
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(7.dp)
                 ) {
-                    Column(
-                        modifier = Modifier.fillMaxWidth().padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        chosungRows.forEach { rowItems ->
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                rowItems.forEach { chosung ->
-                                    val isSelected = uiState.selectedChosung == chosung
+                    chosungRows.forEach { rowItems ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            rowItems.forEach { chosung ->
+                                val selected = uiState.selectedChosung == chosung
 
-                                    Button(
-                                        onClick = {
-                                            // 🚨 제한 조건 싹 지움! 무조건 클릭됨!
-                                            handleSelection { viewModel.selectChosung(chosung) }
+                                Surface(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(38.dp)
+                                        .clickable {
+                                            handleSelection {
+                                                viewModel.selectChosung(chosung)
+                                            }
                                         },
-                                        modifier = Modifier.weight(1f).height(42.dp),
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = if (isSelected) Color(0xFF388E3C) else Color(0xFFF1F8E9)
-                                        ),
-                                        shape = RoundedCornerShape(20.dp),
-                                        contentPadding = PaddingValues(0.dp)
-                                    ) {
+                                    shape = RoundedCornerShape(19.dp),
+                                    color = if (selected) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.surfaceVariant
+                                    },
+                                    border = BorderStroke(
+                                        1.dp,
+                                        if (selected) {
+                                            MaterialTheme.colorScheme.primary
+                                        } else {
+                                            MaterialTheme.colorScheme.outlineVariant
+                                        }
+                                    )
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
                                         Text(
                                             text = chosung,
-                                            color = if (isSelected) Color.White else Color(0xFF2E7D32),
+                                            style = MaterialTheme.typography.labelLarge,
                                             fontWeight = FontWeight.Bold,
-                                            fontSize = 15.sp
+                                            color = if (selected) {
+                                                MaterialTheme.colorScheme.onPrimary
+                                            } else {
+                                                MaterialTheme.colorScheme.onSurfaceVariant
+                                            }
                                         )
                                     }
                                 }
@@ -202,40 +232,103 @@ fun ManagementModeScreen(viewModel: ManagementViewModel, onBack: () -> Unit) {
                     }
                 }
 
-                GridSelectionMenu(
-                    items = uiState.speciesList,
-                    columns = 5,
-                    itemContent = { it.speciesName },
-                    isSelected = { it.speciesId == uiState.selectedSpecies?.speciesId },
-                    onSelect = { species ->
-                        // 🚨 제한 조건 싹 지움! 무조건 클릭됨!
-                        handleSelection { viewModel.selectSpecies(species) }
-                    }
-                )
-            }
-            // 🚨 여기까지 덮어쓰기!
-
-            if (isInputEnabled) {
-                if (uiState.inventoryList.isNotEmpty()) InventoryListSection(viewModel = viewModel)
-                Button(
-                    onClick = { viewModel.activateNewInput() },
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp).height(50.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)), shape = RoundedCornerShape(8.dp)
-                ) { Text("'${uiState.selectedSpecies?.speciesName}' 추가", fontSize = 16.sp, fontWeight = FontWeight.Bold) }
-            }
-
-            Box(modifier = Modifier.alpha(if (uiState.isInputActive) 1f else 0.4f)) {
-                Box {
-                    InventoryInputPane(viewModel = viewModel)
-                    if (!uiState.isInputActive) Box(modifier = Modifier.matchParentSize().clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {})
+                if (uiState.speciesList.isEmpty()) {
+                    ManagementEmptyHint("선택한 초성의 묘목이 없습니다.")
+                } else {
+                    GridSelectionMenu(
+                        items = uiState.speciesList,
+                        columns = 4,
+                        itemContent = { it.speciesName },
+                        isSelected = {
+                            it.speciesId == uiState.selectedSpecies?.speciesId
+                        },
+                        onSelect = { species ->
+                            handleSelection { viewModel.selectSpecies(species) }
+                        }
+                    )
                 }
             }
-            Spacer(modifier = Modifier.height(30.dp))
+
+            if (canManageInventory) {
+                if (uiState.inventoryList.isNotEmpty()) {
+                    InventoryListSection(viewModel = viewModel)
+                } else if (uiState.selectedFarm != null) {
+                    ManagementEmptyHint(
+                        "${uiState.selectedSpecies?.speciesName.orEmpty()} 재고가 아직 없습니다."
+                    )
+                }
+
+                Button(
+                    onClick = { viewModel.activateNewInput() },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp),
+                    shape = RoundedCornerShape(13.dp)
+                ) {
+                    Text(
+                        text = "새 재고 등록",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                }
+            }
+
+            when {
+                uiState.isInputActive -> {
+                    InventoryInputPane(viewModel = viewModel)
+                }
+
+                canManageInventory -> {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        border = BorderStroke(
+                            1.dp,
+                            MaterialTheme.colorScheme.outlineVariant
+                        )
+                    ) {
+                        Text(
+                            text = "기존 재고를 눌러 수정하거나 ‘새 재고 등록’을 선택하세요.",
+                            modifier = Modifier.padding(18.dp),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+
+                else -> {
+                    ManagementEmptyHint("묘목을 선택하면 재고를 등록하거나 수정할 수 있습니다.")
+                }
+            }
+
+            Spacer(modifier = Modifier.height(18.dp))
         }
     }
 
     if (showConfirmDialog) {
-        AlertDialog(onDismissRequest = { showConfirmDialog = false }, title = { Text("알림") }, text = { Text("입력 중인 데이터가 사라집니다. 계속할까요?") }, confirmButton = { TextButton(onClick = { viewModel.resetInput(); pendingAction?.invoke(); showConfirmDialog = false }) { Text("확인") } }, dismissButton = { TextButton(onClick = { showConfirmDialog = false }) { Text("취소") } })
+        AlertDialog(
+            onDismissRequest = { showConfirmDialog = false },
+            title = { Text("입력 내용을 변경할까요?") },
+            text = { Text("저장하지 않은 수량/가격 입력값이 초기화됩니다.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.resetInput()
+                        pendingAction?.invoke()
+                        showConfirmDialog = false
+                    }
+                ) {
+                    Text("변경")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showConfirmDialog = false }) {
+                    Text("계속 입력")
+                }
+            }
+        )
     }
 
     if (showFarmManageDialog) {
@@ -265,7 +358,6 @@ fun ManagementModeScreen(viewModel: ManagementViewModel, onBack: () -> Unit) {
             onDismiss = { showSpeciesManageDialog = false },
             onSave = { id, name ->
                 val chosung = getChosungFromText(name)
-                // ViewModel의 saveSpecies (id, 이름, 농원명(빈값), 초성, 카테고리(빈값), 메모(빈값), 활성(1)) 호출
                 viewModel.saveSpecies(id, name, "", chosung, "", "", 1)
                 showSpeciesManageDialog = false
             },
@@ -276,6 +368,24 @@ fun ManagementModeScreen(viewModel: ManagementViewModel, onBack: () -> Unit) {
         )
     }
 }
+
+@Composable
+private fun ManagementEmptyHint(text: String) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Text(
+            text = text,
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
 
 @Composable
 fun FarmManageDialog(
