@@ -13,13 +13,17 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModelProvider
 import androidx.navigation.compose.NavHost
@@ -161,17 +165,49 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun SplashScreen(onTimeout: () -> Unit) {
     LaunchedEffect(Unit) {
-        delay(1500)
+        delay(900)
         onTimeout()
     }
+
     Box(
-        modifier = Modifier.fillMaxSize().background(Color(0xFFE8F5E9)),
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background),
         contentAlignment = Alignment.Center
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("🌲", fontSize = 100.sp)
-            Text("나무팜 NamuFarm", fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF2E7D32))
-            Text("재고 및 견적 관리 시스템", fontSize = 14.sp, color = Color(0xFF388E3C))
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Surface(
+                modifier = Modifier.size(88.dp),
+                shape = RoundedCornerShape(28.dp),
+                color = MaterialTheme.colorScheme.primary
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text(
+                        text = "나",
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        fontSize = 38.sp,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Text(
+                text = "나무팜",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.ExtraBold,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+
+            Text(
+                text = "묘목 판매 · 재고 관리",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }
