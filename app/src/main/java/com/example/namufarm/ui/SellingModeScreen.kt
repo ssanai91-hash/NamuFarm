@@ -1773,9 +1773,9 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                         )
                         Text(
                             text = if (order.receiverName.isBlank()) {
-                                "👤 받는사람: 미입력"
+                                "주문자: 미입력"
                             } else {
-                                "👤 받는사람: ${order.receiverName}"
+                                "주문자: ${order.receiverName}"
                             },
                             fontSize = 14.sp,
                             color = Color.DarkGray,
