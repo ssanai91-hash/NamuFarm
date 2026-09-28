@@ -13,11 +13,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update // 🚨 핵심 방패 추가!
 import kotlinx.coroutines.launch
-import com.example.namufarm.data.SyncManager
 import com.example.namufarm.data.remote.JusoItem
-import com.example.namufarm.data.remote.RetrofitClient
 import com.example.namufarm.data.remote.SheetOrderItemDto
-import com.google.gson.Gson
+import com.example.namufarm.domain.order.OrderSummaryCodec
 
 data class CartItem(val item: SellingDisplayRow, val orderQuantity: Int)
 data class CallLogItem(val name: String?, val number: String)
@@ -435,25 +433,18 @@ class ManagementViewModel(
                     shippingFee = quote.shippingFee
                 )
 
-                val itemsToDeduct = quote.itemSummary
-                    .split("\n")
-                    .filter { it.isNotBlank() }
-                    .mapNotNull { line ->
-                        val parts = line.split("|")
-                        if (parts.size >= 9) {
-                            SheetOrderItemDto(
-                                species_name = parts[0],
-                                quality = parts[1],
-                                age = parts[2],
-                                size = parts[3],
-                                plant_type = parts[4],
-                                order_qty = parts[5].toIntOrNull() ?: 0,
-                                retail_price = parts[6].toIntOrNull() ?: 0,
-                                farm_name = parts[7]
-                            )
-                        } else {
-                            null
-                        }
+                val itemsToDeduct = OrderSummaryCodec.parseStrict(quote.itemSummary)
+                    .map { line ->
+                        SheetOrderItemDto(
+                            species_name = line.speciesName,
+                            quality = line.quality,
+                            age = line.age,
+                            size = line.size,
+                            plant_type = line.plantType,
+                            order_qty = line.orderQty,
+                            retail_price = line.retailPrice,
+                            farm_name = line.farmName
+                        )
                     }
 
                 val result = repository.confirmOrder(
@@ -893,21 +884,9 @@ class ManagementViewModel(
 
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val response = RetrofitClient.jusoApi.searchAddress(JUSO_API_KEY, keyword)
-                val common = response.results.common
-
-                if (common.errorCode == "0") {
-                    _uiState.update {
-                        it.copy(
-                            jusoResults = response.results.juso ?: emptyList()
-                        )
-                    }
-                } else {
-                    _uiState.update {
-                        it.copy(
-                            jusoResults = emptyList()
-                        )
-                    }
+                val results = repository.searchAddress(JUSO_API_KEY, keyword)
+                _uiState.update {
+                    it.copy(jusoResults = results)
                 }
             } catch (e: Exception) {
                 android.util.Log.e("Juso", "주소 검색 실패", e)
