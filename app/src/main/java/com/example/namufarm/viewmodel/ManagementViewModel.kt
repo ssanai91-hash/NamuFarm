@@ -15,9 +15,15 @@ import kotlinx.coroutines.flow.update // 🚨 핵심 방패 추가!
 import kotlinx.coroutines.launch
 import com.example.namufarm.data.remote.JusoItem
 import com.example.namufarm.data.remote.SheetOrderItemDto
+import com.example.namufarm.domain.order.OrderLine
+import com.example.namufarm.domain.order.OrderLineSource
 import com.example.namufarm.domain.order.OrderSummaryCodec
 
-data class CartItem(val item: SellingDisplayRow, val orderQuantity: Int)
+data class CartItem(
+    val item: SellingDisplayRow,
+    val orderQuantity: Int,
+    val source: OrderLineSource = OrderLineSource.INVENTORY
+)
 data class CallLogItem(val name: String?, val number: String)
 
 data class ManagementUiState(
@@ -254,7 +260,7 @@ class ManagementViewModel(
         } ?: "ㄱ"
     }
 
-    // --- 🛒 [매매 모드 & 통화기록 로직] ---
+    // 판매 / 견적 / 통화기록
     fun addToCart(item: SellingDisplayRow, qty: Int) {
         _uiState.update { currentState ->
             val currentCart = currentState.estimateCart.toMutableList()
@@ -278,6 +284,72 @@ class ManagementViewModel(
                 currentCart.add(CartItem(item, qty))
                 currentState.copy(estimateCart = currentCart, message = "✅ 장바구니 담김")
             }
+        }
+    }
+
+    fun addManualQuoteItem(
+        species: SpeciesEntity,
+        quality: String,
+        age: String,
+        size: String,
+        plantType: String,
+        quantity: Int,
+        retailPrice: Int
+    ) {
+        if (quantity <= 0 || retailPrice <= 0) {
+            _uiState.update {
+                it.copy(message = "⚠️ 수량과 판매 단가를 확인해주세요.")
+            }
+            return
+        }
+
+        val manualItem = SellingDisplayRow(
+            farmId = -1,
+            speciesId = species.speciesId ?: -1,
+            farmName = OrderSummaryCodec.MANUAL_FARM_LABEL,
+            speciesName = species.speciesName,
+            quality = quality,
+            age = age,
+            size = size,
+            plantType = plantType,
+            quantity = quantity,
+            wholesalePrice = 0,
+            retailPrice = retailPrice,
+            chosung = species.chosung
+        )
+
+        _uiState.update { current ->
+            val cart = current.estimateCart.toMutableList()
+            val existingIndex = cart.indexOfFirst {
+                it.source == OrderLineSource.MANUAL &&
+                    it.item.speciesId == manualItem.speciesId &&
+                    it.item.speciesName == manualItem.speciesName &&
+                    it.item.quality == manualItem.quality &&
+                    it.item.age == manualItem.age &&
+                    it.item.size == manualItem.size &&
+                    it.item.plantType == manualItem.plantType &&
+                    it.item.retailPrice == manualItem.retailPrice
+            }
+
+            if (existingIndex >= 0) {
+                val existing = cart[existingIndex]
+                cart[existingIndex] = existing.copy(
+                    orderQuantity = existing.orderQuantity + quantity
+                )
+            } else {
+                cart.add(
+                    CartItem(
+                        item = manualItem,
+                        orderQuantity = quantity,
+                        source = OrderLineSource.MANUAL
+                    )
+                )
+            }
+
+            current.copy(
+                estimateCart = cart,
+                message = "✅ 수기 견적 품목을 담았습니다."
+            )
         }
     }
 
@@ -331,7 +403,7 @@ class ManagementViewModel(
         }
     }
 
-    // 🚨 1. 견적서 저장 함수 수정 (파라미터 추가 및 총액 합산 로직)
+    // 견적 저장
     fun saveCurrentQuote(isPrepaid: Boolean = false, shippingFee: Int = 0) {
         val state = _uiState.value
         if (state.estimateCart.isEmpty()) return
@@ -344,17 +416,22 @@ class ManagementViewModel(
             val lastId = repository.getLastQuoteId() ?: 0
             val quoteNumber = "QUOTE_${datePart}_${String.format("%03d", lastId + 1)}"
 
-            val detailSummary = state.estimateCart.joinToString(separator = "\n") { cartItem ->
-                "${cartItem.item.speciesName}|" +
-                    "${cartItem.item.quality}|" +
-                    "${cartItem.item.age}|" +
-                    "${cartItem.item.size}|" +
-                    "${cartItem.item.plantType}|" +
-                    "${cartItem.orderQuantity}|" +
-                    "${cartItem.item.retailPrice}|" +
-                    "${cartItem.item.farmName}|" +
-                    "${cartItem.item.wholesalePrice}"
-            }
+            val detailSummary = OrderSummaryCodec.encode(
+                state.estimateCart.map { cartItem ->
+                    OrderLine(
+                        speciesName = cartItem.item.speciesName,
+                        quality = cartItem.item.quality,
+                        age = cartItem.item.age,
+                        size = cartItem.item.size,
+                        plantType = cartItem.item.plantType,
+                        orderQty = cartItem.orderQuantity,
+                        retailPrice = cartItem.item.retailPrice,
+                        farmName = cartItem.item.farmName,
+                        wholesalePrice = cartItem.item.wholesalePrice,
+                        source = cartItem.source
+                    )
+                }
+            )
 
             val cartTotal = state.estimateCart.sumOf {
                 it.item.retailPrice * it.orderQuantity
@@ -380,7 +457,7 @@ class ManagementViewModel(
         }
     }
 
-    // 🚨 중복 방지용 전역 카운터 함수 추가! (ViewModel 클래스 안에 넣어줘)
+    // 일자별 로컬 주문 순번
     private fun getNextOrderSequence(context: android.content.Context): Int {
         val pref = context.getSharedPreferences("NamuFarmPrefs", android.content.Context.MODE_PRIVATE)
         val today = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.KOREA).format(java.util.Date())
@@ -405,7 +482,7 @@ class ManagementViewModel(
         return currentSeq
     }
 
-    // 🚨 주문 확정 로직 업데이트 (context 파라미터 추가!)
+    // 견적 → 주문 확정
     fun convertQuoteToOrder(quote: QuoteEntity, context: Context) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
@@ -434,6 +511,7 @@ class ManagementViewModel(
                 )
 
                 val itemsToDeduct = OrderSummaryCodec.parseStrict(quote.itemSummary)
+                    .filter { it.isInventoryBacked }
                     .map { line ->
                         SheetOrderItemDto(
                             species_name = line.speciesName,
@@ -534,19 +612,6 @@ class ManagementViewModel(
             }
         }
     }
-    /**
-     * 주문 영구 삭제는 업무 규칙상 지원하지 않는다.
-     * 주문 기록은 보존하고 상태를 '주문취소'로 관리한다.
-     * UI의 영구삭제 버튼은 다음 UI 정리 단계에서 제거한다.
-     */
-    fun deleteOrder(order: OrderEntity) {
-        _uiState.update {
-            it.copy(
-                message = "ℹ️ 주문 영구삭제는 사용하지 않습니다. 주문취소로 상태를 관리해주세요."
-            )
-        }
-    }
-
     // 🚨 1. 농원 선택 시, 이미 선택된 묘목이 있다면 재고 목록을 바로 불러오도록 수정!
     fun selectFarm(farm: FarmEntity) {
         _uiState.update { it.copy(selectedFarm = farm, isInputEnabled = false, isInputActive = false, inventoryList = emptyList()) }
@@ -1043,13 +1108,6 @@ class ManagementViewModel(
         }
     }
     // 🚨 [추가] 꽉 막힌 동기화 큐를 강제로 날려버리는 관리자 비상용 함수
-    fun forceResetSyncQueue() {
-        _uiState.update {
-            it.copy(
-                message = "⚠️ 미동기화 큐 강제삭제는 데이터 유실 위험 때문에 비활성화했습니다."
-            )
-        }
-    }
 }
 
 // 🚨 3. 수정됨: Factory 클래스에도 SyncManager 파라미터 추가
