@@ -695,209 +695,338 @@ fun InventoryInputPane(viewModel: ManagementViewModel) {
 
     var showValidationErrorDialog by remember { mutableStateOf(false) }
     var showSaveConfirmDialog by remember { mutableStateOf(false) }
+    var showFarmRequiredError by remember { mutableStateOf(false) }
 
     val qualityOptions = listOf("", "특묘", "상묘", "중묘", "하묘")
     val plantTypes = listOf("", "실생", "접목", "삽목", "근삽")
-
-    val currentAgeInt = uiState.inputAge.replace(Regex("[^0-9]"), "").toIntOrNull() ?: 0
-
-    var showFarmRequiredError by remember { mutableStateOf(false) }
+    val currentAgeInt = uiState.inputAge
+        .replace(Regex("[^0-9]"), "")
+        .toIntOrNull() ?: 0
 
     if (showFarmRequiredError) {
         AlertDialog(
             onDismissRequest = { showFarmRequiredError = false },
-            title = { Text("⚠️ 농원 선택 필요", fontWeight = FontWeight.Bold, color = Color.Red) },
-            text = { Text("재고를 저장하려면 대상 '농원'이 필요합니다.\n화면 맨 위에서 농원을 먼저 선택해주세요.") },
-            confirmButton = { Button(onClick = { showFarmRequiredError = false }) { Text("확인") } }
+            title = { Text("농원을 선택해주세요", fontWeight = FontWeight.Bold) },
+            text = { Text("재고를 저장하려면 먼저 대상 농원을 선택해야 합니다.") },
+            confirmButton = {
+                Button(onClick = { showFarmRequiredError = false }) {
+                    Text("확인")
+                }
+            }
+        )
+    }
+
+    if (showValidationErrorDialog) {
+        AlertDialog(
+            onDismissRequest = { showValidationErrorDialog = false },
+            title = { Text("가격을 확인해주세요", fontWeight = FontWeight.Bold) },
+            text = {
+                Text("수량이 있는 재고는 도매가와 소매가를 모두 입력해야 합니다.")
+            },
+            confirmButton = {
+                Button(onClick = { showValidationErrorDialog = false }) {
+                    Text("확인")
+                }
+            }
         )
     }
 
     if (showSaveConfirmDialog) {
         val isDelete = uiState.inputQuantity == 0
+
         AlertDialog(
             onDismissRequest = { showSaveConfirmDialog = false },
-            title = { Text(if (isDelete) "🗑️ 해당 재고 삭제" else "💾 재고 저장 확인", fontWeight = FontWeight.Bold) },
+            title = {
+                Text(
+                    if (isDelete) "재고를 삭제할까요?" else "재고를 저장할까요?",
+                    fontWeight = FontWeight.Bold
+                )
+            },
             text = {
-                Column {
-                    Text(if (isDelete) "다음 재고를 목록에서 완전히 삭제하시겠습니까?" else "다음 정보로 재고를 저장하시겠습니까?", color = Color.DarkGray)
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text("• 농원: ${uiState.selectedFarm?.farmName}")
-                    Text("• 묘목: ${uiState.selectedSpecies?.speciesName}")
-                    Text("• 년생: ${uiState.inputAge}")
-                    // 🚨 로컬 변수 대신 uiState 사용!
-                    Text("• 크기: ${String.format("%.1fm", uiState.inputSizeMeters)}")
-                    Text("• 타입: ${uiState.inputPlantType}")
-                    Text("• 품질: ${uiState.inputQuality}")
-                    Text("• 수량: ${uiState.inputQuantity}주", color = if (isDelete) Color.Red else Color.Blue, fontWeight = FontWeight.ExtraBold)
-                    Text("• 도매가: ${String.format("%,d", uiState.inputWholesale)}원")
-                    Text("• 소매가: ${String.format("%,d", uiState.inputRetail)}원")
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        text = "${uiState.selectedFarm?.farmName.orEmpty()} · ${uiState.selectedSpecies?.speciesName.orEmpty()}",
+                        fontWeight = FontWeight.ExtraBold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+
+                    val spec = listOf(
+                        uiState.inputAge,
+                        String.format("%.1fm", uiState.inputSizeMeters),
+                        uiState.inputPlantType,
+                        uiState.inputQuality
+                    ).filter { it.isNotBlank() }.joinToString(" · ")
+
+                    Text(
+                        text = spec.ifBlank { "규격 미지정" },
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    HorizontalDivider(
+                        modifier = Modifier.padding(vertical = 4.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant
+                    )
+
+                    Text(
+                        text = "수량  ${String.format("%,d", uiState.inputQuantity)}주",
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "도매  ${String.format("%,d", uiState.inputWholesale)}원"
+                    )
+                    Text(
+                        text = "소매  ${String.format("%,d", uiState.inputRetail)}원"
+                    )
+
+                    if (isDelete) {
+                        Text(
+                            text = "수량 0은 해당 규격 재고를 삭제합니다.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
                 }
             },
             confirmButton = {
                 Button(
-                    onClick = { viewModel.saveInventory(); showSaveConfirmDialog = false },
-                    colors = ButtonDefaults.buttonColors(containerColor = if (isDelete) Color.Red else Color(0xFF2196F3))
-                ) { Text(if (isDelete) "삭제 진행" else "저장 진행", color = Color.White) }
+                    onClick = {
+                        viewModel.saveInventory()
+                        showSaveConfirmDialog = false
+                    },
+                    colors = if (isDelete) {
+                        ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.error
+                        )
+                    } else {
+                        ButtonDefaults.buttonColors()
+                    }
+                ) {
+                    Text(if (isDelete) "삭제" else "저장")
+                }
             },
-            dismissButton = { OutlinedButton(onClick = { showSaveConfirmDialog = false }) { Text("취소") } }
+            dismissButton = {
+                TextButton(onClick = { showSaveConfirmDialog = false }) {
+                    Text("취소")
+                }
+            }
         )
     }
 
-    Column(modifier = Modifier.padding(8.dp)) {
-
-        SelectionSection("연생", color = Color(0xFF673AB7)) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        SelectionSection(
+            title = "연생",
+            color = MaterialTheme.colorScheme.primary
+        ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                horizontalArrangement = Arrangement.spacedBy(7.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = if (currentAgeInt > 0) "${currentAgeInt}년생" else "-",
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = Color(0xFF673AB7),
-                    modifier = Modifier.width(60.dp),
-                    textAlign = TextAlign.Center
-                )
-
-                // 🚨 2. 년생 초기화 시 "0년생" 대신 완전한 빈칸("")을 넘겨주도록 수정!
-                OutlinedButton(
-                    onClick = { viewModel.updateAge("") }, // 수정됨!
-                    modifier = Modifier.height(44.dp).weight(0.8f),
-                    contentPadding = PaddingValues(0.dp)
+                Surface(
+                    modifier = Modifier.width(74.dp).height(44.dp),
+                    shape = RoundedCornerShape(11.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer
                 ) {
-                    Text("선택안함", color = Color.Gray, fontSize = 13.sp) // 라벨 변경
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(
+                            text = if (currentAgeInt > 0) "${currentAgeInt}년생" else "미지정",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
                 }
 
-                Button(
-                    onClick = { viewModel.updateAge("${currentAgeInt + 1}년생") },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
-                    modifier = Modifier.height(44.dp).weight(1.5f)
+                OutlinedButton(
+                    onClick = { viewModel.updateAge("") },
+                    modifier = Modifier.weight(1f).height(44.dp),
+                    shape = RoundedCornerShape(11.dp)
                 ) {
-                    Text("+1년생 추가", fontWeight = FontWeight.Bold)
+                    Text("미지정")
+                }
+
+                FilledTonalButton(
+                    onClick = {
+                        viewModel.updateAge("${currentAgeInt + 1}년생")
+                    },
+                    modifier = Modifier.weight(1.25f).height(44.dp),
+                    shape = RoundedCornerShape(11.dp)
+                ) {
+                    Text("+1년", fontWeight = FontWeight.Bold)
                 }
             }
         }
 
-        SelectionSection("크기", color = Color(0xFF0288D1)) {
+        SelectionSection(
+            title = "크기",
+            color = MaterialTheme.colorScheme.primary
+        ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                horizontalArrangement = Arrangement.spacedBy(7.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // 🚨 로컬 변수 대신 uiState.inputSizeMeters 사용!
-                Text(
-                    text = String.format("%.1fm", uiState.inputSizeMeters),
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = Color(0xFF0288D1),
-                    modifier = Modifier.width(60.dp),
-                    textAlign = TextAlign.Center
-                )
+                Surface(
+                    modifier = Modifier.width(74.dp).height(44.dp),
+                    shape = RoundedCornerShape(11.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(
+                            text = if (uiState.inputSizeMeters > 0f) {
+                                String.format("%.1fm", uiState.inputSizeMeters)
+                            } else {
+                                "미지정"
+                            },
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                }
 
                 OutlinedButton(
-                    onClick = { viewModel.updateSize(0f) }, // 🚨 뷰모델 함수 호출
-                    modifier = Modifier.height(44.dp).weight(0.8f),
-                    contentPadding = PaddingValues(0.dp)
+                    onClick = { viewModel.updateSize(0f) },
+                    modifier = Modifier.weight(1f).height(44.dp),
+                    shape = RoundedCornerShape(11.dp)
                 ) {
-                    Text("초기화", color = Color.Gray, fontSize = 13.sp)
+                    Text("초기화")
                 }
 
-                Button(
-                    onClick = { viewModel.updateSize(uiState.inputSizeMeters + 1.0f) }, // 🚨 뷰모델 함수 호출
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF29B6F6)),
-                    modifier = Modifier.height(44.dp).weight(1f),
-                    contentPadding = PaddingValues(0.dp)
+                FilledTonalButton(
+                    onClick = {
+                        viewModel.updateSize(uiState.inputSizeMeters + 0.1f)
+                    },
+                    modifier = Modifier.weight(1f).height(44.dp),
+                    shape = RoundedCornerShape(11.dp)
                 ) {
-                    Text("+1m", color = Color.White, fontWeight = FontWeight.Bold)
+                    Text("+10cm", fontWeight = FontWeight.Bold)
                 }
 
-                Button(
-                    onClick = { viewModel.updateSize(uiState.inputSizeMeters + 0.1f) }, // 🚨 뷰모델 함수 호출
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF81D4FA)),
-                    modifier = Modifier.height(44.dp).weight(1f),
-                    contentPadding = PaddingValues(0.dp)
+                FilledTonalButton(
+                    onClick = {
+                        viewModel.updateSize(uiState.inputSizeMeters + 1f)
+                    },
+                    modifier = Modifier.weight(1f).height(44.dp),
+                    shape = RoundedCornerShape(11.dp)
                 ) {
-                    Text("+10cm", color = Color(0xFF01579B), fontWeight = FontWeight.Bold)
+                    Text("+1m", fontWeight = FontWeight.Bold)
                 }
             }
         }
 
-        SelectionSection("재배 타입", color = Color(0xFF8D6E63)) {
+        SelectionSection(
+            title = "재배 타입",
+            color = MaterialTheme.colorScheme.primary
+        ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 plantTypes.forEach { type ->
-                    val isSelected = uiState.inputPlantType == type
-                    // 🚨 3. 빈칸("")일 때는 "선택안함"이라고 버튼에 글씨만 띄워줌!
-                    val label = if (type.isEmpty()) "선택안함" else type
-
-                    Button(
-                        onClick = { viewModel.updatePlantType(type) },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = if (isSelected) Color(0xFF8D6E63) else Color(0xFFEFEBE9)
-                        ),
-                        modifier = Modifier.weight(1f).height(44.dp),
-                        contentPadding = PaddingValues(0.dp)
+                    SelectionButton(
+                        text = if (type.isBlank()) "미지정" else type,
+                        isSelected = uiState.inputPlantType == type,
+                        modifier = Modifier.weight(1f)
                     ) {
-                        Text(
-                            text = label,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                            color = if (isSelected) Color.White else Color(0xFF4E342E),
-                            fontSize = 13.sp
-                        )
+                        viewModel.updatePlantType(type)
                     }
                 }
             }
         }
 
-        SelectionSection("품질", color = Color(0xFF009688)) {
+        SelectionSection(
+            title = "품질",
+            color = MaterialTheme.colorScheme.primary
+        ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                qualityOptions.forEach { q ->
-                    // 🚨 2. 빈칸("")일 때는 "선택안함"으로 글씨 표시
-                    val label = if (q.isEmpty()) "선택안함" else q
-
+                qualityOptions.forEach { quality ->
                     SelectionButton(
-                        text = label,
-                        isSelected = uiState.inputQuality == q,
+                        text = if (quality.isBlank()) "미지정" else quality,
+                        isSelected = uiState.inputQuality == quality,
                         modifier = Modifier.weight(1f)
                     ) {
-                        viewModel.updateQuality(q)
+                        viewModel.updateQuality(quality)
                     }
                 }
             }
         }
 
-        SelectionSection("수량 · 가격", color = Color(0xFFE91E63)) {
-            ValueAdjuster("수량(주)", uiState.inputQuantity, listOf(1, 10, 100), resetLabel = "품절", onAdd = { viewModel.addQuantity(it) }, onReset = { viewModel.resetQuantityToSoldOut() })
-            Divider(modifier = Modifier.padding(vertical = 12.dp), color = Color(0xFFF0F0F0))
-            ValueAdjuster("도매가(원)", uiState.inputWholesale, listOf(100, 1000, 10000), resetLabel = "초기화", onAdd = { viewModel.addWholesale(it) }, onReset = { viewModel.resetWholesale() })
-            Divider(modifier = Modifier.padding(vertical = 12.dp), color = Color(0xFFF0F0F0))
-            ValueAdjuster("소매가(원)", uiState.inputRetail, listOf(100, 1000, 10000), resetLabel = "초기화", onAdd = { viewModel.addRetail(it) }, onReset = { viewModel.resetRetail() })
+        SelectionSection(
+            title = "수량 · 가격",
+            color = MaterialTheme.colorScheme.primary
+        ) {
+            ValueAdjuster(
+                label = "수량(주)",
+                value = uiState.inputQuantity,
+                steps = listOf(1, 10, 100),
+                resetLabel = "품절",
+                onAdd = { viewModel.addQuantity(it) },
+                onReset = { viewModel.resetQuantityToSoldOut() }
+            )
+
+            HorizontalDivider(
+                modifier = Modifier.padding(vertical = 4.dp),
+                color = MaterialTheme.colorScheme.outlineVariant
+            )
+
+            ValueAdjuster(
+                label = "도매가(원)",
+                value = uiState.inputWholesale,
+                steps = listOf(100, 1000, 10000),
+                onAdd = { viewModel.addWholesale(it) },
+                onReset = { viewModel.resetWholesale() }
+            )
+
+            HorizontalDivider(
+                modifier = Modifier.padding(vertical = 4.dp),
+                color = MaterialTheme.colorScheme.outlineVariant
+            )
+
+            ValueAdjuster(
+                label = "소매가(원)",
+                value = uiState.inputRetail,
+                steps = listOf(100, 1000, 10000),
+                onAdd = { viewModel.addRetail(it) },
+                onReset = { viewModel.resetRetail() }
+            )
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        val deleting = uiState.inputQuantity == 0
 
         Button(
             onClick = {
-                if (uiState.selectedFarm == null) {
-                    // 🚨 농원이 없으면 빠꾸!
-                    showFarmRequiredError = true
-                } else if (uiState.inputQuantity > 0 && (uiState.inputWholesale == 0 || uiState.inputRetail == 0)) {
-                    showValidationErrorDialog = true
-                } else {
-                    showSaveConfirmDialog = true
+                when {
+                    uiState.selectedFarm == null -> {
+                        showFarmRequiredError = true
+                    }
+                    uiState.inputQuantity > 0 &&
+                        (uiState.inputWholesale == 0 || uiState.inputRetail == 0) -> {
+                        showValidationErrorDialog = true
+                    }
+                    else -> {
+                        showSaveConfirmDialog = true
+                    }
                 }
             },
-            modifier = Modifier.fillMaxWidth().height(64.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2196F3)),
-            shape = RoundedCornerShape(12.dp)
+            modifier = Modifier.fillMaxWidth().height(56.dp),
+            shape = RoundedCornerShape(14.dp),
+            colors = if (deleting) {
+                ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.error
+                )
+            } else {
+                ButtonDefaults.buttonColors()
+            }
         ) {
-            Text(if (uiState.inputQuantity == 0) "해당 재고 삭제 (DB 반영)" else "재고 저장 / 업데이트", fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
+            Text(
+                text = if (deleting) "이 규격 재고 삭제" else "재고 저장",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.ExtraBold
+            )
         }
     }
 }
