@@ -48,6 +48,12 @@ android {
             "GOOGLE_SCRIPT_URL",
             "\"${localProperty("GOOGLE_SCRIPT_URL", "https://example.com/")}\""
         )
+
+        buildConfigField(
+            "String",
+            "PAYMENT_ACCOUNT_TEXT",
+            "\"${localProperty("PAYMENT_ACCOUNT_TEXT")}\""
+        )
     }
 
     buildTypes {
