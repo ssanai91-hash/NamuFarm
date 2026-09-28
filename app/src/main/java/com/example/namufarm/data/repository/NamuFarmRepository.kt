@@ -21,6 +21,8 @@ import com.example.namufarm.data.SpeciesEntity
 import com.example.namufarm.data.SyncManager
 import com.example.namufarm.data.SyncResult
 import com.example.namufarm.data.local.LocalDataSource
+import com.example.namufarm.data.remote.JusoApi
+import com.example.namufarm.data.remote.JusoItem
 import com.example.namufarm.data.remote.SheetOrderItemDto
 import com.example.namufarm.domain.order.OrderSummaryCodec
 import com.google.gson.Gson
@@ -82,7 +84,8 @@ private data class LocalCancelWork(
  */
 class NamuFarmRepository(
     private val local: LocalDataSource,
-    private val syncManager: SyncManager
+    private val syncManager: SyncManager,
+    private val jusoApi: JusoApi
 ) {
     private val gson = Gson()
 
@@ -100,6 +103,17 @@ class NamuFarmRepository(
         local.getOrdersForDate(datePrefix)
 
     fun getLastQuoteId(): Int? = local.getLastQuoteId()
+
+    suspend fun searchAddress(apiKey: String, keyword: String): List<JusoItem> {
+        val response = jusoApi.searchAddress(apiKey, keyword)
+        val common = response.results.common
+
+        if (common.errorCode != "0") {
+            error("주소 검색 오류: " + common.errorMessage)
+        }
+
+        return response.results.juso ?: emptyList()
+    }
 
     fun insertQuote(quote: QuoteEntity) = local.insertQuote(quote)
     fun deleteQuote(quote: QuoteEntity) = local.deleteQuote(quote)
