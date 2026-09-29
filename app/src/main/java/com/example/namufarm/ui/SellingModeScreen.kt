@@ -16,12 +16,10 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -32,24 +30,14 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.namufarm.data.SellingDisplayRow
 import com.example.namufarm.viewmodel.ManagementViewModel
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Check // 혹시 Check로 쓰일 경우 대비
 import com.example.namufarm.data.QuoteEntity
 import com.example.namufarm.data.OrderEntity
-import androidx.compose.foundation.layout.offset
 import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.core.content.ContextCompat
-import androidx.compose.material.icons.filled.Refresh // 🚨 동기화 아이콘용
-import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.compose.material.icons.filled.Sync
-import androidx.compose.material.icons.filled.CloudSync
-import androidx.compose.material.icons.filled.Cached
 import androidx.compose.runtime.saveable.rememberSaveable
 import com.example.namufarm.domain.order.OrderLineSource
 import com.example.namufarm.ui.components.*
@@ -149,7 +137,6 @@ internal fun buildSpecText(
 @Composable
 fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: () -> Unit) {
     val uiState by viewModel.uiState.collectAsState()
-    val scrollState = rememberScrollState()
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -391,7 +378,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
             onDismissRequest = { showDeleteQuoteConfirm = false },
             title = { Text("견적서 삭제", fontWeight = FontWeight.Bold) },
             text = {
-                Column {
+                Column(Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState())) {
                     Text("다음 견적서를 삭제하시겠습니까?")
                     Spacer(modifier = Modifier.height(8.dp))
 
@@ -399,7 +386,6 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                         quoteToDelete!!.itemSummary.split("\n").filter { it.isNotBlank() }
                     summaryLines.forEach { line ->
                         if (line.contains("|")) {
-                            val parts = line.split("|")
 
                             val parsed = parseSummaryLine(line)
                             val species = parsed?.species.orEmpty()
@@ -475,9 +461,9 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                         showMoveToManagementConfirm = false
                         onNavigateToManagement()
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                 ) {
-                    Text("관리로 이동", color = MaterialTheme.colorScheme.onError, fontWeight = FontWeight.Bold)
+                    Text("관리로 이동", color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
@@ -495,7 +481,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
             onDismissRequest = { showCancelOrderConfirm = false },
             title = { Text("주문 취소", fontWeight = FontWeight.Bold) },
             text = {
-                Column {
+                Column(Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState())) {
                     Text("주문을 취소하면 차감했던 실제 재고가 한 번 복원됩니다. 수기 견적 품목은 재고 복원에서 제외됩니다.")
                     Spacer(modifier = Modifier.height(8.dp))
 
@@ -503,7 +489,6 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                         orderToCancel!!.itemSummary.split("\n").filter { it.isNotBlank() }
                     summaryLines.forEach { line ->
                         if (line.contains("|")) {
-                            val parts = line.split("|")
 
                             val parsed = parseSummaryLine(line)
                             val species = parsed?.species.orEmpty()
@@ -938,15 +923,15 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                     Row(
-                                        modifier = Modifier.fillMaxWidth(),
+                                        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                                     ) {
                                         plantTypes.forEach { type ->
                                             val selected = uiState.inputPlantType == type
                                             Surface(
                                                 modifier = Modifier
-                                                    .weight(1f)
-                                                    .height(40.dp)
+                                                    .widthIn(min = 64.dp)
+                                                    .heightIn(min = 48.dp)
                                                     .clickable {
                                                         viewModel.updatePlantType(type)
                                                     },
@@ -986,15 +971,15 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                     Row(
-                                        modifier = Modifier.fillMaxWidth(),
+                                        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                                     ) {
                                         qualityOptions.forEach { quality ->
                                             val selected = uiState.inputQuality == quality
                                             Surface(
                                                 modifier = Modifier
-                                                    .weight(1f)
-                                                    .height(40.dp)
+                                                    .widthIn(min = 64.dp)
+                                                    .heightIn(min = 48.dp)
                                                     .clickable {
                                                         viewModel.updateQuality(quality)
                                                     },
@@ -1145,156 +1130,47 @@ fun SellingItemRow(item: SellingDisplayRow, availableQuantity: Int = item.quanti
     )
 
     if (showDialog) {
-        Dialog(
-            onDismissRequest = {
-                showDialog = false
-                inputQty = 0
+        NamuDialog(
+            title = "수량 선택",
+            subtitle = "${item.speciesName} · ${item.farmName}",
+            onDismiss = { showDialog = false; inputQty = 0 },
+            actions = {
+                Button(
+                    onClick = { onAddToCart(inputQty); showDialog = false; inputQty = 0 },
+                    enabled = inputQty > 0 && inputQty <= availableQuantity,
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)
+                ) { Text("견적에 담기") }
             }
         ) {
-            Surface(
-                shape = RoundedCornerShape(22.dp),
-                color = MaterialTheme.colorScheme.surface,
-                tonalElevation = 3.dp,
-                shadowElevation = 16.dp
+            Column(
+                Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(20.dp)
             ) {
-                Column(
-                    modifier = Modifier.verticalScroll(rememberScrollState()).padding(22.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(
-                            text = "수량 선택",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            text = item.speciesName,
-                            style = MaterialTheme.typography.headlineSmall,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        if (specText.isNotBlank()) {
-                            Text(
-                                text = specText,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-
-                    Surface(
-                        shape = RoundedCornerShape(14.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 14.dp, vertical = 12.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column {
-                                Text(
-                                    text = item.farmName,
-                                    style = MaterialTheme.typography.labelLarge,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Text(
-                                    text = "추가 가능 ${String.format("%,d", availableQuantity)}주",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            Text(
-                                text = "${String.format("%,d", item.retailPrice)}원",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                    }
-
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        OutlinedTextField(
-                            value = if (inputQty == 0) "" else inputQty.toString(),
-                            onValueChange = { value ->
-                                if (value.isEmpty()) inputQty = 0
-                                else value.toIntOrNull()?.takeIf { it >= 0 }?.let { inputQty = it }
-                            },
-                            label = { Text("담을 수량 (주)") },
-                            placeholder = { Text("0") },
-                            singleLine = true,
-                            isError = inputQty > availableQuantity,
-                            supportingText = { Text(if (inputQty > availableQuantity) "추가 가능한 수량을 초과했어요" else "예상 금액 ${money(inputQty.toLong() * item.retailPrice)}") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            shape = MaterialTheme.shapes.medium,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        Text(
-                            text = "주",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        OutlinedButton(
-                            onClick = { inputQty = 0 },
-                            modifier = Modifier.weight(1f).heightIn(min = 48.dp),
-                            shape = RoundedCornerShape(11.dp),
-                            contentPadding = PaddingValues(0.dp)
-                        ) {
-                            Text("초기화")
-                        }
-
-                        listOf(1, 10, 100).forEach { step ->
-                            FilledTonalButton(
-                                onClick = {
-                                    inputQty = (inputQty.toLong() + step).coerceAtMost(availableQuantity.toLong()).toInt()
-                                },
-                                modifier = Modifier.weight(1f).heightIn(min = 48.dp),
-                                shape = RoundedCornerShape(11.dp),
-                                contentPadding = PaddingValues(0.dp)
-                            ) {
-                                Text("+$step", fontWeight = FontWeight.Bold)
-                            }
-                        }
-                    }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        OutlinedButton(
-                            onClick = {
-                                showDialog = false
-                                inputQty = 0
-                            },
-                            modifier = Modifier.weight(1f).height(50.dp),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Text("취소", fontWeight = FontWeight.Bold)
-                        }
-
-                        Button(
-                            onClick = {
-                                if (inputQty > 0) {
-                                    onAddToCart(inputQty)
-                                    showDialog = false
-                                    inputQty = 0
-                                }
-                            },
-                            enabled = inputQty > 0 && inputQty <= availableQuantity,
-                            modifier = Modifier.weight(1.6f).height(50.dp),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Text("견적에 담기", fontWeight = FontWeight.ExtraBold)
-                        }
+                Text(item.speciesName, style = MaterialTheme.typography.headlineSmall)
+                Text(specText, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                SourceLabel(OrderLineSource.INVENTORY, item.farmName)
+                NamuBadge("추가 가능 ${String.format("%,d", availableQuantity)}주")
+                Text("판매 단가 ${money(item.retailPrice.toLong())}", style = MaterialTheme.typography.titleMedium)
+                OutlinedTextField(
+                    value = if (inputQty == 0) "" else inputQty.toString(),
+                    onValueChange = { value ->
+                        if (value.isEmpty()) inputQty = 0
+                        else value.toIntOrNull()?.takeIf { it >= 0 }?.let { inputQty = it }
+                    },
+                    label = { Text("담을 수량 (주)") },
+                    placeholder = { Text("0") }, singleLine = true,
+                    isError = inputQty > availableQuantity,
+                    supportingText = { Text(if (inputQty > availableQuantity) "추가 가능한 수량을 초과했어요" else "예상 금액 ${money(inputQty.toLong() * item.retailPrice)}") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    shape = MaterialTheme.shapes.medium, modifier = Modifier.fillMaxWidth()
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = { inputQty = 0 }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(0.dp)) { Text("초기화") }
+                    listOf(1, 10, 100).forEach { step ->
+                        FilledTonalButton(
+                            onClick = { inputQty = (inputQty.toLong() + step).coerceAtMost(availableQuantity.toLong()).toInt() },
+                            modifier = Modifier.weight(1f), contentPadding = PaddingValues(0.dp)
+                        ) { Text("+$step") }
                     }
                 }
             }

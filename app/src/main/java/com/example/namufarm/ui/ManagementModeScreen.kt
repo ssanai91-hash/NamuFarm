@@ -884,14 +884,14 @@ fun InventoryInputPane(viewModel: ManagementViewModel) {
             color = MaterialTheme.colorScheme.primary
         ) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 plantTypes.forEach { type ->
                     SelectionButton(
                         text = if (type.isBlank()) "미지정" else type,
                         isSelected = uiState.inputPlantType == type,
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.widthIn(min = 64.dp)
                     ) {
                         viewModel.updatePlantType(type)
                     }
@@ -904,14 +904,14 @@ fun InventoryInputPane(viewModel: ManagementViewModel) {
             color = MaterialTheme.colorScheme.primary
         ) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 qualityOptions.forEach { quality ->
                     SelectionButton(
                         text = if (quality.isBlank()) "미지정" else quality,
                         isSelected = uiState.inputQuality == quality,
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.widthIn(min = 64.dp)
                     ) {
                         viewModel.updateQuality(quality)
                     }
@@ -1005,7 +1005,7 @@ fun <T> GridSelectionMenu(
     itemContent: (T) -> String,
     isSelected: (T) -> Boolean,
     onSelect: (T) -> Unit,
-    selectedBorderColor: Color = Color(0xFF245C49),
+    selectedBorderColor: Color = MaterialTheme.colorScheme.primary,
     selectedBorderWidth: Dp = 1.dp,
     selectedTextWeight: FontWeight = FontWeight.Bold
 ) {

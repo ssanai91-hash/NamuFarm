@@ -1,8 +1,7 @@
 package com.example.namufarm.ui
 
-import android.graphics.Bitmap
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.ui.graphics.asAndroidBitmap
+import com.github.takahirom.roborazzi.captureRoboImage
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import com.example.namufarm.data.OrderEntity
@@ -118,8 +117,15 @@ class CommerceUiTest {
 
     private fun capture(name: String, node: SemanticsNodeInteraction) {
         val directory = File("build/outputs/ui-previews").apply { mkdirs() }
-        File(directory, "$name.png").outputStream().use {
-            node.captureToImage().asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it)
+        // captureToImage waits for a device Window redraw that Robolectric does not provide.
+        // Roborazzi records the real Compose render tree with Robolectric native graphics.
+        val previous = System.getProperty("roborazzi.test.record")
+        System.setProperty("roborazzi.test.record", "true")
+        try {
+            node.captureRoboImage(File(directory, "$name.png"))
+        } finally {
+            if (previous == null) System.clearProperty("roborazzi.test.record")
+            else System.setProperty("roborazzi.test.record", previous)
         }
     }
 }

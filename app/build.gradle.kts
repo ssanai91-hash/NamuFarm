@@ -94,6 +94,7 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation("org.robolectric:robolectric:4.16.1")
     testImplementation(libs.androidx.compose.ui.test.junit4)
+    testImplementation("io.github.takahirom.roborazzi:roborazzi:1.50.0")
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
