@@ -1,7 +1,5 @@
 package com.example.namufarm.ui
 
-import android.content.Intent
-import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -41,6 +39,7 @@ import androidx.core.content.ContextCompat
 import androidx.compose.runtime.saveable.rememberSaveable
 import com.example.namufarm.domain.order.OrderLineSource
 import com.example.namufarm.ui.components.*
+import com.example.namufarm.phone.openSmsComposer
 
 data class ParsedSummaryItem(
     val species: String,
@@ -135,7 +134,7 @@ internal fun buildSpecText(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: () -> Unit) {
+fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: () -> Unit, onCallAssist: () -> Unit = {}) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
@@ -197,18 +196,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
     }
 
     fun sendQuoteSms(phone: String, body: String) {
-        if (phone.isBlank()) {
-            viewModel.showMessage("전화번호를 입력해주세요.")
-            return
-        }
-        try {
-            context.startActivity(Intent(Intent.ACTION_SENDTO).apply {
-                data = Uri.parse("smsto:$phone")
-                putExtra("sms_body", body)
-            })
-        } catch (_: Exception) {
-            viewModel.showMessage("문자 앱을 찾을 수 없습니다.")
-        }
+        openSmsComposer(context, phone, body)?.let(viewModel::showMessage)
     }
 
     SellingHome(
@@ -224,7 +212,8 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
         onTodayOrders = { viewModel.loadTodayData(); showTodayOrdersDialog = true },
         onCart = { showCartDialog = true },
         onClearCart = { showClearCartConfirm = true },
-        onAddToCart = viewModel::addToCart
+        onAddToCart = viewModel::addToCart,
+        onCallAssist = onCallAssist
     )
 
     if (showCartDialog) {

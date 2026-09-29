@@ -4,6 +4,7 @@ import androidx.compose.material3.SnackbarHostState
 import com.github.takahirom.roborazzi.captureRoboImage
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.StateRestorationTester
 import com.example.namufarm.data.OrderEntity
 import com.example.namufarm.data.SellingDisplayRow
 import com.example.namufarm.domain.order.OrderLineSource
@@ -11,6 +12,10 @@ import com.example.namufarm.ui.components.shippingLabel
 import com.example.namufarm.ui.theme.NamuFarmTheme
 import com.example.namufarm.viewmodel.CartItem
 import com.example.namufarm.viewmodel.ManagementUiState
+import com.example.namufarm.phone.IncomingCaller
+import com.example.namufarm.phone.IncomingCallStore
+import androidx.test.core.app.ApplicationProvider
+import android.content.Context
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -113,6 +118,53 @@ class CommerceUiTest {
         assertEquals("선불 · 0원", shippingLabel(true, 0))
         assertEquals("선불 · 3,000원", shippingLabel(true, 3000))
         assertEquals("착불", shippingLabel(false, 0))
+    }
+
+    @Test fun callerCannotReplaceAnExistingQuoteRecipientWithoutConfirmation() {
+        val caller = IncomingCaller("call-a", "01012345678", 1_790_726_400_000L)
+        var recipient = "01099998888"
+        compose.setContent { NamuFarmTheme {
+            IncomingCallerActions(caller, recipient, 2, { recipient = caller.number }, {}, {})
+        } }
+        compose.onNodeWithText("이 번호로 견적 작성").performClick()
+        assertEquals("01099998888", recipient)
+        compose.onNodeWithText("기존 번호 유지").performClick()
+        assertEquals("01099998888", recipient)
+        compose.onNodeWithText("이 번호로 견적 작성").performClick()
+        compose.onNodeWithText("번호 변경").performClick()
+        assertEquals(caller.number, recipient)
+    }
+
+    @Test fun replyingDoesNotChangeTheQuoteCustomer() {
+        var selected = false
+        var reply = false
+        compose.setContent { NamuFarmTheme {
+            IncomingCallerActions(IncomingCaller("call-b", "01012345678", 1_790_726_400_000L), "01099998888", 3, { selected = true }, { reply = true }, {})
+        } }
+        compose.onNodeWithText("응답 문자 작성").performClick()
+        assertTrue(reply)
+        assertFalse(selected)
+    }
+
+    @Test fun callDialogKeepsItsRecipientWhenAnotherCallArrives() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val store = IncomingCallStore(context)
+        store.setEnabled(true)
+        store.recordRinging("01012345678")
+        var selected: String? = null
+        val restoration = StateRestorationTester(compose)
+        restoration.setContent { NamuFarmTheme {
+            IncomingCallAssistDialog(null, "", 0, { selected = it }, {})
+        } }
+        compose.onNodeWithText("01012345678").assertIsDisplayed()
+        capture("incoming-caller", compose.onNodeWithTag("namu_dialog"))
+        compose.runOnIdle { store.recordRinging("01055556666") }
+        restoration.emulateSavedInstanceStateRestore()
+        compose.onNodeWithText("01012345678").assertIsDisplayed()
+        compose.onNodeWithText("01055556666").assertDoesNotExist()
+        compose.onNodeWithText("이 번호로 견적 작성").performClick()
+        assertEquals("01012345678", selected)
+        store.setEnabled(false)
     }
 
     private fun capture(name: String, node: SemanticsNodeInteraction) {

@@ -34,7 +34,8 @@ internal fun SellingHome(
     onTodayOrders: () -> Unit,
     onCart: () -> Unit,
     onClearCart: () -> Unit,
-    onAddToCart: (SellingDisplayRow, Int) -> Unit
+    onAddToCart: (SellingDisplayRow, Int) -> Unit,
+    onCallAssist: () -> Unit = {}
 ) {
     var query by rememberSaveable { mutableStateOf("") }
     var initial by rememberSaveable { mutableStateOf("전체") }
@@ -64,6 +65,7 @@ internal fun SellingHome(
                     actionIconContentColor = MaterialTheme.colorScheme.onPrimary
                 ),
                 actions = {
+                    IconButton(onClick = onCallAssist) { Icon(Icons.Outlined.PhoneInTalk, "전화 고객 연결") }
                     IconButton(onClick = onSync) { Icon(Icons.Outlined.CloudSync, "재고·주문 동기화") }
                     TextButton(onClick = onManage, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onPrimary)) {
                         Icon(Icons.Outlined.Tune, null, Modifier.size(18.dp))
