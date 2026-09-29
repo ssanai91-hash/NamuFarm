@@ -43,11 +43,11 @@ internal fun IncomingCallAssistDialog(
     val context = LocalContext.current
     val store = remember(context) { IncomingCallStore(context) }
     // Freeze the visible caller: a second call must not change an open reply's recipient.
-    val caller = rememberSaveable(request?.callerId, saver = listSaver<IncomingCaller?, Any>(
+    val caller by rememberSaveable(request?.callerId, stateSaver = listSaver<IncomingCaller?, Any>(
         save = { value -> value?.let { listOf(it.id, it.number, it.receivedAt) } ?: emptyList() },
         restore = { values -> if (values.isEmpty()) null else IncomingCaller(values[0] as String, values[1] as String, values[2] as Long) }
     )) {
-        if (request == null) store.latest() else store.find(request.callerId)
+        mutableStateOf(if (request == null) store.latest() else store.find(request.callerId))
     }
     var cleared by rememberSaveable(request?.callerId) { mutableStateOf(false) }
     var revision by remember { mutableIntStateOf(0) }
@@ -120,7 +120,7 @@ internal fun IncomingCallAssistDialog(
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                Switch(checked = enabled && permissionsGranted, onCheckedChange = { turnOn ->
+                Switch(checked = enabled, onCheckedChange = { turnOn ->
                     if (!turnOn) {
                         store.setEnabled(false)
                         IncomingCallNotifications.cancel(context)

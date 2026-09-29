@@ -53,7 +53,8 @@ class IncomingCallStore(context: Context, private val now: () -> Long = System::
     /** A dialog for caller A must not remove a newer caller B. */
     fun clear(id: String) {
         if (preferences.getString("id", null) == id) {
-            preferences.edit().remove("id").remove("number").remove("received_at").apply()
+            preferences.edit().remove("id").remove("number").remove("received_at")
+                .remove("ringing_number").remove("ringing_at").apply()
         }
     }
 

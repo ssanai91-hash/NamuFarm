@@ -138,6 +138,16 @@ class IncomingCallTest {
         assertFalse(store.preferences.contains("ringing_number"))
     }
 
+    @Test fun clearingACallerAlsoRemovesTheDuplicateDetectionNumber() {
+        store.setEnabled(true)
+        val caller = store.recordRinging("01012345678")!!
+        store.clear(caller.id)
+        assertNull(store.latest())
+        assertFalse(store.preferences.contains("ringing_number"))
+        assertFalse(store.preferences.contains("number"))
+        assertTrue(store.enabled)
+    }
+
     @Test fun smsOpensOneRecipientWithEditableBodyAndRejectsUriInjection() {
         val intent = smsComposeIntent("+82 (10) 1234-5678", "나무팜 견적\n소나무 10주 120,000원")!!
         assertEquals(Intent.ACTION_SENDTO, intent.action)
