@@ -1,5 +1,11 @@
 package com.example.namufarm.ui
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
+import com.example.namufarm.ui.components.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -64,6 +70,10 @@ fun ManagementModeScreen(viewModel: ManagementViewModel, onBack: () -> Unit) {
         }
     }
 
+    BackHandler(enabled = hasUnsavedChanges && uiState.isInputActive) {
+        handleSelection { onBack() }
+    }
+
     val canManageInventory = uiState.selectedSpecies != null
 
     Scaffold(
@@ -112,7 +122,7 @@ fun ManagementModeScreen(viewModel: ManagementViewModel, onBack: () -> Unit) {
                     Spacer(modifier = Modifier.width(6.dp))
 
                     OutlinedButton(
-                        onClick = onBack,
+                        onClick = { handleSelection { onBack() } },
                         border = BorderStroke(
                             1.dp,
                             MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.55f)
@@ -139,9 +149,20 @@ fun ManagementModeScreen(viewModel: ManagementViewModel, onBack: () -> Unit) {
                 .fillMaxSize()
                 .padding(padding)
                 .verticalScroll(scrollState)
-                .padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+                .padding(horizontal = 20.dp, vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.primaryContainer) {
+                Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("등록할 재고를 선택하세요", style = MaterialTheme.typography.titleMedium)
+                    Text("농원 선택 → 묘목 선택 → 수량·가격 입력", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        listOfNotNull(uiState.selectedFarm?.farmName, uiState.selectedSpecies?.speciesName).joinToString(" · ").ifBlank { "농원과 묘목을 선택해주세요" },
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
+            }
             SelectionSection(
                 title = "농원",
                 color = MaterialTheme.colorScheme.primary,
@@ -159,7 +180,7 @@ fun ManagementModeScreen(viewModel: ManagementViewModel, onBack: () -> Unit) {
                 } else {
                     GridSelectionMenu(
                         items = uiState.farmList,
-                        columns = 4,
+                        columns = 3,
                         itemContent = { farm -> farm.farmName.trim() },
                         isSelected = { farm ->
                             farm.farmId == uiState.selectedFarm?.farmId
@@ -186,73 +207,16 @@ fun ManagementModeScreen(viewModel: ManagementViewModel, onBack: () -> Unit) {
                     }
                 }
             ) {
-                val chosungRows = listOf(
-                    listOf("ㄱ", "ㄴ", "ㄷ", "ㄹ", "ㅁ", "ㅂ", "ㅅ"),
-                    listOf("ㅇ", "ㅈ", "ㅊ", "ㅋ", "ㅌ", "ㅍ", "ㅎ")
-                )
-
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(7.dp)
-                ) {
-                    chosungRows.forEach { rowItems ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            rowItems.forEach { chosung ->
-                                val selected = uiState.selectedChosung == chosung
-
-                                Surface(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .height(38.dp)
-                                        .clickable {
-                                            handleSelection {
-                                                viewModel.selectChosung(chosung)
-                                            }
-                                        },
-                                    shape = RoundedCornerShape(19.dp),
-                                    color = if (selected) {
-                                        MaterialTheme.colorScheme.primary
-                                    } else {
-                                        MaterialTheme.colorScheme.surfaceVariant
-                                    },
-                                    border = BorderStroke(
-                                        1.dp,
-                                        if (selected) {
-                                            MaterialTheme.colorScheme.primary
-                                        } else {
-                                            MaterialTheme.colorScheme.outlineVariant
-                                        }
-                                    )
-                                ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Text(
-                                            text = chosung,
-                                            style = MaterialTheme.typography.labelLarge,
-                                            fontWeight = FontWeight.Bold,
-                                            color = if (selected) {
-                                                MaterialTheme.colorScheme.onPrimary
-                                            } else {
-                                                MaterialTheme.colorScheme.onSurfaceVariant
-                                            }
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+                ChosungPicker(uiState.selectedChosung, { initial ->
+                    handleSelection { viewModel.selectChosung(initial) }
+                })
 
                 if (uiState.speciesList.isEmpty()) {
                     ManagementEmptyHint("선택한 초성의 묘목이 없습니다.")
                 } else {
                     GridSelectionMenu(
                         items = uiState.speciesList,
-                        columns = 4,
+                        columns = 3,
                         itemContent = { it.speciesName },
                         isSelected = {
                             it.speciesId == uiState.selectedSpecies?.speciesId
@@ -274,7 +238,7 @@ fun ManagementModeScreen(viewModel: ManagementViewModel, onBack: () -> Unit) {
                 }
 
                 Button(
-                    onClick = { viewModel.activateNewInput() },
+                    onClick = { handleSelection { viewModel.activateNewInput() } },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(52.dp),
@@ -296,7 +260,7 @@ fun ManagementModeScreen(viewModel: ManagementViewModel, onBack: () -> Unit) {
                 canManageInventory -> {
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
+                        shape = MaterialTheme.shapes.large,
                         color = MaterialTheme.colorScheme.surfaceVariant,
                         border = BorderStroke(
                             1.dp,
@@ -496,7 +460,7 @@ fun FarmManageDialog(
             shadowElevation = 14.dp
         ) {
             Column(
-                modifier = Modifier.padding(20.dp),
+                modifier = Modifier.verticalScroll(rememberScrollState()).padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Row(
@@ -823,7 +787,7 @@ fun InventoryInputPane(viewModel: ManagementViewModel) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Surface(
-                    modifier = Modifier.width(74.dp).height(44.dp),
+                    modifier = Modifier.width(74.dp).heightIn(min = 48.dp),
                     shape = RoundedCornerShape(11.dp),
                     color = MaterialTheme.colorScheme.primaryContainer
                 ) {
@@ -839,7 +803,7 @@ fun InventoryInputPane(viewModel: ManagementViewModel) {
 
                 OutlinedButton(
                     onClick = { viewModel.updateAge("") },
-                    modifier = Modifier.weight(1f).height(44.dp),
+                    modifier = Modifier.weight(1f).heightIn(min = 48.dp),
                     shape = RoundedCornerShape(11.dp)
                 ) {
                     Text("미지정")
@@ -849,7 +813,7 @@ fun InventoryInputPane(viewModel: ManagementViewModel) {
                     onClick = {
                         viewModel.updateAge("${currentAgeInt + 1}년생")
                     },
-                    modifier = Modifier.weight(1.25f).height(44.dp),
+                    modifier = Modifier.weight(1.25f).heightIn(min = 48.dp),
                     shape = RoundedCornerShape(11.dp)
                 ) {
                     Text("+1년", fontWeight = FontWeight.Bold)
@@ -867,7 +831,7 @@ fun InventoryInputPane(viewModel: ManagementViewModel) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Surface(
-                    modifier = Modifier.width(74.dp).height(44.dp),
+                    modifier = Modifier.width(74.dp).heightIn(min = 48.dp),
                     shape = RoundedCornerShape(11.dp),
                     color = MaterialTheme.colorScheme.primaryContainer
                 ) {
@@ -887,7 +851,7 @@ fun InventoryInputPane(viewModel: ManagementViewModel) {
 
                 OutlinedButton(
                     onClick = { viewModel.updateSize(0f) },
-                    modifier = Modifier.weight(1f).height(44.dp),
+                    modifier = Modifier.weight(1f).heightIn(min = 48.dp),
                     shape = RoundedCornerShape(11.dp)
                 ) {
                     Text("초기화")
@@ -897,7 +861,7 @@ fun InventoryInputPane(viewModel: ManagementViewModel) {
                     onClick = {
                         viewModel.updateSize(uiState.inputSizeMeters + 0.1f)
                     },
-                    modifier = Modifier.weight(1f).height(44.dp),
+                    modifier = Modifier.weight(1f).heightIn(min = 48.dp),
                     shape = RoundedCornerShape(11.dp)
                 ) {
                     Text("+10cm", fontWeight = FontWeight.Bold)
@@ -907,7 +871,7 @@ fun InventoryInputPane(viewModel: ManagementViewModel) {
                     onClick = {
                         viewModel.updateSize(uiState.inputSizeMeters + 1f)
                     },
-                    modifier = Modifier.weight(1f).height(44.dp),
+                    modifier = Modifier.weight(1f).heightIn(min = 48.dp),
                     shape = RoundedCornerShape(11.dp)
                 ) {
                     Text("+1m", fontWeight = FontWeight.Bold)
@@ -965,7 +929,8 @@ fun InventoryInputPane(viewModel: ManagementViewModel) {
                 steps = listOf(1, 10, 100),
                 resetLabel = "품절",
                 onAdd = { viewModel.addQuantity(it) },
-                onReset = { viewModel.resetQuantityToSoldOut() }
+                onReset = { viewModel.resetQuantityToSoldOut() },
+                onSet = viewModel::setQuantity
             )
 
             HorizontalDivider(
@@ -978,7 +943,8 @@ fun InventoryInputPane(viewModel: ManagementViewModel) {
                 value = uiState.inputWholesale,
                 steps = listOf(100, 1000, 10000),
                 onAdd = { viewModel.addWholesale(it) },
-                onReset = { viewModel.resetWholesale() }
+                onReset = { viewModel.resetWholesale() },
+                onSet = viewModel::setWholesale
             )
 
             HorizontalDivider(
@@ -991,7 +957,8 @@ fun InventoryInputPane(viewModel: ManagementViewModel) {
                 value = uiState.inputRetail,
                 steps = listOf(100, 1000, 10000),
                 onAdd = { viewModel.addRetail(it) },
-                onReset = { viewModel.resetRetail() }
+                onReset = { viewModel.resetRetail() },
+                onSet = viewModel::setRetail
             )
         }
 
@@ -1058,6 +1025,7 @@ fun <T> GridSelectionMenu(
                         modifier = Modifier
                             .weight(1f)
                             .heightIn(min = 48.dp)
+                            .semantics { this.selected = selected }
                             .clickable { onSelect(item) },
                         shape = RoundedCornerShape(11.dp),
                         color = if (selected) {
@@ -1122,8 +1090,8 @@ fun SelectionSection(
             1.dp,
             MaterialTheme.colorScheme.outlineVariant
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-        shape = RoundedCornerShape(16.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        shape = MaterialTheme.shapes.large
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -1163,7 +1131,8 @@ fun SelectionButton(
 ) {
     Surface(
         modifier = modifier
-            .height(44.dp)
+            .heightIn(min = 48.dp)
+            .semantics { selected = isSelected }
             .clickable { onClick() },
         shape = RoundedCornerShape(11.dp),
         color = if (isSelected) {
@@ -1202,25 +1171,29 @@ fun ValueAdjuster(
     steps: List<Int>,
     resetLabel: String = "초기화",
     onAdd: (Int) -> Unit,
-    onReset: () -> Unit
+    onReset: () -> Unit,
+    onSet: ((Int) -> Unit)? = null
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.Bottom
-        ) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.weight(1f)
+        if (onSet != null) {
+            OutlinedTextField(
+                value = if (value == 0) "" else value.toString(),
+                onValueChange = { text ->
+                    if (text.isEmpty()) onSet(0)
+                    else text.toIntOrNull()?.takeIf { it >= 0 }?.let(onSet)
+                },
+                label = { Text(label) },
+                placeholder = { Text("0") },
+                modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                singleLine = true,
+                shape = MaterialTheme.shapes.medium
             )
-            Text(
-                text = String.format("%,d", value),
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.ExtraBold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
+        } else {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
+                Text(label, Modifier.weight(1f), style = MaterialTheme.typography.labelMedium)
+                Text(String.format("%,d", value), style = MaterialTheme.typography.titleLarge)
+            }
         }
 
         Row(
@@ -1229,11 +1202,11 @@ fun ValueAdjuster(
         ) {
             OutlinedButton(
                 onClick = onReset,
-                modifier = Modifier.weight(1f).height(44.dp),
+                modifier = Modifier.weight(1f).heightIn(min = 48.dp),
                 shape = RoundedCornerShape(11.dp),
                 contentPadding = PaddingValues(0.dp),
                 colors = ButtonDefaults.outlinedButtonColors(
-                    contentColor = MaterialTheme.colorScheme.error
+                    contentColor = if (resetLabel == "품절") MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
                 )
             ) {
                 Text(
@@ -1246,7 +1219,7 @@ fun ValueAdjuster(
             steps.forEach { step ->
                 FilledTonalButton(
                     onClick = { onAdd(step) },
-                    modifier = Modifier.weight(1f).height(44.dp),
+                    modifier = Modifier.weight(1f).heightIn(min = 48.dp),
                     shape = RoundedCornerShape(11.dp),
                     contentPadding = PaddingValues(0.dp)
                 ) {
@@ -1311,7 +1284,7 @@ fun SpeciesManageDialog(
             shadowElevation = 14.dp
         ) {
             Column(
-                modifier = Modifier.padding(20.dp),
+                modifier = Modifier.verticalScroll(rememberScrollState()).padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
                 Row(

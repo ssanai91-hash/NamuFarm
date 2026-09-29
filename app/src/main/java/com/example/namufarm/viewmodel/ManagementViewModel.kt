@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update // 🚨 핵심 방패 추가!
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import com.example.namufarm.data.remote.JusoItem
 import com.example.namufarm.domain.order.OrderLine
 import com.example.namufarm.domain.order.OrderAmounts
@@ -46,6 +47,8 @@ data class ManagementUiState(
     val recentCallList: List<CallLogItem> = emptyList(),
     val todayQuotes: List<QuoteEntity> = emptyList(),
     val todayOrders: List<OrderEntity> = emptyList(),
+    val isSavingQuote: Boolean = false,
+    val confirmingQuoteNumber: String? = null,
 
     val farmList: List<FarmEntity> = emptyList(),
     val selectedFarm: FarmEntity? = null,
@@ -74,6 +77,7 @@ class ManagementViewModel(
     val uiState: StateFlow<ManagementUiState> = _uiState.asStateFlow()
 
     private val quoteSaveInProgress = AtomicBoolean(false)
+    private val orderConfirmInProgress = AtomicBoolean(false)
 
     private fun launchOperation(block: suspend CoroutineScope.() -> Unit) =
         viewModelScope.launch(Dispatchers.IO) {
@@ -430,10 +434,11 @@ class ManagementViewModel(
     }
 
     // 견적 저장
-    fun saveCurrentQuote(isPrepaid: Boolean = false, shippingFee: Int = 0) {
+    fun saveCurrentQuote(isPrepaid: Boolean = false, shippingFee: Int = 0, onSaved: () -> Unit = {}) {
         val state = _uiState.value
         if (state.estimateCart.isEmpty()) return
         if (!quoteSaveInProgress.compareAndSet(false, true)) return
+        _uiState.update { it.copy(isSavingQuote = true) }
 
         val now = java.util.Date()
         val datePart = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.KOREA).format(now)
@@ -482,14 +487,18 @@ class ManagementViewModel(
                         message = "💾 견적 저장완료: $quoteNumber"
                     )
                 }
+                withContext(Dispatchers.Main) { onSaved() }
             } finally {
                 quoteSaveInProgress.set(false)
+                _uiState.update { it.copy(isSavingQuote = false) }
             }
         }
     }
 
     // 견적 → 주문 확정
-    fun convertQuoteToOrder(quote: QuoteEntity) {
+    fun convertQuoteToOrder(quote: QuoteEntity, onConfirmed: (OrderEntity) -> Unit = {}) {
+        if (!orderConfirmInProgress.compareAndSet(false, true)) return
+        _uiState.update { it.copy(confirmingQuoteNumber = quote.quoteNumber) }
         launchOperation {
             try {
                 val now = java.util.Date()
@@ -528,6 +537,7 @@ class ManagementViewModel(
                         }
                     )
                 }
+                withContext(Dispatchers.Main) { onConfirmed(newOrder) }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -536,6 +546,9 @@ class ManagementViewModel(
                 _uiState.update {
                     it.copy(message = "❌ 주문확정 실패: ${e.message}")
                 }
+            } finally {
+                orderConfirmInProgress.set(false)
+                _uiState.update { it.copy(confirmingQuoteNumber = null) }
             }
         }
     }
@@ -650,6 +663,10 @@ class ManagementViewModel(
     fun addWholesale(amount: Int) { _uiState.update { it.copy(inputWholesale = (it.inputWholesale.toLong() + amount).coerceIn(0, Int.MAX_VALUE.toLong()).toInt()) } }
     fun addRetail(amount: Int) { _uiState.update { it.copy(inputRetail = (it.inputRetail.toLong() + amount).coerceIn(0, Int.MAX_VALUE.toLong()).toInt()) } }
     fun resetInput() { _uiState.update { it.copy(inputQuantity = 0, inputWholesale = 0, inputRetail = 0) } }
+
+    fun setQuantity(value: Int) { if (value >= 0) _uiState.update { it.copy(inputQuantity = value) } }
+    fun setWholesale(value: Int) { if (value >= 0) _uiState.update { it.copy(inputWholesale = value) } }
+    fun setRetail(value: Int) { if (value >= 0) _uiState.update { it.copy(inputRetail = value) } }
     fun resetQuantityToSoldOut() { _uiState.update { it.copy(inputQuantity = 0, inputWholesale = 0, inputRetail = 0) } }
     fun resetWholesale() { _uiState.update { it.copy(inputWholesale = 0) } }
     fun resetRetail() { _uiState.update { it.copy(inputRetail = 0) } }

@@ -44,3 +44,12 @@ jobs:
                   print(failed.text)
           print('JUnit totals:', totals)
           PY
+
+      - name: Upload UI previews and test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: namufarm-ui-review
+          path: |
+            app/build/outputs/ui-previews/*.png
+            app/build/reports/tests/testDebugUnitTest/
