@@ -39,7 +39,7 @@ internal fun QuoteCartDialog(
     onDismiss: () -> Unit
 ) {
     NamuDialog(
-        "견적 작성", "${cart.size}개 품목 · 저장 전에는 재고가 차감되지 않아요",
+        "견적 작성", "${cart.size}개 품목 · 견적 저장 시 재고는 그대로예요",
         onDismiss, snackbarHostState,
         actions = {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
