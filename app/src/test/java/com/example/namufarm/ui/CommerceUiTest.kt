@@ -5,6 +5,7 @@ import com.github.takahirom.roborazzi.captureRoboImage
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.junit4.StateRestorationTester
+import com.example.namufarm.data.WebQuoteRequestEntity
 import com.example.namufarm.data.OrderEntity
 import com.example.namufarm.data.SellingDisplayRow
 import com.example.namufarm.domain.order.OrderLineSource
@@ -165,6 +166,32 @@ class CommerceUiTest {
         compose.onNodeWithText("이 번호로 견적 작성").performClick()
         assertEquals("01012345678", selected)
         store.setEnabled(false)
+    }
+
+    private val webRequest = WebQuoteRequestEntity(
+        "11111111-1111-4111-8111-111111111111", 1, "2026-10-04T01:23:45.000Z", "김나무", "01012345678", "충북 옥천군",
+        """[{"species":"소나무","specification":"규격 상담","quantity":120},{"species":"감나무","specification":"2년생","quantity":30}]""", "주말에 심을 예정입니다."
+    )
+    @Test fun webCustomerNeedsConfirmationBeforeReplacingDraftRecipient() {
+        var phone = "01099998888"
+        compose.setContent { NamuFarmTheme {
+            androidx.compose.foundation.layout.Column { WebRequestCustomerActions(webRequest, phone, 2) { phone = it } }
+        } }
+        compose.onNodeWithText("이 고객 번호로 견적 작성").performClick()
+        assertEquals("01099998888", phone)
+        compose.onNodeWithText("번호 변경").performClick()
+        assertEquals(webRequest.customerPhone, phone)
+    }
+    @Test fun webInboxShowsItemsWithoutOrderOrStockMutationActions() {
+        compose.setContent { NamuFarmTheme {
+            WebQuoteInboxDialog(com.example.namufarm.viewmodel.WebInboxState(requests = listOf(webRequest), configured = true, paired = true),
+                webRequest.requestId, "", 0, {}, {}, {}, {}, {}, {})
+        } }
+        compose.onNodeWithText("김나무").assertIsDisplayed()
+        compose.onNodeWithText("소나무").assertIsDisplayed()
+        compose.onNodeWithText("주문 확정").assertDoesNotExist()
+        compose.onNodeWithText("주문 삭제").assertDoesNotExist()
+        capture("web-request-detail", compose.onNodeWithTag("namu_dialog"))
     }
 
     private fun capture(name: String, node: SemanticsNodeInteraction) {

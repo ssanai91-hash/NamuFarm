@@ -1,5 +1,6 @@
 package com.example.namufarm.data.local
 
+import com.example.namufarm.data.WebQuoteRequestEntity
 import androidx.room.withTransaction
 import com.example.namufarm.data.AppDatabase
 import com.example.namufarm.data.FarmEntity
@@ -31,6 +32,19 @@ class LocalDataSource(
     fun requireNoPending() {
         check(dao.getAllPendingSync().isEmpty()) {
             "전송 대기 중인 로컬 변경이 있어 Pull을 중단했습니다. 다시 동기화해주세요."
+        }
+    }
+
+    fun getWebRequests() = dao.getWebRequests()
+    fun webRequestCursor() = dao.webRequestCursor()
+    fun markWebRequestRead(id: String, time: Long) = dao.markWebRequestRead(id, time)
+    fun insertWebRequests(requests: List<WebQuoteRequestEntity>) {
+        requests.forEach { incoming ->
+            val existing = dao.getWebRequest(incoming.requestId)
+            if (existing == null) dao.insertWebRequest(incoming)
+            else check(existing.copy(readAt = null) == incoming.copy(readAt = null)) {
+                "이미 받은 요청의 내용이 변경되었습니다. 관리자 확인이 필요합니다."
+            }
         }
     }
 

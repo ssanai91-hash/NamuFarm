@@ -34,14 +34,21 @@ import com.example.namufarm.ui.theme.NamuFarmTheme
 import com.example.namufarm.viewmodel.ManagementViewModel
 import com.example.namufarm.viewmodel.ManagementViewModelFactory
 import kotlinx.coroutines.delay
+import com.example.namufarm.ui.WebQuoteInboxDialog
+import com.example.namufarm.viewmodel.WebInboxViewModel
+import com.example.namufarm.viewmodel.WebInboxViewModelFactory
+import com.example.namufarm.webrequests.WebRequestConnection
+import com.example.namufarm.webrequests.WebRequestPush
 
 class MainActivity : ComponentActivity() {
 
     private lateinit var viewModel: ManagementViewModel
+    private var webRequestId by mutableStateOf<String?>(null)
     private var callAssistRequest by mutableStateOf<CallAssistRequest?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        webRequestId = if (savedInstanceState == null) WebRequestPush.fromIntent(intent) else savedInstanceState.getString("web_request_id")
         callAssistRequest = if (savedInstanceState == null) CallAssistRequest.fromIntent(intent)
         else savedInstanceState.getString("incoming_caller_id")?.let {
             CallAssistRequest(it, savedInstanceState.getBoolean("incoming_reply"))
@@ -62,9 +69,16 @@ class MainActivity : ComponentActivity() {
 
         viewModel = ViewModelProvider(this, factory)[ManagementViewModel::class.java]
 
+        val webInbox = ViewModelProvider(this, WebInboxViewModelFactory(WebRequestConnection(this, repository)))[WebInboxViewModel::class.java]
+
         setContent {
             NamuFarmTheme {
                 val navController = rememberNavController()
+                var showWebInbox by rememberSaveable { mutableStateOf(false) }
+                val webState by webInbox.state.collectAsState()
+                LaunchedEffect(showWebInbox, webRequestId) {
+                    if ((showWebInbox || webRequestId != null) && webState.paired) webInbox.refresh()
+                }
                 var showCallAssist by rememberSaveable { mutableStateOf(false) }
                 val uiState by viewModel.uiState.collectAsState()
 
@@ -80,7 +94,9 @@ class MainActivity : ComponentActivity() {
                         SellingModeScreen(
                             viewModel = viewModel,
                             onNavigateToManagement = { navController.navigate("management") },
-                            onCallAssist = { showCallAssist = true }
+                            onCallAssist = { showCallAssist = true },
+                            onWebInbox = { showWebInbox = true },
+                            webUnread = webState.unread
                         )
                     }
                     composable("management") {
@@ -90,7 +106,19 @@ class MainActivity : ComponentActivity() {
                         )
                     }
                 }
-                if (showCallAssist || callAssistRequest != null) {
+                if (showWebInbox || webRequestId != null) {
+                    WebQuoteInboxDialog(webState, webRequestId, uiState.customerPhone, uiState.estimateCart.size,
+                        onRefresh = webInbox::refresh, onPair = webInbox::pair, onRead = webInbox::read,
+                        onUsePhone = { phone ->
+                            if (uiState.isSavingQuote) webInbox.showMessage("견적 저장이 끝난 뒤 고객 번호를 적용해주세요.")
+                            else {
+                                viewModel.updateCustomerPhone(phone)
+                                viewModel.showMessage("고객 번호를 적용했어요. 재고와 규격을 확인하고 품목을 담아주세요.")
+                                showWebInbox = false; webRequestId = null
+                            }
+                        }, onMessageConsumed = webInbox::clearMessage,
+                        onDismiss = { showWebInbox = false; webRequestId = null })
+                } else if (showCallAssist || callAssistRequest != null) {
                     IncomingCallAssistDialog(
                         request = callAssistRequest,
                         customerPhone = uiState.customerPhone,
@@ -115,10 +143,12 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        callAssistRequest = CallAssistRequest.fromIntent(intent)
+        WebRequestPush.fromIntent(intent)?.let { webRequestId = it }
+        CallAssistRequest.fromIntent(intent)?.let { callAssistRequest = it }
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
+        webRequestId?.let { outState.putString("web_request_id", it) }
         callAssistRequest?.let {
             outState.putString("incoming_caller_id", it.callerId)
             outState.putBoolean("incoming_reply", it.reply)

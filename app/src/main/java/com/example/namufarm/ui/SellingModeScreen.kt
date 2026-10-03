@@ -134,7 +134,7 @@ internal fun buildSpecText(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: () -> Unit, onCallAssist: () -> Unit = {}) {
+fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: () -> Unit, onCallAssist: () -> Unit = {}, onWebInbox: () -> Unit = {}, webUnread: Int = 0) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
@@ -213,7 +213,8 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
         onCart = { showCartDialog = true },
         onClearCart = { showClearCartConfirm = true },
         onAddToCart = viewModel::addToCart,
-        onCallAssist = onCallAssist
+        onCallAssist = onCallAssist,
+        onWebInbox = onWebInbox, webUnread = webUnread
     )
 
     if (showCartDialog) {

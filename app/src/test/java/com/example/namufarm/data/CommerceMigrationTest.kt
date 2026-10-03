@@ -13,8 +13,27 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28])
 class CommerceMigrationTest {
-    @Test fun v10ToV12PreservesStockHistoryAndPending() { migrate(10) }
-    @Test fun v11ToV12PreservesPrepaidAndStructuredAddress() { migrate(11) }
+    @Test fun v10ToV13PreservesStockHistoryAndPending() { migrate(10) }
+    @Test fun v11ToV13PreservesPrepaidAndStructuredAddress() { migrate(11) }
+
+    @Test fun v12ToV13AddsInboxWithoutLosingPending() {
+        val context = RuntimeEnvironment.getApplication<android.app.Application>()
+        val name = "migration-12.db"
+        context.deleteDatabase(name)
+        Room.databaseBuilder(context, AppDatabase::class.java, name).allowMainThreadQueries().build().use { db ->
+            db.managementDao().insertPendingSync(PendingSyncEntity(syncType = "inventory", payloadJson = "{}"))
+        }
+        SQLiteDatabase.openDatabase(context.getDatabasePath(name).path, null, SQLiteDatabase.OPEN_READWRITE).use { db ->
+            db.execSQL("DROP TABLE web_quote_request")
+            db.execSQL("DROP TABLE room_master_table")
+            db.version = 12
+        }
+        Room.databaseBuilder(context, AppDatabase::class.java, name).addMigrations(*AppDatabase.ALL_MIGRATIONS).allowMainThreadQueries().build().use { db ->
+            assertEquals(1, db.managementDao().getAllPendingSync().size)
+            assertTrue(db.managementDao().getWebRequests().isEmpty())
+        }
+        context.deleteDatabase(name)
+    }
 
     private fun migrate(version: Int) {
         val context: Context = RuntimeEnvironment.getApplication()

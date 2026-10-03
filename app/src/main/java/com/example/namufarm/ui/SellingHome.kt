@@ -35,7 +35,9 @@ internal fun SellingHome(
     onCart: () -> Unit,
     onClearCart: () -> Unit,
     onAddToCart: (SellingDisplayRow, Int) -> Unit,
-    onCallAssist: () -> Unit = {}
+    onCallAssist: () -> Unit = {},
+    onWebInbox: () -> Unit = {},
+    webUnread: Int = 0
 ) {
     var query by rememberSaveable { mutableStateOf("") }
     var initial by rememberSaveable { mutableStateOf("전체") }
@@ -106,6 +108,13 @@ internal fun SellingHome(
                     HomeAction("빠른 견적", "수기 작성", Icons.Outlined.EditNote, Modifier.weight(1f), onQuickQuote)
                     HomeAction("오늘 견적", "${state.todayQuotes.size}건", Icons.Outlined.Description, Modifier.weight(1f), onTodayQuotes)
                     HomeAction("오늘 주문", "${state.todayOrders.size}건", Icons.AutoMirrored.Outlined.ReceiptLong, Modifier.weight(1f), onTodayOrders)
+                }
+            }
+            item(key = "web-inbox") {
+                OutlinedButton(onClick = onWebInbox, modifier = Modifier.fillMaxWidth()) {
+                    Icon(Icons.Outlined.MarkEmailUnread, null)
+                    Spacer(Modifier.width(8.dp))
+                    Text(if (webUnread > 0) "홈페이지 요청함 · 안 읽음 ${webUnread}건" else "홈페이지 요청함")
                 }
             }
             item(key = "search") {

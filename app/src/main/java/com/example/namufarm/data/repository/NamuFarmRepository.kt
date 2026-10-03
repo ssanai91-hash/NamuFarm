@@ -1,5 +1,7 @@
 package com.example.namufarm.data.repository
 
+import com.example.namufarm.data.remote.WebQuoteApi
+import com.example.namufarm.data.remote.WebQuoteValidator
 import com.example.namufarm.data.FarmEntity
 import com.example.namufarm.data.FarmInventoryEntity
 import com.example.namufarm.data.InventoryDisplayRow
@@ -544,6 +546,30 @@ class NamuFarmRepository(
             // The local transaction has already committed. Keep its outbox for retry.
             CloudWriteResult(false, e.message ?: "동기화 대기")
         }
+    }
+
+    fun getWebRequests() = local.getWebRequests()
+    suspend fun markWebRequestRead(id: String) = local.transaction { markWebRequestRead(id, System.currentTimeMillis()) }
+
+    /** The same pending-first gate applies to inbound requests. No stock/cart mutation. */
+    suspend fun syncWebRequests(api: WebQuoteApi, url: String, deviceToken: String): Int = local.serializedSync {
+        val drained = drainPending()
+        check(drained.error == null) { drained.error ?: "로컬 변경 전송을 먼저 완료해주세요." }
+        local.requireNoPending()
+        var imported = 0
+        repeat(20) {
+            local.requireNoPending()
+            val cursor = local.webRequestCursor()
+            val response = api.request(url, mapOf("action" to "list_requests", "deviceToken" to deviceToken, "afterSequence" to cursor))
+            val page = WebQuoteValidator.page(response, cursor)
+            local.transaction {
+                requireNoPending()
+                insertWebRequests(page)
+            }
+            imported += page.size
+            if (response.hasMore == false) return@serializedSync imported
+        }
+        imported // Bounded work; the next refresh resumes from the committed Room cursor.
     }
 
     suspend fun syncAll(): GeneralSyncResult = local.serializedSync {

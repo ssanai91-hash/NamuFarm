@@ -29,6 +29,10 @@ android {
     }
 
     defaultConfig {
+        listOf("WEB_REQUEST_SCRIPT_URL", "FIREBASE_APPLICATION_ID", "FIREBASE_API_KEY", "FIREBASE_PROJECT_ID", "FIREBASE_SENDER_ID").forEach { name ->
+            buildConfigField("String", name, "\"${localProperty(name)}\"")
+        }
+
         applicationId = "com.example.namufarm"
         minSdk = 24
         targetSdk = 36
@@ -82,6 +86,8 @@ android {
 }
 
 dependencies {
+    implementation("com.google.firebase:firebase-messaging:24.1.0")
+    implementation("androidx.work:work-runtime-ktx:2.9.1")
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)

@@ -8,6 +8,21 @@ import androidx.room.Query
 
 @Dao
 interface ManagementDao {
+    @Query("SELECT * FROM web_quote_request ORDER BY sequence DESC")
+    fun getWebRequests(): List<WebQuoteRequestEntity>
+
+    @Query("SELECT * FROM web_quote_request WHERE requestId = :id")
+    fun getWebRequest(id: String): WebQuoteRequestEntity?
+
+    @Query("SELECT COALESCE(MAX(sequence), 0) FROM web_quote_request")
+    fun webRequestCursor(): Long
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    fun insertWebRequest(request: WebQuoteRequestEntity)
+
+    @Query("UPDATE web_quote_request SET readAt = :readAt WHERE requestId = :id AND readAt IS NULL")
+    fun markWebRequestRead(id: String, readAt: Long)
+
 
     @Query("SELECT * FROM farm_info ORDER BY farm_name ASC")
     fun getAllFarms(): List<FarmEntity>

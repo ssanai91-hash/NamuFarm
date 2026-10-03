@@ -15,9 +15,10 @@ import kotlinx.coroutines.sync.Mutex
         FarmInventoryEntity::class,
         QuoteEntity::class,
         OrderEntity::class,
-        PendingSyncEntity::class
+        PendingSyncEntity::class,
+        WebQuoteRequestEntity::class
     ],
-    version = 12, // 현재 스키마: 배송비/선불여부 + 주문상태 포함
+    version = 13, // 웹 견적 요청함: 주문/재고와 별도 저장
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -598,11 +599,26 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_12_13 = object : Migration(12, 13) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS web_quote_request (
+                        requestId TEXT NOT NULL PRIMARY KEY,
+                        sequence INTEGER NOT NULL, createdAt TEXT NOT NULL,
+                        customerName TEXT NOT NULL, customerPhone TEXT NOT NULL,
+                        region TEXT NOT NULL, itemsJson TEXT NOT NULL,
+                        message TEXT NOT NULL, readAt INTEGER
+                    )
+                """.trimIndent())
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_web_quote_request_sequence ON web_quote_request(sequence)")
+            }
+        }
+
         internal val ALL_MIGRATIONS = arrayOf(
             MIGRATION_1_7, MIGRATION_2_7, MIGRATION_3_7,
             MIGRATION_4_7, MIGRATION_5_7, MIGRATION_6_7,
             MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10,
-            MIGRATION_10_12, MIGRATION_11_12
+            MIGRATION_10_12, MIGRATION_11_12, MIGRATION_12_13
         )
 
         fun getDatabase(context: Context): AppDatabase {
