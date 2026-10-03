@@ -105,7 +105,7 @@ class WebQuoteRequestTest {
         assertEquals(0L, local.webRequestCursor())
     }
     @Test fun notificationDeepLinkOnlyAcceptsOneValidRequestId() {
-        val context = RuntimeEnvironment.getApplication<android.app.Application>()
+        val context = RuntimeEnvironment.getApplication()
         assertEquals(id, WebRequestPush.fromIntent(WebRequestPush.intent(context, id)))
         assertNull(WebRequestPush.fromIntent(Intent(WebRequestPush.ACTION, Uri.parse("namufarm://web-request/bad"))))
         assertNull(WebRequestPush.fromIntent(Intent(WebRequestPush.ACTION, Uri.parse("https://web-request/$id"))))

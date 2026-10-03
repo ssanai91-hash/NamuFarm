@@ -17,21 +17,23 @@ class CommerceMigrationTest {
     @Test fun v11ToV13PreservesPrepaidAndStructuredAddress() { migrate(11) }
 
     @Test fun v12ToV13AddsInboxWithoutLosingPending() {
-        val context = RuntimeEnvironment.getApplication<android.app.Application>()
+        val context = RuntimeEnvironment.getApplication()
         val name = "migration-12.db"
         context.deleteDatabase(name)
-        Room.databaseBuilder(context, AppDatabase::class.java, name).allowMainThreadQueries().build().use { db ->
-            db.managementDao().insertPendingSync(PendingSyncEntity(syncType = "inventory", payloadJson = "{}"))
-        }
+        val original = Room.databaseBuilder(context, AppDatabase::class.java, name).allowMainThreadQueries().build()
+        try {
+            original.managementDao().insertPendingSync(PendingSyncEntity(syncType = "inventory", payloadJson = "{}"))
+        } finally { original.close() }
         SQLiteDatabase.openDatabase(context.getDatabasePath(name).path, null, SQLiteDatabase.OPEN_READWRITE).use { db ->
             db.execSQL("DROP TABLE web_quote_request")
             db.execSQL("DROP TABLE room_master_table")
             db.version = 12
         }
-        Room.databaseBuilder(context, AppDatabase::class.java, name).addMigrations(*AppDatabase.ALL_MIGRATIONS).allowMainThreadQueries().build().use { db ->
-            assertEquals(1, db.managementDao().getAllPendingSync().size)
-            assertTrue(db.managementDao().getWebRequests().isEmpty())
-        }
+        val migrated = Room.databaseBuilder(context, AppDatabase::class.java, name).addMigrations(*AppDatabase.ALL_MIGRATIONS).allowMainThreadQueries().build()
+        try {
+            assertEquals(1, migrated.managementDao().getAllPendingSync().size)
+            assertTrue(migrated.managementDao().getWebRequests().isEmpty())
+        } finally { migrated.close() }
         context.deleteDatabase(name)
     }
 
