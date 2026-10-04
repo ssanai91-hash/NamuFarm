@@ -28,7 +28,7 @@
 | `WebRequestPush.kt`, `AndroidManifest.xml` | FCM opt-in, 고객 정보 없는 알림 및 요청함 이동 |
 | `WebInboxViewModel.kt`, `WebQuoteInbox.kt`, `MainActivity.kt`, `SellingHome.kt` | 요청함 UI·상세·고객 번호 확인 적용 |
 
-홈페이지 코드는 별도 Sites 소스 저장소에서 관리합니다. `components/quote-home.tsx`는 고객 화면, `lib/quote-schema.ts`는 입력 검증, `app/api/quote-requests/route.ts`는 비밀키를 숨긴 서버 중계입니다.
+홈페이지 소스는 같은 저장소의 [website/](../website/)에 함께 보관합니다. `website/components/quote-home.tsx`는 고객 화면, `website/lib/quote-schema.ts`는 입력 검증, `website/app/api/quote-requests/route.ts`는 비밀키를 숨긴 서버 중계입니다. 설치·빌드·배포 설명은 [홈페이지 README](../website/README.md)를 참고하세요. 현재 호스팅은 기존 Sites 프로젝트에서 유지되며, 이 GitHub 폴더의 커밋이 자동 배포되지는 않습니다.
 
 ## 운영 연결 순서
 

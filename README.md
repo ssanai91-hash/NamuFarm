@@ -40,6 +40,12 @@ NamuFarmRepository
 
 자세한 설계와 동기화 규칙은 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)를 참고하세요.
 
+## 홈페이지와 고객 문의
+
+홈페이지 소스는 [website/](website/)에 함께 보관합니다. 묘목 소개·견적 문의 화면과 서버 API, 이미지, 실행·빌드 설정을 포함합니다. 설치와 실행 방법은 [홈페이지 README](website/README.md)를 참고하세요.
+
+접수용 Apps Script는 [server/quote-requests/](server/quote-requests/)에 있으며, 홈페이지·Google Sheet·Android 요청함·FCM 연결 순서는 [홈페이지 접수 안내](docs/WEB_QUOTE_REQUESTS.md)에 정리되어 있습니다.
+
 ## 로컬 설정
 
 실제 API 값은 Git에 올리지 않고 프로젝트 루트의 `local.properties`에 둡니다.
