@@ -25,6 +25,7 @@ class CommerceMigrationTest {
             original.managementDao().insertPendingSync(PendingSyncEntity(syncType = "inventory", payloadJson = "{}"))
         } finally { original.close() }
         SQLiteDatabase.openDatabase(context.getDatabasePath(name).path, null, SQLiteDatabase.OPEN_READWRITE).use { db ->
+            stripV15(db)
             db.execSQL("DROP TABLE web_quote_request")
             db.execSQL("DROP TABLE room_master_table")
             db.version = 12
@@ -42,6 +43,7 @@ class CommerceMigrationTest {
         val original = Room.databaseBuilder(context, AppDatabase::class.java, name).allowMainThreadQueries().build()
         try { original.managementDao().insertPendingSync(PendingSyncEntity(syncType = "inventory", payloadJson = "{}")) } finally { original.close() }
         SQLiteDatabase.openDatabase(context.getDatabasePath(name).path, null, SQLiteDatabase.OPEN_READWRITE).use { raw ->
+            stripV15(raw)
             raw.execSQL("DROP TABLE web_quote_request")
             raw.execSQL("CREATE TABLE web_quote_request (requestId TEXT NOT NULL PRIMARY KEY, sequence INTEGER NOT NULL, createdAt TEXT NOT NULL, customerName TEXT NOT NULL, customerPhone TEXT NOT NULL, region TEXT NOT NULL, itemsJson TEXT NOT NULL, message TEXT NOT NULL, readAt INTEGER)")
             raw.execSQL("CREATE UNIQUE INDEX index_web_quote_request_sequence ON web_quote_request(sequence)")
@@ -56,6 +58,25 @@ class CommerceMigrationTest {
             assertEquals(1, dao.getAllPendingSync().size); assertTrue(dao.getQuoteDocuments().isEmpty())
         } finally { migrated.close(); context.deleteDatabase(name) }
     }
+
+    /** Recreate the actual old order schema instead of merely changing the version number on a new DB. */
+    private fun stripV15(db: SQLiteDatabase) {
+        db.execSQL("DROP TABLE privacy_sync")
+        db.execSQL("ALTER TABLE order_list RENAME TO order_list_v15")
+        db.execSQL("CREATE TABLE order_list (order_id INTEGER PRIMARY KEY AUTOINCREMENT, order_number TEXT NOT NULL, order_date TEXT NOT NULL, customer_phone TEXT NOT NULL, total_qty INTEGER NOT NULL, total_price INTEGER NOT NULL, item_summary TEXT NOT NULL, receiver_name TEXT NOT NULL DEFAULT '', zip_no TEXT NOT NULL DEFAULT '', road_address TEXT NOT NULL DEFAULT '', detail_address TEXT NOT NULL DEFAULT '', note TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT '입금확인', is_prepaid INTEGER NOT NULL, shipping_fee INTEGER NOT NULL)")
+        val fields="order_id,order_number,order_date,customer_phone,total_qty,total_price,item_summary,receiver_name,zip_no,road_address,detail_address,note,status,is_prepaid,shipping_fee"
+        db.execSQL("INSERT INTO order_list ($fields) SELECT $fields FROM order_list_v15")
+        db.execSQL("DROP TABLE order_list_v15")
+    }
+    @Test fun v14ToV15PreservesCustomerHistoryAndIndependentCursor() {
+        val context=RuntimeEnvironment.getApplication();val name="migration-14.db";context.deleteDatabase(name)
+        val original=Room.databaseBuilder(context,AppDatabase::class.java,name).allowMainThreadQueries().build()
+        original.managementDao().insertOrder(OrderEntity(orderNumber="O",orderDate="2026-10-01 10:00",customerPhone="01012345678",totalQty=1,totalPrice=1000,itemSummary="소나무|||||1|1000|수기견적|0"))
+        original.managementDao().insertWebRequest(WebQuoteRequestEntity("11111111-1111-4111-8111-111111111111",7,"2026-10-04T01:23:45.000Z","김나무","01012345678","옥천","[]","문의"))
+        original.close()
+        SQLiteDatabase.openDatabase(context.getDatabasePath(name).path,null,SQLiteDatabase.OPEN_READWRITE).use { raw ->stripV15(raw);raw.execSQL("DROP TABLE room_master_table");raw.version=14 }
+        val migrated=Room.databaseBuilder(context,AppDatabase::class.java,name).addMigrations(*AppDatabase.ALL_MIGRATIONS).allowMainThreadQueries().build()
+        try {val dao=migrated.managementDao();val order=dao.getOrderByNumber("O")!!;assertEquals("01012345678",order.customerPhone);assertEquals(0L,order.revision);assertFalse(order.costConfirmed);assertEquals(7L,dao.privacyCursor("web"));assertEquals(1,dao.getWebRequests().size)}finally {migrated.close();context.deleteDatabase(name)}
 
     private fun migrate(version: Int) {
         val context: Context = RuntimeEnvironment.getApplication()

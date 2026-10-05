@@ -8,6 +8,8 @@
 <full-backup-content>
     <exclude domain="sharedpref" path="incoming_call_assist.xml" />
     <exclude domain="sharedpref" path="web_request_connection.xml" />
+        <exclude domain="sharedpref" path="seller_privacy_keys.xml" />
+        <exclude domain="database" path="." />
     <!--
    <include domain="sharedpref" path="."/>
    <exclude domain="sharedpref" path="device.xml"/>

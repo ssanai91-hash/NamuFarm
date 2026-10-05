@@ -34,6 +34,8 @@ import com.example.namufarm.ui.theme.NamuFarmTheme
 import com.example.namufarm.viewmodel.ManagementViewModel
 import com.example.namufarm.viewmodel.ManagementViewModelFactory
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import androidx.lifecycle.lifecycleScope
 import com.example.namufarm.ui.WebQuoteInboxDialog
 import com.example.namufarm.viewmodel.WebInboxViewModel
 import com.example.namufarm.viewmodel.WebInboxViewModelFactory
@@ -60,8 +62,10 @@ class MainActivity : ComponentActivity() {
 
         // 2. 데이터 계층 조립
         val api = RetrofitClient.api
-        val localDataSource = LocalDataSource(database, dao)
-        val syncManager = SyncManager(localDataSource, api)
+        val keys = com.example.namufarm.privacy.SellerKeys(this)
+        val localDataSource = LocalDataSource(database, dao, keys)
+        val syncManager = SyncManager(localDataSource, api, com.example.namufarm.sales.EncryptedSalesGateway(com.example.namufarm.webrequests.WebRequestSettings(this),keys))
+        com.example.namufarm.privacy.PrivacyCleanupWorker.schedule(this)
         val repository = NamuFarmRepository(localDataSource, syncManager, RetrofitClient.jusoApi)
 
         // 3. ViewModel은 Repository만 바라본다.
@@ -71,6 +75,7 @@ class MainActivity : ComponentActivity() {
 
         val webInbox = ViewModelProvider(this, WebInboxViewModelFactory(WebRequestConnection(this, repository)))[WebInboxViewModel::class.java]
 
+        androidx.lifecycle.lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) { try { repository.initializePrivacy(); repository.cleanupPrivacy() } catch(e: Exception) { viewModel.showMessage("고객정보 보관 상태를 확인해주세요. 보안 설정 화면에서 백업을 확인할 수 있어요.") } }
         setContent {
             NamuFarmTheme {
                 val navController = rememberNavController()
@@ -109,6 +114,7 @@ class MainActivity : ComponentActivity() {
                 if (showWebInbox || webRequestId != null) {
                     WebQuoteInboxDialog(webState, webRequestId, uiState.customerPhone, uiState.estimateCart.size,
                         onRefresh = webInbox::refresh, onPair = webInbox::pair, onRead = webInbox::read,
+                        onBackup=webInbox::backup,onRestore=webInbox::restore,onSecure=webInbox::configureSecurity,onClose=webInbox::close,
                         onUseRequest = { request ->
                             if (uiState.isSavingQuote) webInbox.showMessage("견적 저장이 끝난 뒤 고객 번호를 적용해주세요.")
                             else {

@@ -7,6 +7,8 @@
     <cloud-backup>
         <exclude domain="sharedpref" path="incoming_call_assist.xml" />
         <exclude domain="sharedpref" path="web_request_connection.xml" />
+        <exclude domain="sharedpref" path="seller_privacy_keys.xml" />
+        <exclude domain="database" path="." />
         <!-- TODO: Use <include> and <exclude> to control what is backed up.
         <include .../>
         <exclude .../>
@@ -15,6 +17,8 @@
     <device-transfer>
         <exclude domain="sharedpref" path="incoming_call_assist.xml" />
         <exclude domain="sharedpref" path="web_request_connection.xml" />
+        <exclude domain="sharedpref" path="seller_privacy_keys.xml" />
+        <exclude domain="database" path="." />
     </device-transfer>
     <!--
     <device-transfer>

@@ -93,6 +93,13 @@ class NamuFarmRepository(
     private val jusoApi: JusoApi
 ) {
     private val gson = Gson()
+    private val sales get() = syncManager.salesGateway
+    fun getAllOrders() = local.getAllOrders()
+    fun getOrder(number: String) = local.getOrderByNumber(number)
+    suspend fun initializePrivacy() = local.protectLegacyCustomerCopies()
+    suspend fun cleanupPrivacy() = local.cleanupPrivacy()
+    suspend fun closeLocalRequest(id: String) = local.transaction { advanceWebCursor(webRequestCursor());purgeRequestCopies(id) }
+    private fun requireNoLegacyCommerce() { check(sales == null || local.getAllPendingSync().none { it.syncType in listOf(PendingSyncType.ORDER,PendingSyncType.CANCEL_ORDER,PendingSyncType.DELIVERY) }) { "이전 주문 전송을 먼저 동기화해주세요." } }
 
     fun getAllFarms(): List<FarmEntity> = local.getAllFarms()
     fun getAllSpecies(): List<SpeciesEntity> = local.getAllSpecies()
@@ -335,6 +342,7 @@ class NamuFarmRepository(
 
     suspend fun confirmOrder(quote: QuoteEntity, newOrder: OrderEntity): CloudWriteResult {
         val pendingId = local.transaction {
+            requireNoLegacyCommerce()
             val stored = getQuoteById(quote.quoteId ?: error("저장된 견적이 아닙니다."))
                 ?: error("이미 주문으로 확정되었거나 삭제된 견적입니다.")
             require(stored == quote) { "견적이 변경되었습니다. 다시 열어주세요." }
@@ -348,15 +356,35 @@ class NamuFarmRepository(
                 "견적 합계와 품목 합계가 일치하지 않습니다."
             }
             // Stored quote is the authority for both local deduction and the wire payload.
+            val contact = getQuoteContact(stored.quoteNumber)?.let { gson.fromJson(it.recipientJson, com.example.namufarm.quotation.QuoteRecipient::class.java) }
+            val doc = getQuoteDocument(stored.quoteNumber)?.snapshotJson
+            val tax = doc?.let { gson.fromJson(it, com.example.namufarm.quotation.QuoteDocument::class.java).taxAmount } ?: 0
+            val now = System.currentTimeMillis()
             val order = newOrder.copy(
                 itemSummary = stored.itemSummary, customerPhone = stored.customerPhone,
                 totalQty = totals.quantity, totalPrice = totals.price,
                 isPrepaid = stored.isPrepaid, shippingFee = stored.shippingFee,
-                status = OrderStatus.CONFIRMED
+                status = if(sales != null) OrderStatus.PURCHASED else OrderStatus.CONFIRMED,
+                customerName=contact?.customerName.orEmpty(), customerEmail=contact?.customerEmail.orEmpty(),
+                sourceRequestId=contact?.sourceRequestId.orEmpty(), sourceQuoteNumber=stored.quoteNumber,
+                revision=if(sales!=null) 1 else 0, purchasedAt=now,updatedAt=now,
+                costTotal=lines.fold(0L) { sum,line -> Math.addExact(sum,Math.multiplyExact(line.wholesalePrice.toLong(),line.orderQty.toLong())) },
+                costConfirmed=false,taxAmount=tax
             )
             insertOrder(order)
             deleteQuote(stored)
+            if(sales!=null && order.sourceRequestId.isNotEmpty()) purgeRequestCopies(order.sourceRequestId)
             deductInventoryStrict(stored.itemSummary)
+            if(sales != null) {
+                var last = enqueueSale(order, doc)
+                lines.filter { it.isInventoryBacked }.forEach { line ->
+                    val farm=checkNotNull(getFarmByName(line.farmName)); val plant=checkNotNull(getSpeciesByName(line.speciesName))
+                    val entity=getInventoryEntity(farm.farmId!!,plant.speciesId!!,line.quality,line.age,line.size,line.plantType)
+                        ?: FarmInventoryEntity(farm.farmId!!,plant.speciesId!!,line.quality,line.age,line.size,line.plantType,0,line.wholesalePrice,line.retailPrice)
+                    last=enqueue(PendingSyncType.INVENTORY,PendingInventorySyncPayload("save",entity,farm.farmName,plant.speciesName))
+                }
+                return@transaction last
+            }
             enqueue(
                 PendingSyncType.ORDER,
                 PendingOrderSyncPayload(order, lines.filter { it.isInventoryBacked }.map { line ->
@@ -378,7 +406,9 @@ class NamuFarmRepository(
      */
     suspend fun cancelOrder(orderNumber: String): OrderCancelResult {
         return try {
+            ensureSecureOrder(orderNumber)
             val localWork = local.transaction {
+                requireNoLegacyCommerce()
                 val currentOrder = getOrderByNumber(orderNumber)
                     ?: error("주문을 찾을 수 없습니다: $orderNumber")
 
@@ -386,14 +416,12 @@ class NamuFarmRepository(
                     return@transaction LocalCancelWork(alreadyCanceled = true)
                 }
 
-                check(currentOrder.status == OrderStatus.CONFIRMED) { "지원하지 않는 주문 상태입니다." }
+                check(OrderStatus.canCancel(currentOrder.status)) { "배송 이후에는 주문취소할 수 없습니다." }
                 val lines = OrderSummaryCodec.parseStrict(currentOrder.itemSummary)
 
                 // 원격에서도 주문취소가 재고복원보다 먼저 처리되도록 먼저 큐에 적재한다.
-                val cancelPendingId = enqueue(
-                    PendingSyncType.CANCEL_ORDER,
-                    PendingCancelOrderSyncPayload(orderNumber)
-                )
+                val canceled = currentOrder.copy(status=OrderStatus.CANCELED,revision=Math.addExact(currentOrder.revision,1),updatedAt=maxOf(System.currentTimeMillis(),currentOrder.updatedAt))
+                val cancelPendingId = if(sales!=null) enqueueSale(canceled) else enqueue(PendingSyncType.CANCEL_ORDER,PendingCancelOrderSyncPayload(orderNumber))
 
                 val inventoryTasks = mutableListOf<InventoryPendingTask>()
                 var restoredQuantity = 0
@@ -457,7 +485,7 @@ class NamuFarmRepository(
                     )
                 }
 
-                updateOrderStatus(orderNumber, OrderStatus.CANCELED)
+                if(sales!=null) upsertOrder(canceled) else updateOrderStatus(orderNumber, OrderStatus.CANCELED)
 
                 LocalCancelWork(
                     alreadyCanceled = false,
@@ -507,31 +535,68 @@ class NamuFarmRepository(
         detailAddress: String,
         note: String
     ): CloudWriteResult {
+        ensureSecureOrder(orderNumber)
         val pendingId = local.transaction {
-            check(getOrderByNumber(orderNumber) != null) { "주문을 찾을 수 없습니다." }
-            updateOrderDeliveryInfo(
-                orderNumber,
-                receiverName,
-                zipNo,
-                roadAddress,
-                detailAddress,
-                note
-            )
-
-            enqueue(
-                PendingSyncType.DELIVERY,
-                PendingDeliverySyncPayload(
-                    orderNumber = orderNumber,
-                    receiverName = receiverName,
-                    zipNo = zipNo,
-                    roadAddress = roadAddress,
-                    detailAddress = detailAddress,
-                    note = note
-                )
-            )
+            requireNoLegacyCommerce()
+            val old = getOrderByNumber(orderNumber) ?: error("주문을 찾을 수 없습니다.")
+            check(old.status !in listOf(OrderStatus.CANCELED,OrderStatus.COMPLETED)) { "종료된 주문의 배송정보는 변경할 수 없습니다." }
+            if(sales != null) {
+                val updated=old.copy(receiverName=receiverName,zipNo=zipNo,roadAddress=roadAddress,detailAddress=detailAddress,note=note,
+                    revision=Math.addExact(old.revision,1),updatedAt=maxOf(System.currentTimeMillis(),old.updatedAt))
+                val id=enqueueSale(updated); upsertOrder(updated); id
+            } else {
+                updateOrderDeliveryInfo(orderNumber,receiverName,zipNo,roadAddress,detailAddress,note)
+                enqueue(PendingSyncType.DELIVERY,PendingDeliverySyncPayload(orderNumber,receiverName,zipNo,roadAddress,detailAddress,note))
+            }
         }
 
         return flushThrough(pendingId)
+    }
+
+    private fun enqueueSale(order: OrderEntity, document: String? = local.getQuoteDocument(order.sourceQuoteNumber)?.snapshotJson): Int =
+        enqueue(PendingSyncType.SALE, checkNotNull(sales).prepare(order,java.util.UUID.randomUUID().toString(),document))
+
+    /** First migrate a legacy local order without guessing any new payment/delivery confirmation. */
+    private suspend fun ensureSecureOrder(number: String) {
+        if(sales==null) return
+        val id=local.transaction {
+            requireNoLegacyCommerce()
+            val old=getOrderByNumber(number) ?: error("주문을 찾을 수 없습니다.")
+            if(old.revision>0) return@transaction null
+            val initial=com.example.namufarm.sales.SalePolicy.legacy(old)
+            val pending=enqueueSale(initial); upsertOrder(initial); pending
+        }
+        if(id!=null) flushThrough(id)
+    }
+    suspend fun updateSaleStatus(number: String, expectedRevision: Long, target: String): CloudWriteResult {
+        ensureSecureOrder(number)
+        val id=local.transaction {
+            requireNoLegacyCommerce()
+            val old=getOrderByNumber(number) ?: error("주문을 찾을 수 없습니다.")
+            check(old.revision==expectedRevision || expectedRevision==0L && old.revision==1L) { "다른 변경이 반영됐습니다. 주문을 다시 열어주세요." }
+            val updated=com.example.namufarm.sales.SalePolicy.transition(old,target,maxOf(System.currentTimeMillis(),old.updatedAt))
+            val pending=enqueueSale(updated); upsertOrder(updated); pending
+        }
+        return flushThrough(id)
+    }
+    suspend fun updateSaleCosts(number: String, expectedRevision: Long, cost: Long, expense: Long, mode: String, basisPoints: Int, confirmed: Boolean): CloudWriteResult {
+        ensureSecureOrder(number)
+        val id=local.transaction {
+            requireNoLegacyCommerce()
+            val old=getOrderByNumber(number) ?: error("주문을 찾을 수 없습니다.")
+            check(old.revision==expectedRevision || expectedRevision==0L && old.revision==1L) { "주문을 다시 열어주세요." }
+            check(OrderStatus.next(old.status)!=null) { "종료된 주문의 금액은 변경할 수 없습니다." }
+            val updated=old.copy(costTotal=cost,expenseTotal=expense,profitMode=mode,commissionBps=basisPoints,costConfirmed=confirmed,
+                revision=Math.addExact(old.revision,1),updatedAt=maxOf(System.currentTimeMillis(),old.updatedAt))
+            com.example.namufarm.sales.SalePolicy.metadata(updated)
+            val pending=enqueueSale(updated); upsertOrder(updated); pending
+        }
+        return flushThrough(id)
+    }
+    suspend fun salesReport(granularity: String, from: String, to: String) = local.serializedSync {
+        val drained=drainPending(); check(drained.error==null) { drained.error ?: "전송 대기 중입니다." }
+        local.requireNoPending()
+        checkNotNull(sales) { "보안 판매 연결을 먼저 설정해주세요." }.report(granularity,from,to)
     }
 
     private data class DrainResult(val sent: Int, val error: String? = null)
@@ -570,7 +635,7 @@ class NamuFarmRepository(
     suspend fun markWebRequestRead(id: String) = local.transaction { markWebRequestRead(id, System.currentTimeMillis()) }
 
     /** The same pending-first gate applies to inbound requests. No stock/cart mutation. */
-    suspend fun syncWebRequests(api: WebQuoteApi, url: String, deviceToken: String): Int = local.serializedSync {
+    suspend fun syncWebRequests(api: WebQuoteApi, url: String, deviceToken: String, decrypt: ((com.example.namufarm.data.remote.WebQuoteRemote) -> com.example.namufarm.data.remote.WebQuoteRemote)? = null): Int = local.serializedSync {
         val drained = drainPending()
         check(drained.error == null) { drained.error ?: "로컬 변경 전송을 먼저 완료해주세요." }
         local.requireNoPending()
@@ -579,12 +644,14 @@ class NamuFarmRepository(
             local.requireNoPending()
             val cursor = local.webRequestCursor()
             val response = api.request(url, mapOf("action" to "list_requests", "deviceToken" to deviceToken, "afterSequence" to cursor))
-            val page = WebQuoteValidator.page(response, cursor)
+            val page = WebQuoteValidator.checkedPage(response, cursor, decrypt)
             local.transaction {
                 requireNoPending()
-                insertWebRequests(page)
+                insertWebRequests(page.rows)
+                page.expiredIds.forEach { purgeRequestCopies(it) }
+                advanceWebCursor(page.cursor)
             }
-            imported += page.size
+            imported += page.rows.size
             if (response.hasMore == false) return@serializedSync imported
         }
         imported // Bounded work; the next refresh resumes from the committed Room cursor.

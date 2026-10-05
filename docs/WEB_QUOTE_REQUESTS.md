@@ -1,5 +1,7 @@
 # 홈페이지 견적 요청 · 앱 요청함
 
+현재 v4는 [암호화·판매 운영 안내](SECURE_SALES.md)의 구조를 사용합니다. 아래 설치 흐름과 공식 견적서 기능은 유지하며, 개인정보를 평문 원본 JSON/표시 셀로 저장했던 v1~v3 방식은 암호화 저장으로 대체합니다.
+
 ## 구현 범위와 원칙
 
 홈페이지에서 묘목명·규격(선택)·수량·성함·전화번호·배송 지역·요청사항을 확인한 뒤 접수합니다. 가격, 재고 보장이나 온라인 결제는 제공하지 않습니다. 묘목 카드는 문의 예시입니다.
@@ -7,9 +9,9 @@
 - 고객 접수는 별도 `웹견적요청` Sheet에 저장됩니다. 기존 재고·주문 API와 분리합니다.
 - Sheet 저장 및 flush가 성공한 후에만 접수번호를 반환합니다. 같은 UUID와 같은 내용의 재전송은 같은 접수로 처리합니다. 내용이 다르면 충돌로 중단합니다.
 - 응답 유실 시 홈페이지는 같은 ID로 재확인합니다. 해당 탭의 sessionStorage에 최대 24시간 복구용 내용을 두며, 성공하면 지웁니다. 불확실한 접수 내용을 수정해서 새 요청을 만들지 못하도록 잠급니다. 새 탭/다른 기기의 별도 접수까지 중복으로 판정하지는 않습니다.
-- 원본 JSON과 해시를 함께 보관하여 전화번호의 앞자리 0, 수식처럼 보이는 문자열, 메모를 정확히 복원합니다. Sheet의 표시 셀에 원본 재구성을 의존하지 않습니다.
+- 암호화한 원본 JSON과 비밀키 기반 접수 해시를 함께 보관하여 전화번호의 앞자리 0, 수식처럼 보이는 문자열, 메모를 정확히 복원합니다. Sheet의 표시 셀에 원본 재구성을 의존하지 않습니다.
 - 접수 직후 FCM을 시도하며 실패하면 Sheet의 PENDING 알림을 분 단위 트리거가 재시도합니다. 알림에는 고객 개인정보를 넣지 않습니다. 푸시 지연/누락과 관계없이 요청은 남습니다.
-- Android Room v14의 `web_quote_request`는 주문·견적·재고 테이블과 독립적입니다. UUID/순번 유일성, 페이지 단위 transaction, commit한 최대 순번으로 재개합니다. pending 전송 실패 시 Pull 중단 원칙도 유지합니다.
+- Android Room v15의 `web_quote_request`는 주문·견적·재고 테이블과 독립적입니다. UUID/순번 유일성, 페이지 단위 transaction, 별도 cursor 테이블에 commit한 최대 순번으로 재개하여 요청 삭제 후에도 재개합니다. pending 전송 실패 시 Pull 중단 원칙도 유지합니다.
 - 요청을 열면 기기에서 읽음 처리합니다. 다른 폰의 읽음 상태는 바꾸지 않습니다.
 - 고객 번호 적용은 사용자가 선택하고, 기존 견적 고객과 다르면 확인받습니다. 품목을 자동으로 INVENTORY/MANUAL로 분류하거나 차감하지 않습니다. 실제 재고와 규격을 확인한 뒤 기존 견적 기능을 이용합니다.
 - 문자 버튼은 기본 문자 앱의 초안을 엽니다. 자동 문자 발송이나 SMS 전송 권한은 추가하지 않습니다.
@@ -21,7 +23,7 @@
 | `server/quote-requests/Code.gs` | 인증·검증·UUID 멱등 접수·순번 발급·기기 연결·요청 조회·FCM outbox |
 | `server/quote-requests/appsscript.json` | Apps Script 권한과 한국 시간대 |
 | `WebQuoteApi.kt` | 별도 Apps Script POST API 및 필수 필드/순번 검증 |
-| `WebQuoteRequestEntity.kt`, `AppDatabase.kt`, `ManagementDao.kt` | Room v14 요청함·발행 문서와 12→13→14 비파괴 migration |
+| `WebQuoteRequestEntity.kt`, `AppDatabase.kt`, `ManagementDao.kt` | Room v15 요청함·발행 문서와 12→13→14 비파괴 migration |
 | `LocalDataSource.kt`, `NamuFarmRepository.kt` | 페이지 원자적 반영, 중복/변경/순번 충돌 방지 |
 | `WebRequestSettings.kt` | Android Keystore AES-GCM 기기 인증정보 저장·백업 제외 |
 | `WebRequestConnection.kt`, `PushRegistrationWorker.kt` | 연결 코드 등록, 연결 회복 후 토큰 등록 재시도 |

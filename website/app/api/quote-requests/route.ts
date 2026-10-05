@@ -1,5 +1,6 @@
 import { quoteSchema } from "@/lib/quote-schema";
-import { jsonResult, quoteSettings, quoteServiceReady } from "@/lib/quote-server";
+import { jsonResult, quoteSettings, quoteServiceInfo } from "@/lib/quote-server";
+import { privateFingerprint, sealCustomer } from "@/lib/privacy-crypto";
 export async function POST(request: Request) {
   const settings = quoteSettings();
   if (!settings.ready) return jsonResult({ error: "온라인 접수를 준비하고 있습니다. 아직 요청이 전송되지 않았어요." }, 503);
@@ -22,13 +23,16 @@ export async function POST(request: Request) {
   } catch { return jsonResult({ error: "입력 내용을 확인해주세요." }, 400); }
   const parsed = quoteSchema.safeParse(input);
   if (!parsed.success) return jsonResult({ error: "품목, 수량과 연락처를 다시 확인해주세요." }, 400);
-  if (!(await quoteServiceReady(settings))) return jsonResult({ error: "온라인 접수를 준비하고 있습니다. 아직 요청이 전송되지 않았어요." }, 503);
+  const service = await quoteServiceInfo(settings);
+  if (!service?.sellerKey) return jsonResult({ error: "온라인 접수를 준비하고 있습니다. 아직 요청이 전송되지 않았어요." }, 503);
   const ip = request.headers.get("cf-connecting-ip") ?? "preview";
   const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(settings.secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
   const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(ip));
   const rateKey = Array.from(new Uint8Array(signature), b => b.toString(16).padStart(2, "0")).join("");
   try {
-    const response = await fetch(settings.url, { method: "POST", redirect: "follow", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "submit_request", webSecret: settings.secret, rateKey, request: parsed.data }), signal: AbortSignal.timeout(22000) });
+    const encryptedRequest = await sealCustomer(parsed.data, service.sellerKey, "quote", parsed.data.requestId);
+    const fingerprint = await privateFingerprint(settings.secret, JSON.stringify(parsed.data));
+    const response = await fetch(settings.url, { method: "POST", redirect: "follow", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "submit_request", webSecret: settings.secret, rateKey, requestId: parsed.data.requestId, fingerprint, encryptedRequest }), signal: AbortSignal.timeout(22000) });
     const result = await response.json() as { ok?: boolean; requestId?: string; code?: string };
     if (response.ok && result.ok && result.requestId === parsed.data.requestId) return jsonResult({ requestId: result.requestId }, 201);
     if (result.code === "RATE_LIMITED") return jsonResult({ error: "잠시 후 다시 요청해주세요. 입력한 내용은 그대로 유지됩니다." }, 429);

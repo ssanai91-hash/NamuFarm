@@ -34,12 +34,16 @@ import com.google.gson.Gson
 internal fun WebQuoteInboxDialog(
     state: WebInboxState, initialRequestId: String?, customerPhone: String, cartItemCount: Int,
     onRefresh: () -> Unit, onPair: (String) -> Unit, onRead: (String) -> Unit,
-    onUseRequest: (WebQuoteRequestEntity) -> Unit, onMessageConsumed: () -> Unit, onDismiss: () -> Unit
+    onUseRequest: (WebQuoteRequestEntity) -> Unit, onMessageConsumed: () -> Unit, onDismiss: () -> Unit,
+    onBackup: (android.net.Uri, CharArray) -> Unit = {_,_->}, onRestore: (android.net.Uri, CharArray) -> Unit = {_,_->},
+    onSecure: () -> Unit = {}, onClose: (String) -> Unit = {}
 ) {
     // Keep the selected customer stable if another notification arrives while composing.
     var selectedId by rememberSaveable { mutableStateOf(initialRequestId) }
     var invite by remember { mutableStateOf("") } // Credentials never enter saved-state backups.
     var connecting by rememberSaveable { mutableStateOf(false) }
+    var showSecurity by remember { mutableStateOf(false) }
+    var closeConfirm by remember { mutableStateOf(false) }
     val snackbar = remember { SnackbarHostState() }
     val selected = state.requests.find { it.requestId == selectedId }
     val context = LocalContext.current
@@ -47,6 +51,9 @@ internal fun WebQuoteInboxDialog(
     LaunchedEffect(selected?.requestId) { selected?.let { onRead(it.requestId) } }
     LaunchedEffect(state.paired) { if (state.paired) { invite = ""; connecting = false } }
     LaunchedEffect(state.message) { state.message?.let { snackbar.showSnackbar(it); onMessageConsumed() } }
+    if(showSecurity) PrivacySetupDialog(state,onBackup,onRestore,onSecure) { showSecurity=false }
+    if(closeConfirm && selected!=null) AlertDialog(onDismissRequest={closeConfirm=false},title={Text("상담을 종료할까요?")},text={Text("구매하지 않은 고객 문의와 연결된 견적 사본을 삭제합니다. 실제 구매 기록은 따로 보관합니다.")},
+        confirmButton={TextButton(onClick={closeConfirm=false;onClose(selected.requestId);selectedId=null}) {Text("상담 종료 · 삭제")}},dismissButton={TextButton(onClick={closeConfirm=false}) {Text("돌아가기")}})
     NamuDialog(
         title = if (selected == null) "홈페이지 요청함" else "견적 요청 상세",
         subtitle = "고객 문의 · 주문 확정 전 재고 변동 없음",
@@ -54,11 +61,12 @@ internal fun WebQuoteInboxDialog(
         actions = {
             if (selected != null) {
                 WebRequestCustomerActions(selected, customerPhone, cartItemCount) { onUseRequest(selected) }
+                TextButton(onClick={closeConfirm=true},enabled=!state.busy) { Text("상담 종료 · 고객 문의 삭제") }
                 OutlinedButton(onClick = { selectedId = null }, modifier = Modifier.fillMaxWidth()) {
                     Icon(Icons.AutoMirrored.Outlined.ArrowBack, null); Spacer(Modifier.width(8.dp)); Text("요청 목록")
                 }
             } else {
-                Button(onClick = onRefresh, enabled = state.paired && !state.busy, modifier = Modifier.fillMaxWidth()) {
+                Button(onClick = onRefresh, enabled = state.paired && state.securityReady && !state.busy, modifier = Modifier.fillMaxWidth()) {
                     Icon(Icons.Outlined.Refresh, null); Spacer(Modifier.width(8.dp)); Text(if (state.busy) "요청 확인 중…" else "새 요청 가져오기")
                 }
             }
@@ -83,6 +91,10 @@ internal fun WebQuoteInboxDialog(
                         OutlinedTextField(invite, { invite = it.trim() }, label = { Text("기기 연결 코드") }, modifier = Modifier.fillMaxWidth(), singleLine = true, visualTransformation = PasswordVisualTransformation())
                         Button(onClick = { onPair(invite) }, enabled = invite.length == 64 && !state.busy, modifier = Modifier.fillMaxWidth()) { Text("요청함 연결") }
                     }
+                }
+                if(state.paired) item {
+                    OutlinedButton(onClick={showSecurity=true},enabled=!state.busy,modifier=Modifier.fillMaxWidth()) { Text(if(state.securityReady) "고객정보 보안 백업 · 복원" else "고객정보 보안 설정하기") }
+                    if(!state.securityReady) Text("보안 백업을 저장하고 연결하면 고객 문의를 받을 수 있어요.")
                 }
                 if (state.paired) item {
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {

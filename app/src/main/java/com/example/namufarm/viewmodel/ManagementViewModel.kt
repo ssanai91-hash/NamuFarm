@@ -49,6 +49,8 @@ data class ManagementUiState(
     val recentCallList: List<CallLogItem> = emptyList(),
     val todayQuotes: List<QuoteEntity> = emptyList(),
     val todayOrders: List<OrderEntity> = emptyList(),
+    val allOrders: List<OrderEntity> = emptyList(),
+    val salesReport: com.example.namufarm.sales.SalesReport? = null, val salesBusy: Boolean = false,
     val isSavingQuote: Boolean = false,
     val confirmingQuoteNumber: String? = null,
 
@@ -93,8 +95,7 @@ class ManagementViewModel(
         }
 
     init {
-        loadInitialData()
-        loadTodayData()
+        launchOperation { repository.initializePrivacy();repository.cleanupPrivacy();loadInitialData();loadTodayData() }
     }
 
     private fun loadInitialData() {
@@ -142,7 +143,7 @@ class ManagementViewModel(
 
 
     private fun todayDatePrefix(): String =
-        java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.KOREA)
+        java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.KOREA).apply { timeZone=java.util.TimeZone.getTimeZone("Asia/Seoul") }
             .format(java.util.Date())
 
     private fun refreshLocalState() {
@@ -173,7 +174,7 @@ class ManagementViewModel(
                     checkChosung(it.speciesName, it.chosung, activeChosung)
                 },
                 todayQuotes = quotes,
-                todayOrders = orders,
+                todayOrders = orders, allOrders=repository.getAllOrders(),
                 selectedFarm = farms.find { it.farmId == current.selectedFarm?.farmId },
                 selectedSpecies = allSpecies.find { it.speciesId == current.selectedSpecies?.speciesId }
             )
@@ -411,7 +412,7 @@ class ManagementViewModel(
     suspend fun quoteDocument(number: String) = withContext(Dispatchers.IO) { repository.getQuoteDocument(number) }
     suspend fun issueDocument(number: String, issuer: com.example.namufarm.quotation.QuoteIssuer, recipient: com.example.namufarm.quotation.QuoteRecipient, tax: Long, validUntil: String, notes: String, account: String) = withContext(Dispatchers.IO) {
         val result = repository.issueQuoteDocument(number, issuer, tax, validUntil, notes, account, recipient)
-        _uiState.update { it.copy(quoteDocuments = repository.getQuoteDocuments()) }
+        _uiState.update { it.copy(quoteDocuments = repository.getQuoteDocuments(),allOrders=repository.getAllOrders()) }
         result
     }
 
@@ -464,7 +465,7 @@ class ManagementViewModel(
 
         val now = java.util.Date()
         val datePart = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.KOREA).format(now)
-        val displayDate = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.KOREA).format(now)
+        val displayDate = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.KOREA).apply { timeZone=java.util.TimeZone.getTimeZone("Asia/Seoul") }.format(now)
 
         launchOperation {
             try {
@@ -524,7 +525,7 @@ class ManagementViewModel(
             try {
                 val now = java.util.Date()
                 val datePart = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.KOREA).format(now)
-                val displayDate = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.KOREA).format(now)
+                val displayDate = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.KOREA).apply { timeZone=java.util.TimeZone.getTimeZone("Asia/Seoul") }.format(now)
 
                 val orderNumber = "ORDER_${datePart}_${UUID.randomUUID()}"
 
@@ -540,7 +541,7 @@ class ManagementViewModel(
                     roadAddress = "",
                     detailAddress = "",
                     note = "",
-                    status = OrderStatus.CONFIRMED,
+                    status = OrderStatus.PURCHASED,
                     isPrepaid = quote.isPrepaid,
                     shippingFee = quote.shippingFee
                 )
@@ -558,7 +559,8 @@ class ManagementViewModel(
                         }
                     )
                 }
-                withContext(Dispatchers.Main) { onConfirmed(newOrder) }
+                val saved=repository.getOrder(newOrder.orderNumber) ?: error("저장된 주문을 확인해주세요.")
+                withContext(Dispatchers.Main) { onConfirmed(saved) }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -578,7 +580,7 @@ class ManagementViewModel(
         launchOperation {
             val quotes = repository.getQuotesForDate(todayDatePrefix())
             val orders = repository.getOrdersForDate(todayDatePrefix())
-            _uiState.update { it.copy(todayQuotes = quotes, todayOrders = orders, quoteDocuments = repository.getQuoteDocuments()) }
+            _uiState.update { it.copy(todayQuotes = quotes, todayOrders = orders, quoteDocuments = repository.getQuoteDocuments(),allOrders=repository.getAllOrders()) }
         }
     }
 
@@ -599,15 +601,11 @@ class ManagementViewModel(
             return
         }
 
-        if (newStatus == OrderStatus.CONFIRMED) {
-            _uiState.update {
-                it.copy(
-                    message = if (order.status == OrderStatus.CONFIRMED) {
-                        "ℹ️ 이미 입금확인 상태입니다."
-                    } else {
-                        "⚠️ 취소된 주문을 입금확인으로 되돌리는 기능은 지원하지 않습니다."
-                    }
-                )
+        if(newStatus != OrderStatus.CANCELED) {
+            launchOperation {
+                val result=repository.updateSaleStatus(order.orderNumber,order.revision,newStatus)
+                refreshLocalState()
+                _uiState.update { it.copy(message=if(result.cloudSynced) "$newStatus 저장 완료" else "$newStatus 로컬 저장 완료 · 시트 전송 대기") }
             }
             return
         }
@@ -632,6 +630,19 @@ class ManagementViewModel(
                     }
                 )
             }
+        }
+    }
+    fun updateSaleCosts(order: OrderEntity,cost: Long,expense: Long,mode: String,bps: Int,confirmed: Boolean) = launchOperation {
+        val result=repository.updateSaleCosts(order.orderNumber,order.revision,cost,expense,mode,bps,confirmed)
+        refreshLocalState();_uiState.update { it.copy(message=if(result.cloudSynced) "원가·비용 저장 완료" else "원가·비용 로컬 저장 완료 · 시트 전송 대기") }
+    }
+    private val reportInProgress=AtomicBoolean(false)
+    fun loadSalesReport(granularity: String,from: String,to: String) {
+        if(!reportInProgress.compareAndSet(false,true)) return
+        _uiState.update { it.copy(salesBusy=true,salesReport=null) }
+        launchOperation {
+            try { val report=repository.salesReport(granularity,from,to);_uiState.update { it.copy(salesReport=report) } }
+            finally { reportInProgress.set(false);_uiState.update { it.copy(salesBusy=false) } }
         }
     }
     // 🚨 1. 농원 선택 시, 이미 선택된 묘목이 있다면 재고 목록을 바로 불러오도록 수정!

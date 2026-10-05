@@ -9,7 +9,7 @@ const RFQ_COL = { id:0, sequence:1, created:2, name:3, phone:4, region:5, summar
 function doPost(e) {
   try {
     const text = e && e.postData && e.postData.contents;
-    assert_(typeof text === 'string' && text.length <= 30000, 'INVALID');
+    assert_(typeof text === 'string' && text.length <= 65000, 'INVALID');
     const body = JSON.parse(text);
     let value;
     if (body.action === 'submit_request') {
@@ -23,6 +23,11 @@ function doPost(e) {
       const device = authenticateDevice_(body.deviceToken);
       if (body.action === 'list_requests') value = listRequests_(body);
       else if (body.action === 'register_push') value = registerPush_(body, device);
+      else if (body.action === 'configure_encryption') value = configurePrivacy_(body);
+      else if (body.action === 'save_sale') value = saveSale_(body);
+      else if (body.action === 'list_sales') value = listSales_(body);
+      else if (body.action === 'sales_report') value = salesReport_(body);
+      else if (body.action === 'close_request') value = closeRequest_(body);
       else fail_('INVALID_ACTION');
     }
     return json_(Object.assign({ ok: true }, value));
@@ -32,7 +37,7 @@ function doPost(e) {
     return json_({ ok: false, code: code });
   }
 }
-function doGet() { return json_({ ok: true, service: 'namufarm-quote-requests', version: 3, processingBases: ['quote_request'], requestFields: ['customerEmail','formalQuoteRequested','recipientName','replyChannel'] }); }
+function doGet() { return json_(secureServiceInfo_()); }
 function json_(value) { return ContentService.createTextOutput(JSON.stringify(value)).setMimeType(ContentService.MimeType.JSON); }
 function fail_(code) { const error = new Error(code); error.code = code; throw error; }
 function assert_(value, code) { if (!value) fail_(code || 'INVALID'); }
@@ -86,31 +91,7 @@ function sheet_() {
 // Prefix formula-like customer strings, preserving their exact original text on read.
 function cell_(value) { const text = String(value); return /^[=+\-@']/.test(text) ? "'" + text : text; }
 function rows_(sheet) { const count = sheet.getLastRow() - 1; return count > 0 ? sheet.getRange(2,1,count,RFQ_HEADERS.length).getValues() : []; }
-function submitRequest_(body) {
-  const request = validateRequest_(body.request);
-  assert_(typeof body.rateKey === 'string' && /^[a-f0-9]{64}$/.test(body.rateKey));
-  const digest = hash_(JSON.stringify(request));
-  return lock_(() => {
-    const sheet = sheet_(); const rows = rows_(sheet);
-    const existing = rows.find(row => row[RFQ_COL.id] === request.requestId);
-    if (existing) { assert_(existing[RFQ_COL.hash] === digest, 'CONFLICT'); return { requestId: request.requestId, duplicate: true }; }
-    const cache = CacheService.getScriptCache(); const cacheKey = 'rfq-rate:' + body.rateKey;
-    const now = Date.now(); const prior = JSON.parse(cache.get(cacheKey) || '{"count":0,"until":0}');
-    const bucket = prior.until > now ? prior : { count: 0, until: now + 600000 };
-    assert_(bucket.count < 5, 'RATE_LIMITED');
-    const props = PropertiesService.getScriptProperties();
-    const sequence = rows.reduce((max,row) => Math.max(max, Number(row[RFQ_COL.sequence]) || 0), Number(props.getProperty('LAST_SEQUENCE')) || 0) + 1;
-    assert_(Number.isSafeInteger(sequence), 'NOT_READY');
-    props.setProperty('LAST_SEQUENCE', String(sequence)); // Gaps after failed writes are safe; never reuse a cursor.
-    const summary = request.items.map(item => item.species + (item.specification ? ' ('+item.specification+')' : '') + ' '+item.quantity+'주').join('\n');
-    const row = [request.requestId, sequence, new Date(now).toISOString(), cell_(request.customerName), cell_(request.customerPhone), cell_(request.region), cell_(summary), JSON.stringify(request.items), cell_(request.message), '신규', 'PENDING', digest, 0, new Date(now).toISOString(), '', JSON.stringify(request)];
-    const range = sheet.getRange(sheet.getLastRow()+1,1,1,RFQ_HEADERS.length);
-    range.setNumberFormat('@'); range.setValues([row]); SpreadsheetApp.flush();
-    // If the response or cache write fails after commit, the same ID still returns success.
-    cache.put(cacheKey, JSON.stringify({ count: bucket.count + 1, until: bucket.until }), Math.max(1, Math.ceil((bucket.until-now)/1000)));
-    return { requestId: request.requestId, duplicate: false };
-  });
-}
+function submitRequest_(body) { return submitEncryptedRequest_(body); }
 
 /** Run once as the owner. Never replaces or clears an existing Sheet. */
 function setupQuoteRequests() {
@@ -127,6 +108,7 @@ function setupQuoteRequests() {
     }
     sheet_();
     if (!ScriptApp.getProjectTriggers().some(trigger => trigger.getHandlerFunction() === 'dispatchQuoteNotifications')) ScriptApp.newTrigger('dispatchQuoteNotifications').timeBased().everyMinutes(1).create();
+    setupPrivacyStorage_();
   });
 }
 
@@ -174,20 +156,7 @@ function registerPush_(body, hash) {
     props.setProperty('DEVICES', JSON.stringify(devices)); return { registered: true };
   });
 }
-function listRequests_(body) {
-  const after = body.afterSequence;
-  assert_(Number.isSafeInteger(after) && after >= 0);
-  // Sheet rows may be sorted manually; never use row position as cursor.
-  const rows = rows_(sheet_()).filter(row => Number(row[RFQ_COL.sequence]) > after).sort((a,b) => Number(a[1])-Number(b[1]));
-  const page = rows.slice(0,100).map(row => {
-    // Display cells may be escaped or manually formatted. The immutable JSON preserves the exact enquiry.
-    const raw = JSON.parse(row[RFQ_COL.raw]);
-    assert_(hash_(JSON.stringify(raw)) === row[RFQ_COL.hash] && raw.requestId === row[0], 'NOT_READY');
-    const request = validateRequest_(Object.assign({}, raw, { website: '' }));
-    return Object.assign(request, { sequence: Number(row[1]), createdAt: String(row[2]) });
-  });
-  return { requests: page, hasMore: rows.length > page.length };
-}
+function listRequests_(body) { return listEncryptedRequests_(body); }
 
 /** Durable outbox; network I/O never holds the request-submission lock. */
 function dispatchQuoteNotifications() { dispatchNotifications_(null); }
@@ -201,7 +170,7 @@ function dispatchNotifications_(onlyId) {
     const sheet = sheet_(); const now = Date.now(); const lease = new Date(now + 600000).toISOString();
     const batch = [];
     rows_(sheet).forEach((row, offset) => {
-      if (batch.length >= (onlyId ? 1 : 10) || (onlyId && row[0] !== onlyId) || row[10] !== 'PENDING' || Date.parse(String(row[13])) > now) return;
+      if (batch.length >= (onlyId ? 1 : 10) || (onlyId && row[0] !== onlyId) || row[10] !== 'PENDING' || Date.parse(String(row[2])) + 30*86400000 <= now || Date.parse(String(row[13])) > now) return;
       sheet.getRange(offset+2,14,1,1).setValues([[lease]]);
       batch.push({ id:String(row[0]), lease:lease });
     });

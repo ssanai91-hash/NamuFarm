@@ -17,9 +17,9 @@ import kotlinx.coroutines.sync.Mutex
         OrderEntity::class,
         PendingSyncEntity::class,
         WebQuoteRequestEntity::class,
-        QuoteContactEntity::class, QuoteDocumentEntity::class
+        QuoteContactEntity::class, QuoteDocumentEntity::class, PrivacySyncEntity::class
     ],
-    version = 14, // 요청 연락처와 변경 없는 발행 견적서 기록
+    version = 15, // 요청 연락처와 변경 없는 발행 견적서 기록
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -628,11 +628,34 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_14_15 = object : Migration(14, 15) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE order_list ADD COLUMN customer_name TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE order_list ADD COLUMN customer_email TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE order_list ADD COLUMN source_request_id TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE order_list ADD COLUMN source_quote_number TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE order_list ADD COLUMN revision INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE order_list ADD COLUMN purchased_at INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE order_list ADD COLUMN paid_at INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE order_list ADD COLUMN delivered_at INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE order_list ADD COLUMN completed_at INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE order_list ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE order_list ADD COLUMN cost_total INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE order_list ADD COLUMN expense_total INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE order_list ADD COLUMN cost_confirmed INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE order_list ADD COLUMN profit_mode TEXT NOT NULL DEFAULT 'resale'")
+                db.execSQL("ALTER TABLE order_list ADD COLUMN commission_bps INTEGER NOT NULL DEFAULT 3000")
+                db.execSQL("ALTER TABLE order_list ADD COLUMN tax_amount INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("CREATE TABLE IF NOT EXISTS privacy_sync (name TEXT NOT NULL PRIMARY KEY, cursor INTEGER NOT NULL)")
+                db.execSQL("INSERT OR IGNORE INTO privacy_sync(name,cursor) SELECT 'web', COALESCE(MAX(sequence),0) FROM web_quote_request")
+            }
+        }
+
         internal val ALL_MIGRATIONS = arrayOf(
             MIGRATION_1_7, MIGRATION_2_7, MIGRATION_3_7,
             MIGRATION_4_7, MIGRATION_5_7, MIGRATION_6_7,
             MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10,
-            MIGRATION_10_12, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14
+            MIGRATION_10_12, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15
         )
 
         fun getDatabase(context: Context): AppDatabase {
@@ -643,6 +666,9 @@ abstract class AppDatabase : RoomDatabase() {
                     "NamuFarm.db"
                 )
                     .addMigrations(*ALL_MIGRATIONS)
+                    .addCallback(object : RoomDatabase.Callback() {
+                        override fun onOpen(db: SupportSQLiteDatabase) { db.execSQL("PRAGMA secure_delete=ON") }
+                    })
                     .build().also { instance = it }
             }
         }

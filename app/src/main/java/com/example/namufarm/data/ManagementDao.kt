@@ -8,6 +8,32 @@ import androidx.room.Query
 
 @Dao
 interface ManagementDao {
+    @Query("SELECT cursor FROM privacy_sync WHERE name = :name")
+    fun privacyCursor(name: String): Long?
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun savePrivacyCursor(value: PrivacySyncEntity)
+    @Query("DELETE FROM web_quote_request WHERE requestId = :id")
+    fun deleteWebRequest(id: String)
+    @Query("SELECT * FROM quote_list")
+    fun getAllQuotes(): List<QuoteEntity>
+    @Query("SELECT * FROM order_list")
+    fun getAllOrders(): List<OrderEntity>
+    @Query("SELECT * FROM quote_contact")
+    fun getAllQuoteContacts(): List<QuoteContactEntity>
+    @Query("DELETE FROM order_list WHERE order_number = :number")
+    fun deleteOrder(number: String)
+    @Query("DELETE FROM quote_document WHERE documentId = :id")
+    fun deleteQuoteDocument(id: String)
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun replaceWebRequest(value: WebQuoteRequestEntity)
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun replaceQuoteContact(value: QuoteContactEntity)
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun replaceQuoteDocument(value: QuoteDocumentEntity)
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun replaceQuote(value: QuoteEntity)
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun replacePending(value: PendingSyncEntity)
     @Query("SELECT * FROM web_quote_request ORDER BY sequence DESC")
     fun getWebRequests(): List<WebQuoteRequestEntity>
 

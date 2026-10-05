@@ -40,13 +40,18 @@ data class SnapshotSyncResult(val inventoryResult: SyncResult, val orderCount: I
 
 class SyncManager(
     private val local: LocalDataSource,
-    private val api: GoogleSheetApi
+    private val api: GoogleSheetApi,
+    val salesGateway: com.example.namufarm.sales.SalesGateway? = null
 ) {
     private val gson = Gson()
 
     suspend fun processPendingSync(item: PendingSyncEntity): PendingSyncProcessResult {
         return try {
+            if (salesGateway != null && item.syncType in listOf(PendingSyncType.ORDER, PendingSyncType.CANCEL_ORDER, PendingSyncType.DELIVERY)) {
+                return processLegacyCommerce(item)
+            }
             val ok = when (item.syncType) {
+                PendingSyncType.SALE -> checkNotNull(salesGateway).save(gson.fromJson(item.payloadJson, com.example.namufarm.sales.PendingSaleSyncPayload::class.java))
                 PendingSyncType.INVENTORY -> {
                     val payload = gson.fromJson(
                         item.payloadJson,
@@ -153,6 +158,42 @@ class SyncManager(
                 errorMessage = e.message ?: "알 수 없는 오류"
             )
         }
+    }
+
+
+    /** Freeze a migrated encrypted event in Room before any network write. A retry uses the same nonce. */
+    private suspend fun processLegacyCommerce(item: PendingSyncEntity): PendingSyncProcessResult {
+        val gateway = checkNotNull(salesGateway)
+        val current = when (item.syncType) {
+            PendingSyncType.ORDER -> com.example.namufarm.sales.SalePolicy.legacy(gson.fromJson(item.payloadJson, PendingOrderSyncPayload::class.java).order)
+            else -> {
+                val number = if(item.syncType==PendingSyncType.CANCEL_ORDER) gson.fromJson(item.payloadJson, PendingCancelOrderSyncPayload::class.java).orderNumber
+                    else gson.fromJson(item.payloadJson, PendingDeliverySyncPayload::class.java).orderNumber
+                val remote = gateway.orders().singleOrNull { it.orderNumber==number } ?: error("이전 주문을 먼저 보안 시트로 전송해주세요.")
+                val now = maxOf(System.currentTimeMillis(),remote.updatedAt)
+                if(item.syncType==PendingSyncType.CANCEL_ORDER) remote.copy(status=OrderStatus.CANCELED, revision=Math.addExact(remote.revision,1),updatedAt=now)
+                else gson.fromJson(item.payloadJson, PendingDeliverySyncPayload::class.java).let { d -> remote.copy(receiverName=d.receiverName,zipNo=d.zipNo,roadAddress=d.roadAddress,detailAddress=d.detailAddress,note=d.note,revision=Math.addExact(remote.revision,1),updatedAt=now) }
+            }
+        }
+        val payload = gateway.prepare(current, java.util.UUID.randomUUID().toString(),local.getQuoteDocument(current.sourceQuoteNumber)?.snapshotJson)
+        local.transaction {
+            check(getPendingSyncById(checkNotNull(item.syncId)) == item)
+            replacePending(item.copy(syncType=PendingSyncType.SALE,payloadJson=gson.toJson(payload)))
+            getOrderByNumber(current.orderNumber)?.let { old ->
+                if(old.revision<=current.revision) upsertOrder(old.copy(orderDate=current.orderDate,revision=current.revision,
+                    purchasedAt=current.purchasedAt,paidAt=current.paidAt,deliveredAt=current.deliveredAt,completedAt=current.completedAt,updatedAt=current.updatedAt,
+                    profitMode=current.profitMode,commissionBps=current.commissionBps))
+            }
+            if(item.syncType==PendingSyncType.ORDER) {
+                OrderSummaryCodec.parseStrict(current.itemSummary).filter { it.isInventoryBacked }.forEach { line ->
+                    val farm=checkNotNull(getFarmByName(line.farmName)); val plant=checkNotNull(getSpeciesByName(line.speciesName))
+                    val entity=getInventoryEntity(checkNotNull(farm.farmId),checkNotNull(plant.speciesId),line.quality,line.age,line.size,line.plantType)
+                        ?: FarmInventoryEntity(farm.farmId!!,plant.speciesId!!,line.quality,line.age,line.size,line.plantType,0,line.wholesalePrice,line.retailPrice)
+                    insertPendingSync(PendingSyncEntity(syncType=PendingSyncType.INVENTORY,payloadJson=gson.toJson(PendingInventorySyncPayload("save",entity,farm.farmName,plant.speciesName))))
+                }
+            }
+        }
+        return PendingSyncProcessResult(gateway.save(payload))
     }
 
     // ===== 농원 =====
@@ -336,7 +377,8 @@ class SyncManager(
     suspend fun syncSnapshot(): SnapshotSyncResult {
         return try {
             val inventory = api.getInventoryData("get_inventory")
-            val orders = api.getOrdersData("get_orders")
+            val secureOrders = salesGateway?.orders()
+            val orders = if (salesGateway == null) api.getOrdersData("get_orders") else emptyList()
             local.transaction {
                 requireNoPending()
                 val farms = getAllFarms().groupBy { it.farmName.trim() }
@@ -366,13 +408,26 @@ class SyncManager(
                 check(numbers.none { it.isBlank() } && numbers.distinct().size == numbers.size) {
                     "원격 주문번호 누락/중복. 기존 데이터를 보존했습니다."
                 }
-                val merged = orders.map { dto -> OrderRemoteMapper.merge(getOrderByNumber(dto.order_number!!.trim()), dto) }
+                val merged = secureOrders?.map { incoming ->
+                    val existing = getOrderByNumber(incoming.orderNumber)
+                    if (existing != null && existing.revision > 0) {
+                        check(incoming.revision >= existing.revision) { "서버 주문 상태가 이전 버전입니다. 기존 데이터를 보존했습니다." }
+                        if (incoming.revision == existing.revision) check(incoming.copy(orderId=null) == existing.copy(orderId=null)) { "같은 버전의 주문 내용이 다릅니다." }
+                        check(incoming.itemSummary == existing.itemSummary && incoming.totalPrice == existing.totalPrice && incoming.purchasedAt == existing.purchasedAt) { "주문 원본이 변경되었습니다." }
+                    }
+                    incoming.copy(orderId=existing?.orderId)
+                } ?: orders.map { dto -> OrderRemoteMapper.merge(getOrderByNumber(dto.order_number!!.trim()), dto) }
+                salesGateway?.issuedDocuments()?.forEach { incoming ->
+                    val previous=getQuoteDocument(incoming.quoteNumber)
+                    check(previous==null || previous==incoming) { "발행 견적서 원본이 변경되었습니다." }
+                    if(previous==null) insertQuoteDocument(incoming)
+                }
                 // This transaction owns both stock and order status, including remote cancellations.
                 clearAllInventory()
                 rows.forEach { upsertInventory(it) }
                 merged.forEach { upsertOrder(it) }
             }
-            SnapshotSyncResult(SyncResult(inventory.size, inventory.size, 0, 0, 0), orders.size)
+            SnapshotSyncResult(SyncResult(inventory.size, inventory.size, 0, 0, 0), (secureOrders?.size ?: orders.size))
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {

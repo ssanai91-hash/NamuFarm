@@ -148,6 +148,8 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
     var isPrepaid by rememberSaveable { mutableStateOf(true) } // true: 선불, false: 후불(착불)
 
     var showTodayQuotesDialog by remember { mutableStateOf(false) }
+    var showSales by remember { mutableStateOf(false) }
+    var financeOrder by remember { mutableStateOf<OrderEntity?>(null) }
     var showTodayOrdersDialog by remember { mutableStateOf(false) }
     var showQuoteDetailDialog by remember { mutableStateOf(false) }
     var showQuickQuoteDialog by remember { mutableStateOf(false) }
@@ -341,7 +343,8 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
     if (showTodayOrdersDialog) TodayOrdersDialog(
         uiState.todayOrders,
         onSelect = { selectedOrder = it; showOrderDetailDialog = true },
-        onDismiss = { showTodayOrdersDialog = false }
+        onDismiss = { showTodayOrdersDialog = false },
+        onSales={viewModel.loadTodayData();showSales=true}
     )
     if (showQuoteDetailDialog) selectedQuote?.let { quote ->
         QuoteDetailsDialog(
@@ -363,15 +366,21 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
     documentQuoteNumber?.let { number -> FormalQuoteDialog(viewModel, number) { documentQuoteNumber = null } }
     if (showDocumentHistory) QuoteDocumentHistoryDialog(uiState.quoteDocuments, onSelect = { documentQuoteNumber = it.quoteNumber }, onDismiss = { showDocumentHistory = false })
     if (showOrderDetailDialog) selectedOrder?.let { selected ->
-        val order = uiState.todayOrders.firstOrNull { it.orderNumber == selected.orderNumber } ?: selected
+        val order = uiState.allOrders.firstOrNull { it.orderNumber == selected.orderNumber } ?: selected
         OrderDetailsDialog(
             order, snackbarHostState,
             onDelivery = { selectedOrder = order; viewModel.clearJusoResults(); showAddressSearch = true },
             onCancel = { orderToCancel = order; showCancelOrderConfirm = true },
-            onDismiss = { showOrderDetailDialog = false }
+            onDismiss = { showOrderDetailDialog = false },
+            onStatus={viewModel.updateOrderStatus(order,it)},onCosts={financeOrder=order}
         )
     }
 
+    if(showSales) SalesDashboardDialog(uiState,onReport=viewModel::loadSalesReport,onSelect={selectedOrder=it;showSales=false;showOrderDetailDialog=true},onDismiss={showSales=false})
+    financeOrder?.let { selected ->
+        val current=uiState.allOrders.find { it.orderNumber==selected.orderNumber } ?: selected
+        SaleFinanceDialog(current,onSave={cost,expense,mode,bps,confirmed -> viewModel.updateSaleCosts(current,cost,expense,mode,bps,confirmed);financeOrder=null},onDismiss={financeOrder=null})
+    }
     if (showDeleteQuoteConfirm && quoteToDelete != null) {
         AlertDialog(
             onDismissRequest = { showDeleteQuoteConfirm = false },

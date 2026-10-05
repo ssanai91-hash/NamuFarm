@@ -26,8 +26,16 @@ jobs:
       - name: Make Gradle executable
         run: chmod +x gradlew
 
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Website encryption tests
+        run: node --test website/tests/privacy-crypto.test.mjs
+
       - name: Quote request server tests
-        run: node --test server/quote-requests/tests/requests.test.cjs
+        run: node --test server/quote-requests/tests/*.test.cjs
 
       - name: Unit tests and debug build
         run: ./gradlew testDebugUnitTest assembleDebug

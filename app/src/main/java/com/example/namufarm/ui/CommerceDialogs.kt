@@ -148,10 +148,10 @@ internal fun TodayQuotesDialog(quotes: List<QuoteEntity>, onSelect: (QuoteEntity
 }
 
 @Composable
-internal fun TodayOrdersDialog(orders: List<OrderEntity>, onSelect: (OrderEntity) -> Unit, onDismiss: () -> Unit) {
-    NamuDialog("오늘 주문", "주문 기록 ${orders.size}건 · 취소 내역 포함", onDismiss) {
+internal fun TodayOrdersDialog(orders: List<OrderEntity>, onSelect: (OrderEntity) -> Unit, onDismiss: () -> Unit, onSales: () -> Unit = {}) {
+    NamuDialog("오늘 주문", "주문 기록 ${orders.size}건 · 취소 내역 포함", onDismiss, actions={ OutlinedButton(onClick=onSales,modifier=Modifier.fillMaxWidth()) { Text("전체 판매 관리 · 일/월/년 매출 조회") } }) {
         LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            if (orders.isEmpty()) item { NamuEmptyState("오늘 확정한 주문이 없어요", "저장한 견적에서 입금 확인 후 주문을 확정해주세요.", Icons.Outlined.Inventory2) }
+            if (orders.isEmpty()) item { NamuEmptyState("오늘 확정한 주문이 없어요", "고객이 구매를 결정하면 견적에서 구매 확정을 눌러주세요.", Icons.Outlined.Inventory2) }
             items(orders, key = { it.orderNumber }) { order ->
                 HistoryCard(order.customerPhone, order.orderDate, order.itemSummary, order.totalPrice, order.status, order.status == "주문취소", { onSelect(order) }, order.receiverName)
             }
@@ -194,13 +194,13 @@ internal fun QuoteDetailsDialog(quote: QuoteEntity, confirming: Boolean, snackba
     var confirm by remember { mutableStateOf(false) }
     if (confirm) AlertDialog(
         onDismissRequest = { confirm = false },
-        title = { Text("입금을 확인하셨나요?") },
-        text = { Text("${money(quote.totalPrice.toLong())} 견적을 주문으로 확정합니다. 재고 품목은 수량이 차감되고 수기 품목은 실제 재고에 영향을 주지 않습니다.") },
+        title = { Text("고객이 구매를 결정하셨나요?") },
+        text = { Text("${money(quote.totalPrice.toLong())} 견적을 구매 확정으로 저장합니다. 실제 입금은 다음 단계에서 확인합니다. 재고 품목은 수량이 차감되고 수기 품목은 실제 재고에 영향을 주지 않습니다.") },
         confirmButton = { Button(onClick = { confirm = false; onConfirm() }) { Text("주문 확정") } },
         dismissButton = { TextButton(onClick = { confirm = false }) { Text("다시 확인") } }
     )
     NamuDialog("견적 상세", quote.saveDate, onDismiss, snackbar, actions = {
-        Button(onClick = { confirm = true }, enabled = !confirming, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) { Text(if (confirming) "주문 확정 중…" else "입금확인 · 주문 확정") }
+        Button(onClick = { confirm = true }, enabled = !confirming, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) { Text(if (confirming) "주문 확정 중…" else "고객 구매 확정") }
         OutlinedButton(onClick = onDocument, enabled = !confirming, modifier = Modifier.fillMaxWidth()) { Text("공식 견적서 · PDF / 이미지") }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             TextButton(onClick = onSms, enabled = !confirming) { Text("견적 문자 보내기") }
@@ -212,15 +212,25 @@ internal fun QuoteDetailsDialog(quote: QuoteEntity, confirming: Boolean, snackba
 }
 
 @Composable
-internal fun OrderDetailsDialog(order: OrderEntity, snackbar: SnackbarHostState, onDelivery: () -> Unit, onCancel: () -> Unit, onDismiss: () -> Unit) {
+internal fun OrderDetailsDialog(order: OrderEntity, snackbar: SnackbarHostState, onDelivery: () -> Unit, onCancel: () -> Unit, onDismiss: () -> Unit, onStatus: (String) -> Unit = {}, onCosts: () -> Unit = {}) {
+    var statusConfirm by remember { mutableStateOf(false) }
+    val next=com.example.namufarm.data.OrderStatus.next(order.status)
+    if(statusConfirm && next!=null) AlertDialog(onDismissRequest={statusConfirm=false},title={Text("$next 처리할까요?")},
+        text={Text(when(next) { "입금확인" -> "고객의 대금 ${money(order.totalPrice.toLong()+order.taxAmount)} 입금을 실제로 확인한 뒤 눌러주세요."; "배송확인" -> "배송 또는 고객의 상품 인수를 확인한 뒤 눌러주세요."; else -> "원가·비용과 배송을 확인하고 이 판매를 완료합니다. 완료 후에는 금액과 상태를 변경할 수 없습니다." })},
+        confirmButton={TextButton(onClick={statusConfirm=false;onStatus(next)}) {Text(next)}},dismissButton={TextButton(onClick={statusConfirm=false}) {Text("돌아가기")}})
     NamuDialog("주문 상세", order.orderDate, onDismiss, snackbar, actions = {
-        Button(onClick = onDelivery, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) {
+        if(next!=null) {
+            Button(onClick={statusConfirm=true},enabled=next!="판매완료" || order.costConfirmed,modifier=Modifier.fillMaxWidth()) { Text(next) }
+            OutlinedButton(onClick=onCosts,modifier=Modifier.fillMaxWidth()) { Text("원가·비용 확인 · 수익 계산") }
+            if(next=="판매완료" && !order.costConfirmed) Text("판매 완료 전에 원가·비용을 확인해주세요.")
+        }
+        Button(onClick = onDelivery, enabled=next!=null, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) {
             Icon(Icons.Outlined.LocalShipping, null, Modifier.size(20.dp))
             Spacer(Modifier.width(8.dp))
             Text("배송정보 관리")
         }
         TextButton(
-            onClick = onCancel, enabled = order.status != "주문취소", modifier = Modifier.align(Alignment.CenterHorizontally),
+            onClick = onCancel, enabled = com.example.namufarm.data.OrderStatus.canCancel(order.status), modifier = Modifier.align(Alignment.CenterHorizontally),
             colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
         ) { Text(if (order.status == "주문취소") "취소된 주문입니다" else "주문취소") }
     }) {
