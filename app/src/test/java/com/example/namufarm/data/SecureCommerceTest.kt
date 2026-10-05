@@ -61,6 +61,44 @@ class SecureCommerceTest {
         return local.getQuoteByNumber("Q")!!
     }
     private fun order(q:QuoteEntity)=OrderEntity(orderNumber="ORDER_TEST",orderDate="2026-10-05 10:00",customerPhone=q.customerPhone,totalQty=q.totalQty,totalPrice=q.totalPrice,itemSummary=q.itemSummary)
+    @Test fun manualQuoteSendAndPaymentKeepHistoryWithoutInventoryOrLegacyEndpoint()=runBlocking {
+        local.clearAllInventory()
+        val q = quote().copy(itemSummary = "감나무|2년생||||3|1000|수기견적|0")
+        local.replaceQuote(q)
+        local.insertPendingSync(PendingSyncEntity(syncType = PendingSyncType.INVENTORY, payloadJson = "{}"))
+        val date = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.KOREA).apply { timeZone = java.util.TimeZone.getTimeZone("Asia/Seoul") }.format(java.util.Date())
+        assertTrue(repo.sentQuotesForDate(date).isEmpty())
+        val sent = repo.markQuoteSent(q.quoteNumber)
+        assertEquals(sent.sentAt, repo.markQuoteSent(q.quoteNumber).sentAt)
+        assertEquals(1, repo.sentQuotesForDate(date).size)
+        assertTrue(repo.confirmOrder(sent, order(sent), paid = true).cloudSynced)
+        assertEquals(OrderStatus.CONFIRMED, repo.getOrder("ORDER_TEST")!!.status)
+        assertEquals(2L, repo.getOrder("ORDER_TEST")!!.revision)
+        assertEquals(2, gateway.receipts.size)
+        assertEquals(1, repo.paidOrdersForDate(date).size)
+        assertEquals(1, repo.sentQuotesForDate(date).size)
+        local.transaction { purgeRequestCopies(id) }
+        assertEquals(1, repo.sentQuotesForDate(date).size)
+        assertTrue(runCatching { repo.confirmOrder(sent, order(sent).copy(orderNumber = "SECOND"), paid = true) }.isFailure)
+        assertTrue(local.getAllInventoryEntities().isEmpty())
+        assertEquals(1, local.getAllPendingSync().size)
+        api.events.clear()
+        repo.syncCommerce()
+        assertTrue(api.events.isEmpty())
+        assertEquals(1, local.getAllPendingSync().size)
+    }
+    @Test fun failedPaymentTransactionDoesNotAdvanceCountsOrDropQuote()=runBlocking {
+        val q = quote()
+        db.openHelper.writableDatabase.execSQL("CREATE TRIGGER reject_payment BEFORE UPDATE ON order_list WHEN NEW.paid_at > 0 BEGIN SELECT RAISE(ABORT,'injected'); END")
+        // REPLACE executes INSERT, so reject that operation as well.
+        db.openHelper.writableDatabase.execSQL("CREATE TRIGGER reject_payment_insert BEFORE INSERT ON order_list WHEN NEW.paid_at > 0 BEGIN SELECT RAISE(ABORT,'injected'); END")
+        assertTrue(runCatching { repo.confirmOrder(q, order(q), paid = true) }.isFailure)
+        assertNotNull(local.getQuoteByNumber(q.quoteNumber))
+        assertNull(repo.getOrder("ORDER_TEST"))
+        assertTrue(local.getAllPendingSync().isEmpty())
+        assertEquals(10, local.getAllInventoryEntities().single().quantity)
+        assertTrue(gateway.receipts.isEmpty())
+    }
     @Test fun actualBuyerFieldsAndOutboxAreEncryptedInRoomAndLegacyOrderApiIsNeverCalled()=runBlocking {
         val q=quote();gateway.loseResponse=true
         val result=repo.confirmOrder(q,order(q));assertFalse(result.cloudSynced)

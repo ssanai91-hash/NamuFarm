@@ -10,7 +10,7 @@ from pathlib import Path
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 from .crypto import canonical, password_key, SellerKey
-from .domain import now_ms, sale_expired
+from .domain import now_ms, sale_expired, require
 from .errors import UserError
 
 
@@ -124,6 +124,19 @@ class Vault:
                     reference = row[ref_key] if kind == "requests" else row["metadata"][ref_key]
                     index = self._index(kind, reference)
                     db.execute("INSERT INTO cache VALUES (?,?,?)", (kind, index, self._seal(row, kind + ":" + index)))
+            db.execute("INSERT OR REPLACE INTO config VALUES ('snapshot',?)", (self._seal(marker, "snapshot"),))
+
+    def replace_requests(self, requests, cursor, deleted):
+        """Commit an independent inbox snapshot without touching sales or their outbox."""
+        with self.mutex, self._db() as db:
+            marker = self._read_snapshot_marker(db)
+            require(cursor >= marker["requests"] and set(marker["deletedRequests"]) <= set(deleted),
+                    "문의 접수 순번이나 삭제 기록이 이전 상태입니다.")
+            db.execute("DELETE FROM cache WHERE kind='requests'")
+            for row in requests:
+                index = self._index("requests", row["requestId"])
+                db.execute("INSERT INTO cache VALUES ('requests',?,?)", (index, self._seal(row, "requests:" + index)))
+            marker.update(requests=cursor, deletedRequests=sorted(deleted))
             db.execute("INSERT OR REPLACE INTO config VALUES ('snapshot',?)", (self._seal(marker, "snapshot"),))
 
     def queue(self, operation, optimistic=None):

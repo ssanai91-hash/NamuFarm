@@ -373,6 +373,32 @@ class SyncManager(
 
     // ===== 재고 =====
 
+    /** Sales sync must not depend on the retired inventory endpoint. */
+    suspend fun syncSecureOrders(): Int {
+        val gateway = checkNotNull(salesGateway) { "보안 판매 연결을 먼저 설정해주세요." }
+        val orders = gateway.orders()
+        local.transaction {
+            check(getAllPendingSync().none { it.syncType in listOf(PendingSyncType.SALE, PendingSyncType.ORDER, PendingSyncType.CANCEL_ORDER, PendingSyncType.DELIVERY) }) {
+                "주문 변경 전송 대기 중입니다. 저장한 내용을 유지합니다."
+            }
+            orders.forEach { incoming ->
+                val previous = getOrderByNumber(incoming.orderNumber)
+                if (previous != null) {
+                    check(incoming.revision >= previous.revision) { "서버 주문이 이전 버전입니다." }
+                    if (incoming.revision == previous.revision) check(incoming.copy(orderId = null) == previous.copy(orderId = null)) { "같은 버전의 주문 내용이 다릅니다." }
+                    check(incoming.itemSummary == previous.itemSummary && incoming.totalPrice == previous.totalPrice && incoming.purchasedAt == previous.purchasedAt) { "주문 원본이 변경되었습니다." }
+                }
+                upsertOrder(incoming.copy(orderId = previous?.orderId))
+            }
+            gateway.issuedDocuments().forEach { incoming ->
+                val previous = getQuoteDocument(incoming.quoteNumber)
+                check(previous == null || previous == incoming) { "발행 견적서 원본이 변경되었습니다." }
+                if (previous == null) insertQuoteDocument(incoming)
+            }
+        }
+        return orders.size
+    }
+
     /** Fetch both collections first. Any bad row or concurrent local write aborts the whole apply. */
     suspend fun syncSnapshot(): SnapshotSyncResult {
         return try {

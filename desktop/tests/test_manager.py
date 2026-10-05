@@ -28,6 +28,21 @@ class ManagerTest(unittest.TestCase):
         self.bridge.close()
         self.tmp.cleanup()
 
+    def test_inbox_sync_preserves_pending_sale_and_fetches_new_request(self):
+        self.manager.api.offline = True
+        with self.assertRaises(NetworkError):
+            self.manager.save_sale('ORDER_TEST', 1, {'receiverName': '전송 대기 고객'})
+        pending = self.manager.vault.pending()
+        sale = self.manager.vault.rows('sales')
+        self.manager.api.offline = False
+        request = self.bridge.send(control='submit_new')
+        self.manager.api.calls.clear()
+        view = self.manager.sync_requests()
+        self.assertIn(request['requestId'], [r['requestId'] for r in view['requests']])
+        self.assertEqual(pending, self.manager.vault.pending())
+        self.assertEqual(sale, self.manager.vault.rows('sales'))
+        self.assertEqual(['list_requests'], self.manager.api.calls)
+
     def test_node_backup_restore_and_python_encryption_match_real_server(self):
         self.manager.save_sale('ORDER_TEST', 1, {'receiverName': '변경 수령인', 'note': '첫 줄\n두 번째 줄'})
         stored = self.bridge.send(control='stored')

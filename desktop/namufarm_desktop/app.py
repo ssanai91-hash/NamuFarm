@@ -270,6 +270,7 @@ class MainWindow(QMainWindow):
         paired = ready and self.data["paired"]
         self.tabs.setEnabled(self.task is None)
         self.sync_button.setEnabled(paired)
+        self.inbox_sync_button.setEnabled(paired)
         self.lock_button.setEnabled(ready)
         self.open_button.setEnabled(self.manager is None and self.task is None)
         self.pair_button.setEnabled(ready and not self.data["paired"])
@@ -311,11 +312,11 @@ class MainWindow(QMainWindow):
         page = QWidget()
         layout = QVBoxLayout(page)
         self.request_search = QLineEdit()
-        self.request_search.setPlaceholderText("고객명 · 전화번호 · 묘목 · 지역 검색")
+        self.request_search.setPlaceholderText("접수번호 · 고객명 · 전화번호 · 묘목 · 지역 검색")
         self.request_search.textChanged.connect(self.refresh_requests)
         layout.addWidget(self.request_search)
         split = QSplitter(Qt.Orientation.Vertical)
-        self.request_table = table(["접수일", "고객명", "전화번호", "희망 묘목", "지역", "견적서"])
+        self.request_table = table(["접수번호", "접수일", "고객명", "전화번호", "희망 묘목", "지역", "견적서"])
         self.request_table.itemSelectionChanged.connect(self.select_request)
         split.addWidget(self.request_table)
         self.request_detail = QPlainTextEdit()
@@ -324,19 +325,22 @@ class MainWindow(QMainWindow):
         split.setSizes([450, 170])
         layout.addWidget(split)
         row = QHBoxLayout()
-        row.addWidget(QLabel("홈페이지 문의 · 구매 확정과 재고 차감은 휴대폰 앱에서 처리합니다."))
+        row.addWidget(QLabel("접수번호는 홈페이지·휴대폰과 동일합니다. 수동 견적·문자·PDF 발송은 휴대폰에서 처리합니다."))
         row.addStretch()
         self.delete_button = QPushButton("선택 문의 삭제")
         self.delete_button.clicked.connect(self.delete_request)
+        self.inbox_sync_button = QPushButton("새 요청 가져오기")
+        self.inbox_sync_button.clicked.connect(lambda: self.run_job("온라인 견적 요청 가져오는 중…", self.manager.sync_requests, self.apply_view))
+        row.addWidget(self.inbox_sync_button)
         row.addWidget(self.delete_button)
         layout.addLayout(row)
-        self.tabs.addTab(page, "견적 요청")
+        self.tabs.addTab(page, "온라인 견적 요청함")
 
     def refresh_requests(self):
         query = self.request_search.text().casefold()
-        self.request_rows = [r for r in self.data["requests"] if query in str(r["personal"]).casefold()]
+        self.request_rows = [r for r in self.data["requests"] if query in (r["requestId"] + str(r["personal"])).casefold()]
         self.request_table.blockSignals(True)
-        fill_table(self.request_table, [(timestamp(r["createdAt"]), r["personal"]["customerName"], r["personal"]["customerPhone"],
+        fill_table(self.request_table, [(r["requestId"], timestamp(r["createdAt"]), r["personal"]["customerName"], r["personal"]["customerPhone"],
                    ", ".join(f"{i['species']} {i['quantity']}주" for i in r["personal"]["items"]), r["personal"]["region"],
                    "요청" if r["personal"].get("formalQuoteRequested") else "—") for r in self.request_rows])
         self.request_table.clearSelection()
@@ -349,7 +353,7 @@ class MainWindow(QMainWindow):
         index = self.request_table.currentRow()
         if 0 <= index < len(self.request_rows):
             row, person = self.request_rows[index], self.request_rows[index]["personal"]
-            text = [f"고객: {person['customerName']} / {person['customerPhone']}", f"이메일: {person.get('customerEmail') or '없음'}",
+            text = [f"접수번호: {row['requestId']}", f"고객: {person['customerName']} / {person['customerPhone']}", f"이메일: {person.get('customerEmail') or '없음'}",
                     f"배송지역: {person['region']}", "희망 묘목:"]
             text.extend(f"  · {i['species']} {i.get('specification', '')} / {i['quantity']:,}주" for i in person["items"])
             text.extend([f"요청사항: {person.get('message', '')}", f"공식 견적 수신인: {person.get('recipientName', '')}",

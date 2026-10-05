@@ -60,7 +60,15 @@ class CommerceMigrationTest {
     }
 
     /** Recreate the actual old order schema instead of merely changing the version number on a new DB. */
+    private fun stripV16(db: SQLiteDatabase) {
+        db.execSQL("ALTER TABLE quote_list RENAME TO quote_list_v16")
+        db.execSQL("CREATE TABLE quote_list (quote_id INTEGER PRIMARY KEY AUTOINCREMENT, is_prepaid INTEGER NOT NULL, shipping_fee INTEGER NOT NULL, quote_number TEXT NOT NULL, save_date TEXT NOT NULL, customer_phone TEXT NOT NULL, total_qty INTEGER NOT NULL, total_price INTEGER NOT NULL, item_summary TEXT NOT NULL)")
+        val fields = "quote_id,is_prepaid,shipping_fee,quote_number,save_date,customer_phone,total_qty,total_price,item_summary"
+        db.execSQL("INSERT INTO quote_list ($fields) SELECT $fields FROM quote_list_v16")
+        db.execSQL("DROP TABLE quote_list_v16")
+    }
     private fun stripV15(db: SQLiteDatabase) {
+        stripV16(db)
         db.execSQL("DROP TABLE privacy_sync")
         db.execSQL("ALTER TABLE order_list RENAME TO order_list_v15")
         db.execSQL("CREATE TABLE order_list (order_id INTEGER PRIMARY KEY AUTOINCREMENT, order_number TEXT NOT NULL, order_date TEXT NOT NULL, customer_phone TEXT NOT NULL, total_qty INTEGER NOT NULL, total_price INTEGER NOT NULL, item_summary TEXT NOT NULL, receiver_name TEXT NOT NULL DEFAULT '', zip_no TEXT NOT NULL DEFAULT '', road_address TEXT NOT NULL DEFAULT '', detail_address TEXT NOT NULL DEFAULT '', note TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT '입금확인', is_prepaid INTEGER NOT NULL, shipping_fee INTEGER NOT NULL)")
@@ -77,6 +85,19 @@ class CommerceMigrationTest {
         SQLiteDatabase.openDatabase(context.getDatabasePath(name).path,null,SQLiteDatabase.OPEN_READWRITE).use { raw ->stripV15(raw);raw.execSQL("DROP TABLE room_master_table");raw.version=14 }
         val migrated=Room.databaseBuilder(context,AppDatabase::class.java,name).addMigrations(*AppDatabase.ALL_MIGRATIONS).allowMainThreadQueries().build()
         try {val dao=migrated.managementDao();val order=dao.getOrderByNumber("O")!!;assertEquals("01012345678",order.customerPhone);assertEquals(0L,order.revision);assertFalse(order.costConfirmed);assertEquals(7L,dao.privacyCursor("web"));assertEquals(1,dao.getWebRequests().size)}finally {migrated.close();context.deleteDatabase(name)}
+    }
+
+    @Test fun v15ToV16KeepsDraftAndDoesNotInventSentTime() {
+        val context = RuntimeEnvironment.getApplication(); val name = "migration-15.db"; context.deleteDatabase(name)
+        val original = Room.databaseBuilder(context, AppDatabase::class.java, name).allowMainThreadQueries().build()
+        original.managementDao().insertQuote(QuoteEntity(quoteNumber = "DRAFT", saveDate = "2026-10-05", customerPhone = "01012345678", totalQty = 1, totalPrice = 1000, itemSummary = "감나무|||||1|1000|수기견적|0"))
+        original.close()
+        SQLiteDatabase.openDatabase(context.getDatabasePath(name).path, null, SQLiteDatabase.OPEN_READWRITE).use { raw ->
+            stripV16(raw); raw.execSQL("DROP TABLE room_master_table"); raw.version = 15
+        }
+        val migrated = Room.databaseBuilder(context, AppDatabase::class.java, name).addMigrations(*AppDatabase.ALL_MIGRATIONS).allowMainThreadQueries().build()
+        try { val q = migrated.managementDao().getAllQuotes().single(); assertEquals("DRAFT", q.quoteNumber); assertEquals(0L, q.sentAt) }
+        finally { migrated.close(); context.deleteDatabase(name) }
     }
 
     private fun migrate(version: Int) {

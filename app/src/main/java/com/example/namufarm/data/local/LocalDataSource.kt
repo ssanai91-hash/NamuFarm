@@ -54,8 +54,10 @@ class LocalDataSource(
         advanceWebCursor(webRequestCursor())
         val bought=getAllOrders().map { it.sourceQuoteNumber }.toSet()
         getAllQuoteContacts().filter { com.google.gson.Gson().fromJson(it.recipientJson,com.example.namufarm.quotation.QuoteRecipient::class.java).sourceRequestId==id }.forEach { contact ->
-            getQuoteByNumber(contact.quoteNumber)?.let { deleteQuote(it) }
-            dao.deleteQuoteContact(contact.quoteNumber)
+            if (contact.quoteNumber !in bought) {
+                getQuoteByNumber(contact.quoteNumber)?.let { deleteQuote(it) }
+                dao.deleteQuoteContact(contact.quoteNumber)
+            }
             if(contact.quoteNumber !in bought) getQuoteDocument(contact.quoteNumber)?.let { deleteQuoteDocument(it.documentId) }
         }
         deleteWebRequest(id)
@@ -70,7 +72,7 @@ class LocalDataSource(
         }
         getQuoteDocuments().filter { it.quoteNumber !in bought && it.issuedAt+com.example.namufarm.privacy.PrivacyRetention.QUOTE_MS<=now }.forEach { deleteQuoteDocument(it.documentId) }
         if(getAllPendingSync().isEmpty()) getAllOrders().filter { com.example.namufarm.privacy.PrivacyRetention.saleExpires(it)?.let { date -> date<=now }==true }.forEach { order ->
-            getQuoteDocument(order.sourceQuoteNumber)?.let { deleteQuoteDocument(it.documentId) };dao.deleteQuoteContact(order.sourceQuoteNumber);deleteOrder(order.orderNumber)
+            getQuoteDocument(order.sourceQuoteNumber)?.let { deleteQuoteDocument(it.documentId) };getQuoteByNumber(order.sourceQuoteNumber)?.let { deleteQuote(it) };dao.deleteQuoteContact(order.sourceQuoteNumber);deleteOrder(order.orderNumber)
         }
     }
 
@@ -180,6 +182,7 @@ class LocalDataSource(
     fun getQuoteDocuments() = dao.getQuoteDocuments().map { it.copy(snapshotJson=reveal(it.snapshotJson)) }
     fun insertQuoteDocument(document: com.example.namufarm.data.QuoteDocumentEntity) = dao.insertQuoteDocument(document.copy(snapshotJson=protect(document.snapshotJson)))
     fun insertQuote(quote: QuoteEntity) = dao.insertQuote(quoteRow(quote,true))
+    fun replaceQuote(quote: QuoteEntity) = dao.replaceQuote(quoteRow(quote,true))
     fun getQuoteById(quoteId: Int): QuoteEntity? = dao.getQuoteById(quoteId)?.let { quoteRow(it,false) }
     fun deleteQuote(quote: QuoteEntity) { dao.deleteQuote(quote); dao.deleteQuoteContact(quote.quoteNumber) }
     fun getLastQuoteId(): Int? = dao.getLastQuoteId()

@@ -42,18 +42,18 @@ class CommerceUiTest {
         itemSummary = "소나무|상묘|3년생|1.2m|실생|10|12000|이원농원|7000\n감나무|||||2|5000|수기견적|0"
     )
 
-    @Test fun homeSearchFindsFarmAndKeepsCartVisible() {
-        val state = ManagementUiState(allSellingInventory = listOf(pine, maple), estimateCart = listOf(CartItem(pine, 10)))
+    @Test fun homeShowsOnlineReceiptInsteadOfInventory() {
+        var selected = false
         compose.setContent { NamuFarmTheme {
-            SellingHome(state, SnackbarHostState(), {}, {}, {}, {}, {}, {}, {}, { _, _ -> })
+            SellingHome(ManagementUiState(), SnackbarHostState(), {}, {}, {}, {}, {}, {}, {}, { _, _ -> },
+                webRequests = listOf(webRequest), onRequest = { selected = true })
         } }
+        compose.onNodeWithText("온라인 견적 요청함").assertIsDisplayed()
+        compose.onNodeWithText("접수번호 ${webRequest.requestId}").assertIsDisplayed()
+        compose.onNodeWithText("김나무 · 01012345678").performClick()
+        assertTrue(selected)
+        compose.onNodeWithText("판매 재고").assertDoesNotExist()
         capture("selling-home", compose.onRoot())
-        compose.onNodeWithText("묘목명 또는 농원명 검색").performTextInput("옥천")
-        compose.onNodeWithText("단풍나무").assertIsDisplayed()
-        compose.onNodeWithText("소나무").assertDoesNotExist()
-        compose.onNodeWithText("견적 확인").assertIsDisplayed()
-        compose.onNodeWithContentDescription("검색어 지우기").performClick()
-        compose.onNodeWithText("소나무").assertExists()
     }
 
     @Test fun quantityPickerRejectsMoreThanRemainingStock() {
@@ -104,7 +104,7 @@ class CommerceUiTest {
 
     @Test fun emptyHistoryHasGuidanceInsteadOfClosingImmediately() {
         compose.setContent { NamuFarmTheme { TodayQuotesDialog(emptyList(), {}, {}) } }
-        compose.onNodeWithText("오늘 저장한 견적이 없어요").assertIsDisplayed()
+        compose.onNodeWithText("오늘 발송한 견적이 없어요").assertIsDisplayed()
         compose.onNodeWithContentDescription("닫기").assertIsDisplayed()
     }
 
@@ -177,7 +177,7 @@ class CommerceUiTest {
         compose.setContent { NamuFarmTheme {
             androidx.compose.foundation.layout.Column { WebRequestCustomerActions(webRequest, phone, 2) { phone = it } }
         } }
-        compose.onNodeWithText("이 고객 번호로 견적 작성").performClick()
+        compose.onNodeWithText("수동 견적 작성").performClick()
         assertEquals("01099998888", phone)
         compose.onNodeWithText("번호 변경").performClick()
         assertEquals(webRequest.customerPhone, phone)

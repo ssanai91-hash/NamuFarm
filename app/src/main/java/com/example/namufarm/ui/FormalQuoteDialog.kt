@@ -35,7 +35,7 @@ internal fun FormalQuoteDialog(viewModel: ManagementViewModel, quoteNumber: Stri
     var loading by remember { mutableStateOf(true) }; var busy by remember { mutableStateOf(false) }
     var tax by remember { mutableStateOf("0") }
     var validUntil by remember { mutableStateOf("발행일로부터 7일") }
-    var notes by remember { mutableStateOf("견적 유효기간 경과 후에는 가격과 재고를 다시 확인해 주세요.") }
+    var notes by remember { mutableStateOf("견적 유효기간 경과 후에는 가격과 묘목 확보 가능 여부를 다시 확인해 주세요.") }
     var account by remember { mutableStateOf(BuildConfig.PAYMENT_ACCOUNT_TEXT) }
     var error by remember { mutableStateOf<String?>(null) }
     var notice by remember { mutableStateOf<String?>(null) }
@@ -67,7 +67,7 @@ internal fun FormalQuoteDialog(viewModel: ManagementViewModel, quoteNumber: Stri
             finally { busy = false }
         }
     }
-    NamuDialog("공식 견적서", document?.number ?: "내용 확인 후 발행 · 재고 변동 없음", onDismiss = { if (!busy) onDismiss() }, actions = {
+    NamuDialog("공식 견적서", document?.number ?: "내용 확인 후 발행", onDismiss = { if (!busy) onDismiss() }, actions = {
         error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         notice?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
         if (document == null) Button(onClick = {
@@ -95,6 +95,7 @@ internal fun FormalQuoteDialog(viewModel: ManagementViewModel, quoteNumber: Stri
                 OutlinedButton(onClick = { reply("view") }, enabled = !busy, modifier = Modifier.weight(1f)) { Text("PDF 보기") }
                 OutlinedButton(onClick = { reply("share") }, enabled = !busy, modifier = Modifier.weight(1f)) { Text("PDF 공유") }
             }
+            QuoteSentAction(viewModel, quoteNumber)
         }
     }) {
         LazyColumn(contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -167,4 +168,29 @@ internal fun QuoteDocumentHistoryDialog(documents: List<QuoteDocumentEntity>, on
             }
         }
     }
+}
+
+/** Opening another app does not prove delivery. The seller records the actual send once. */
+@Composable
+internal fun QuoteSentAction(viewModel: ManagementViewModel, number: String) {
+    val state by viewModel.uiState.collectAsState()
+    val scope = rememberCoroutineScope()
+    val quote = state.allQuotes.firstOrNull { it.quoteNumber == number }
+    var confirm by remember { mutableStateOf(false) }
+    var busy by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    if ((quote?.sentAt ?: 0L) > 0L) Text("견적 발송 완료 · 최초 발송일에 1건으로 집계", color = MaterialTheme.colorScheme.primary)
+    else OutlinedButton(onClick = { confirm = true }, enabled = !busy && quote != null, modifier = Modifier.fillMaxWidth()) { Text("발송 완료로 기록") }
+    error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+    if (confirm) AlertDialog(onDismissRequest = { confirm = false }, title = { Text("고객에게 견적을 보내셨나요?") },
+        text = { Text("문자·메일·PDF를 실제로 보낸 뒤 확인해주세요. 오늘 견적이 1건 증가하며 다시 눌러도 중복 집계하지 않습니다.") },
+        confirmButton = { TextButton(onClick = {
+            confirm = false; busy = true
+            scope.launch {
+                try { viewModel.markQuoteSent(number) }
+                catch (e: CancellationException) { throw e }
+                catch (e: Exception) { error = e.message ?: "발송 기록 저장에 실패했습니다." }
+                finally { busy = false }
+            }
+        }) { Text("발송 완료") } }, dismissButton = { TextButton(onClick = { confirm = false }) { Text("돌아가기") } })
 }

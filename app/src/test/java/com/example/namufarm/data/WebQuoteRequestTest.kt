@@ -85,24 +85,26 @@ class WebQuoteRequestTest {
         assertEquals(1, repository.syncWebRequests(retry, "test", "test"))
         assertEquals(2, local.getWebRequests().size)
     }
-    @Test fun pendingFailureBlocksRequestPull() = runBlocking {
+    @Test fun legacyPendingFailureDoesNotBlockIndependentRequestPull() = runBlocking {
         db.managementDao().insertPendingSync(PendingSyncEntity(syncType = "unknown", payloadJson = "{}"))
         var called = false
         val api = object : WebQuoteApi {
             override suspend fun request(url: String, body: Map<String, Any>): WebQuoteEnvelope { called = true; return page(remote()) }
         }
-        assertTrue(runCatching { repository.syncWebRequests(api, "test", "test") }.isFailure)
-        assertFalse(called); assertTrue(local.getWebRequests().isEmpty())
+        assertEquals(1, repository.syncWebRequests(api, "test", "test"))
+        assertTrue(called); assertEquals(1, local.getWebRequests().size)
+        assertEquals(1, local.getAllPendingSync().size)
     }
-    @Test fun pendingCreatedDuringPullBlocksItsCommit() = runBlocking {
+    @Test fun pendingCreatedDuringPullDoesNotBlockRequestCommit() = runBlocking {
         val api = object : WebQuoteApi {
             override suspend fun request(url: String, body: Map<String, Any>): WebQuoteEnvelope {
                 db.managementDao().insertPendingSync(PendingSyncEntity(syncType = "unknown", payloadJson = "{}"))
                 return page(remote())
             }
         }
-        assertTrue(runCatching { repository.syncWebRequests(api, "test", "test") }.isFailure)
-        assertEquals(0L, local.webRequestCursor())
+        assertEquals(1, repository.syncWebRequests(api, "test", "test"))
+        assertEquals(1L, local.webRequestCursor())
+        assertEquals(1, local.getAllPendingSync().size)
     }
     @Test fun optionalEmailAndOfficialQuotePreferencesRoundTrip() {
         val formal = remote().copy(customerEmail = "buyer@example.com", formalQuoteRequested = true, recipientName = "테스트건설", replyChannel = "both")

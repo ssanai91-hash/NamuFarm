@@ -134,7 +134,7 @@ internal fun buildSpecText(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: () -> Unit, onCallAssist: () -> Unit = {}, onWebInbox: () -> Unit = {}, webUnread: Int = 0) {
+fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: () -> Unit, onCallAssist: () -> Unit = {}, onWebInbox: () -> Unit = {}, webUnread: Int = 0, webRequests: List<com.example.namufarm.data.WebQuoteRequestEntity> = emptyList(), webBusy: Boolean = false, onWebSettings: () -> Unit = {}, onRequest: (com.example.namufarm.data.WebQuoteRequestEntity) -> Unit = {}) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
@@ -207,11 +207,8 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
     SellingHome(
         state = uiState,
         snackbarHostState = snackbarHostState,
-        onSync = viewModel::syncDataWithGoogleSheet,
-        onManage = {
-            if (uiState.estimateCart.isNotEmpty()) showMoveToManagementConfirm = true
-            else onNavigateToManagement()
-        },
+        onSync = { onWebInbox(); viewModel.syncDataWithGoogleSheet() },
+        onManage = onWebSettings,
         onQuickQuote = { viewModel.resetInput(); showQuickQuoteDialog = true },
         onTodayQuotes = { viewModel.loadTodayData(); showTodayQuotesDialog = true },
         onTodayOrders = { viewModel.loadTodayData(); showTodayOrdersDialog = true },
@@ -219,7 +216,8 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
         onClearCart = { showClearCartConfirm = true },
         onAddToCart = viewModel::addToCart,
         onCallAssist = onCallAssist,
-        onWebInbox = onWebInbox, webUnread = webUnread
+        onWebInbox = onWebInbox, webUnread = webUnread, webRequests = webRequests, webBusy = webBusy, onRequest = onRequest,
+        onSavedQuote = { selectedQuote = it; showQuoteDetailDialog = true }
     )
 
     if (showCartDialog) {
@@ -346,7 +344,8 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
         onDismiss = { showTodayOrdersDialog = false },
         onSales={viewModel.loadTodayData();showSales=true}
     )
-    if (showQuoteDetailDialog) selectedQuote?.let { quote ->
+    if (showQuoteDetailDialog) selectedQuote?.let { selected ->
+        val quote = uiState.allQuotes.firstOrNull { it.quoteNumber == selected.quoteNumber } ?: selected
         QuoteDetailsDialog(
             quote, uiState.confirmingQuoteNumber == quote.quoteNumber, snackbarHostState,
             onSms = { sendQuoteSms(quote.customerPhone, viewModel.generateQuoteTextFromEntity(quote)) },
@@ -360,7 +359,10 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
             },
             onDelete = { quoteToDelete = quote; showDeleteQuoteConfirm = true },
             onDismiss = { showQuoteDetailDialog = false },
-            onDocument = { documentQuoteNumber = quote.quoteNumber }
+            onDocument = { documentQuoteNumber = quote.quoteNumber },
+            sentAction = { QuoteSentAction(viewModel, quote.quoteNumber) },
+            ordered = uiState.allOrders.any { it.sourceQuoteNumber == quote.quoteNumber },
+            onOrder = { selectedOrder = uiState.allOrders.first { it.sourceQuoteNumber == quote.quoteNumber }; showQuoteDetailDialog = false; showOrderDetailDialog = true }
         )
     }
     documentQuoteNumber?.let { number -> FormalQuoteDialog(viewModel, number) { documentQuoteNumber = null } }
@@ -620,506 +622,15 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
         )
     }
 
-    if (showQuickQuoteDialog) {
-        val qualityOptions = listOf("", "특묘", "상묘", "중묘", "하묘")
-        val plantTypes = listOf("", "실생", "접목", "삽목", "근삽")
-        val currentAgeInt = uiState.inputAge
-            .replace(Regex("[^0-9]"), "")
-            .toIntOrNull() ?: 0
-
-        Dialog(
-            onDismissRequest = { showQuickQuoteDialog = false },
-            properties = DialogProperties(usePlatformDefaultWidth = false)
-        ) {
-            Surface(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(12.dp),
-                shape = RoundedCornerShape(22.dp),
-                color = MaterialTheme.colorScheme.background
-            ) {
-                Column(modifier = Modifier.fillMaxSize()) {
-                    Surface(
-                        color = MaterialTheme.colorScheme.primaryContainer
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "빠른 견적",
-                                    style = MaterialTheme.typography.titleLarge,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                                )
-                                Text(
-                                    text = "수기 견적 · 실제 재고 차감·복원 없음",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.72f)
-                                )
-                            }
-                            IconButton(onClick = { showQuickQuoteDialog = false }) {
-                                Icon(
-                                    Icons.Default.Close,
-                                    contentDescription = "닫기",
-                                    tint = MaterialTheme.colorScheme.onPrimaryContainer
-                                )
-                            }
-                        }
-                    }
-
-                    Column(
-                        modifier = Modifier
-                            .weight(1f)
-                            .verticalScroll(rememberScrollState())
-                            .padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Card(
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surface
-                            ),
-                            border = BorderStroke(
-                                1.dp,
-                                MaterialTheme.colorScheme.outlineVariant
-                            ),
-                            shape = RoundedCornerShape(16.dp)
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(14.dp),
-                                verticalArrangement = Arrangement.spacedBy(11.dp)
-                            ) {
-                                Text(
-                                    text = "묘목 선택",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.ExtraBold
-                                )
-
-                                ChosungPicker(uiState.selectedChosung, viewModel::selectChosung)
-
-                                if (uiState.speciesList.isEmpty()) {
-                                    Surface(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        shape = RoundedCornerShape(12.dp),
-                                        color = MaterialTheme.colorScheme.surfaceVariant
-                                    ) {
-                                        Text(
-                                            text = "선택한 초성의 묘목이 없습니다.",
-                                            modifier = Modifier.padding(14.dp),
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            textAlign = TextAlign.Center
-                                        )
-                                    }
-                                } else {
-                                    uiState.speciesList.chunked(3).forEach { rowItems ->
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                        ) {
-                                            rowItems.forEach { species ->
-                                                val selected =
-                                                    uiState.selectedSpecies?.speciesId == species.speciesId
-
-                                                Surface(
-                                                    modifier = Modifier
-                                                        .weight(1f)
-                                                        .heightIn(min = 46.dp)
-                                                        .clickable {
-                                                            viewModel.selectSpecies(species)
-                                                        },
-                                                    shape = RoundedCornerShape(11.dp),
-                                                    color = if (selected) {
-                                                        MaterialTheme.colorScheme.primaryContainer
-                                                    } else {
-                                                        MaterialTheme.colorScheme.surfaceVariant
-                                                    },
-                                                    border = BorderStroke(
-                                                        1.dp,
-                                                        if (selected) {
-                                                            MaterialTheme.colorScheme.primary
-                                                        } else {
-                                                            MaterialTheme.colorScheme.outlineVariant
-                                                        }
-                                                    )
-                                                ) {
-                                                    Box(
-                                                        modifier = Modifier.padding(
-                                                            horizontal = 5.dp,
-                                                            vertical = 8.dp
-                                                        ),
-                                                        contentAlignment = Alignment.Center
-                                                    ) {
-                                                        Text(
-                                                            text = species.speciesName,
-                                                            style = MaterialTheme.typography.labelSmall,
-                                                            maxLines = 2,
-                                                            textAlign = TextAlign.Center,
-                                                            fontWeight = if (selected) {
-                                                                FontWeight.ExtraBold
-                                                            } else {
-                                                                FontWeight.Medium
-                                                            },
-                                                            color = if (selected) {
-                                                                MaterialTheme.colorScheme.onPrimaryContainer
-                                                            } else {
-                                                                MaterialTheme.colorScheme.onSurfaceVariant
-                                                            }
-                                                        )
-                                                    }
-                                                }
-                                            }
-
-                                            repeat(3 - rowItems.size) {
-                                                Spacer(modifier = Modifier.weight(1f))
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        if (uiState.selectedSpecies != null) {
-                            Card(
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = CardDefaults.cardColors(
-                                    containerColor = MaterialTheme.colorScheme.surface
-                                ),
-                                border = BorderStroke(
-                                    1.dp,
-                                    MaterialTheme.colorScheme.outlineVariant
-                                ),
-                                shape = RoundedCornerShape(16.dp)
-                            ) {
-                                Column(
-                                    modifier = Modifier.padding(14.dp),
-                                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                                ) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                text = "규격 · 단가",
-                                                style = MaterialTheme.typography.titleMedium,
-                                                fontWeight = FontWeight.ExtraBold
-                                            )
-                                            Text(
-                                                text = uiState.selectedSpecies!!.speciesName,
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.primary,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                        }
-                                    }
-
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(7.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Surface(
-                                            modifier = Modifier.width(72.dp).heightIn(min = 48.dp),
-                                            shape = RoundedCornerShape(10.dp),
-                                            color = MaterialTheme.colorScheme.primaryContainer
-                                        ) {
-                                            Box(contentAlignment = Alignment.Center) {
-                                                Text(
-                                                    text = if (currentAgeInt > 0) {
-                                                        "${currentAgeInt}년생"
-                                                    } else {
-                                                        "연생 없음"
-                                                    },
-                                                    style = MaterialTheme.typography.labelMedium,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                                                )
-                                            }
-                                        }
-
-                                        OutlinedButton(
-                                            onClick = { viewModel.updateAge("") },
-                                            modifier = Modifier.weight(1f).heightIn(min = 48.dp),
-                                            shape = RoundedCornerShape(10.dp),
-                                            contentPadding = PaddingValues(horizontal = 5.dp)
-                                        ) {
-                                            Text("미지정", style = MaterialTheme.typography.labelMedium)
-                                        }
-
-                                        FilledTonalButton(
-                                            onClick = {
-                                                viewModel.updateAge("${currentAgeInt + 1}년생")
-                                            },
-                                            modifier = Modifier.weight(1f).heightIn(min = 48.dp),
-                                            shape = RoundedCornerShape(10.dp),
-                                            contentPadding = PaddingValues(horizontal = 5.dp)
-                                        ) {
-                                            Text("+1년", fontWeight = FontWeight.Bold)
-                                        }
-                                    }
-
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(7.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Surface(
-                                            modifier = Modifier.width(72.dp).heightIn(min = 48.dp),
-                                            shape = RoundedCornerShape(10.dp),
-                                            color = MaterialTheme.colorScheme.primaryContainer
-                                        ) {
-                                            Box(contentAlignment = Alignment.Center) {
-                                                Text(
-                                                    text = if (uiState.inputSizeMeters > 0f) {
-                                                        String.format(
-                                                            "%.1fm",
-                                                            uiState.inputSizeMeters
-                                                        )
-                                                    } else {
-                                                        "크기 없음"
-                                                    },
-                                                    style = MaterialTheme.typography.labelMedium,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                                                )
-                                            }
-                                        }
-
-                                        OutlinedButton(
-                                            onClick = { viewModel.updateSize(0f) },
-                                            modifier = Modifier.weight(1f).heightIn(min = 48.dp),
-                                            shape = RoundedCornerShape(10.dp),
-                                            contentPadding = PaddingValues(horizontal = 5.dp)
-                                        ) {
-                                            Text("초기화", style = MaterialTheme.typography.labelMedium)
-                                        }
-
-                                        FilledTonalButton(
-                                            onClick = {
-                                                viewModel.updateSize(
-                                                    uiState.inputSizeMeters + 0.1f
-                                                )
-                                            },
-                                            modifier = Modifier.weight(1f).heightIn(min = 48.dp),
-                                            shape = RoundedCornerShape(10.dp),
-                                            contentPadding = PaddingValues(horizontal = 5.dp)
-                                        ) {
-                                            Text("+10cm", fontWeight = FontWeight.Bold)
-                                        }
-
-                                        FilledTonalButton(
-                                            onClick = {
-                                                viewModel.updateSize(
-                                                    uiState.inputSizeMeters + 1f
-                                                )
-                                            },
-                                            modifier = Modifier.weight(1f).heightIn(min = 48.dp),
-                                            shape = RoundedCornerShape(10.dp),
-                                            contentPadding = PaddingValues(horizontal = 5.dp)
-                                        ) {
-                                            Text("+1m", fontWeight = FontWeight.Bold)
-                                        }
-                                    }
-
-                                    Text(
-                                        text = "재배 타입",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                    ) {
-                                        plantTypes.forEach { type ->
-                                            val selected = uiState.inputPlantType == type
-                                            Surface(
-                                                modifier = Modifier
-                                                    .widthIn(min = 64.dp)
-                                                    .heightIn(min = 48.dp)
-                                                    .clickable {
-                                                        viewModel.updatePlantType(type)
-                                                    },
-                                                shape = RoundedCornerShape(10.dp),
-                                                color = if (selected) {
-                                                    MaterialTheme.colorScheme.primaryContainer
-                                                } else {
-                                                    MaterialTheme.colorScheme.surfaceVariant
-                                                },
-                                                border = BorderStroke(
-                                                    1.dp,
-                                                    if (selected) {
-                                                        MaterialTheme.colorScheme.primary
-                                                    } else {
-                                                        MaterialTheme.colorScheme.outlineVariant
-                                                    }
-                                                )
-                                            ) {
-                                                Box(contentAlignment = Alignment.Center) {
-                                                    Text(
-                                                        text = if (type.isBlank()) "미지정" else type,
-                                                        style = MaterialTheme.typography.labelSmall,
-                                                        fontWeight = if (selected) {
-                                                            FontWeight.Bold
-                                                        } else {
-                                                            FontWeight.Medium
-                                                        }
-                                                    )
-                                                }
-                                            }
-                                        }
-                                    }
-
-                                    Text(
-                                        text = "품질",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                    ) {
-                                        qualityOptions.forEach { quality ->
-                                            val selected = uiState.inputQuality == quality
-                                            Surface(
-                                                modifier = Modifier
-                                                    .widthIn(min = 64.dp)
-                                                    .heightIn(min = 48.dp)
-                                                    .clickable {
-                                                        viewModel.updateQuality(quality)
-                                                    },
-                                                shape = RoundedCornerShape(10.dp),
-                                                color = if (selected) {
-                                                    MaterialTheme.colorScheme.primaryContainer
-                                                } else {
-                                                    MaterialTheme.colorScheme.surfaceVariant
-                                                },
-                                                border = BorderStroke(
-                                                    1.dp,
-                                                    if (selected) {
-                                                        MaterialTheme.colorScheme.primary
-                                                    } else {
-                                                        MaterialTheme.colorScheme.outlineVariant
-                                                    }
-                                                )
-                                            ) {
-                                                Box(contentAlignment = Alignment.Center) {
-                                                    Text(
-                                                        text = if (quality.isBlank()) {
-                                                            "미지정"
-                                                        } else {
-                                                            quality
-                                                        },
-                                                        style = MaterialTheme.typography.labelSmall,
-                                                        fontWeight = if (selected) {
-                                                            FontWeight.Bold
-                                                        } else {
-                                                            FontWeight.Medium
-                                                        }
-                                                    )
-                                                }
-                                            }
-                                        }
-                                    }
-
-                                    HorizontalDivider(
-                                        color = MaterialTheme.colorScheme.outlineVariant
-                                    )
-
-                                    ValueAdjuster(
-                                        label = "수량 (주)", value = uiState.inputQuantity,
-                                        steps = listOf(1, 10, 100), onAdd = viewModel::addQuantity,
-                                        onReset = { viewModel.resetQuantityToSoldOut() }, onSet = viewModel::setQuantity
-                                    )
-                                    ValueAdjuster(
-                                        label = "판매 단가 (원)", value = uiState.inputRetail,
-                                        steps = listOf(100, 1000, 10000), onAdd = viewModel::addRetail,
-                                        onReset = viewModel::resetRetail, onSet = viewModel::setRetail
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    SnackbarHost(snackbarHostState)
-                    Surface(
-                        color = MaterialTheme.colorScheme.surface,
-                        tonalElevation = 3.dp,
-                        shadowElevation = 8.dp
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .navigationBarsPadding()
-                                .padding(12.dp),
-                            horizontalArrangement = Arrangement.spacedBy(9.dp)
-                        ) {
-                            OutlinedButton(
-                                onClick = {
-                                    showQuickQuoteDialog = false
-                                    showCartDialog = true
-                                },
-                                modifier = Modifier.weight(1f).height(50.dp),
-                                shape = RoundedCornerShape(12.dp)
-                            ) {
-                                Text(
-                                    "견적 확인",
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-
-                            Button(
-                                onClick = {
-                                    if (
-                                        uiState.selectedSpecies != null &&
-                                        uiState.inputQuantity > 0 &&
-                                        uiState.inputRetail > 0
-                                    ) {
-                                        viewModel.addManualQuoteItem(
-                                            species = uiState.selectedSpecies!!,
-                                            quality = uiState.inputQuality,
-                                            age = uiState.inputAge,
-                                            size = if (
-                                                uiState.inputSizeMeters > 0f
-                                            ) {
-                                                "${String.format(java.util.Locale.US, "%.1f", uiState.inputSizeMeters)}m"
-                                            } else {
-                                                ""
-                                            },
-                                            plantType = uiState.inputPlantType,
-                                            quantity = uiState.inputQuantity,
-                                            retailPrice = uiState.inputRetail
-                                        )
-                                        viewModel.resetInput()
-                                        viewModel.updateAge("")
-                                        viewModel.updateSize(0f)
-                                        viewModel.updatePlantType("")
-                                        viewModel.updateQuality("")
-                                        viewModel.showMessage(
-                                            "견적에 담았습니다. 다음 묘목을 선택하세요."
-                                        )
-                                    } else {
-                                        viewModel.showMessage(
-                                            "묘목, 수량, 단가를 확인해주세요."
-                                        )
-                                    }
-                                },
-                                modifier = Modifier.weight(1.2f).height(50.dp),
-                                shape = RoundedCornerShape(12.dp)
-                            ) {
-                                Text(
-                                    "견적에 담기",
-                                    fontWeight = FontWeight.ExtraBold
-                                )
-                            }
-                        }
-                    }
+    if (showQuickQuoteDialog || uiState.editingRequest != null) {
+        ManualQuoteEditor(uiState.editingRequest, uiState.isSavingQuote, uiState.message,
+            onDismiss = { showQuickQuoteDialog = false; viewModel.dismissManualQuote() },
+            onSave = { lines, phone, recipient, prepaid, fee ->
+                viewModel.saveManualQuote(lines, phone, recipient, prepaid, fee) { saved ->
+                    showQuickQuoteDialog = false; viewModel.dismissManualQuote()
+                    selectedQuote = saved; showQuoteDetailDialog = true
                 }
-            }
-        }
+            })
     }
 
 }

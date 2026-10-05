@@ -139,7 +139,7 @@ internal fun QuoteCartDialog(
 internal fun TodayQuotesDialog(quotes: List<QuoteEntity>, onSelect: (QuoteEntity) -> Unit, onDismiss: () -> Unit, onDocuments: () -> Unit = {}) {
     NamuDialog("오늘 견적", "저장한 견적 ${quotes.size}건", onDismiss, actions = { OutlinedButton(onClick = onDocuments, modifier = Modifier.fillMaxWidth()) { Text("발행 견적서 보관함") } }) {
         LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            if (quotes.isEmpty()) item { NamuEmptyState("오늘 저장한 견적이 없어요", "재고를 담거나 빠른 견적으로 첫 견적을 작성해보세요.", Icons.Outlined.Description) }
+            if (quotes.isEmpty()) item { NamuEmptyState("오늘 발송한 견적이 없어요", "온라인 요청이나 빠른 견적에서 작성한 뒤 발송 완료를 기록해주세요.", Icons.Outlined.Description) }
             items(quotes, key = { it.quoteNumber }) { quote ->
                 HistoryCard(quote.customerPhone, quote.saveDate, quote.itemSummary, quote.totalPrice, "견적", false, { onSelect(quote) })
             }
@@ -190,21 +190,24 @@ private fun HistoryCard(phone: String, date: String, summary: String, amount: In
 }
 
 @Composable
-internal fun QuoteDetailsDialog(quote: QuoteEntity, confirming: Boolean, snackbar: SnackbarHostState, onSms: () -> Unit, onConfirm: () -> Unit, onDelete: () -> Unit, onDismiss: () -> Unit, onDocument: () -> Unit = {}) {
+internal fun QuoteDetailsDialog(quote: QuoteEntity, confirming: Boolean, snackbar: SnackbarHostState, onSms: () -> Unit, onConfirm: () -> Unit, onDelete: () -> Unit, onDismiss: () -> Unit, onDocument: () -> Unit = {}, sentAction: @Composable () -> Unit = {}, ordered: Boolean = false, onOrder: () -> Unit = {}) {
     var confirm by remember { mutableStateOf(false) }
     if (confirm) AlertDialog(
         onDismissRequest = { confirm = false },
-        title = { Text("고객이 구매를 결정하셨나요?") },
-        text = { Text("${money(quote.totalPrice.toLong())} 견적을 구매 확정으로 저장합니다. 실제 입금은 다음 단계에서 확인합니다. 재고 품목은 수량이 차감되고 수기 품목은 실제 재고에 영향을 주지 않습니다.") },
-        confirmButton = { Button(onClick = { confirm = false; onConfirm() }) { Text("주문 확정") } },
+        title = { Text("실제 입금을 확인하셨나요?") },
+        text = { Text("입금 내역과 최종 견적 금액을 확인한 뒤 등록해주세요. 입금 확인 시 오늘 주문이 증가하고 발송한 견적 기록은 유지됩니다.") },
+        confirmButton = { Button(onClick = { confirm = false; onConfirm() }) { Text("입금 완료 · 주문 등록") } },
         dismissButton = { TextButton(onClick = { confirm = false }) { Text("다시 확인") } }
     )
     NamuDialog("견적 상세", quote.saveDate, onDismiss, snackbar, actions = {
-        Button(onClick = { confirm = true }, enabled = !confirming, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) { Text(if (confirming) "주문 확정 중…" else "고객 구매 확정") }
+        if (ordered) Button(onClick = onOrder, modifier = Modifier.fillMaxWidth()) { Text("등록한 주문 보기") }
+        else Button(onClick = { confirm = true }, enabled = !confirming, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) { Text(if (confirming) "입금 처리 중…" else "입금 완료 · 주문 등록") }
+        sentAction()
+
         OutlinedButton(onClick = onDocument, enabled = !confirming, modifier = Modifier.fillMaxWidth()) { Text("공식 견적서 · PDF / 이미지") }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             TextButton(onClick = onSms, enabled = !confirming) { Text("견적 문자 보내기") }
-            TextButton(onClick = onDelete, enabled = !confirming, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) { Text("견적 삭제") }
+            TextButton(onClick = onDelete, enabled = !confirming && !ordered && quote.sentAt == 0L, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) { Text("견적 삭제") }
         }
     }) {
         CommerceDetailBody(quote.customerPhone, "", quote.quoteNumber, quote.itemSummary, quote.totalQty, quote.totalPrice, quote.isPrepaid, quote.shippingFee)

@@ -43,7 +43,7 @@ object WebQuoteTransport {
     val configured: Boolean get() = Regex("https://script\\.google\\.com/macros/s/[A-Za-z0-9_-]+/exec").matches(BuildConfig.WEB_REQUEST_SCRIPT_URL)
     val api: WebQuoteApi by lazy {
         Retrofit.Builder().baseUrl("https://script.google.com/")
-            .client(OkHttpClient.Builder().retryOnConnectionFailure(false).connectTimeout(15, TimeUnit.SECONDS).readTimeout(35, TimeUnit.SECONDS).build())
+            .client(OkHttpClient.Builder().retryOnConnectionFailure(false).connectTimeout(15, TimeUnit.SECONDS).readTimeout(75, TimeUnit.SECONDS).callTimeout(100, TimeUnit.SECONDS).build())
             .addConverterFactory(GsonConverterFactory.create()).build().create(WebQuoteApi::class.java)
     }
 }

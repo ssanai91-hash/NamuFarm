@@ -19,7 +19,7 @@ import kotlinx.coroutines.sync.Mutex
         WebQuoteRequestEntity::class,
         QuoteContactEntity::class, QuoteDocumentEntity::class, PrivacySyncEntity::class
     ],
-    version = 15, // 요청 연락처와 변경 없는 발행 견적서 기록
+    version = 16, // 발송 확인 시각을 저장하고 입금 후에도 견적 원본 유지
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -651,11 +651,16 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_15_16 = object : Migration(15, 16) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE quote_list ADD COLUMN sent_at INTEGER NOT NULL DEFAULT 0")
+            }
+        }
         internal val ALL_MIGRATIONS = arrayOf(
             MIGRATION_1_7, MIGRATION_2_7, MIGRATION_3_7,
             MIGRATION_4_7, MIGRATION_5_7, MIGRATION_6_7,
             MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10,
-            MIGRATION_10_12, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15
+            MIGRATION_10_12, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16
         )
 
         fun getDatabase(context: Context): AppDatabase {

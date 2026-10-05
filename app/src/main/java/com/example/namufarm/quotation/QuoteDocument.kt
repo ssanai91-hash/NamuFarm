@@ -36,8 +36,8 @@ data class QuoteRecipient(
 }
 
 data class QuoteIssuer(
-    val businessName: String = "나무팜", val businessNumber: String = "", val representative: String = "",
-    val address: String = "", val phone: String = "", val businessType: String = "", val category: String = ""
+    val businessName: String = "나무팜농원", val businessNumber: String = "213-94-24363", val representative: String = "오진웅",
+    val address: String = "충북 옥천군 동이면 금강로 185", val phone: String = "043-732-0980", val businessType: String = "", val category: String = ""
 ) {
     fun checked() = copy(
         businessName = cleanText(businessName, 50, true), businessNumber = cleanText(businessNumber, 20, true),

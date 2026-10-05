@@ -97,7 +97,10 @@ class MainActivity : ComponentActivity() {
                             viewModel = viewModel,
                             onNavigateToManagement = { navController.navigate("management") },
                             onCallAssist = { showCallAssist = true },
-                            onWebInbox = { showWebInbox = true },
+                            onWebInbox = { if (webState.paired && webState.securityReady) webInbox.refresh() else showWebInbox = true },
+                            onWebSettings = { showWebInbox = true },
+                            webRequests = webState.requests, webBusy = webState.busy,
+                            onRequest = { request -> webRequestId = request.requestId; webInbox.read(request.requestId) },
                             webUnread = webState.unread
                         )
                     }
@@ -108,6 +111,12 @@ class MainActivity : ComponentActivity() {
                         )
                     }
                 }
+                LaunchedEffect(webState.message, showWebInbox, webRequestId) {
+                    if (!showWebInbox && webRequestId == null) webState.message?.let {
+                        viewModel.showMessage(it); webInbox.clearMessage()
+                    }
+                }
+                LaunchedEffect(webState.busy) { if (!webState.busy) viewModel.loadTodayData() }
                 if (showWebInbox || webRequestId != null) {
                     WebQuoteInboxDialog(webState, webRequestId, uiState.customerPhone, uiState.estimateCart.size,
                         onRefresh = webInbox::refresh, onPair = webInbox::pair, onRead = webInbox::read,
@@ -116,7 +125,7 @@ class MainActivity : ComponentActivity() {
                             if (uiState.isSavingQuote) webInbox.showMessage("견적 저장이 끝난 뒤 고객 번호를 적용해주세요.")
                             else {
                                 viewModel.useWebRequestForQuote(request)
-                                viewModel.showMessage("고객 정보를 적용했어요. 재고와 규격을 확인하고 품목을 담아주세요.")
+                                viewModel.showMessage("희망 묘목을 불러왔어요. 규격과 판매 단가를 입력해주세요.")
                                 showWebInbox = false; webRequestId = null
                             }
                         }, onMessageConsumed = webInbox::clearMessage,

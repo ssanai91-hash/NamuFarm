@@ -47,6 +47,9 @@ data class ManagementUiState(
     val quoteRecipient: com.example.namufarm.quotation.QuoteRecipient = com.example.namufarm.quotation.QuoteRecipient(),
     val quoteDocuments: List<QuoteDocumentEntity> = emptyList(),
     val recentCallList: List<CallLogItem> = emptyList(),
+    val allQuotes: List<QuoteEntity> = emptyList(),
+    val quotesByRequest: Map<String, QuoteEntity> = emptyMap(),
+    val editingRequest: WebQuoteRequestEntity? = null,
     val todayQuotes: List<QuoteEntity> = emptyList(),
     val todayOrders: List<OrderEntity> = emptyList(),
     val allOrders: List<OrderEntity> = emptyList(),
@@ -104,29 +107,6 @@ class ManagementViewModel(
             var farms = repository.getAllFarms()
             var allInventory = repository.getAllSellingInventory()
 
-            if (farms.isEmpty() || allSpecies.isEmpty()) {
-                _uiState.update {
-                    it.copy(message = "🔄 최초 실행: 전체 농원/묘목 마스터 데이터 가져오는 중...")
-                }
-
-                val farmSyncCount = repository.syncFarmMaster()
-                val speciesSyncCount = repository.syncSpeciesMaster()
-
-                allSpecies = repository.getAllSpecies()
-                farms = repository.getAllFarms()
-                allInventory = repository.getAllSellingInventory()
-
-                _uiState.update {
-                    it.copy(
-                        message = if (farmSyncCount < 0 || speciesSyncCount < 0) {
-                            "⚠️ 최초 마스터 동기화 일부 실패. 네트워크 확인 후 다시 동기화하세요."
-                        } else {
-                            "✅ 마스터 데이터 초기 세팅 완료!"
-                        }
-                    )
-                }
-            }
-
             val firstChosung = findFirstAvailableSellingChosung(allInventory)
 
             _uiState.update {
@@ -150,8 +130,8 @@ class ManagementViewModel(
         val farms = repository.getAllFarms()
         val allSpecies = repository.getAllSpecies()
         val allInventory = repository.getAllSellingInventory()
-        val quotes = repository.getQuotesForDate(todayDatePrefix())
-        val orders = repository.getOrdersForDate(todayDatePrefix())
+        val quotes = repository.sentQuotesForDate(todayDatePrefix())
+        val orders = repository.paidOrdersForDate(todayDatePrefix())
 
         _uiState.update { current ->
             val activeChosung = if (
@@ -173,7 +153,7 @@ class ManagementViewModel(
                 filteredSellingInventory = allInventory.filter {
                     checkChosung(it.speciesName, it.chosung, activeChosung)
                 },
-                todayQuotes = quotes,
+                allQuotes = repository.getAllQuotes(), quotesByRequest = repository.quotesByRequest(), todayQuotes = quotes,
                 todayOrders = orders, allOrders=repository.getAllOrders(),
                 selectedFarm = farms.find { it.farmId == current.selectedFarm?.farmId },
                 selectedSpecies = allSpecies.find { it.speciesId == current.selectedSpecies?.speciesId }
@@ -405,7 +385,37 @@ class ManagementViewModel(
         if (!_uiState.value.isSavingQuote) _uiState.update { it.copy(quoteRecipient = recipient) }
     }
     fun useWebRequestForQuote(request: WebQuoteRequestEntity) {
-        if (!_uiState.value.isSavingQuote) _uiState.update { it.copy(customerPhone = request.customerPhone, quoteRecipient = com.example.namufarm.quotation.QuoteRecipient.from(request)) }
+        if (!_uiState.value.isSavingQuote) _uiState.update { it.copy(editingRequest = request, customerPhone = request.customerPhone, quoteRecipient = com.example.namufarm.quotation.QuoteRecipient.from(request)) }
+    }
+    fun dismissManualQuote() { _uiState.update { it.copy(editingRequest = null) } }
+    suspend fun markQuoteSent(number: String) = withContext(Dispatchers.IO) {
+        val quote = repository.markQuoteSent(number)
+        refreshLocalState()
+        quote
+    }
+    fun saveManualQuote(lines: List<OrderLine>, phone: String, recipient: com.example.namufarm.quotation.QuoteRecipient,
+                        prepaid: Boolean, fee: Int, onSaved: (QuoteEntity) -> Unit) {
+        if (!quoteSaveInProgress.compareAndSet(false, true)) return
+        _uiState.update { it.copy(isSavingQuote = true) }
+        launchOperation {
+            try {
+                require(Regex("0[0-9]{8,10}").matches(phone.replace(Regex("[\\s()-]"), ""))) { "고객 전화번호를 확인해주세요." }
+                require(lines.isNotEmpty() && lines.all { it.source == OrderLineSource.MANUAL })
+                val summary = OrderSummaryCodec.encode(lines)
+                val amounts = OrderAmounts.calculate(lines, prepaid, fee)
+                val date = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.KOREA).apply { timeZone = java.util.TimeZone.getTimeZone("Asia/Seoul") }.format(java.util.Date())
+                val number = "QUOTE_${UUID.randomUUID()}"
+                val quote = QuoteEntity(quoteNumber = number, saveDate = date, customerPhone = phone.replace(Regex("[\\s()-]"), ""),
+                    totalQty = amounts.quantity, totalPrice = amounts.price, itemSummary = summary, isPrepaid = prepaid, shippingFee = fee)
+                repository.insertQuoteWithContact(quote, recipient.checked())
+                refreshLocalState()
+                val saved = repository.getSavedQuote(number) ?: error("저장한 견적을 확인해주세요.")
+                withContext(Dispatchers.Main) { onSaved(saved) }
+            } finally {
+                quoteSaveInProgress.set(false)
+                _uiState.update { it.copy(isSavingQuote = false) }
+            }
+        }
     }
     suspend fun savedQuote(number: String) = withContext(Dispatchers.IO) { repository.getSavedQuote(number) }
     suspend fun quoteRecipient(number: String) = withContext(Dispatchers.IO) { repository.getQuoteRecipient(number) }
@@ -546,7 +556,7 @@ class ManagementViewModel(
                     shippingFee = quote.shippingFee
                 )
 
-                val result = repository.confirmOrder(quote, newOrder)
+                val result = repository.confirmOrder(quote, newOrder, paid = true)
 
                 refreshLocalState()
 
@@ -578,9 +588,9 @@ class ManagementViewModel(
 
     fun loadTodayData() {
         launchOperation {
-            val quotes = repository.getQuotesForDate(todayDatePrefix())
-            val orders = repository.getOrdersForDate(todayDatePrefix())
-            _uiState.update { it.copy(todayQuotes = quotes, todayOrders = orders, quoteDocuments = repository.getQuoteDocuments(),allOrders=repository.getAllOrders()) }
+            val quotes = repository.sentQuotesForDate(todayDatePrefix())
+            val orders = repository.paidOrdersForDate(todayDatePrefix())
+            _uiState.update { it.copy(allQuotes = repository.getAllQuotes(), quotesByRequest = repository.quotesByRequest(), todayQuotes = quotes, todayOrders = orders, quoteDocuments = repository.getQuoteDocuments(),allOrders=repository.getAllOrders()) }
         }
     }
 
@@ -792,34 +802,12 @@ class ManagementViewModel(
         launchOperation {
             _uiState.update { it.copy(message = "🔄 미동기화 항목 재전송 중...") }
 
-            val result = repository.syncAll()
+            val result = repository.syncCommerce()
             refreshLocalState()
+            _uiState.update { it.copy(message = if (result.pendingFailureCount > 0)
+                "주문은 로컬에 저장되었습니다 · 서버 전송 대기: ${result.errorMessage.orEmpty()}"
+                else "주문 동기화 완료 · ${result.orderSyncCount ?: 0}건") }
 
-            if (result.pendingFailureCount > 0) {
-                _uiState.update {
-                    it.copy(
-                        message = "⚠️ Pull 중단: ${result.errorMessage ?: "미동기화 항목을 다시 전송해주세요."}"
-                    )
-                }
-                return@launchOperation
-            }
-
-            val inventoryResult = result.inventoryResult
-            val orderCount = result.orderSyncCount ?: -1
-
-            _uiState.update {
-                it.copy(
-                    message = if (
-                        inventoryResult == null ||
-                        inventoryResult.errorMessage != null ||
-                        orderCount < 0
-                    ) {
-                        "⚠️ 재고/주문 동기화 실패: ${inventoryResult?.errorMessage ?: "기존 데이터를 보존했습니다."}"
-                    } else {
-                        "✅ 동기화 완료 (재전송 ${result.resentSuccess}건, 재고 ${inventoryResult.upserted}건, 주문 ${orderCount}건)"
-                    }
-                )
-            }
         }
     }
 

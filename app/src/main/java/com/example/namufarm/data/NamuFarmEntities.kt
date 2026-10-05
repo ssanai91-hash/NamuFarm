@@ -108,7 +108,8 @@ data class QuoteEntity(
     @ColumnInfo(name = "customer_phone") val customerPhone: String,
     @ColumnInfo(name = "total_qty") val totalQty: Int,
     @ColumnInfo(name = "total_price") val totalPrice: Int,
-    @ColumnInfo(name = "item_summary") val itemSummary: String
+    @ColumnInfo(name = "item_summary") val itemSummary: String,
+    @ColumnInfo(name = "sent_at", defaultValue = "0") val sentAt: Long = 0
 )
 
 // 7. 🚨 주문서 저장 테이블 (배송정보 및 상태 필드 추가!)

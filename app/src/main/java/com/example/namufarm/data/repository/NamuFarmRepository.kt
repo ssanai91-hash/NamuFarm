@@ -95,6 +95,21 @@ class NamuFarmRepository(
     private val gson = Gson()
     private val sales get() = syncManager.salesGateway
     fun getAllOrders() = local.getAllOrders()
+    fun getAllQuotes() = local.getAllQuotes()
+    fun quotesByRequest(): Map<String, QuoteEntity> = local.getAllQuoteContacts().mapNotNull { contact ->
+        val id = gson.fromJson(contact.recipientJson, com.example.namufarm.quotation.QuoteRecipient::class.java).sourceRequestId
+        val quote = local.getQuoteByNumber(contact.quoteNumber)
+        if (id.isNullOrBlank() || quote == null) null else id to quote
+    }.toMap()
+    private fun onDay(time: Long, date: String) = time > 0 && java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.KOREA).apply {
+        timeZone = java.util.TimeZone.getTimeZone("Asia/Seoul")
+    }.format(java.util.Date(time)) == date
+    fun sentQuotesForDate(date: String) = local.getAllQuotes().filter { onDay(it.sentAt, date) }
+    fun paidOrdersForDate(date: String) = local.getAllOrders().filter { onDay(it.paidAt, date) }
+    suspend fun markQuoteSent(number: String): QuoteEntity = local.transaction {
+        val quote = getQuoteByNumber(number) ?: error("견적을 찾을 수 없습니다.")
+        if (quote.sentAt > 0) quote else quote.copy(sentAt = System.currentTimeMillis()).also { replaceQuote(it) }
+    }
     fun getOrder(number: String) = local.getOrderByNumber(number)
     suspend fun initializePrivacy() = local.protectLegacyCustomerCopies()
     suspend fun cleanupPrivacy() = local.cleanupPrivacy()
@@ -340,12 +355,13 @@ class NamuFarmRepository(
         return flushThrough(pendingId)
     }
 
-    suspend fun confirmOrder(quote: QuoteEntity, newOrder: OrderEntity): CloudWriteResult {
+    suspend fun confirmOrder(quote: QuoteEntity, newOrder: OrderEntity, paid: Boolean = false): CloudWriteResult {
         val pendingId = local.transaction {
             requireNoLegacyCommerce()
             val stored = getQuoteById(quote.quoteId ?: error("저장된 견적이 아닙니다."))
                 ?: error("이미 주문으로 확정되었거나 삭제된 견적입니다.")
             require(stored == quote) { "견적이 변경되었습니다. 다시 열어주세요." }
+            check(getAllOrders().none { it.sourceQuoteNumber == stored.quoteNumber }) { "이미 주문으로 등록한 견적입니다. 주문 내역을 확인해주세요." }
             require(newOrder.orderId == null && newOrder.orderNumber.isNotBlank()) {
                 "새 주문번호가 필요합니다."
             }
@@ -358,6 +374,9 @@ class NamuFarmRepository(
             // Stored quote is the authority for both local deduction and the wire payload.
             val contact = getQuoteContact(stored.quoteNumber)?.let { gson.fromJson(it.recipientJson, com.example.namufarm.quotation.QuoteRecipient::class.java) }
             val doc = getQuoteDocument(stored.quoteNumber)?.snapshotJson
+            check(contact?.sourceRequestId.isNullOrBlank() || getAllOrders().none {
+                it.sourceRequestId == contact?.sourceRequestId && it.status != OrderStatus.CANCELED
+            }) { "이 접수번호는 이미 주문 처리되었습니다." }
             val tax = doc?.let { gson.fromJson(it, com.example.namufarm.quotation.QuoteDocument::class.java).taxAmount } ?: 0
             val now = System.currentTimeMillis()
             val order = newOrder.copy(
@@ -372,11 +391,14 @@ class NamuFarmRepository(
                 costConfirmed=false,taxAmount=tax
             )
             insertOrder(order)
-            deleteQuote(stored)
-            if(sales!=null && order.sourceRequestId.isNotEmpty()) purgeRequestCopies(order.sourceRequestId)
             deductInventoryStrict(stored.itemSummary)
             if(sales != null) {
                 var last = enqueueSale(order, doc)
+                if (paid) {
+                    val confirmed = order.copy(status = OrderStatus.CONFIRMED, revision = 2, paidAt = now)
+                    upsertOrder(confirmed)
+                    last = enqueueSale(confirmed, doc)
+                }
                 lines.filter { it.isInventoryBacked }.forEach { line ->
                     val farm=checkNotNull(getFarmByName(line.farmName)); val plant=checkNotNull(getSpeciesByName(line.speciesName))
                     val entity=getInventoryEntity(farm.farmId!!,plant.speciesId!!,line.quality,line.age,line.size,line.plantType)
@@ -594,8 +616,8 @@ class NamuFarmRepository(
         return flushThrough(id)
     }
     suspend fun salesReport(granularity: String, from: String, to: String) = local.serializedSync {
-        val drained=drainPending(); check(drained.error==null) { drained.error ?: "전송 대기 중입니다." }
-        local.requireNoPending()
+        val drained=drainPending(salesOnly = true); check(drained.error==null) { drained.error ?: "전송 대기 중입니다." }
+        check(local.getAllPendingSync().none { it.syncType == PendingSyncType.SALE }) { "주문 전송 대기 중입니다." }
         checkNotNull(sales) { "보안 판매 연결을 먼저 설정해주세요." }.report(granularity,from,to)
     }
 
@@ -603,9 +625,9 @@ class NamuFarmRepository(
 
     // Called only while holding the database's shared network mutex. New local writes
     // can commit immediately; each invocation processes a bounded snapshot of the queue.
-    private suspend fun drainPending(throughId: Int = Int.MAX_VALUE): DrainResult {
+    private suspend fun drainPending(throughId: Int = Int.MAX_VALUE, salesOnly: Boolean = false): DrainResult {
         var sent = 0
-        for (pending in local.getAllPendingSync().filter { checkNotNull(it.syncId) <= throughId }) {
+        for (pending in local.getAllPendingSync().filter { checkNotNull(it.syncId) <= throughId && (!salesOnly || it.syncType == PendingSyncType.SALE) }) {
             val id = checkNotNull(pending.syncId)
             val result = syncManager.processPendingSync(pending)
             if (!result.success) {
@@ -621,7 +643,7 @@ class NamuFarmRepository(
 
     private suspend fun flushThrough(pendingId: Int): CloudWriteResult = local.serializedSync {
         try {
-            val result = drainPending(pendingId)
+            val result = drainPending(pendingId, local.getPendingSyncById(pendingId)?.syncType == PendingSyncType.SALE)
             CloudWriteResult(local.getPendingSyncById(pendingId) == null, result.error)
         } catch (e: CancellationException) {
             throw e
@@ -634,19 +656,14 @@ class NamuFarmRepository(
     fun getWebRequests() = local.getWebRequests()
     suspend fun markWebRequestRead(id: String) = local.transaction { markWebRequestRead(id, System.currentTimeMillis()) }
 
-    /** The same pending-first gate applies to inbound requests. No stock/cart mutation. */
+    /** Immutable enquiries are independent of the legacy inventory outbox. Commit rows and cursor together. */
     suspend fun syncWebRequests(api: WebQuoteApi, url: String, deviceToken: String, decrypt: ((com.example.namufarm.data.remote.WebQuoteRemote) -> com.example.namufarm.data.remote.WebQuoteRemote)? = null): Int = local.serializedSync {
-        val drained = drainPending()
-        check(drained.error == null) { drained.error ?: "로컬 변경 전송을 먼저 완료해주세요." }
-        local.requireNoPending()
         var imported = 0
         repeat(20) {
-            local.requireNoPending()
             val cursor = local.webRequestCursor()
             val response = api.request(url, mapOf("action" to "list_requests", "deviceToken" to deviceToken, "afterSequence" to cursor))
             val page = WebQuoteValidator.checkedPage(response, cursor, decrypt)
             local.transaction {
-                requireNoPending()
                 insertWebRequests(page.rows)
                 page.expiredIds.forEach { purgeRequestCopies(it) }
                 advanceWebCursor(page.cursor)
@@ -668,6 +685,13 @@ class NamuFarmRepository(
         }
         val snapshot = syncManager.syncSnapshot()
         GeneralSyncResult(drained.sent, 0, snapshot.inventoryResult, snapshot.orderCount)
+    }
+
+    suspend fun syncCommerce(): GeneralSyncResult = local.serializedSync {
+        val drained = drainPending(salesOnly = true)
+        val remaining = local.getAllPendingSync().count { it.syncType == PendingSyncType.SALE }
+        if (drained.error != null || remaining > 0) GeneralSyncResult(drained.sent, remaining.coerceAtLeast(1), errorMessage = drained.error)
+        else GeneralSyncResult(drained.sent, 0, orderSyncCount = syncManager.syncSecureOrders())
     }
 
     suspend fun syncFarmMaster(): Int = local.serializedSync {

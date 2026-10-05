@@ -55,8 +55,8 @@ internal fun WebQuoteInboxDialog(
     if(closeConfirm && selected!=null) AlertDialog(onDismissRequest={closeConfirm=false},title={Text("상담을 종료할까요?")},text={Text("구매하지 않은 고객 문의와 연결된 견적 사본을 삭제합니다. 실제 구매 기록은 따로 보관합니다.")},
         confirmButton={TextButton(onClick={closeConfirm=false;onClose(selected.requestId);selectedId=null}) {Text("상담 종료 · 삭제")}},dismissButton={TextButton(onClick={closeConfirm=false}) {Text("돌아가기")}})
     NamuDialog(
-        title = if (selected == null) "홈페이지 요청함" else "견적 요청 상세",
-        subtitle = "고객 문의 · 주문 확정 전 재고 변동 없음",
+        title = if (selected == null) "온라인 견적 요청함" else "견적 요청 상세",
+        subtitle = "고객 요청 → 수동 견적 → 발송 → 입금 확인",
         onDismiss = onDismiss, snackbarHostState = snackbar,
         actions = {
             if (selected != null) {
@@ -155,7 +155,7 @@ internal fun WebRequestDetail(request: WebQuoteRequestEntity) {
             }
         }
         if (request.message.isNotBlank()) { NamuSectionTitle("고객 요청사항"); Text(request.message) }
-        Text("재고와 규격을 확인한 뒤 판매 품목을 선택해 견적을 작성해주세요. 홈페이지 문의는 실제 재고나 수기 견적 품목으로 자동 등록되지 않습니다.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("희망 묘목과 연락처를 불러와 수동 견적을 작성합니다. 판매자가 규격·수량·단가를 확정해주세요.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text("접수번호 ${request.requestId}\n${request.createdAt}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
@@ -168,13 +168,13 @@ internal fun WebRequestCustomerActions(request: WebQuoteRequestEntity, customerP
     Button(onClick = {
         if (customerPhone != request.customerPhone && (customerPhone.isNotBlank() || cartItemCount > 0)) confirm = true
         else onUsePhone(request.customerPhone)
-    }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Outlined.Description, null); Spacer(Modifier.width(8.dp)); Text("이 고객 번호로 견적 작성") }
+    }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Outlined.Description, null); Spacer(Modifier.width(8.dp)); Text("수동 견적 작성") }
     OutlinedButton(onClick = {
         smsError = openSmsComposer(context, request.customerPhone, "[나무팜] ${request.customerName}님, 묘목 견적 문의를 확인했습니다. 요청하신 품목과 규격을 확인한 후 안내드리겠습니다.")
     }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Outlined.Sms, null); Spacer(Modifier.width(8.dp)); Text("접수 안내 문자 작성") }
     smsError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
     if (confirm) AlertDialog(onDismissRequest = { confirm = false }, title = { Text("견적 고객 번호를 변경할까요?") },
-        text = { Text("작성 중인 견적의 번호를 ${request.customerPhone}(으)로 변경합니다. 담긴 품목 ${cartItemCount}개는 유지됩니다.") },
+        text = { Text("작성 중인 견적의 번호를 ${request.customerPhone}(으)로 변경합니다. 희망 묘목으로 새 수동 견적을 작성합니다.") },
         confirmButton = { TextButton(onClick = { confirm = false; onUsePhone(request.customerPhone) }) { Text("번호 변경") } },
         dismissButton = { TextButton(onClick = { confirm = false }) { Text("돌아가기") } })
 }

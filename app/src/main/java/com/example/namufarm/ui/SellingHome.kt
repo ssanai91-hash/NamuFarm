@@ -37,15 +37,13 @@ internal fun SellingHome(
     onAddToCart: (SellingDisplayRow, Int) -> Unit,
     onCallAssist: () -> Unit = {},
     onWebInbox: () -> Unit = {},
-    webUnread: Int = 0
+    webUnread: Int = 0,
+    webRequests: List<com.example.namufarm.data.WebQuoteRequestEntity> = emptyList(),
+    webBusy: Boolean = false,
+    onRequest: (com.example.namufarm.data.WebQuoteRequestEntity) -> Unit = {},
+    onSavedQuote: (com.example.namufarm.data.QuoteEntity) -> Unit = {}
 ) {
-    var query by rememberSaveable { mutableStateOf("") }
-    var initial by rememberSaveable { mutableStateOf("전체") }
-    val inventory = remember(state.allSellingInventory, query, initial) {
-        filterSellingInventory(state.allSellingInventory, query, initial)
-    }
     val listState = rememberLazyListState()
-    LaunchedEffect(query, initial) { listState.scrollToItem(0) }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -68,11 +66,11 @@ internal fun SellingHome(
                 ),
                 actions = {
                     IconButton(onClick = onCallAssist) { Icon(Icons.Outlined.PhoneInTalk, "전화 고객 연결") }
-                    IconButton(onClick = onSync) { Icon(Icons.Outlined.CloudSync, "재고·주문 동기화") }
+                    IconButton(onClick = onSync) { Icon(Icons.Outlined.CloudSync, "요청·주문 동기화") }
                     TextButton(onClick = onManage, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onPrimary)) {
                         Icon(Icons.Outlined.Tune, null, Modifier.size(18.dp))
                         Spacer(Modifier.width(6.dp))
-                        Text("관리")
+                        Text("연결 설정")
                     }
                 }
             )
@@ -111,55 +109,31 @@ internal fun SellingHome(
                 }
             }
             item(key = "web-inbox") {
-                OutlinedButton(onClick = onWebInbox, modifier = Modifier.fillMaxWidth()) {
-                    Icon(Icons.Outlined.MarkEmailUnread, null)
-                    Spacer(Modifier.width(8.dp))
-                    Text(if (webUnread > 0) "홈페이지 요청함 · 안 읽음 ${webUnread}건" else "홈페이지 요청함")
-                }
+                HomeAction("온라인 견적 요청함", if (webBusy) "가져오는 중…" else "${webRequests.size}건 · 눌러서 동기화", Icons.Outlined.MarkEmailUnread, Modifier.fillMaxWidth(), onWebInbox)
             }
-            item(key = "search") {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    NamuSectionTitle("판매 재고", "묘목을 선택해 견적에 담아보세요")
-                    OutlinedTextField(
-                        value = query,
-                        onValueChange = { query = it; initial = "전체" },
-                        modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text("묘목명 또는 농원명 검색") },
-                        leadingIcon = { Icon(Icons.Outlined.Search, null) },
-                        trailingIcon = {
-                            if (query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(Icons.Outlined.Close, "검색어 지우기") }
-                        },
-                        singleLine = true,
-                        shape = MaterialTheme.shapes.large,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                            focusedContainerColor = MaterialTheme.colorScheme.surface,
-                            unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant
-                        )
-                    )
-                    ChosungPicker(initial, { initial = it }, includeAll = true) { chosung ->
-                        state.allSellingInventory.any { isSellingItemInChosung(it.speciesName, it.chosung, chosung) }
+            if (webBusy) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
+            if (webRequests.isEmpty()) item { NamuEmptyState("온라인 견적 요청을 기다리고 있어요", "위 버튼을 누르면 구글시트에 접수된 요청을 가져옵니다.") }
+            items(webRequests, key = { "request-${it.requestId}" }) { request ->
+                val quote = state.quotesByRequest[request.requestId]
+                val order = state.allOrders.firstOrNull { it.sourceRequestId == request.requestId }
+                OutlinedCard(onClick = { if (quote != null) onSavedQuote(quote) else onRequest(request) }, modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("접수번호 ${request.requestId}", style = MaterialTheme.typography.labelMedium)
+                        Text("${request.customerName} · ${request.customerPhone}", fontWeight = FontWeight.Bold)
+                        val rows = remember(request.itemsJson) { com.google.gson.Gson().fromJson(request.itemsJson, Array<com.example.namufarm.data.WebQuoteItem>::class.java).toList() }
+                        rows.forEach { Text("${it.species} · ${it.specification} · ${it.quantity}주") }
+                        Text(when { (order?.paidAt ?: 0) > 0 -> "입금 완료 · ${order?.status}"; (quote?.sentAt ?: 0) > 0 -> "견적 발송 완료"; quote != null -> "견적 작성 중 · 이어서 열기"; else -> "새 요청 · 수동 견적 작성" }, color = MaterialTheme.colorScheme.primary)
                     }
-                    Text(
-                        "${inventory.map { it.speciesId }.distinct().size}종 · ${inventory.size}개 재고",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
                 }
             }
-            if (inventory.isEmpty()) {
-                item(key = "empty") {
-                    NamuEmptyState(
-                        if (query.isNotBlank()) "검색 결과가 없어요" else "판매 가능한 재고가 없어요",
-                        if (query.isNotBlank()) "묘목명이나 농원명을 다시 확인해주세요." else "다른 초성을 선택하거나 관리에서 재고를 등록해주세요."
-                    )
+            item { NamuSectionTitle("저장한 견적", "발송 확인 후 오늘 견적에 집계됩니다") }
+            items(state.allQuotes.filter { q -> state.quotesByRequest.values.none { it.quoteNumber == q.quoteNumber } || webRequests.none { it.requestId == state.quotesByRequest.entries.find { e -> e.value.quoteNumber == q.quoteNumber }?.key } }, key = { "quote-${it.quoteNumber}" }) { quote ->
+                OutlinedCard(onClick = { onSavedQuote(quote) }, modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(16.dp)) {
+                        Text(quote.customerPhone, fontWeight = FontWeight.Bold)
+                        Text("${quote.totalQty}주 · ${money(quote.totalPrice.toLong())} · ${if (quote.sentAt > 0) "발송 완료" else "작성 중"}")
+                    }
                 }
-            }
-            items(inventory, key = { sellingRowKey(it) }) { item ->
-                val inCart = state.estimateCart.filter {
-                    it.source == OrderLineSource.INVENTORY && sellingRowKey(it.item) == sellingRowKey(item)
-                }.sumOf { it.orderQuantity.toLong() }
-                SellingItemRow(item, (item.quantity.toLong() - inCart).coerceAtLeast(0).toInt()) { onAddToCart(item, it) }
             }
             item(key = "offline") {
                 Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {

@@ -143,6 +143,16 @@ class Manager:
                         "문의 삭제 응답을 확인하지 못했습니다. 전송 대기를 유지합니다.")
             self.vault.acknowledge(operation["id"])
 
+    def sync_requests(self):
+        require(self.credentials.get("paired") is True, "PC를 먼저 연결해주세요.")
+        self.verify_server()
+        requests, cursor, deleted = self._pages("list_requests", "requests")
+        ids = {r["requestId"] for r in requests} | deleted
+        require(all(r["requestId"] in ids for r in self.vault.rows("requests")),
+                "서버 문의 목록 일부가 누락되어 기존 기록을 유지합니다.")
+        self.vault.replace_requests(requests, cursor, deleted)
+        return self.view()
+
     def sync(self):
         require(self.credentials.get("paired") is True, "PC를 먼저 연결해주세요.")
         self.verify_server()
