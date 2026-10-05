@@ -77,6 +77,7 @@ class CommerceMigrationTest {
         SQLiteDatabase.openDatabase(context.getDatabasePath(name).path,null,SQLiteDatabase.OPEN_READWRITE).use { raw ->stripV15(raw);raw.execSQL("DROP TABLE room_master_table");raw.version=14 }
         val migrated=Room.databaseBuilder(context,AppDatabase::class.java,name).addMigrations(*AppDatabase.ALL_MIGRATIONS).allowMainThreadQueries().build()
         try {val dao=migrated.managementDao();val order=dao.getOrderByNumber("O")!!;assertEquals("01012345678",order.customerPhone);assertEquals(0L,order.revision);assertFalse(order.costConfirmed);assertEquals(7L,dao.privacyCursor("web"));assertEquals(1,dao.getWebRequests().size)}finally {migrated.close();context.deleteDatabase(name)}
+    }
 
     private fun migrate(version: Int) {
         val context: Context = RuntimeEnvironment.getApplication()

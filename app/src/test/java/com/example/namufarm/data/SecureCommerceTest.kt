@@ -3,6 +3,7 @@ package com.example.namufarm.data
 import androidx.room.Room
 import com.example.namufarm.data.local.LocalDataSource
 import com.example.namufarm.data.remote.*
+import com.example.namufarm.data.remote.SheetInventoryDto
 import com.example.namufarm.data.repository.NamuFarmRepository
 import com.example.namufarm.privacy.*
 import com.example.namufarm.sales.*
