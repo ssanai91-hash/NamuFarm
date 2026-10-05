@@ -660,17 +660,33 @@ abstract class AppDatabase : RoomDatabase() {
 
         fun getDatabase(context: Context): AppDatabase {
             return instance ?: synchronized(this) {
-                instance ?: Room.databaseBuilder(
-                    context.applicationContext,
-                    AppDatabase::class.java,
-                    "NamuFarm.db"
-                )
-                    .addMigrations(*ALL_MIGRATIONS)
-                    .addCallback(object : RoomDatabase.Callback() {
-                        override fun onOpen(db: SupportSQLiteDatabase) { db.execSQL("PRAGMA secure_delete=ON") }
-                    })
-                    .build().also { instance = it }
+                instance ?: createDatabase(context).also { instance = it }
             }
         }
+
+        internal fun createDatabase(context: Context): AppDatabase = Room.databaseBuilder(
+            context.applicationContext,
+            AppDatabase::class.java,
+            "NamuFarm.db"
+        )
+            .addMigrations(*ALL_MIGRATIONS)
+            .addCallback(object : RoomDatabase.Callback() {
+                override fun onOpen(db: SupportSQLiteDatabase) {
+                    // This PRAGMA returns a row, so Android requires query(), not execSQL().
+                    // Pin the writable connection: WAL reads may use a separate connection.
+                    db.beginTransaction()
+                    try {
+                        db.query("PRAGMA secure_delete=ON").use { cursor ->
+                            check(cursor.moveToFirst() && cursor.getInt(0) == 1) {
+                                "고객정보 삭제 보호 설정을 적용하지 못했습니다."
+                            }
+                        }
+                        db.setTransactionSuccessful()
+                    } finally {
+                        db.endTransaction()
+                    }
+                }
+            })
+            .build()
     }
 }
