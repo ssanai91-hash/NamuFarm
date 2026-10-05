@@ -1,5 +1,5 @@
 import { quoteSchema } from "@/lib/quote-schema";
-import { jsonResult, quoteSettings } from "@/lib/quote-server";
+import { jsonResult, quoteSettings, quoteServiceReady } from "@/lib/quote-server";
 export async function POST(request: Request) {
   const settings = quoteSettings();
   if (!settings.ready) return jsonResult({ error: "온라인 접수를 준비하고 있습니다. 아직 요청이 전송되지 않았어요." }, 503);
@@ -22,6 +22,7 @@ export async function POST(request: Request) {
   } catch { return jsonResult({ error: "입력 내용을 확인해주세요." }, 400); }
   const parsed = quoteSchema.safeParse(input);
   if (!parsed.success) return jsonResult({ error: "품목, 수량과 연락처를 다시 확인해주세요." }, 400);
+  if (!(await quoteServiceReady(settings))) return jsonResult({ error: "온라인 접수를 준비하고 있습니다. 아직 요청이 전송되지 않았어요." }, 503);
   const ip = request.headers.get("cf-connecting-ip") ?? "preview";
   const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(settings.secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
   const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(ip));

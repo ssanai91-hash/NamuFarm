@@ -1,2 +1,2 @@
-import { jsonResult, quoteSettings } from "@/lib/quote-server";
-export function GET() { const settings = quoteSettings(); return jsonResult({ ready: settings.ready, privacyNotice: settings.privacy }); }
+import { jsonResult, quoteSettings, quoteServiceReady } from "@/lib/quote-server";
+export async function GET() { const settings = quoteSettings(); return jsonResult({ ready: await quoteServiceReady(settings), privacyNotice: settings.privacy }); }

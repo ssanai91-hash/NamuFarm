@@ -32,7 +32,7 @@ function doPost(e) {
     return json_({ ok: false, code: code });
   }
 }
-function doGet() { return json_({ ok: true, service: 'namufarm-quote-requests', version: 1 }); }
+function doGet() { return json_({ ok: true, service: 'namufarm-quote-requests', version: 2, processingBases: ['quote_request'] }); }
 function json_(value) { return ContentService.createTextOutput(JSON.stringify(value)).setMimeType(ContentService.MimeType.JSON); }
 function fail_(code) { const error = new Error(code); error.code = code; throw error; }
 function assert_(value, code) { if (!value) fail_(code || 'INVALID'); }
@@ -47,7 +47,10 @@ function token_() { return Utilities.getUuid().replace(/-/g, '') + Utilities.get
 function lock_(work) { const lock = LockService.getScriptLock(); if (!lock.tryLock(15000)) fail_('BUSY'); try { return work(); } finally { lock.releaseLock(); } }
 function text_(value, max, min) { assert_(typeof value === 'string' && value.trim().length >= (min || 0) && value.trim().length <= max && !/[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(value)); return value.trim(); }
 function validateRequest_(raw) {
-  assert_(raw && typeof raw === 'object' && raw.consent === true && raw.website === '');
+  assert_(raw && typeof raw === 'object' && raw.website === '');
+  const current = raw.processingBasis === 'quote_request' && !Object.prototype.hasOwnProperty.call(raw, 'consent');
+  const legacy = raw.processingBasis === undefined && raw.consent === true;
+  assert_(current || legacy);
   assert_(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(raw.requestId));
   const phone = text_(raw.customerPhone, 20, 9).replace(/[\s()-]/g, '');
   assert_(/^0\d{8,10}$/.test(phone));
@@ -56,7 +59,7 @@ function validateRequest_(raw) {
     region: text_(raw.region, 100, 2), items: raw.items.map(item => {
       assert_(item && Number.isSafeInteger(item.quantity) && item.quantity > 0 && item.quantity <= 1000000);
       return { species: text_(item.species, 80, 1), specification: text_(item.specification, 120), quantity: item.quantity };
-    }), message: text_(raw.message, 1000), consent: true };
+    }), message: text_(raw.message, 1000), ...(current ? { processingBasis: 'quote_request' } : { consent: true }) };
 }
 function sheet_() {
   const id = PropertiesService.getScriptProperties().getProperty('SPREADSHEET_ID');

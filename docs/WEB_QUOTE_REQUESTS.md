@@ -39,7 +39,7 @@
 3. Firebase Android 앱의 package name은 `com.example.namufarm`입니다. Firebase Cloud Messaging API v1을 활성화하고 Apps Script 실행 주체에 해당 프로젝트의 메시지 발송 권한을 부여합니다. 필요하면 Apps Script를 표준 Google Cloud 프로젝트에 연결합니다. 서비스 계정 개인키를 앱에 넣지 않습니다.
 4. Apps Script 편집기에서 `setupQuoteRequests()`를 실행하고 권한을 승인합니다. 함수는 빈 경우에만 헤더를 작성하고 재시도 트리거를 한 번 등록합니다. 기존 헤더가 다르면 중단합니다. 접수 원본·순번 열을 수동 변경하거나 행을 삭제하지 마세요. 원본은 추가형입니다.
 5. 웹 앱을 소유자로 실행하도록 배포합니다. 홈페이지 서버와 앱에서 호출할 수 있도록 접근 대상을 설정하되 모든 쓰기/읽기는 별도 비밀키/기기 토큰으로 인증됩니다. `/exec` URL을 사용합니다. 소스 변경 후에는 새 배포 버전을 반영해야 합니다.
-6. 홈페이지 비밀 설정: `QUOTE_SCRIPT_URL` = 위 `/exec`, `QUOTE_WEB_SECRET` = 같은 WEB_SECRET. `QUOTE_PRIVACY_NOTICE`에는 실제 운영자·연락 창구·수집 목적과 항목·보유기간·동의 거부 안내 등 운영자가 확정한 안내문을 넣습니다. 설정이 모두 있어야 실제 전송을 허용합니다. 자동으로 작성한 문구를 운영 정책으로 확정하지 않습니다.
+6. 홈페이지 비밀 설정: `QUOTE_SCRIPT_URL` = 위 `/exec`, `QUOTE_WEB_SECRET` = 같은 WEB_SECRET. `QUOTE_PRIVACY_NOTICE`에는 실제 운영자·연락 창구·견적 요청 처리의 법적 근거·목적과 항목·보유기간·파기 기준 등 운영자가 확정한 안내문을 넣습니다. 설정이 모두 있어야 실제 전송을 허용합니다. 자동으로 작성한 문구를 운영 정책으로 확정하지 않습니다.
 7. `local.properties.example`을 참고해 Android `WEB_REQUEST_SCRIPT_URL`과 Firebase Android 공개 구성값 네 가지를 설정하고 앱을 빌드합니다. 값이 바뀌면 재빌드/재설치가 필요합니다. 기존 재고/주소/계좌 설정은 유지합니다.
 8. Apps Script 편집기에서 `createDeviceInvite()`를 실행합니다. 15분 유효한 1기기용 코드를 친구의 앱 **홈페이지 요청함 → 요청함 연결**에 입력합니다. 코드 유실/만료 시 새로 발급합니다. 분실 폰은 편집기에서 `revokeDevice(deviceHash)`로 차단합니다.
 9. 앱에서 새 요청 알림을 허용합니다. 테스트 요청 한 건으로 Sheet 1행 → 앱 알림 → 요청함 내용 → 전화번호 확인 → 문자 초안 순서를 실폰에서 확인합니다. 설정만으로 푸시 전달 성공을 보장하지 않습니다.
@@ -55,3 +55,11 @@
 - 기존 재고·주문 API의 서버 멱등성 및 여러 폰의 절대 재고 충돌 문제는 이 접수 API로 해결되지 않습니다. 기존 검토 보고서의 제한이 유효합니다.
 
 참고: https://firebase.google.com/docs/cloud-messaging/android/receive-messages , https://firebase.google.com/docs/cloud-messaging/auth-server , https://developers.google.com/apps-script/reference/spreadsheet/range
+
+## 개인정보 체크 없는 견적 처리 (서버 v2)
+
+홈페이지는 필수 동의 체크박스 대신 처리 안내와 `/privacy` 링크를 표시합니다. 새 요청은 `processingBasis: "quote_request"`를 보내며 동의를 받았다는 값을 생성하지 않습니다. 접수 서버는 과거의 실제 동의 기록과 접수번호를 그대로 지원하여 불확실한 접수의 재시도와 중복 방지를 유지합니다.
+
+기존 Apps Script 프로젝트의 `Code.gs`를 최신 소스로 교체하고 기존 웹 앱 배포를 **새 버전**으로 업데이트해야 합니다. Script Properties, 기존 접수 Sheet, 배포 URL은 유지합니다. `/exec`의 GET 응답에 `version: 2` 및 `processingBases: ["quote_request"]`가 표시되는지 확인하세요.
+
+개인정보 처리방침에 문의 연락처·실제 보유기간·파기 기준을 확정하기 전에는 `QUOTE_PRIVACY_NOTICE`를 설정하지 않습니다. 새 서버의 처리 근거 응답이 없거나 운영 안내가 비어 있으면 접수를 열지 않습니다. 상담 종료 후 90일은 제안된 운영 기준이며 자동 삭제가 구현되었거나 법정 보유기간이라는 의미가 아닙니다. Google Sheet와 Android에 보관한 사본을 포함하여 실제 파기 방식을 정해야 합니다.

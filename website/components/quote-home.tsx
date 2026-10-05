@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
+import { quoteProcessingNotice } from "@/lib/privacy-content";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { quoteItemSchema, quoteSchema, requestFingerprint, newRequestId, type QuoteRequest } from "@/lib/quote-schema";
@@ -25,8 +25,8 @@ export default function QuoteHome() {
   const nextLine = useRef(1);
   const [name, setName] = useState(""); const [phone, setPhone] = useState("");
   const [region, setRegion] = useState(""); const [message, setMessage] = useState("");
-  const [consent, setConsent] = useState(false); const [website, setWebsite] = useState("");
-  const [ready, setReady] = useState<boolean | null>(null); const [privacy, setPrivacy] = useState("");
+  const [website, setWebsite] = useState("");
+  const [ready, setReady] = useState<boolean | null>(null);
   const [error, setError] = useState(""); const [notice, setNotice] = useState("");
   const [review, setReview] = useState<QuoteRequest | null>(null);
   const [uncertain, setUncertain] = useState(false);
@@ -43,7 +43,7 @@ export default function QuoteHome() {
       const restored = quoteSchema.safeParse(saved?.request);
       if (restored.success && Date.now() - saved.createdAt < 86400000) {
         const v = restored.data;
-        setName(v.customerName); setPhone(v.customerPhone); setRegion(v.region); setMessage(v.message); setConsent(true);
+        setName(v.customerName); setPhone(v.customerPhone); setRegion(v.region); setMessage(v.message);
         setLines(v.items.map(item => ({ ...item, id: nextLine.current++, quantity: String(item.quantity) })));
         const { requestId, ...payload } = v;
         attempt.current = { id: requestId, fingerprint: requestFingerprint(payload) };
@@ -51,7 +51,7 @@ export default function QuoteHome() {
       } else sessionStorage.removeItem("namufarm.pending-request");
     } catch { /* Storage may be blocked; no request is sent automatically. */ }
     fetch("/api/config", { cache: "no-store" }).then(r => r.json() as Promise<{ ready?: boolean; privacyNotice?: string }>).then(v => {
-      setReady(v.ready === true); setPrivacy(typeof v.privacyNotice === "string" ? v.privacyNotice : "");
+      setReady(v.ready === true);
     }).catch(() => setReady(false));
     const observer = new IntersectionObserver(([entry]) => setAtForm(entry.isIntersecting), { threshold: 0.05 });
     if (formRef.current) observer.observe(formRef.current);
@@ -93,7 +93,7 @@ export default function QuoteHome() {
   }
   function prepare(event: FormEvent) {
     event.preventDefault(); setError("");
-    const candidate = { requestId: newRequestId(), customerName: name, customerPhone: phone, region, items: lines.map(({ species, specification, quantity }) => ({ species, specification, quantity: Number(quantity) })), message, consent, website };
+    const candidate = { requestId: newRequestId(), customerName: name, customerPhone: phone, region, items: lines.map(({ species, specification, quantity }) => ({ species, specification, quantity: Number(quantity) })), message, processingBasis: "quote_request", website };
     const parsed = quoteSchema.safeParse(candidate);
     if (!parsed.success) { setError(parsed.error.issues[0]?.message ?? "입력 내용을 확인해주세요."); return; }
     const { requestId: _, ...payload } = parsed.data;
@@ -121,7 +121,7 @@ export default function QuoteHome() {
       if (!response.ok || result.requestId !== review.requestId) throw new Error(result.error || "접수 결과를 확인하지 못했어요. 다시 시도해주세요.");
       sessionStorage.removeItem("namufarm.pending-request");
       setUncertain(false); setSuccess(review.requestId); setReview(null); attempt.current = null;
-      setName(""); setPhone(""); setRegion(""); setMessage(""); setConsent(false); setLines([emptyLine(nextLine.current++)]);
+      setName(""); setPhone(""); setRegion(""); setMessage(""); setLines([emptyLine(nextLine.current++)]);
     } catch (e) { setError(e instanceof Error && e.name !== "TimeoutError" ? e.message : "접수 결과를 확인하지 못했어요. 같은 내용으로 다시 보내주세요."); }
     finally { setBusy(false); inFlight.current = false; }
   }
@@ -167,7 +167,7 @@ export default function QuoteHome() {
               <div className="field full"><Label htmlFor="message">궁금한 점이나 요청사항 <small>선택</small></Label><Textarea id="message" maxLength={1000} placeholder="심을 장소, 희망 배송 시기 등을 편하게 남겨주세요." value={message} onChange={e => setMessage(e.target.value)} rows={3} /></div>
             </div></fieldset>
             <div className="honeypot" aria-hidden="true"><label htmlFor="website">Website</label><input id="website" tabIndex={-1} autoComplete="off" value={website} onChange={e => setWebsite(e.target.value)} /></div>
-            <div className="consent-row"><Checkbox id="consent" checked={consent} onCheckedChange={v => setConsent(v === true)} aria-required="true" /><Label htmlFor="consent">견적 상담을 위한 개인정보 수집·이용에 동의합니다. <span>(필수)</span></Label><Dialog><DialogTrigger asChild><Button type="button" variant="link">보기</Button></DialogTrigger><DialogContent className="privacy-dialog"><DialogHeader><DialogTitle>개인정보 수집·이용 안내</DialogTitle><DialogDescription>접수 전에 내용을 확인해주세요.</DialogDescription></DialogHeader><p className="privacy-text">{privacy || "온라인 접수 개시 전 운영자의 개인정보 처리 안내가 게시됩니다. 수집 예정 항목은 성함, 연락처, 배송 지역 및 견적 요청 내용이며, 묘목 견적 상담을 위해 사용합니다. 현재 요청은 전송되지 않습니다."}</p></DialogContent></Dialog></div>
+            <div className="processing-notice"><p>{quoteProcessingNotice}</p><a href="/privacy">개인정보 처리방침</a></div>
             <div ref={errorRef} tabIndex={-1} className={error ? "form-error" : ""} role={error ? "alert" : undefined}>{error}</div>
             <div className="form-summary"><span>요청 품목 <strong>{count}종</strong></span><span>총 수량 <strong>{total.toLocaleString()}주</strong></span></div>
             <Button className="submit-button" type="submit" disabled={busy}><FileText />견적 요청 내용 확인</Button><p className="submit-note">상담 후 규격, 금액과 배송 방법을 함께 확인해요.</p>
@@ -183,7 +183,7 @@ export default function QuoteHome() {
         <AccordionItem value="more"><AccordionTrigger>목록에 없는 나무도 문의할 수 있나요?</AccordionTrigger><AccordionContent>네. 견적 요청 양식에 원하는 나무 이름을 직접 입력해주세요. 공급 가능 여부는 상담을 통해 확인합니다.</AccordionContent></AccordionItem>
       </Accordion></section>
     </main>
-    <footer className="site-footer"><div className="wrap footer-inner"><div><a href="#home" className="brand"><Sprout /><span>나무팜<small>NAMUFARM</small></span></a><p>당신의 내일에, 푸르름을 더합니다.</p></div><div><a href="#quote">묘목 견적 상담</a><small>© {new Date().getFullYear()} NAMUFARM. All rights reserved.</small></div></div></footer>
+    <footer className="site-footer"><div className="wrap footer-inner"><div><a href="#home" className="brand"><Sprout /><span>나무팜<small>NAMUFARM</small></span></a><p>당신의 내일에, 푸르름을 더합니다.</p></div><div><a href="#quote">묘목 견적 상담</a><a href="/privacy">개인정보 처리방침</a><small>© {new Date().getFullYear()} NAMUFARM. All rights reserved.</small></div></div></footer>
     <div className={`mobile-cta ${atForm || review ? "is-hidden" : ""}`}><span><strong>어떤 나무를 심을까요?</strong><small>품목과 수량만 알려주세요.</small></span><Button asChild><a href="#quote"><FileText />견적 요청</a></Button></div>
     <Dialog open={!!review} onOpenChange={open => { if (!open && !busy && !uncertain) setReview(null); }}><DialogContent className="review-dialog" onInteractOutside={e => { if (busy || uncertain) e.preventDefault(); }} onEscapeKeyDown={e => { if (busy || uncertain) e.preventDefault(); }} showCloseButton={!busy && !uncertain}><DialogHeader><DialogTitle>보내기 전에 확인해주세요</DialogTitle><DialogDescription>아래 내용으로 묘목 견적 상담을 요청합니다.</DialogDescription></DialogHeader>{review && <><div className="review-items">{review.items.map((item, i) => <div key={i}><span><strong>{item.species}</strong><small>{item.specification || "규격 상담 희망"}</small></span><b>{item.quantity.toLocaleString()}주</b></div>)}</div><dl className="review-contact"><dt>성함</dt><dd>{review.customerName}</dd><dt>연락처</dt><dd>{review.customerPhone}</dd><dt>배송 지역</dt><dd>{review.region}</dd>{review.message && <><dt>요청사항</dt><dd>{review.message}</dd></>}</dl>{ready === false && <p className="service-notice">온라인 접수를 준비하고 있어요. 현재 요청은 전송할 수 없습니다.</p>}{uncertain && <p className="service-notice">접수 결과를 확인 중입니다. 같은 요청번호로 다시 보내면 중복 접수되지 않아요. 확인 전에는 내용을 수정할 수 없습니다.</p>}{error && <p className="form-error" role="alert">{error}</p>}<Button className="submit-button" type="button" disabled={busy || ready !== true} onClick={submit}>{busy ? <LoaderCircle className="animate-spin" /> : <CheckCheck />}{busy ? "접수 확인 중…" : "견적 요청 보내기"}</Button><Button type="button" variant="outline" onClick={() => setReview(null)} disabled={busy || uncertain}>내용 수정하기</Button><p className="submit-note">접수 완료 안내가 나오면 요청이 저장된 상태입니다.</p></>}</DialogContent></Dialog>
   </>;

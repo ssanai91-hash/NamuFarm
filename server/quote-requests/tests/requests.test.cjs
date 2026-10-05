@@ -38,4 +38,30 @@ test('pairing retry is idempotent and invite cannot be stolen by another token',
 test('notification failure preserves receipt for retry and never sends personal details',()=>{const f=fixture();f.properties.FIREBASE_PROJECT_ID='test-project';f.properties.DEVICES=JSON.stringify({abc:{fcmToken:'test-device'}});f.failPush();assert.equal(f.submit().ok,true);assert.equal(f.cells[1][10],'PENDING');assert.deepEqual(Object.keys(f.sent[0].message.data).sort(),['requestId','type']);assert.equal(f.sent[0].message.data.requestId,f.request.requestId);});
 test('successful notification marks only the committed request sent',()=>{const f=fixture();f.properties.FIREBASE_PROJECT_ID='test-project';f.properties.DEVICES=JSON.stringify({abc:{fcmToken:'test-device'}});assert.equal(f.submit().ok,true);assert.equal(f.cells[1][10],'SENT');f.submit();assert.equal(f.sent.length,1);});
 test('missing consent, invalid quantities and honeypot are rejected',()=>{for(const change of [{consent:false},{website:'bot'},{items:[{species:'소나무',specification:'',quantity:0}]}]){const f=fixture();assert.equal(f.submit({...f.request,...change}).code,'INVALID');assert.equal(f.cells.length,1)}});
+test('quote processing basis needs no consent and survives retry/list without inventing consent',()=>{
+  const f=fixture();const {consent,...request}=f.request;
+  request.processingBasis='quote_request';
+  assert.equal(f.submit(request).ok,true);
+  assert.equal(f.submit(request).duplicate,true);
+  assert.equal(f.cells.length,2);
+  const saved=JSON.parse(f.cells[1][15]);
+  assert.equal(saved.processingBasis,'quote_request');
+  assert.equal(Object.hasOwn(saved,'consent'),false);
+  const listed=f.context.listRequests_({afterSequence:0}).requests[0];
+  assert.equal(listed.processingBasis,'quote_request');
+  assert.equal(Object.hasOwn(listed,'consent'),false);
+});
+test('absent, unknown or mixed processing basis cannot create a receipt',()=>{
+  for(const patch of [{processingBasis:undefined,consent:undefined},{processingBasis:'marketing',consent:undefined},{processingBasis:'quote_request',consent:true}]){
+    const f=fixture();assert.equal(f.submit({...f.request,...patch}).code,'INVALID');assert.equal(f.cells.length,1);
+  }
+});
+test('legacy stored JSON and receipt hash retain their original consent representation',()=>{
+  const f=fixture();f.submit();
+  const original={requestId:f.request.requestId,customerName:f.request.customerName,customerPhone:'01012345678',region:f.request.region,items:f.request.items,message:f.request.message,consent:true};
+  assert.equal(f.cells[1][15],JSON.stringify(original));
+  assert.equal(f.cells[1][11],crypto.createHash('sha256').update(JSON.stringify(original)).digest('hex'));
+  assert.equal(f.submit(f.request).duplicate,true);
+  assert.equal(f.context.listRequests_({afterSequence:0}).requests[0].consent,true);
+});
 test('rate limit does not block receipt retry',()=>{const f=fixture();for(let i=0;i<5;i++)assert.equal(f.submit({...f.request,requestId:crypto.randomUUID()}).ok,true);assert.equal(f.submit().code,'RATE_LIMITED');const saved=JSON.parse(f.cells[1][15]);assert.equal(f.submit({...saved,website:''}).duplicate,true);});
