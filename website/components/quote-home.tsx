@@ -7,6 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { quoteProcessingNotice } from "@/lib/privacy-content";
+import { businessInfo } from "@/lib/business-info";
+import { testNotice, testRequestMessage } from "@/lib/quote-test";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { quoteItemSchema, quoteSchema, requestFingerprint, newRequestId, type QuoteRequest } from "@/lib/quote-schema";
@@ -20,7 +22,7 @@ const examples = [
 ];
 const emptyLine = (id: number): Line => ({ id, species: "", specification: "", quantity: "" });
 
-export default function QuoteHome() {
+export default function QuoteHome({ initialTestMode = false }: { initialTestMode?: boolean }) {
   const [lines, setLines] = useState<Line[]>([emptyLine(0)]);
   const nextLine = useRef(1);
   const [name, setName] = useState(""); const [phone, setPhone] = useState("");
@@ -29,6 +31,10 @@ export default function QuoteHome() {
   const [recipient, setRecipient] = useState(""); const [replyChannel, setReplyChannel] = useState<"sms" | "email" | "both">("sms");
   const [website, setWebsite] = useState("");
   const [ready, setReady] = useState<boolean | null>(null);
+  const [testMode, setTestMode] = useState(initialTestMode);
+  const [testNoticeOpen, setTestNoticeOpen] = useState(initialTestMode);
+  const [testAcknowledged, setTestAcknowledged] = useState(false);
+  const [sampleOpen, setSampleOpen] = useState(false);
   const [error, setError] = useState(""); const [notice, setNotice] = useState("");
   const [review, setReview] = useState<QuoteRequest | null>(null);
   const [uncertain, setUncertain] = useState(false);
@@ -52,7 +58,10 @@ export default function QuoteHome() {
         setReview(v); setUncertain(true);
       } else sessionStorage.removeItem("namufarm.pending-request");
     } catch { /* Storage may be blocked; no request is sent automatically. */ }
-    fetch("/api/config", { cache: "no-store" }).then(r => r.json() as Promise<{ ready?: boolean; privacyNotice?: string }>).then(v => {
+    fetch("/api/config", { cache: "no-store" }).then(r => r.json() as Promise<{ ready?: boolean; privacyNotice?: string; testMode?: boolean }>).then(v => {
+      setTestMode(v.testMode === true);
+      if (v.testMode === true && !initialTestMode) setTestNoticeOpen(true);
+      if (v.testMode !== true) setTestNoticeOpen(false);
       setReady(v.ready === true);
     }).catch(() => setReady(false));
     const observer = new IntersectionObserver(([entry]) => setAtForm(entry.isIntersecting), { threshold: 0.05 });
@@ -95,7 +104,8 @@ export default function QuoteHome() {
   }
   function prepare(event: FormEvent) {
     event.preventDefault(); setError("");
-    const candidate = { requestId: newRequestId(), customerName: name, customerPhone: phone, region, items: lines.map(({ species, specification, quantity }) => ({ species, specification, quantity: Number(quantity) })), message, processingBasis: "quote_request", website, customerEmail: email, formalQuoteRequested: formalQuote, recipientName: formalQuote ? recipient : "", replyChannel: formalQuote ? replyChannel : "sms" };
+    if (testMode && !testAcknowledged) { setTestNoticeOpen(true); return; }
+    const candidate = { requestId: newRequestId(), customerName: name, customerPhone: phone, region, items: lines.map(({ species, specification, quantity }) => ({ species, specification, quantity: Number(quantity) })), message: testMode ? testRequestMessage(message) : message, processingBasis: "quote_request", website, customerEmail: email, formalQuoteRequested: formalQuote, recipientName: formalQuote ? recipient : "", replyChannel: formalQuote ? replyChannel : "sms" };
     const parsed = quoteSchema.safeParse(candidate);
     if (!parsed.success) { setError(parsed.error.issues[0]?.message ?? "입력 내용을 확인해주세요."); return; }
     const { requestId: _, ...payload } = parsed.data;
@@ -105,6 +115,7 @@ export default function QuoteHome() {
   }
   async function submit() {
     if (!review || inFlight.current) return;
+    if (testMode && !testAcknowledged) { setTestNoticeOpen(true); return; }
     inFlight.current = true;
     setBusy(true); setError(""); setUncertain(true);
     try {
@@ -115,7 +126,7 @@ export default function QuoteHome() {
       setUncertain(false); setBusy(false); inFlight.current = false; return;
     }
     try {
-      const response = await fetch("/api/quote-requests", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(review), signal: AbortSignal.timeout(30000) });
+      const response = await fetch("/api/quote-requests", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(review), signal: AbortSignal.timeout(60000) });
       const result = await response.json() as { requestId?: string; error?: string };
       if ([400, 403, 413, 415, 429].includes(response.status)) {
         sessionStorage.removeItem("namufarm.pending-request"); setUncertain(false);
@@ -154,8 +165,9 @@ export default function QuoteHome() {
       <section id="quote" className="quote-section" aria-labelledby="quote-title"><div className="quote-layout wrap">
         <aside className="quote-intro"><span className="overline">LET’S GROW TOGETHER</span><h2 id="quote-title">좋은 시작은,<br />작은 문의에서.</h2><p>정확한 규격을 몰라도 괜찮아요.<br />심을 곳과 필요한 수량을 알려주세요.</p><div className="intro-promise"><ShieldCheck /><span>견적 요청만으로<br /><strong>주문이나 결제가 확정되지 않아요.</strong></span></div><div className="quote-progress"><span>01 <b>품목 작성</b></span><i /><span>02 <b>연락처 입력</b></span><i /><span>03 <b>상담</b></span></div></aside>
         <form className="quote-form" ref={formRef} onSubmit={prepare}>
-          {success ? <div className="success-panel" role="status"><CircleCheck /><span className="overline">REQUEST RECEIVED</span><h3>견적 요청을 접수했어요.</h3><p>남겨주신 품목을 확인한 후<br />입력하신 연락처로 안내드릴게요.</p><div className="receipt"><span>접수번호</span><code>{success}</code></div><Button type="button" variant="outline" onClick={() => { setSuccess(""); setNotice(""); }}>다른 견적 요청하기</Button></div> : <>
+          {success ? <div className="success-panel" role="status"><CircleCheck /><span className="overline">{testMode ? "TEST REQUEST SAVED" : "REQUEST RECEIVED"}</span><h3>{testMode ? "테스트 요청을 저장했어요." : "견적 요청을 접수했어요."}</h3><p>{testMode ? "테스트 요청만 저장됐습니다. 실제 상담·견적서 발송은 진행하지 않습니다." : <>남겨주신 품목을 확인한 후<br />입력하신 연락처로 안내드릴게요.</>}</p><div className="receipt"><span>접수번호</span><code>{success}</code></div><Button type="button" variant="outline" onClick={() => { setSuccess(""); setNotice(""); }}>{testMode ? "다른 테스트 요청하기" : "다른 견적 요청하기"}</Button></div> : <>
             <div className="form-title"><div><FileText /><h3>묘목 견적 요청</h3></div><span>필수 항목 *</span></div>
+            {testMode && <div className="test-mode-notice"><strong>{testNotice}</strong><p>연결 확인용 테스트 요청만 저장합니다. 실제 고객정보 대신 테스트용 정보를 입력해주세요.</p><Button type="button" variant="link" onClick={() => setTestNoticeOpen(true)}>테스트 안내 다시 보기</Button></div>}
             {ready === false && <div className="service-notice">온라인 접수를 준비하고 있어요.<br /><span>지금은 양식을 미리 살펴볼 수 있으며, 요청은 전송되지 않습니다.</span></div>}
             <div className="live-notice" role="status">{notice}</div>
             <fieldset><legend><span>01</span>원하는 묘목을 알려주세요</legend><div className="line-list">{lines.map((line, index) => <div className="item-line" key={line.id}>
@@ -167,10 +179,10 @@ export default function QuoteHome() {
               <div className="field"><Label htmlFor="phone">연락처 *</Label><Input id="phone" type="tel" autoComplete="tel" inputMode="tel" required maxLength={20} placeholder="010-1234-5678" value={phone} onChange={e => setPhone(e.target.value)} /></div>
               <div className="field full"><Label htmlFor="email">이메일 <small>{formalQuote && replyChannel !== "sms" ? "견적서 이메일 수신 시 필수" : "선택"}</small></Label><Input id="email" type="email" autoComplete="email" maxLength={254} required={formalQuote && replyChannel !== "sms"} placeholder="견적서를 이메일로 받고 싶다면 입력해주세요" value={email} onChange={e => setEmail(e.target.value)} /></div>
               <div className="field full"><Label htmlFor="region">배송 지역 *</Label><Input id="region" autoComplete="address-level2" required minLength={2} maxLength={100} placeholder="예: 경북 경산시 · 상세 주소는 필요 없어요" value={region} onChange={e => setRegion(e.target.value)} /></div>
-              <div className="field full"><Label htmlFor="message">궁금한 점이나 요청사항 <small>선택</small></Label><Textarea id="message" maxLength={1000} placeholder="심을 장소, 희망 배송 시기 등을 편하게 남겨주세요." value={message} onChange={e => setMessage(e.target.value)} rows={3} /></div>
+              <div className="field full"><Label htmlFor="message">궁금한 점이나 요청사항 <small>선택</small></Label><Textarea id="message" maxLength={testMode ? 900 : 1000} placeholder="심을 장소, 희망 배송 시기 등을 편하게 남겨주세요." value={message} onChange={e => setMessage(e.target.value)} rows={3} /></div>
             </div></fieldset>
             <fieldset className="formal-quote-options"><legend><span>03</span>공식 견적서가 필요하신가요?</legend>
-              <label className="quote-option-check"><input type="checkbox" checked={formalQuote} onChange={e => setFormalQuote(e.target.checked)} /><span>공식 견적서를 요청합니다 <small>선택</small></span></label>
+              <div className="formal-quote-heading"><label className="quote-option-check"><input type="checkbox" checked={formalQuote} onChange={e => setFormalQuote(e.target.checked)} /><span>공식 견적서를 요청합니다 <small>선택</small></span></label><button type="button" className="sample-help-button" aria-label="공식 견적서 SAMPLE 양식 보기" title="공식 견적서 견본 보기" onClick={() => setSampleOpen(true)}>?</button></div>
               {formalQuote && <div className="contact-grid">
                 <div className="field full"><Label htmlFor="recipient">견적서 수신인·회사명 <small>선택</small></Label><Input id="recipient" maxLength={100} placeholder="비워두면 입력하신 성함으로 작성합니다" value={recipient} onChange={e => setRecipient(e.target.value)} /></div>
                 <div className="field full"><Label htmlFor="reply-channel">견적서 받는 방법</Label><select id="reply-channel" value={replyChannel} onChange={e => setReplyChannel(e.target.value as "sms" | "email" | "both")}><option value="sms">문자 · 견적서 이미지</option><option value="email">이메일 · PDF 견적서</option><option value="both">이메일과 문자 · 둘 다</option></select></div>
@@ -194,8 +206,10 @@ export default function QuoteHome() {
         <AccordionItem value="more"><AccordionTrigger>목록에 없는 나무도 문의할 수 있나요?</AccordionTrigger><AccordionContent>네. 견적 요청 양식에 원하는 나무 이름을 직접 입력해주세요. 공급 가능 여부는 상담을 통해 확인합니다.</AccordionContent></AccordionItem>
       </Accordion></section>
     </main>
-    <footer className="site-footer"><div className="wrap footer-inner"><div><a href="#home" className="brand"><Sprout /><span>나무팜<small>NAMUFARM</small></span></a><p>당신의 내일에, 푸르름을 더합니다.</p></div><div><a href="#quote">묘목 견적 상담</a><a href="/privacy">개인정보 처리방침</a><small>© {new Date().getFullYear()} NAMUFARM. All rights reserved.</small></div></div></footer>
+    <footer className="site-footer"><div className="wrap footer-inner"><div><div className="footer-brand-row"><a href="#home" className="brand"><Sprout /><span>나무팜<small>NAMUFARM</small></span></a><div className="footer-business"><span>{businessInfo.name} · 대표 {businessInfo.representative}</span><span>사업자등록번호 {businessInfo.number}</span></div></div><p>당신의 내일에, 푸르름을 더합니다.</p></div><div><a href="#quote">묘목 견적 상담</a><a href="/privacy">개인정보 처리방침</a><small>© {new Date().getFullYear()} NAMUFARM. All rights reserved.</small></div></div></footer>
     <div className={`mobile-cta ${atForm || review ? "is-hidden" : ""}`}><span><strong>어떤 나무를 심을까요?</strong><small>품목과 수량만 알려주세요.</small></span><Button asChild><a href="#quote"><FileText />견적 요청</a></Button></div>
-    <Dialog open={!!review} onOpenChange={open => { if (!open && !busy && !uncertain) setReview(null); }}><DialogContent className="review-dialog" onInteractOutside={e => { if (busy || uncertain) e.preventDefault(); }} onEscapeKeyDown={e => { if (busy || uncertain) e.preventDefault(); }} showCloseButton={!busy && !uncertain}><DialogHeader><DialogTitle>보내기 전에 확인해주세요</DialogTitle><DialogDescription>아래 내용으로 묘목 견적 상담을 요청합니다.</DialogDescription></DialogHeader>{review && <><div className="review-items">{review.items.map((item, i) => <div key={i}><span><strong>{item.species}</strong><small>{item.specification || "규격 상담 희망"}</small></span><b>{item.quantity.toLocaleString()}주</b></div>)}</div><dl className="review-contact"><dt>성함</dt><dd>{review.customerName}</dd><dt>연락처</dt><dd>{review.customerPhone}</dd><dt>배송 지역</dt><dd>{review.region}</dd>{review.customerEmail && <><dt>이메일</dt><dd>{review.customerEmail}</dd></>}{review.formalQuoteRequested && <><dt>공식 견적서</dt><dd>{review.replyChannel === "email" ? "이메일 · PDF" : review.replyChannel === "both" ? "이메일과 문자" : "문자 · 이미지"}</dd><dt>견적서 수신인</dt><dd>{review.recipientName || review.customerName}</dd></>}{review.message && <><dt>요청사항</dt><dd>{review.message}</dd></>}</dl>{ready === false && <p className="service-notice">온라인 접수를 준비하고 있어요. 현재 요청은 전송할 수 없습니다.</p>}{uncertain && <p className="service-notice">접수 결과를 확인 중입니다. 같은 요청번호로 다시 보내면 중복 접수되지 않아요. 확인 전에는 내용을 수정할 수 없습니다.</p>}{error && <p className="form-error" role="alert">{error}</p>}<Button className="submit-button" type="button" disabled={busy || ready !== true} onClick={submit}>{busy ? <LoaderCircle className="animate-spin" /> : <CheckCheck />}{busy ? "접수 확인 중…" : "견적 요청 보내기"}</Button><Button type="button" variant="outline" onClick={() => setReview(null)} disabled={busy || uncertain}>내용 수정하기</Button><p className="submit-note">접수 완료 안내가 나오면 요청이 저장된 상태입니다.</p></>}</DialogContent></Dialog>
+    <Dialog open={!!review} onOpenChange={open => { if (!open && !busy && !uncertain) setReview(null); }}><DialogContent className="review-dialog" onInteractOutside={e => { if (busy || uncertain) e.preventDefault(); }} onEscapeKeyDown={e => { if (busy || uncertain) e.preventDefault(); }} showCloseButton={!busy && !uncertain}><DialogHeader><DialogTitle>{testMode ? "테스트 요청을 보내기 전에 확인해주세요" : "보내기 전에 확인해주세요"}</DialogTitle><DialogDescription>{testMode ? testNotice : "아래 내용으로 묘목 견적 상담을 요청합니다."}</DialogDescription></DialogHeader>{review && <><div className="review-items">{review.items.map((item, i) => <div key={i}><span><strong>{item.species}</strong><small>{item.specification || "규격 상담 희망"}</small></span><b>{item.quantity.toLocaleString()}주</b></div>)}</div><dl className="review-contact"><dt>성함</dt><dd>{review.customerName}</dd><dt>연락처</dt><dd>{review.customerPhone}</dd><dt>배송 지역</dt><dd>{review.region}</dd>{review.customerEmail && <><dt>이메일</dt><dd>{review.customerEmail}</dd></>}{review.formalQuoteRequested && <><dt>공식 견적서</dt><dd>{review.replyChannel === "email" ? "이메일 · PDF" : review.replyChannel === "both" ? "이메일과 문자" : "문자 · 이미지"}</dd><dt>견적서 수신인</dt><dd>{review.recipientName || review.customerName}</dd></>}{review.message && <><dt>요청사항</dt><dd>{review.message}</dd></>}</dl>{ready === false && <p className="service-notice">온라인 접수를 준비하고 있어요. 현재 요청은 전송할 수 없습니다.</p>}{uncertain && <p className="service-notice">접수 결과를 확인 중입니다. 같은 요청번호로 다시 보내면 중복 접수되지 않아요. 확인 전에는 내용을 수정할 수 없습니다.</p>}{error && <p className="form-error" role="alert">{error}</p>}<Button className="submit-button" type="button" disabled={busy || ready !== true} onClick={submit}>{busy ? <LoaderCircle className="animate-spin" /> : <CheckCheck />}{busy ? "접수 확인 중…" : testMode ? "테스트 요청 보내기" : "견적 요청 보내기"}</Button><Button type="button" variant="outline" onClick={() => setReview(null)} disabled={busy || uncertain}>내용 수정하기</Button><p className="submit-note">{testMode ? "테스트 요청만 저장되며 실제 견적·주문으로 처리하지 않습니다." : "접수 완료 안내가 나오면 요청이 저장된 상태입니다."}</p></>}</DialogContent></Dialog>
+    <Dialog open={testNoticeOpen} onOpenChange={setTestNoticeOpen}><DialogContent className="test-notice-dialog"><DialogHeader><DialogTitle>견적 요청 테스트 안내</DialogTitle><DialogDescription>{testNotice}</DialogDescription></DialogHeader><p>테스트 요청은 연결 확인용으로만 저장하며, 견적 상담·견적서 발송·구매·배송은 진행하지 않습니다.</p><p>실제 고객정보를 입력하지 말고 테스트용 이름과 연락처를 사용해주세요.</p><Button type="button" onClick={() => { setTestAcknowledged(true); setTestNoticeOpen(false); }}>확인 · 테스트 양식 보기</Button></DialogContent></Dialog>
+    <Dialog open={sampleOpen} onOpenChange={setSampleOpen}><DialogContent className="quote-sample-dialog"><DialogHeader><DialogTitle>공식 견적서 SAMPLE</DialogTitle><DialogDescription>수신 업체 정보는 공개하지 않은 양식 견본입니다. 품목·수량·금액은 예시이며 실제 견적이 아닙니다.</DialogDescription></DialogHeader><div className="quote-sample-preview"><img src="/quote-sample.webp" alt="나무팜농원 공식 견적서 견본. 블루베리와 감나무 예시 품목, 수신 업체 정보 비공개, 가운데 SAMPLE 워터마크." width="1190" height="1684" /></div><Button asChild variant="outline"><a href="/quote-sample.pdf" target="_blank" rel="noopener noreferrer">SAMPLE PDF 보기</a></Button></DialogContent></Dialog>
   </>;
 }

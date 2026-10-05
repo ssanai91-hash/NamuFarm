@@ -49,3 +49,6 @@ next-env.d.ts
 
 # Generated TypeScript cache
 *.tsbuildinfo
+
+# Device key backups never belong in published source.
+NamuFarm-Security-Backup*.json

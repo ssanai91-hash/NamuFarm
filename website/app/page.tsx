@@ -1,2 +1,3 @@
 import QuoteHome from "@/components/quote-home";
-export default function Page() { return <QuoteHome />; }
+import { quoteSettings } from "@/lib/quote-server";
+export default function Page() { return <QuoteHome initialTestMode={quoteSettings().testMode} />; }

@@ -29,3 +29,6 @@ __pycache__/
 desktop/build/
 desktop/dist/
 *.spec
+
+# Password-protected device key backups belong outside source control.
+NamuFarm-Security-Backup*.json
