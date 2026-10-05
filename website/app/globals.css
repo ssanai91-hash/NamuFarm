@@ -45,3 +45,15 @@ body{font-size:16px} .field label,.field input,.field textarea,.consent-row>labe
 .quote-sample-preview { border: 1px solid #d7ddd5; background: white; }
 .quote-sample-preview img { display: block; width: 100%; height: auto; }
 @media(max-width:767px) { .footer-brand-row { gap: 1rem; } .footer-business span { font-size: .875rem; } .formal-quote-heading { align-items: flex-start; } .sample-help-button { margin-top: .1rem; } .quote-sample-dialog { padding: 1.25rem; } }
+
+/* Separate items, recipient details and quotation options in both steps. */
+.quote-form .quote-section-box{min-width:0;border:1px solid #b9cdbf;border-radius:14px;padding:18px;background:#f9fcf9;margin-bottom:24px}
+.quote-form .quote-section-box legend{width:auto;padding:0 8px;font-size:1rem;margin-left:-8px;margin-bottom:0;color:#205844;font-weight:700}
+.quote-section-box .item-line{background:#fff;border-color:#d8e3da}
+.review-dialog{max-height:calc(100dvh - 32px);overflow-y:auto}
+.review-section-box{min-width:0;border:1px solid #b9cdbf;border-radius:12px;background:#f9fcf9;padding:16px}
+.review-section-box h3{font-size:1rem;color:#205844;font-weight:700;margin-bottom:12px}
+.review-section-box .review-items{max-height:none;overflow:visible;margin:0;border:0;padding:0;background:transparent}
+.review-section-box .review-contact{margin:0;padding:0;border:0;grid-template-columns:92px minmax(0,1fr)}
+.review-section-box .review-contact dd{margin:0;min-width:0;white-space:pre-wrap;overflow-wrap:anywhere}
+@media(max-width:767px){.quote-form .quote-section-box{padding:16px 12px}.review-section-box{padding:14px 12px}.review-section-box .review-contact{grid-template-columns:80px minmax(0,1fr)}}
