@@ -16,7 +16,7 @@ function secureServiceInfo_() {
     && rows_(sheet_()).every(row => { const raw = JSON.parse(row[15]); return raw.expired === true || !!raw.encryptedRequest; }); } catch (_) {}
   return {ok:true,service:'namufarm-quote-requests',version:4,processingBases:['quote_request'],
     requestFields:['customerEmail','formalQuoteRequested','recipientName','replyChannel'],encryptionReady:ready,
-    sellerKey:key,retentionDays:30,commerceStates:['구매확정','입금확인','배송확인','판매완료','주문취소']};
+    sellerKey:key,retentionDays:30,requestDeletionSync:true,commerceStates:['구매확정','입금확인','배송확인','판매완료','주문취소']};
 }
 function byteString_(value, minimum, maximum) {
   assert_(typeof value === 'string' && /^[A-Za-z0-9+/]+={0,2}$/.test(value) && value.length <= maximum*2);
@@ -120,7 +120,15 @@ function closeRequest_(body) {
     if (i>=0) expireQuoteRow_(sheet,rows[i],i); return {closed:true,requestId:body.requestId};});
 }
 function expireQuoteRow_(sheet,row,index) {
+  // An already imported phone only asks for sequences beyond its committed cursor.
+  // Publish disposal as a new change once; retries must not keep moving the cursor.
+  if(JSON.parse(row[15]).expired===true)return;
+  const props=PropertiesService.getScriptProperties();
+  const sequence=rows_(sheet).reduce((m,r)=>Math.max(m,Number(r[1])||0),Number(props.getProperty('LAST_SEQUENCE'))||0)+1;
+  assert_(Number.isSafeInteger(sequence),'NOT_READY');
+  props.setProperty('LAST_SEQUENCE',String(sequence));
   const next=row.slice(); for(let c=3;c<=8;c++)next[c]=''; next[9]='보관종료'; next[10]='STOPPED'; next[14]=''; next[15]='{"expired":true}';
+  next[1]=sequence;
   sheet.getRange(index+2,1,1,16).setValues([next]); SpreadsheetApp.flush();
 }
 function saleMetadata_(raw) {
@@ -184,7 +192,7 @@ function saveSale_(body) {
         assert_(previous.status!=='판매완료' && previous.status!=='주문취소','CONFLICT');
         const next={'구매확정':'입금확인','입금확인':'배송확인','배송확인':'판매완료'};
         assert_(meta.status===previous.status || meta.status===next[previous.status] || (meta.status==='주문취소' && ['구매확정','입금확인'].includes(previous.status)),'CONFLICT');
-        ['orderNumber','orderDate','totalQty','totalPrice','isPrepaid','shippingFee','purchasedAt','taxAmount','items'].forEach(k=>assert_(JSON.stringify(meta[k])===JSON.stringify(previous[k]),'CONFLICT'));
+        ['orderNumber','orderDate','totalQty','totalPrice','isPrepaid','shippingFee','purchasedAt','taxAmount','items'].forEach(k=>assert_(canonical_(meta[k])===canonical_(previous[k]),'CONFLICT'));
         assert_(meta.updatedAt>=previous.updatedAt,'CONFLICT');
         ['paidAt','deliveredAt','completedAt'].forEach(k=>{if(previous[k]>0)assert_(previous[k]===meta[k],'CONFLICT');});
       }else assert_(meta.revision===1 && ['구매확정','입금확인','주문취소'].includes(meta.status),'CONFLICT');

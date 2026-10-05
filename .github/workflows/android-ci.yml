@@ -40,6 +40,13 @@ jobs:
       - name: Unit tests and debug build
         run: ./gradlew testDebugUnitTest assembleDebug
 
+      - name: Verify Android key backup in Python desktop
+        env:
+          PYTHONPATH: desktop
+        run: |
+          python3 -m pip install --quiet 'cryptography>=44,<52'
+          python3 desktop/tests/check_android_backup.py app/build/outputs/desktop-interop/android-backup.json
+
       - name: Validate generated quote PDFs
         run: |
           python3 -m pip install --quiet pypdf

@@ -22,3 +22,10 @@ keystore.properties
 *.db-wal
 
 .DS_Store
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+desktop/build/
+desktop/dist/
+*.spec

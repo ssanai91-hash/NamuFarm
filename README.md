@@ -13,6 +13,9 @@
 - 배송정보 저장
 - 인터넷이 불안정해도 로컬 DB에서 계속 작업
 - Google Sheets와 수동 동기화하여 백업/공유
+- Python·Qt PC 관리 프로그램에서 고객 문의 조회·삭제, 판매 수정·단계 처리, 통계와 자동 동기화
+
+PC 실행과 연결 방법은 [desktop/README.md](desktop/README.md)를 참고하세요.
 
 ## 현재 구조
 

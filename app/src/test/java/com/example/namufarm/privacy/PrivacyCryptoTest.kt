@@ -40,10 +40,22 @@ class PrivacyCryptoTest {
         val private=KeyFactory.getInstance("RSA").generatePrivate(PKCS8EncodedKeySpec(HybridCrypto.decode(f.privateKey)))
         assertEquals(f.plaintext,HybridCrypto.open(f.encrypted,private,public,"quote",f.reference))
     }
+    @Test fun pythonDesktopFixtureDecryptsInActualAndroidProtocol() {
+        val f=Gson().fromJson(javaClass.classLoader!!.getResourceAsStream("desktop-crypto-test.json")!!.bufferedReader().use {it.readText()},Fixture::class.java)
+        val public=HybridCrypto.publicKey(f.publicKey)
+        val private=KeyFactory.getInstance("RSA").generatePrivate(PKCS8EncodedKeySpec(HybridCrypto.decode(f.privateKey)))
+        val decrypted=HybridCrypto.open(f.encrypted,private,public,"quote",f.reference)
+        assertEquals(Gson().fromJson(f.plaintext,Map::class.java),Gson().fromJson(decrypted,Map::class.java))
+    }
     @Test fun recoveryExportIsPasswordEncryptedAndRestoresOnAnotherDeviceKey() {
         val context=RuntimeEnvironment.getApplication();val prefs=context.getSharedPreferences("seller_privacy_keys",0);prefs.edit().clear().commit()
         val keys=SellerKeys(context) {SecretKeySpec(ByteArray(32){1},"AES")}
         val backup=keys.exportBackup("test-password-12345".toCharArray());val id=keys.keyId();val e=keys.seal("고객","quote","one")
+        java.io.File("build/outputs/desktop-interop/android-backup.json").apply {
+            parentFile.mkdirs()
+            writeText(Gson().toJson(mapOf("backup" to backup,"password" to "test-password-12345",
+                "reference" to "interop","encrypted" to keys.seal("{\"customerName\":\"김나무\",\"customerPhone\":\"01012345678\"}","quote","interop"))))
+        }
         assertFalse(backup.contains(keys.publicKey()));assertFalse(keys.backedUp)
         keys.markBackupSaved();assertTrue(keys.backedUp)
         prefs.edit().clear().commit()

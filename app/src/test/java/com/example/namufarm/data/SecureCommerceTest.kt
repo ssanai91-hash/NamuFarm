@@ -104,6 +104,22 @@ class SecureCommerceTest {
         val transport=object:WebQuoteApi {override suspend fun request(url:String,body:Map<String,Any>)=WebQuoteEnvelope(ok=true,hasMore=false,requests=listOf(WebQuoteRemote(requestId=id,sequence=7,createdAt="2026-09-01T01:23:45.000Z",expired=true)))}
         assertEquals(0,repo.syncWebRequests(transport,"test","test") {error("expired rows must not be decrypted")});assertEquals(7L,local.webRequestCursor());assertTrue(local.getWebRequests().isEmpty())
     }
+    @Test fun pcDeletionAfterPhoneImportPurgesConsultationAndQuoteAtNewCursor()=runBlocking {
+        var deleted=false
+        val transport=object:WebQuoteApi {
+            override suspend fun request(url:String,body:Map<String,Any>):WebQuoteEnvelope {
+                assertEquals(if(deleted) 1L else 0L,body["afterSequence"])
+                val row=if(deleted) WebQuoteRemote(requestId=id,sequence=2,createdAt="2026-10-04T01:23:45.000Z",expired=true)
+                    else WebQuoteRemote(requestId=id,sequence=1,createdAt="2026-10-04T01:23:45.000Z",customerName="김나무",customerPhone="01012345678",region="옥천",items=listOf(WebQuoteItemRemote("소나무","",3)),message="문의")
+                return WebQuoteEnvelope(ok=true,hasMore=false,requests=listOf(row))
+            }
+        }
+        assertEquals(1,repo.syncWebRequests(transport,"test","test"))
+        quote();assertNotNull(local.getQuoteByNumber("Q"));assertEquals(1L,local.webRequestCursor())
+        deleted=true
+        assertEquals(0,repo.syncWebRequests(transport,"test","test"))
+        assertEquals(2L,local.webRequestCursor());assertTrue(local.getWebRequests().isEmpty());assertNull(local.getQuoteByNumber("Q"))
+    }
     @Test fun expiredConsultationDeletesItsUnpurchasedQuoteButKeepsActualPurchaseRecord()=runBlocking {
         val time=PrivacyRetention.quoteTime("2026-10-04T01:23:45.000Z")
         local.transaction {insertWebRequests(listOf(WebQuoteRequestEntity(id,7,"2026-10-04T01:23:45.000Z","김나무","01012345678","옥천","[]","문의")))}
