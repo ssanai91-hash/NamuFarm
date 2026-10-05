@@ -9,6 +9,11 @@ from .errors import ConflictError, NetworkError, UserError
 
 DEFAULT_URL = "https://script.google.com/macros/s/AKfycby0dlMj7qKxXZDsShc92WQn0DW0YyOHjJIEsVCM4xrd8PDzVqVL1JuQLkPuxPxxyGDR/exec"
 MAX_RESPONSE = 8 * 1024 * 1024
+# Allow the server's 15-second lock wait plus connection/startup overhead.
+# urllib applies this to blocking I/O, not the entire redirect/request chain.
+REQUEST_TIMEOUT = 30
+ACTION_LABELS = {"pair_device": "PC 연결", "close_request": "문의 삭제", "save_sale": "판매 저장",
+                 "list_requests": "문의 목록 조회", "list_sales": "판매 목록 조회", "sales_report": "판매 통계 조회"}
 
 
 def validate_url(url):
@@ -34,13 +39,18 @@ class ScriptApi:
         self.opener = opener or urllib.request.build_opener(GoogleRedirect())
 
     def _send(self, payload=None):
+        label = "서버 보안 확인" if payload is None else ACTION_LABELS.get(payload.get("action"), "서버 요청")
+
+        def failure(reason):
+            return NetworkError(f"{label} 중 {reason} 로컬 기록과 전송 대기를 유지합니다. '지금 동기화'로 재시도해주세요.")
+
         try:
             data = None if payload is None else canonical(payload).encode("utf-8")
             if data is not None and len(data) > 65000:
                 raise UserError("전송할 기록이 너무 큽니다.")
             request = urllib.request.Request(self.url, data=data,
                        headers={"Content-Type": "application/json", "User-Agent": "NamuFarmDesktop/0.1"})
-            with self.opener.open(request, timeout=20) as response:
+            with self.opener.open(request, timeout=REQUEST_TIMEOUT) as response:
                 raw = response.read(MAX_RESPONSE + 1)
                 if len(raw) > MAX_RESPONSE:
                     raise UserError("서버 응답이 너무 큽니다. 기존 기록을 유지합니다.")
@@ -56,8 +66,17 @@ class ScriptApi:
             return result
         except (UserError, ConflictError):
             raise
+        except urllib.error.HTTPError as error:
+            raise failure(f"서버가 HTTP {error.code} 오류를 반환했습니다.") from None
+        except TimeoutError:
+            raise failure("서버 응답 대기 시간이 초과되었습니다.") from None
+        except urllib.error.URLError as error:
+            reason = "서버 응답 대기 시간이 초과되었습니다." if isinstance(error.reason, TimeoutError) else "서버에 연결하지 못했습니다."
+            raise failure(reason) from None
+        except (json.JSONDecodeError, UnicodeError):
+            raise failure("올바른 서버 응답을 받지 못했습니다. Apps Script 웹 앱 배포와 접근 설정을 확인해주세요.") from None
         except Exception:
-            raise NetworkError("서버에 연결하지 못했습니다. 로컬 기록과 전송 대기를 유지합니다.") from None
+            raise failure("서버에 연결하지 못했습니다.") from None
 
     def info(self):
         result = self._send()

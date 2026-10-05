@@ -41,10 +41,12 @@ class TestApi:
         self.lose_ack = False
         self.bad_ack = False
         self.calls = []
+        self.info_calls = 0
         self.page_filter = None
         self.info_filter = None
 
     def info(self):
+        self.info_calls += 1
         if self.offline:
             raise NetworkError('offline')
         result = self.bridge.send(control='info')
@@ -59,12 +61,15 @@ class TestApi:
             if result.get('code') == 'CONFLICT':
                 raise ConflictError('conflict')
             raise UserError('server failed')
-        if action == 'save_sale' and self.lose_ack:
+        if action in ('save_sale', 'close_request') and self.lose_ack:
             self.lose_ack = False
             raise NetworkError('lost response')
-        if action == 'save_sale' and self.bad_ack:
+        if action in ('save_sale', 'close_request') and self.bad_ack:
             self.bad_ack = False
-            result['fingerprint'] = '0' * 64
+            if action == 'save_sale':
+                result['fingerprint'] = '0' * 64
+            else:
+                result['requestId'] = 'wrong-id'
         if self.page_filter and action in ('list_requests', 'list_sales'):
             result = self.page_filter(action, copy.deepcopy(result))
         return result

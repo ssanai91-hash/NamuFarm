@@ -365,7 +365,11 @@ class MainWindow(QMainWindow):
         if QMessageBox.question(self, "문의 삭제", "선택 문의와 연결된 미구매 견적 사본을 삭제할까요?\n휴대폰은 다음 요청함 동기화 때 반영합니다.", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
             return
         request_id = self.request_rows[index]["requestId"]
-        self.run_job("문의 삭제 저장 중…", lambda: self.manager.close_request(request_id))
+        self.run_job("문의 삭제 서버 확인 중…", lambda: self.manager.close_request(request_id), self.request_deleted)
+
+    def request_deleted(self, value):
+        self.apply_view(value)
+        self.message.setText("문의 삭제를 서버에서 확인했습니다. 휴대폰은 다음 요청함 동기화 때 반영합니다.")
 
     def build_sales(self):
         page = QWidget()

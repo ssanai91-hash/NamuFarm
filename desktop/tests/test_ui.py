@@ -67,6 +67,38 @@ class UiTest(unittest.TestCase):
         self.assertFalse(self.window.dirty)
         self.assertFalse(self.window.save_button.isEnabled())
 
+    def select_new_request(self):
+        request = self.bridge.send(control='submit_new')
+        self.window.apply_view(self.manager.sync())
+        index = next(i for i, row in enumerate(self.window.request_rows) if row['requestId'] == request['requestId'])
+        self.window.request_table.selectRow(index)
+        self.app.processEvents()
+        return request['requestId']
+
+    def test_delete_button_removes_only_confirmed_request_and_shows_delete_success(self):
+        identifier = self.select_new_request()
+        with patch.object(QMessageBox, 'question', return_value=QMessageBox.StandardButton.Yes):
+            self.window.delete_button.click()
+        self.wait_job()
+        self.assertNotIn(identifier, [r['requestId'] for r in self.window.request_rows])
+        self.assertEqual(1, self.window.request_table.rowCount())
+        self.assertIn('문의 삭제를 서버에서 확인', self.window.message.text())
+        self.assertFalse(self.window.data['pending'])
+
+    def test_lost_delete_response_keeps_row_until_sync_confirms_delete(self):
+        identifier = self.select_new_request()
+        self.manager.api.lose_ack = True
+        with patch.object(QMessageBox, 'question', return_value=QMessageBox.StandardButton.Yes):
+            self.window.delete_button.click()
+        self.wait_job()
+        self.assertIn(identifier, [r['requestId'] for r in self.window.request_rows])
+        self.assertEqual(1, len(self.window.data['pending']))
+        self.assertFalse(self.window.delete_button.isEnabled())
+        self.window.manual_sync()
+        self.wait_job()
+        self.assertNotIn(identifier, [r['requestId'] for r in self.window.request_rows])
+        self.assertFalse(self.window.data['pending'])
+
     def test_validation_error_keeps_unsaved_form(self):
         self.window.sale_table.selectRow(0)
         self.window.fields['customerEmail'].setText('잘못된 이메일')

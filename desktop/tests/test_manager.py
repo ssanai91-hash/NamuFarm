@@ -159,6 +159,93 @@ class ManagerTest(unittest.TestCase):
         self.assertTrue(tombstones[0]['expired'])
         self.assertFalse(self.manager.view()['requests'])
 
+    def test_confirmed_delete_does_not_wait_for_unrelated_list_pulls(self):
+        request = self.bridge.send(control='submit')
+        self.manager.sync()
+        old_sales = self.manager.vault.rows('sales')
+        self.manager.api.calls.clear()
+        self.manager.api.info_calls = 0
+        def unavailable(action, result):
+            raise NetworkError('list pull unavailable')
+        self.manager.api.page_filter = unavailable
+        view = self.manager.close_request(request['requestId'])
+        self.assertEqual(['close_request'], self.manager.api.calls)
+        self.assertEqual(1, self.manager.api.info_calls)
+        self.assertFalse(view['requests'])
+        self.assertFalse(view['pending'])
+        self.assertEqual(old_sales, self.manager.vault.rows('sales'))
+        self.assertIn(request['requestId'], self.manager.vault.snapshot_marker()['deletedRequests'])
+
+    def test_sync_checks_pinned_server_once_before_flush_and_pull(self):
+        self.manager.api.info_calls = 0
+        self.manager.sync()
+        self.assertEqual(1, self.manager.api.info_calls)
+
+    def test_lost_delete_ack_keeps_request_and_durable_pending_for_idempotent_retry(self):
+        request = self.bridge.send(control='submit')
+        self.manager.sync()
+        self.manager.api.lose_ack = True
+        with self.assertRaises(NetworkError):
+            self.manager.close_request(request['requestId'])
+        pending = self.manager.vault.pending()
+        self.assertEqual(1, len(pending))
+        self.assertEqual(1, len(self.manager.view()['requests']))
+        self.assertNotIn(request['requestId'], self.manager.vault.snapshot_marker()['deletedRequests'])
+        tombstone = self.manager.api.call('list_requests', afterSequence=0)['requests'][0]
+        self.assertTrue(tombstone['expired'])
+        self.manager.vault = Vault.unlock(self.path, PASSWORD)
+        self.assertEqual(pending, self.manager.vault.pending())
+        view = self.manager.sync()
+        self.assertFalse(view['requests'])
+        self.assertFalse(view['pending'])
+        retried = self.manager.api.call('list_requests', afterSequence=0)['requests'][0]
+        self.assertEqual(tombstone['sequence'], retried['sequence'])
+
+    def test_mismatched_delete_ack_keeps_local_request_and_pending(self):
+        request = self.bridge.send(control='submit')
+        self.manager.sync()
+        self.manager.api.bad_ack = True
+        with self.assertRaises(UserError):
+            self.manager.close_request(request['requestId'])
+        self.assertEqual(1, len(self.manager.view()['requests']))
+        self.assertEqual(1, len(self.manager.vault.pending()))
+        self.assertFalse(self.manager.sync()['requests'])
+
+    def test_local_delete_ack_failure_rolls_back_cache_marker_and_pending_together(self):
+        request = self.bridge.send(control='submit')
+        self.manager.sync()
+        old_marker = self.manager.vault.snapshot_marker()
+        with closing(sqlite3.connect(self.path)) as db:
+            db.execute("CREATE TRIGGER reject_ack BEFORE DELETE ON outbox BEGIN SELECT RAISE(ABORT,'injected'); END")
+            db.commit()
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.manager.close_request(request['requestId'])
+        self.assertEqual(1, len(self.manager.view()['requests']))
+        self.assertEqual(old_marker, self.manager.vault.snapshot_marker())
+        self.assertEqual(1, len(self.manager.vault.pending()))
+        with closing(sqlite3.connect(self.path)) as db:
+            db.execute('DROP TRIGGER reject_ack')
+            db.commit()
+        self.assertFalse(self.manager.sync()['requests'])
+
+    def test_failed_pull_after_retry_cannot_restore_confirmed_deleted_request(self):
+        request = self.bridge.send(control='submit')
+        self.manager.sync()
+        self.manager.api.offline = True
+        with self.assertRaises(NetworkError):
+            self.manager.close_request(request['requestId'])
+        self.manager.api.offline = False
+        def unavailable(action, result):
+            raise NetworkError('list pull unavailable')
+        self.manager.api.page_filter = unavailable
+        with self.assertRaises(NetworkError):
+            self.manager.sync()
+        self.assertFalse(self.manager.view()['requests'])
+        self.assertFalse(self.manager.vault.pending())
+        self.assertIn(request['requestId'], self.manager.vault.snapshot_marker()['deletedRequests'])
+        self.manager.api.page_filter = None
+        self.assertFalse(self.manager.sync()['requests'])
+
     def test_partial_or_corrupt_second_snapshot_does_not_replace_cache(self):
         original = self.manager.vault.rows('sales')
         self.bridge.send(control='submit')
@@ -207,10 +294,20 @@ class ManagerTest(unittest.TestCase):
         self.assertTrue(self.manager.vault.pending())
 
     def test_old_server_and_wrong_pinned_key_rejected_before_pending_send(self):
+        request = self.bridge.send(control='submit')
+        self.manager.sync()
+        self.manager.api.offline = True
+        with self.assertRaises(NetworkError):
+            self.manager.close_request(request['requestId'])
+        self.manager.api.offline = False
+        self.manager.api.calls.clear()
         for field, value in (('requestDeletionSync', False), ('sellerKey', {'keyId': 'wrong', 'publicKey': 'wrong'})):
             self.manager.api.info_filter = lambda info, field=field, value=value: {**info, field: value}
             with self.assertRaises(UserError):
                 self.manager.sync()
+            self.assertFalse(self.manager.api.calls)
+            self.assertEqual(1, len(self.manager.vault.pending()))
+            self.assertEqual(1, len(self.manager.view()['requests']))
 
     def test_snapshot_database_failure_rolls_back_existing_cache(self):
         with closing(sqlite3.connect(self.path)) as db:

@@ -107,8 +107,11 @@ class Vault:
 
     def snapshot_marker(self):
         with self.mutex, self._db() as db:
-            row = db.execute("SELECT value FROM config WHERE name='snapshot'").fetchone()
-            return self._open(row[0], "snapshot") if row else {"requests": 0, "sales": 0, "deletedRequests": []}
+            return self._read_snapshot_marker(db)
+
+    def _read_snapshot_marker(self, db):
+        row = db.execute("SELECT value FROM config WHERE name='snapshot'").fetchone()
+        return self._open(row[0], "snapshot") if row else {"requests": 0, "sales": 0, "deletedRequests": []}
 
     def replace_snapshot(self, requests, sales, marker):
         """Both complete validated pages become visible together. Never overwrite an unsent edit."""
@@ -135,6 +138,18 @@ class Vault:
 
     def acknowledge(self, identifier):
         with self.mutex, self._db() as db:
+            row = db.execute("SELECT body FROM outbox WHERE id=?", (identifier,)).fetchone()
+            if row is None:
+                raise UserError("전송 대기가 변경되었습니다. 다시 동기화해주세요.")
+            operation = self._open(row[0], "outbox:" + identifier)
+            if operation["action"] == "close_request":
+                request_id = operation["payload"]["requestId"]
+                marker = self._read_snapshot_marker(db)
+                marker["deletedRequests"] = sorted(set(marker["deletedRequests"]) | {request_id})
+                db.execute("DELETE FROM cache WHERE kind='requests' AND id=?", (self._index("requests", request_id),))
+                db.execute("INSERT OR REPLACE INTO config VALUES ('snapshot',?)", (self._seal(marker, "snapshot"),))
+            # Cache deletion, resurrection protection and clearing the outbox
+            # commit together, only after the server acknowledgement was checked.
             db.execute("DELETE FROM outbox WHERE id=?", (identifier,))
 
     def discard_conflict(self, identifier, requests, sales, marker):

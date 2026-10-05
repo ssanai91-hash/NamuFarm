@@ -113,6 +113,9 @@ class Manager:
 
     def fetch_snapshot(self):
         self.verify_server()
+        return self._fetch_verified_snapshot()
+
+    def _fetch_verified_snapshot(self):
         requests, request_cursor, deleted = self._pages("list_requests", "requests")
         sales, sale_cursor, _ = self._pages("list_sales", "sales")
         old = self.vault.snapshot_marker()
@@ -144,7 +147,7 @@ class Manager:
         require(self.credentials.get("paired") is True, "PC를 먼저 연결해주세요.")
         self.verify_server()
         self.flush()
-        requests, sales, marker = self.fetch_snapshot()
+        requests, sales, marker = self._fetch_verified_snapshot()
         previous = {r["metadata"]["orderNumber"]: r for r in self.vault.rows("sales")}
         for row in sales:
             old = previous.get(row["metadata"]["orderNumber"])
@@ -179,7 +182,11 @@ class Manager:
         require(any(r["requestId"] == request_id for r in self.vault.rows("requests")), "먼저 문의를 다시 조회해주세요.")
         require(self.credentials.get("paired") is True, "PC를 먼저 연결해주세요.")
         self.vault.queue({"id": str(uuid.uuid4()), "action": "close_request", "payload": {"requestId": request_id}})
-        return self.sync()
+        self.verify_server()
+        self.flush()
+        # A verified deletion acknowledgement is sufficient. A later list pull
+        # must not turn a completed deletion into an apparent save failure.
+        return self.view()
 
     def conflict_preview(self):
         pending = self.vault.pending()
