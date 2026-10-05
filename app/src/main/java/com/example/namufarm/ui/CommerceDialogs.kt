@@ -137,7 +137,7 @@ internal fun QuoteCartDialog(
 
 @Composable
 internal fun TodayQuotesDialog(quotes: List<QuoteEntity>, onSelect: (QuoteEntity) -> Unit, onDismiss: () -> Unit, onDocuments: () -> Unit = {}) {
-    NamuDialog("오늘 견적", "저장한 견적 ${quotes.size}건", onDismiss, actions = { OutlinedButton(onClick = onDocuments, modifier = Modifier.fillMaxWidth()) { Text("발행 견적서 보관함") } }) {
+    NamuDialog("오늘 견적", "오늘 발송한 견적 ${quotes.size}건", onDismiss, actions = { OutlinedButton(onClick = onDocuments, modifier = Modifier.fillMaxWidth()) { Text("발행 견적서 보관함") } }) {
         LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (quotes.isEmpty()) item { NamuEmptyState("오늘 발송한 견적이 없어요", "온라인 요청이나 빠른 견적에서 작성한 뒤 발송 완료를 기록해주세요.", Icons.Outlined.Description) }
             items(quotes, key = { it.quoteNumber }) { quote ->

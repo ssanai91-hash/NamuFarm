@@ -100,7 +100,7 @@ class NamuFarmRepository(
         val id = gson.fromJson(contact.recipientJson, com.example.namufarm.quotation.QuoteRecipient::class.java).sourceRequestId
         val quote = local.getQuoteByNumber(contact.quoteNumber)
         if (id.isNullOrBlank() || quote == null) null else id to quote
-    }.toMap()
+    }.sortedBy { it.second.quoteId ?: 0 }.toMap()
     private fun onDay(time: Long, date: String) = time > 0 && java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.KOREA).apply {
         timeZone = java.util.TimeZone.getTimeZone("Asia/Seoul")
     }.format(java.util.Date(time)) == date
@@ -169,7 +169,11 @@ class NamuFarmRepository(
         insertQuoteDocument(record)
         record
     }
-    fun deleteQuote(quote: QuoteEntity) = local.deleteQuote(quote)
+    suspend fun deleteQuote(quote: QuoteEntity) = local.transaction {
+        val stored = getQuoteByNumber(quote.quoteNumber) ?: error("견적을 찾을 수 없습니다.")
+        check(stored.sentAt == 0L && getAllOrders().none { it.sourceQuoteNumber == stored.quoteNumber }) { "발송·주문 기록은 삭제할 수 없습니다." }
+        deleteQuote(stored)
+    }
 
     suspend fun saveFarm(
         farmId: Int?,
@@ -395,7 +399,7 @@ class NamuFarmRepository(
             if(sales != null) {
                 var last = enqueueSale(order, doc)
                 if (paid) {
-                    val confirmed = order.copy(status = OrderStatus.CONFIRMED, revision = 2, paidAt = now)
+                    val confirmed = order.copy(orderId = getOrderByNumber(order.orderNumber)!!.orderId, status = OrderStatus.CONFIRMED, revision = 2, paidAt = now)
                     upsertOrder(confirmed)
                     last = enqueueSale(confirmed, doc)
                 }

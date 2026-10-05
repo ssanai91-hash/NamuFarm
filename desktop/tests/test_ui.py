@@ -57,6 +57,15 @@ class UiTest(unittest.TestCase):
         self.assertEqual(0, self.window.request_table.rowCount())
         self.assertFalse(self.window.delete_button.isEnabled())
 
+    def test_inbox_refresh_keeps_unsaved_sale_editor(self):
+        self.window.sale_table.selectRow(0)
+        self.window.fields['receiverName'].setText('아직 저장하지 않은 수령인')
+        self.assertTrue(self.window.dirty)
+        self.window.apply_inbox(self.manager.sync_requests())
+        self.assertTrue(self.window.dirty)
+        self.assertEqual('아직 저장하지 않은 수령인', self.window.fields['receiverName'].text())
+        self.assertTrue(self.window.save_button.isEnabled())
+
     def test_save_button_sends_edited_fields_and_refreshes_revision(self):
         self.window.sale_table.selectRow(0)
         self.window.fields['receiverName'].setText('Qt 화면에서 저장')

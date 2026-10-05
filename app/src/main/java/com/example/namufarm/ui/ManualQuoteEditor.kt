@@ -68,7 +68,7 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
                     ManualField("규격", row.spec, { update(row.copy(spec = it)) }, saving)
                     ManualField("수량 (주) *", row.quantity, { update(row.copy(quantity = it)) }, saving, KeyboardType.Number)
                     ManualField("판매 단가 (원) *", row.price, { update(row.copy(price = it)) }, saving, KeyboardType.Number)
-                    val subtotal = (row.quantity.toLongOrNull() ?: 0) * (row.price.toLongOrNull() ?: 0)
+                    val subtotal = (row.quantity.toIntOrNull()?.toLong() ?: 0) * (row.price.toIntOrNull()?.toLong() ?: 0)
                     if (subtotal >= 0) Text("품목 금액 · ${com.example.namufarm.ui.components.money(subtotal)}")
                     TextButton(onClick = { rows = rows.filterIndexed { i, _ -> i != index } }, enabled = !saving && rows.size > 1) { Text("품목 삭제") }
                 }

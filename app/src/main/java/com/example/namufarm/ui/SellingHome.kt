@@ -44,6 +44,7 @@ internal fun SellingHome(
     onSavedQuote: (com.example.namufarm.data.QuoteEntity) -> Unit = {}
 ) {
     val listState = rememberLazyListState()
+    val visibleQuoteNumbers = webRequests.mapNotNull { state.quotesByRequest[it.requestId]?.quoteNumber }.toSet()
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -127,10 +128,12 @@ internal fun SellingHome(
                 }
             }
             item { NamuSectionTitle("저장한 견적", "발송 확인 후 오늘 견적에 집계됩니다") }
-            items(state.allQuotes.filter { q -> state.quotesByRequest.values.none { it.quoteNumber == q.quoteNumber } || webRequests.none { it.requestId == state.quotesByRequest.entries.find { e -> e.value.quoteNumber == q.quoteNumber }?.key } }, key = { "quote-${it.quoteNumber}" }) { quote ->
+            items(state.allQuotes.filter { it.quoteNumber !in visibleQuoteNumbers }, key = { "quote-${it.quoteNumber}" }) { quote ->
                 OutlinedCard(onClick = { onSavedQuote(quote) }, modifier = Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(16.dp)) {
+                        state.quotesByRequest.entries.firstOrNull { it.value.quoteNumber == quote.quoteNumber }?.key?.let { Text("접수번호 $it", style = MaterialTheme.typography.labelMedium) }
                         Text(quote.customerPhone, fontWeight = FontWeight.Bold)
+                        Text(com.example.namufarm.domain.order.OrderSummaryCodec.parseStrict(quote.itemSummary).joinToString(" · ") { "${it.speciesName} ${it.orderQty}주" })
                         Text("${quote.totalQty}주 · ${money(quote.totalPrice.toLong())} · ${if (quote.sentAt > 0) "발송 완료" else "작성 중"}")
                     }
                 }

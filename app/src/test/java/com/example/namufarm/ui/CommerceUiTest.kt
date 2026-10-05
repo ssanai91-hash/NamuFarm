@@ -56,6 +56,26 @@ class CommerceUiTest {
         capture("selling-home", compose.onRoot())
     }
 
+    @Test fun manualEditorPrefillsRequestAndSavesWithoutInventory() {
+        var saved: List<com.example.namufarm.domain.order.OrderLine>? = null
+        val request = webRequest.copy(itemsJson = """[{"species":"감나무","specification":"2년생","quantity":30}]""")
+        compose.setContent { NamuFarmTheme {
+            ManualQuoteEditor(request, false, null, {}, { lines, phone, recipient, _, _ ->
+                saved = lines
+                assertEquals(request.customerPhone, phone)
+                assertEquals(request.requestId, recipient.sourceRequestId)
+            })
+        } }
+        compose.onNodeWithText("받는 사람 · 연락처").assertIsDisplayed()
+        capture("manual-quote", compose.onNodeWithTag("namu_dialog"))
+        compose.onNodeWithText("판매 단가 (원) *").performScrollTo().performTextInput("1500")
+        compose.onNodeWithText("견적 저장 · 보내기").performClick()
+        assertEquals(OrderLineSource.MANUAL, saved!!.single().source)
+        assertEquals("감나무", saved!!.single().speciesName)
+        assertEquals(30, saved!!.single().orderQty)
+        assertEquals(1500, saved!!.single().retailPrice)
+    }
+
     @Test fun quantityPickerRejectsMoreThanRemainingStock() {
         var added = 0
         compose.setContent { NamuFarmTheme { SellingItemRow(pine, availableQuantity = 3) { added = it } } }

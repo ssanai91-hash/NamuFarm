@@ -308,6 +308,12 @@ class MainWindow(QMainWindow):
         self.refresh_sales()
         self.update_controls()
 
+    def apply_inbox(self, value):
+        # An inbox refresh must keep the seller's unsaved sale editor intact.
+        self.data.update(requests=value["requests"], pending=value["pending"], paired=value["paired"])
+        self.refresh_requests()
+        self.update_controls()
+
     def build_requests(self):
         page = QWidget()
         layout = QVBoxLayout(page)
@@ -330,7 +336,7 @@ class MainWindow(QMainWindow):
         self.delete_button = QPushButton("선택 문의 삭제")
         self.delete_button.clicked.connect(self.delete_request)
         self.inbox_sync_button = QPushButton("새 요청 가져오기")
-        self.inbox_sync_button.clicked.connect(lambda: self.run_job("온라인 견적 요청 가져오는 중…", self.manager.sync_requests, self.apply_view))
+        self.inbox_sync_button.clicked.connect(lambda: self.run_job("온라인 견적 요청 가져오는 중…", self.manager.sync_requests, self.apply_inbox))
         row.addWidget(self.inbox_sync_button)
         row.addWidget(self.delete_button)
         layout.addLayout(row)
