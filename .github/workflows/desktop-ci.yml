@@ -53,6 +53,12 @@ jobs:
       - name: Build Windows executable
         working-directory: desktop
         run: python -m PyInstaller --noconfirm --clean --onefile --windowed --name NamuFarm-PC run_desktop.py
+      - name: Verify packaged Windows Qt startup
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          $check = Start-Process -FilePath desktop/dist/NamuFarm-PC.exe -ArgumentList '--self-check' -Wait -PassThru
+          if ($check.ExitCode -ne 0) { throw "Packaged application failed with exit code $($check.ExitCode)" }
       - name: Upload Windows executable and instructions
         uses: actions/upload-artifact@v4
         with:

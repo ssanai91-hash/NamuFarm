@@ -685,5 +685,10 @@ def main():
     app.setStyleSheet("QPushButton {padding:7px 12px;} QLineEdit,QComboBox,QDateEdit {padding:5px;} QTabBar::tab {padding:10px 20px;} QGroupBox {font-weight:600;}")
     window = MainWindow()
     window.show()
+    if "--self-check" in sys.argv:
+        app.processEvents()
+        require(window.tabs.count() == 4, "PC 화면 초기화에 실패했습니다.")
+        window.close()
+        return 0
     QTimer.singleShot(0, window.open_vault)
     return app.exec()

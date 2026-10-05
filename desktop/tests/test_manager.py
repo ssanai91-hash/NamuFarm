@@ -1,4 +1,5 @@
 import copy
+from contextlib import closing
 import json
 import sqlite3
 import tempfile
@@ -212,8 +213,9 @@ class ManagerTest(unittest.TestCase):
                 self.manager.sync()
 
     def test_snapshot_database_failure_rolls_back_existing_cache(self):
-        with sqlite3.connect(self.path) as db:
+        with closing(sqlite3.connect(self.path)) as db:
             db.execute("CREATE TRIGGER reject_cache BEFORE INSERT ON cache BEGIN SELECT RAISE(ABORT,'injected'); END")
+            db.commit()
         old = self.manager.vault.rows('sales')
         with self.assertRaises(sqlite3.IntegrityError):
             self.manager.sync()
