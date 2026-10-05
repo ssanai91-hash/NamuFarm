@@ -36,7 +36,9 @@ internal fun QuoteCartDialog(
     onRecentCalls: () -> Unit,
     onSendSms: () -> Unit,
     onSave: () -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    recipient: com.example.namufarm.quotation.QuoteRecipient = com.example.namufarm.quotation.QuoteRecipient(),
+    onRecipient: (com.example.namufarm.quotation.QuoteRecipient) -> Unit = {}
 ) {
     NamuDialog(
         "견적 작성", "${cart.size}개 품목 · 견적 저장 시 재고는 그대로예요",
@@ -106,6 +108,20 @@ internal fun QuoteCartDialog(
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                             singleLine = true, shape = MaterialTheme.shapes.medium
                         )
+                        OutlinedTextField(recipient.customerName, { onRecipient(recipient.copy(customerName = it)) }, label = { Text("고객 성함 · 선택") }, singleLine = true, enabled = !saving, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(recipient.customerEmail, { onRecipient(recipient.copy(customerEmail = it)) }, label = { Text("이메일 · 선택") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email), singleLine = true, enabled = !saving, modifier = Modifier.fillMaxWidth())
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(recipient.formalQuoteRequested, { onRecipient(recipient.copy(formalQuoteRequested = it, replyChannel = if (it) recipient.replyChannel else "sms")) }, enabled = !saving)
+                            Text("공식 견적서 작성")
+                        }
+                        if (recipient.formalQuoteRequested) {
+                            OutlinedTextField(recipient.recipientName, { onRecipient(recipient.copy(recipientName = it)) }, label = { Text("견적서 수신인·회사명 · 선택") }, singleLine = true, enabled = !saving, modifier = Modifier.fillMaxWidth())
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                listOf("sms" to "문자", "email" to "이메일", "both" to "둘 다").forEach { (key, label) ->
+                                    FilterChip(recipient.replyChannel == key, { onRecipient(recipient.copy(replyChannel = key)) }, { Text(label) }, enabled = !saving)
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -120,8 +136,8 @@ internal fun QuoteCartDialog(
 }
 
 @Composable
-internal fun TodayQuotesDialog(quotes: List<QuoteEntity>, onSelect: (QuoteEntity) -> Unit, onDismiss: () -> Unit) {
-    NamuDialog("오늘 견적", "저장한 견적 ${quotes.size}건", onDismiss) {
+internal fun TodayQuotesDialog(quotes: List<QuoteEntity>, onSelect: (QuoteEntity) -> Unit, onDismiss: () -> Unit, onDocuments: () -> Unit = {}) {
+    NamuDialog("오늘 견적", "저장한 견적 ${quotes.size}건", onDismiss, actions = { OutlinedButton(onClick = onDocuments, modifier = Modifier.fillMaxWidth()) { Text("발행 견적서 보관함") } }) {
         LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (quotes.isEmpty()) item { NamuEmptyState("오늘 저장한 견적이 없어요", "재고를 담거나 빠른 견적으로 첫 견적을 작성해보세요.", Icons.Outlined.Description) }
             items(quotes, key = { it.quoteNumber }) { quote ->
@@ -174,7 +190,7 @@ private fun HistoryCard(phone: String, date: String, summary: String, amount: In
 }
 
 @Composable
-internal fun QuoteDetailsDialog(quote: QuoteEntity, confirming: Boolean, snackbar: SnackbarHostState, onSms: () -> Unit, onConfirm: () -> Unit, onDelete: () -> Unit, onDismiss: () -> Unit) {
+internal fun QuoteDetailsDialog(quote: QuoteEntity, confirming: Boolean, snackbar: SnackbarHostState, onSms: () -> Unit, onConfirm: () -> Unit, onDelete: () -> Unit, onDismiss: () -> Unit, onDocument: () -> Unit = {}) {
     var confirm by remember { mutableStateOf(false) }
     if (confirm) AlertDialog(
         onDismissRequest = { confirm = false },
@@ -185,6 +201,7 @@ internal fun QuoteDetailsDialog(quote: QuoteEntity, confirming: Boolean, snackba
     )
     NamuDialog("견적 상세", quote.saveDate, onDismiss, snackbar, actions = {
         Button(onClick = { confirm = true }, enabled = !confirming, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) { Text(if (confirming) "주문 확정 중…" else "입금확인 · 주문 확정") }
+        OutlinedButton(onClick = onDocument, enabled = !confirming, modifier = Modifier.fillMaxWidth()) { Text("공식 견적서 · PDF / 이미지") }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             TextButton(onClick = onSms, enabled = !confirming) { Text("견적 문자 보내기") }
             TextButton(onClick = onDelete, enabled = !confirming, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) { Text("견적 삭제") }

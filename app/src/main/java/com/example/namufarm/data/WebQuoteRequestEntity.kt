@@ -1,5 +1,6 @@
 package com.example.namufarm.data
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
@@ -15,7 +16,11 @@ data class WebQuoteRequestEntity(
     val region: String,
     val itemsJson: String,
     val message: String,
-    val readAt: Long? = null
+    val readAt: Long? = null,
+    @ColumnInfo(defaultValue = "''") val customerEmail: String = "",
+    @ColumnInfo(defaultValue = "0") val formalQuoteRequested: Boolean = false,
+    @ColumnInfo(defaultValue = "''") val recipientName: String = "",
+    @ColumnInfo(defaultValue = "'sms'") val replyChannel: String = "sms"
 )
 
 data class WebQuoteItem(val species: String, val specification: String, val quantity: Int)

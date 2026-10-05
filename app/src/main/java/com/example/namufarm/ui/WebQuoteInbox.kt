@@ -34,7 +34,7 @@ import com.google.gson.Gson
 internal fun WebQuoteInboxDialog(
     state: WebInboxState, initialRequestId: String?, customerPhone: String, cartItemCount: Int,
     onRefresh: () -> Unit, onPair: (String) -> Unit, onRead: (String) -> Unit,
-    onUsePhone: (String) -> Unit, onMessageConsumed: () -> Unit, onDismiss: () -> Unit
+    onUseRequest: (WebQuoteRequestEntity) -> Unit, onMessageConsumed: () -> Unit, onDismiss: () -> Unit
 ) {
     // Keep the selected customer stable if another notification arrives while composing.
     var selectedId by rememberSaveable { mutableStateOf(initialRequestId) }
@@ -53,7 +53,7 @@ internal fun WebQuoteInboxDialog(
         onDismiss = onDismiss, snackbarHostState = snackbar,
         actions = {
             if (selected != null) {
-                WebRequestCustomerActions(selected, customerPhone, cartItemCount, onUsePhone)
+                WebRequestCustomerActions(selected, customerPhone, cartItemCount) { onUseRequest(selected) }
                 OutlinedButton(onClick = { selectedId = null }, modifier = Modifier.fillMaxWidth()) {
                     Icon(Icons.AutoMirrored.Outlined.ArrowBack, null); Spacer(Modifier.width(8.dp)); Text("요청 목록")
                 }
@@ -106,6 +106,7 @@ internal fun WebQuoteInboxDialog(
                             }
                             Text(request.customerPhone, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                             Text(requestItems(request).joinToString(" · ") { "${it.species} ${it.quantity}주" }, style = MaterialTheme.typography.bodyMedium)
+                            if (request.formalQuoteRequested) NamuBadge("공식 견적서 요청")
                             Text(request.region, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
@@ -125,6 +126,12 @@ internal fun WebRequestDetail(request: WebQuoteRequestEntity) {
         Text(request.customerName, style = MaterialTheme.typography.headlineSmall)
         Text(request.customerPhone, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
         Text("배송 희망 지역 · ${request.region}", style = MaterialTheme.typography.bodyMedium)
+        if (request.customerEmail.isNotBlank()) Text(request.customerEmail, style = MaterialTheme.typography.bodyLarge)
+        if (request.formalQuoteRequested) {
+            NamuBadge("공식 견적서 요청")
+            Text("받는 방법 · ${when(request.replyChannel) { "email" -> "이메일 PDF"; "both" -> "이메일 PDF와 문자 이미지"; else -> "문자 이미지" }}")
+            Text("견적서 수신인 · ${request.recipientName.ifBlank { request.customerName }}")
+        }
         HorizontalDivider()
         requestItems(request).forEach { item ->
             Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surface) {

@@ -104,6 +104,20 @@ class WebQuoteRequestTest {
         assertTrue(runCatching { repository.syncWebRequests(api, "test", "test") }.isFailure)
         assertEquals(0L, local.webRequestCursor())
     }
+    @Test fun optionalEmailAndOfficialQuotePreferencesRoundTrip() {
+        val formal = remote().copy(customerEmail = "buyer@example.com", formalQuoteRequested = true, recipientName = "테스트건설", replyChannel = "both")
+        val row = WebQuoteValidator.page(page(formal), 0).single()
+        assertEquals("buyer@example.com", row.customerEmail); assertEquals("테스트건설", row.recipientName)
+        assertTrue(row.formalQuoteRequested); assertEquals("both", row.replyChannel)
+        val legacy = WebQuoteValidator.page(page(remote()), 0).single()
+        assertEquals("", legacy.customerEmail); assertFalse(legacy.formalQuoteRequested); assertEquals("sms", legacy.replyChannel)
+    }
+    @Test fun invalidEmailAndMissingEmailCannotAdvanceRequestCursor() {
+        listOf(remote().copy(customerEmail = "bad"), remote().copy(customerEmail = "a@b.com\\r\\nBcc:x@y.com"), remote().copy(replyChannel = "email"), remote().copy(replyChannel = "fax")).forEach { row ->
+            assertTrue(runCatching { WebQuoteValidator.page(page(row), 0) }.isFailure)
+        }
+        assertEquals(0L, local.webRequestCursor())
+    }
     @Test fun notificationDeepLinkOnlyAcceptsOneValidRequestId() {
         val context = RuntimeEnvironment.getApplication()
         assertEquals(id, WebRequestPush.fromIntent(WebRequestPush.intent(context, id)))

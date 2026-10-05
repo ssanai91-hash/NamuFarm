@@ -65,3 +65,26 @@ test('legacy stored JSON and receipt hash retain their original consent represen
   assert.equal(f.context.listRequests_({afterSequence:0}).requests[0].consent,true);
 });
 test('rate limit does not block receipt retry',()=>{const f=fixture();for(let i=0;i<5;i++)assert.equal(f.submit({...f.request,requestId:crypto.randomUUID()}).ok,true);assert.equal(f.submit().code,'RATE_LIMITED');const saved=JSON.parse(f.cells[1][15]);assert.equal(f.submit({...saved,website:''}).duplicate,true);});
+
+test('formal quote email and reply preference round trip with immutable receipt',()=>{
+  const f=fixture();const {consent,...old}=f.request;
+  const request={...old,processingBasis:'quote_request',customerEmail:'buyer@example.com',formalQuoteRequested:true,recipientName:'나무건설',replyChannel:'both'};
+  assert.equal(f.submit(request).ok,true); assert.equal(f.submit(request).duplicate,true);
+  const row=f.context.listRequests_({afterSequence:0}).requests[0];
+  for(const key of ['customerEmail','formalQuoteRequested','recipientName','replyChannel'])assert.equal(row[key],request[key]);
+  assert.equal(f.submit({...request,customerEmail:'other@example.com'}).code,'CONFLICT');
+  assert.equal(f.cells.length,2);
+});
+test('email is optional for SMS and invalid email or email delivery without address cannot write',()=>{
+  const f=fixture();assert.equal(f.submit({...f.request,customerEmail:'',formalQuoteRequested:true,replyChannel:'sms',recipientName:''}).ok,true);
+  for(const change of [{customerEmail:'bad'},{customerEmail:'a@b.com\r\nBcc:c@d.com'},{customerEmail:'',replyChannel:'email'},{customerEmail:'',replyChannel:'both'},{formalQuoteRequested:'yes'},{replyChannel:'fax'}]){
+    const g=fixture();assert.equal(g.submit({...g.request,...change}).code,'INVALID'); assert.equal(g.cells.length,1);
+  }
+});
+test('v2 receipt hash and canonical JSON stay unchanged after v3 upgrade',()=>{
+  const f=fixture();const {consent,...request}=f.request;request.processingBasis='quote_request';
+  const original=f.context.validateRequest_(request); f.submit(request);
+  assert.equal(Object.hasOwn(original,'customerEmail'),false);
+  assert.equal(f.cells[1][15],JSON.stringify(original));
+  assert.equal(f.submit({...original,website:''}).duplicate,true);
+});

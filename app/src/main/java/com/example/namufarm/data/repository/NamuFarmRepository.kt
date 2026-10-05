@@ -129,6 +129,24 @@ class NamuFarmRepository(
         }
         local.insertQuote(quote)
     }
+    suspend fun insertQuoteWithContact(quote: QuoteEntity, recipient: com.example.namufarm.quotation.QuoteRecipient) = local.transaction {
+        this@NamuFarmRepository.insertQuote(quote)
+        insertQuoteContact(com.example.namufarm.data.QuoteContactEntity(quote.quoteNumber, Gson().toJson(recipient.checked())))
+    }
+    fun getSavedQuote(number: String) = local.getQuoteByNumber(number)
+    fun getQuoteRecipient(number: String): com.example.namufarm.quotation.QuoteRecipient = local.getQuoteContact(number)?.let {
+        Gson().fromJson(it.recipientJson, com.example.namufarm.quotation.QuoteRecipient::class.java).checked()
+    } ?: com.example.namufarm.quotation.QuoteRecipient()
+    fun getQuoteDocument(number: String) = local.getQuoteDocument(number)
+    fun getQuoteDocuments() = local.getQuoteDocuments()
+    suspend fun issueQuoteDocument(number: String, issuer: com.example.namufarm.quotation.QuoteIssuer, tax: Long, validUntil: String, notes: String, account: String, recipient: com.example.namufarm.quotation.QuoteRecipient? = null): com.example.namufarm.data.QuoteDocumentEntity = local.transaction {
+        getQuoteDocument(number)?.let { return@transaction it }
+        val quote = checkNotNull(getQuoteByNumber(number)) { "저장된 견적이 없습니다. 먼저 견적을 저장해주세요." }
+        val document = com.example.namufarm.quotation.QuoteDocument.create(quote, recipient ?: this@NamuFarmRepository.getQuoteRecipient(number), issuer, tax, validUntil, notes, account)
+        val record = com.example.namufarm.data.QuoteDocumentEntity(document.id, number, document.number, document.issuedAt, document.json())
+        insertQuoteDocument(record)
+        record
+    }
     fun deleteQuote(quote: QuoteEntity) = local.deleteQuote(quote)
 
     suspend fun saveFarm(

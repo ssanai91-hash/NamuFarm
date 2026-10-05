@@ -37,6 +37,26 @@ class CommerceMigrationTest {
         context.deleteDatabase(name)
     }
 
+    @Test fun v13ToV14KeepsReceiptAndReadStateWithSafeDefaults() {
+        val context = RuntimeEnvironment.getApplication(); val name = "migration-13.db"; context.deleteDatabase(name)
+        val original = Room.databaseBuilder(context, AppDatabase::class.java, name).allowMainThreadQueries().build()
+        try { original.managementDao().insertPendingSync(PendingSyncEntity(syncType = "inventory", payloadJson = "{}")) } finally { original.close() }
+        SQLiteDatabase.openDatabase(context.getDatabasePath(name).path, null, SQLiteDatabase.OPEN_READWRITE).use { raw ->
+            raw.execSQL("DROP TABLE web_quote_request")
+            raw.execSQL("CREATE TABLE web_quote_request (requestId TEXT NOT NULL PRIMARY KEY, sequence INTEGER NOT NULL, createdAt TEXT NOT NULL, customerName TEXT NOT NULL, customerPhone TEXT NOT NULL, region TEXT NOT NULL, itemsJson TEXT NOT NULL, message TEXT NOT NULL, readAt INTEGER)")
+            raw.execSQL("CREATE UNIQUE INDEX index_web_quote_request_sequence ON web_quote_request(sequence)")
+            raw.execSQL("INSERT INTO web_quote_request VALUES('11111111-1111-4111-8111-111111111111',7,'2026-10-04T01:23:45.000Z','김나무','01012345678','옥천','[]','문의',42)")
+            raw.execSQL("DROP TABLE quote_contact"); raw.execSQL("DROP TABLE quote_document"); raw.execSQL("DROP TABLE room_master_table"); raw.version = 13
+        }
+        val migrated = Room.databaseBuilder(context, AppDatabase::class.java, name).addMigrations(*AppDatabase.ALL_MIGRATIONS).allowMainThreadQueries().build()
+        try {
+            val dao = migrated.managementDao(); val row = dao.getWebRequests().single()
+            assertEquals(7L, row.sequence); assertEquals(42L, row.readAt); assertEquals("", row.customerEmail)
+            assertFalse(row.formalQuoteRequested); assertEquals("sms", row.replyChannel)
+            assertEquals(1, dao.getAllPendingSync().size); assertTrue(dao.getQuoteDocuments().isEmpty())
+        } finally { migrated.close(); context.deleteDatabase(name) }
+    }
+
     private fun migrate(version: Int) {
         val context: Context = RuntimeEnvironment.getApplication()
         val name = "migration-$version.db"

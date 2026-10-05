@@ -16,9 +16,10 @@ import kotlinx.coroutines.sync.Mutex
         QuoteEntity::class,
         OrderEntity::class,
         PendingSyncEntity::class,
-        WebQuoteRequestEntity::class
+        WebQuoteRequestEntity::class,
+        QuoteContactEntity::class, QuoteDocumentEntity::class
     ],
-    version = 13, // 웹 견적 요청함: 주문/재고와 별도 저장
+    version = 14, // 웹 견적 요청함: 주문/재고와 별도 저장
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -614,11 +615,24 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_13_14 = object : Migration(13, 14) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE web_quote_request ADD COLUMN customerEmail TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE web_quote_request ADD COLUMN formalQuoteRequested INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE web_quote_request ADD COLUMN recipientName TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE web_quote_request ADD COLUMN replyChannel TEXT NOT NULL DEFAULT 'sms'")
+                db.execSQL("CREATE TABLE IF NOT EXISTS quote_contact (quoteNumber TEXT NOT NULL PRIMARY KEY, recipientJson TEXT NOT NULL)")
+                db.execSQL("CREATE TABLE IF NOT EXISTS quote_document (documentId TEXT NOT NULL PRIMARY KEY, quoteNumber TEXT NOT NULL, issuedNumber TEXT NOT NULL, issuedAt INTEGER NOT NULL, snapshotJson TEXT NOT NULL)")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_quote_document_quoteNumber ON quote_document(quoteNumber)")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_quote_document_issuedNumber ON quote_document(issuedNumber)")
+            }
+        }
+
         internal val ALL_MIGRATIONS = arrayOf(
             MIGRATION_1_7, MIGRATION_2_7, MIGRATION_3_7,
             MIGRATION_4_7, MIGRATION_5_7, MIGRATION_6_7,
             MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10,
-            MIGRATION_10_12, MIGRATION_11_12, MIGRATION_12_13
+            MIGRATION_10_12, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14
         )
 
         fun getDatabase(context: Context): AppDatabase {

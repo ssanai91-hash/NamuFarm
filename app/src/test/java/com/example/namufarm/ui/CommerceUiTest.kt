@@ -194,6 +194,15 @@ class CommerceUiTest {
         capture("web-request-detail", compose.onNodeWithTag("namu_dialog"))
     }
 
+    @Test fun officialRequestShowsEmailRecipientAndRequestedReplyMethod() {
+        val formal = webRequest.copy(customerEmail = "buyer@example.com", formalQuoteRequested = true, recipientName = "테스트건설", replyChannel = "both")
+        compose.setContent { NamuFarmTheme { WebRequestDetail(formal) } }
+        compose.onNodeWithText("buyer@example.com").assertIsDisplayed()
+        compose.onNodeWithText("공식 견적서 요청").assertIsDisplayed()
+        compose.onNodeWithText("받는 방법 · 이메일 PDF와 문자 이미지").assertIsDisplayed()
+        compose.onNodeWithText("견적서 수신인 · 테스트건설").assertIsDisplayed()
+    }
+
     private fun capture(name: String, node: SemanticsNodeInteraction) {
         val directory = File("build/outputs/ui-previews").apply { mkdirs() }
         // captureToImage waits for a device Window redraw that Robolectric does not provide.

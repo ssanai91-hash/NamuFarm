@@ -109,11 +109,11 @@ class MainActivity : ComponentActivity() {
                 if (showWebInbox || webRequestId != null) {
                     WebQuoteInboxDialog(webState, webRequestId, uiState.customerPhone, uiState.estimateCart.size,
                         onRefresh = webInbox::refresh, onPair = webInbox::pair, onRead = webInbox::read,
-                        onUsePhone = { phone ->
+                        onUseRequest = { request ->
                             if (uiState.isSavingQuote) webInbox.showMessage("견적 저장이 끝난 뒤 고객 번호를 적용해주세요.")
                             else {
-                                viewModel.updateCustomerPhone(phone)
-                                viewModel.showMessage("고객 번호를 적용했어요. 재고와 규격을 확인하고 품목을 담아주세요.")
+                                viewModel.useWebRequestForQuote(request)
+                                viewModel.showMessage("고객 정보를 적용했어요. 재고와 규격을 확인하고 품목을 담아주세요.")
                                 showWebInbox = false; webRequestId = null
                             }
                         }, onMessageConsumed = webInbox::clearMessage,

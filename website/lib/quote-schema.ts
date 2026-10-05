@@ -15,9 +15,15 @@ export const quoteSchema = z.object({
   // Preserve genuine consent recorded by an older, pending request for receipt retries.
   consent: z.literal(true).optional(),
   website: z.string().max(0),
+  // Optional for older pending receipts: never add defaults to their original payload.
+  customerEmail: z.string().trim().max(254).refine(v => !v || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v), "이메일 주소를 확인해주세요.").optional(),
+  formalQuoteRequested: z.boolean().optional(),
+  recipientName: z.string().regex(/^[^\x00-\x1f]*$/, "입력할 수 없는 문자가 있습니다.").trim().max(100).optional(),
+  replyChannel: z.enum(["sms", "email", "both"]).optional(),
 }).strict().superRefine((request, context) => {
   const current = request.processingBasis === "quote_request" && request.consent === undefined;
   const legacy = request.processingBasis === undefined && request.consent === true;
+  if ((request.replyChannel === "email" || request.replyChannel === "both") && !request.customerEmail) context.addIssue({ code: z.ZodIssueCode.custom, path: ["customerEmail"], message: "이메일로 견적서를 받으려면 이메일 주소를 입력해주세요." });
   if (!current && !legacy) context.addIssue({ code: z.ZodIssueCode.custom, message: "견적 요청 정보를 다시 확인해주세요." });
 });
 export type QuoteItem = z.infer<typeof quoteItemSchema>;

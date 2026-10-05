@@ -32,7 +32,7 @@ function doPost(e) {
     return json_({ ok: false, code: code });
   }
 }
-function doGet() { return json_({ ok: true, service: 'namufarm-quote-requests', version: 2, processingBases: ['quote_request'] }); }
+function doGet() { return json_({ ok: true, service: 'namufarm-quote-requests', version: 3, processingBases: ['quote_request'], requestFields: ['customerEmail','formalQuoteRequested','recipientName','replyChannel'] }); }
 function json_(value) { return ContentService.createTextOutput(JSON.stringify(value)).setMimeType(ContentService.MimeType.JSON); }
 function fail_(code) { const error = new Error(code); error.code = code; throw error; }
 function assert_(value, code) { if (!value) fail_(code || 'INVALID'); }
@@ -55,11 +55,25 @@ function validateRequest_(raw) {
   const phone = text_(raw.customerPhone, 20, 9).replace(/[\s()-]/g, '');
   assert_(/^0\d{8,10}$/.test(phone));
   assert_(Array.isArray(raw.items) && raw.items.length > 0 && raw.items.length <= 20);
-  return { requestId: raw.requestId.toLowerCase(), customerName: text_(raw.customerName, 50, 2), customerPhone: phone,
+  const request = { requestId: raw.requestId.toLowerCase(), customerName: text_(raw.customerName, 50, 2), customerPhone: phone,
     region: text_(raw.region, 100, 2), items: raw.items.map(item => {
       assert_(item && Number.isSafeInteger(item.quantity) && item.quantity > 0 && item.quantity <= 1000000);
       return { species: text_(item.species, 80, 1), specification: text_(item.specification, 120), quantity: item.quantity };
     }), message: text_(raw.message, 1000), ...(current ? { processingBasis: 'quote_request' } : { consent: true }) };
+  // Keep v1/v2 canonical JSON byte-for-byte when the new fields were not supplied.
+  if (['customerEmail','formalQuoteRequested','recipientName','replyChannel'].some(key => Object.prototype.hasOwnProperty.call(raw, key))) {
+    const email = text_(raw.customerEmail === undefined ? '' : raw.customerEmail, 254);
+    assert_(!email || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email));
+    const formal = raw.formalQuoteRequested === undefined ? false : raw.formalQuoteRequested;
+    assert_(typeof formal === 'boolean');
+    const recipient = text_(raw.recipientName === undefined ? '' : raw.recipientName, 100);
+    assert_(!/[\x00-\x1f]/.test(recipient));
+    const channel = raw.replyChannel === undefined ? 'sms' : raw.replyChannel;
+    assert_(['sms','email','both'].indexOf(channel) >= 0);
+    assert_(channel === 'sms' || email.length > 0);
+    Object.assign(request, {customerEmail:email, formalQuoteRequested:formal, recipientName:recipient, replyChannel:channel});
+  }
+  return request;
 }
 function sheet_() {
   const id = PropertiesService.getScriptProperties().getProperty('SPREADSHEET_ID');

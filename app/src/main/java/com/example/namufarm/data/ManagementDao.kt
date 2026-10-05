@@ -108,6 +108,21 @@ interface ManagementDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     fun insertSpecies(species: SpeciesEntity)
 
+    @Query("SELECT * FROM quote_list WHERE quote_number = :number")
+    fun getQuoteByNumber(number: String): List<QuoteEntity>
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    fun insertQuoteContact(contact: QuoteContactEntity)
+    @Query("SELECT * FROM quote_contact WHERE quoteNumber = :number")
+    fun getQuoteContact(number: String): QuoteContactEntity?
+    @Query("DELETE FROM quote_contact WHERE quoteNumber = :number")
+    fun deleteQuoteContact(number: String)
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    fun insertQuoteDocument(document: QuoteDocumentEntity)
+    @Query("SELECT * FROM quote_document WHERE quoteNumber = :number")
+    fun getQuoteDocument(number: String): QuoteDocumentEntity?
+    @Query("SELECT * FROM quote_document ORDER BY issuedAt DESC")
+    fun getQuoteDocuments(): List<QuoteDocumentEntity>
+
     // --- 📋 견적서 & 주문서 관리 ---
 
     @Insert

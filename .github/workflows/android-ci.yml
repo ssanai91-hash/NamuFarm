@@ -55,6 +55,7 @@ jobs:
           name: namufarm-ui-review
           path: |
             app/build/outputs/ui-previews/*.png
+            app/build/outputs/quote-previews/*
             app/build/reports/tests/testDebugUnitTest/
 
       - name: Upload debug APK

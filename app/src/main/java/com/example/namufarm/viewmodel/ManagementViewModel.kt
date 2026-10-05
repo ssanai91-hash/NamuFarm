@@ -44,6 +44,8 @@ data class ManagementUiState(
     val estimateCart: List<CartItem> = emptyList(),
 
     val customerPhone: String = "",
+    val quoteRecipient: com.example.namufarm.quotation.QuoteRecipient = com.example.namufarm.quotation.QuoteRecipient(),
+    val quoteDocuments: List<QuoteDocumentEntity> = emptyList(),
     val recentCallList: List<CallLogItem> = emptyList(),
     val todayQuotes: List<QuoteEntity> = emptyList(),
     val todayOrders: List<OrderEntity> = emptyList(),
@@ -391,7 +393,27 @@ class ManagementViewModel(
 
     fun clearCart() { _uiState.update { it.copy(estimateCart = emptyList()) } }
     fun clearMessage() { _uiState.update { it.copy(message = null) } }
-    fun updateCustomerPhone(phone: String) { _uiState.update { it.copy(customerPhone = phone) } }
+    fun updateCustomerPhone(phone: String) {
+        if (_uiState.value.isSavingQuote) return
+        _uiState.update { current ->
+            val same = phone.replace(Regex("[\\s()-]"), "") == current.customerPhone.replace(Regex("[\\s()-]"), "")
+            current.copy(customerPhone = phone, quoteRecipient = if (same) current.quoteRecipient else com.example.namufarm.quotation.QuoteRecipient())
+        }
+    }
+    fun updateQuoteRecipient(recipient: com.example.namufarm.quotation.QuoteRecipient) {
+        if (!_uiState.value.isSavingQuote) _uiState.update { it.copy(quoteRecipient = recipient) }
+    }
+    fun useWebRequestForQuote(request: WebQuoteRequestEntity) {
+        if (!_uiState.value.isSavingQuote) _uiState.update { it.copy(customerPhone = request.customerPhone, quoteRecipient = com.example.namufarm.quotation.QuoteRecipient.from(request)) }
+    }
+    suspend fun savedQuote(number: String) = withContext(Dispatchers.IO) { repository.getSavedQuote(number) }
+    suspend fun quoteRecipient(number: String) = withContext(Dispatchers.IO) { repository.getQuoteRecipient(number) }
+    suspend fun quoteDocument(number: String) = withContext(Dispatchers.IO) { repository.getQuoteDocument(number) }
+    suspend fun issueDocument(number: String, issuer: com.example.namufarm.quotation.QuoteIssuer, recipient: com.example.namufarm.quotation.QuoteRecipient, tax: Long, validUntil: String, notes: String, account: String) = withContext(Dispatchers.IO) {
+        val result = repository.issueQuoteDocument(number, issuer, tax, validUntil, notes, account, recipient)
+        _uiState.update { it.copy(quoteDocuments = repository.getQuoteDocuments()) }
+        result
+    }
 
     fun fetchRecentCallLogs(context: android.content.Context) {
         launchOperation {
@@ -434,7 +456,7 @@ class ManagementViewModel(
     }
 
     // 견적 저장
-    fun saveCurrentQuote(isPrepaid: Boolean = false, shippingFee: Int = 0, onSaved: () -> Unit = {}) {
+    fun saveCurrentQuote(isPrepaid: Boolean = false, shippingFee: Int = 0, onSaved: (QuoteEntity) -> Unit = {}) {
         val state = _uiState.value
         if (state.estimateCart.isEmpty()) return
         if (!quoteSaveInProgress.compareAndSet(false, true)) return
@@ -467,8 +489,7 @@ class ManagementViewModel(
 
                 val amounts = OrderAmounts.calculate(OrderSummaryCodec.parseStrict(detailSummary), isPrepaid, shippingFee)
 
-                repository.insertQuote(
-                    QuoteEntity(
+                val savedQuote = QuoteEntity(
                         quoteNumber = quoteNumber,
                         saveDate = displayDate,
                         customerPhone = state.customerPhone,
@@ -478,7 +499,7 @@ class ManagementViewModel(
                         isPrepaid = isPrepaid,
                         shippingFee = shippingFee
                     )
-                )
+                repository.insertQuoteWithContact(savedQuote, state.quoteRecipient)
 
                 loadTodayData()
                 _uiState.update {
@@ -487,7 +508,7 @@ class ManagementViewModel(
                         message = "💾 견적 저장완료: $quoteNumber"
                     )
                 }
-                withContext(Dispatchers.Main) { onSaved() }
+                withContext(Dispatchers.Main) { onSaved(savedQuote) }
             } finally {
                 quoteSaveInProgress.set(false)
                 _uiState.update { it.copy(isSavingQuote = false) }
@@ -557,7 +578,7 @@ class ManagementViewModel(
         launchOperation {
             val quotes = repository.getQuotesForDate(todayDatePrefix())
             val orders = repository.getOrdersForDate(todayDatePrefix())
-            _uiState.update { it.copy(todayQuotes = quotes, todayOrders = orders) }
+            _uiState.update { it.copy(todayQuotes = quotes, todayOrders = orders, quoteDocuments = repository.getQuoteDocuments()) }
         }
     }
 
@@ -830,6 +851,7 @@ class ManagementViewModel(
             it.copy(
                 estimateCart = emptyList(),
                 customerPhone = "",
+                quoteRecipient = com.example.namufarm.quotation.QuoteRecipient(),
                 message = null
             )
         }

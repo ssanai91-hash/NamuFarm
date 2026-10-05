@@ -195,6 +195,9 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
         } else callLogPermissionLauncher.launch(permission)
     }
 
+    var documentQuoteNumber by rememberSaveable { mutableStateOf<String?>(null) }
+    var showDocumentHistory by rememberSaveable { mutableStateOf(false) }
+
     fun sendQuoteSms(phone: String, body: String) {
         openSmsComposer(context, phone, body)?.let(viewModel::showMessage)
     }
@@ -228,13 +231,15 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
             onRecentCalls = ::openRecentCalls,
             onSendSms = { sendQuoteSms(uiState.customerPhone, viewModel.generateQuoteText(isPrepaid, shippingFee)) },
             onSave = {
-                viewModel.saveCurrentQuote(isPrepaid, shippingFee) {
+                viewModel.saveCurrentQuote(isPrepaid, shippingFee) { saved ->
+                    if (uiState.quoteRecipient.formalQuoteRequested) documentQuoteNumber = saved.quoteNumber
                     showCartDialog = false
                     shippingFee = 0
                     isPrepaid = true
                 }
             },
-            onDismiss = { showCartDialog = false }
+            onDismiss = { showCartDialog = false }, recipient = uiState.quoteRecipient,
+            onRecipient = viewModel::updateQuoteRecipient
         )
     }
 
@@ -330,7 +335,8 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
     if (showTodayQuotesDialog) TodayQuotesDialog(
         uiState.todayQuotes,
         onSelect = { selectedQuote = it; showQuoteDetailDialog = true },
-        onDismiss = { showTodayQuotesDialog = false }
+        onDismiss = { showTodayQuotesDialog = false },
+        onDocuments = { viewModel.loadTodayData(); showDocumentHistory = true }
     )
     if (showTodayOrdersDialog) TodayOrdersDialog(
         uiState.todayOrders,
@@ -350,9 +356,12 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                 }
             },
             onDelete = { quoteToDelete = quote; showDeleteQuoteConfirm = true },
-            onDismiss = { showQuoteDetailDialog = false }
+            onDismiss = { showQuoteDetailDialog = false },
+            onDocument = { documentQuoteNumber = quote.quoteNumber }
         )
     }
+    documentQuoteNumber?.let { number -> FormalQuoteDialog(viewModel, number) { documentQuoteNumber = null } }
+    if (showDocumentHistory) QuoteDocumentHistoryDialog(uiState.quoteDocuments, onSelect = { documentQuoteNumber = it.quoteNumber }, onDismiss = { showDocumentHistory = false })
     if (showOrderDetailDialog) selectedOrder?.let { selected ->
         val order = uiState.todayOrders.firstOrNull { it.orderNumber == selected.orderNumber } ?: selected
         OrderDetailsDialog(

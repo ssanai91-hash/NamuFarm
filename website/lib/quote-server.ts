@@ -11,9 +11,11 @@ export async function quoteServiceReady(settings: ReturnType<typeof quoteSetting
   if (!settings.ready) return false;
   try {
     const response = await fetch(settings.url, { redirect: "follow", cache: "no-store", signal: AbortSignal.timeout(5000) });
-    const service = await response.json() as { ok?: boolean; service?: string; processingBases?: string[] };
+    const service = await response.json() as { ok?: boolean; service?: string; processingBases?: string[]; requestFields?: string[] };
     return response.ok && service.ok === true && service.service === "namufarm-quote-requests"
-      && Array.isArray(service.processingBases) && service.processingBases.includes("quote_request");
+      && Array.isArray(service.processingBases) && service.processingBases.includes("quote_request")
+      && Array.isArray(service.requestFields)
+      && ["customerEmail", "formalQuoteRequested", "recipientName", "replyChannel"].every(field => service.requestFields!.includes(field));
   } catch { return false; }
 }
 export function jsonResult(value: unknown, status = 200) {

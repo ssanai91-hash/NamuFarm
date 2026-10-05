@@ -27,7 +27,9 @@ data class WebQuoteEnvelope(
 data class WebQuoteRemote(
     val requestId: String? = null, val sequence: Long? = null, val createdAt: String? = null,
     val customerName: String? = null, val customerPhone: String? = null,
-    val region: String? = null, val items: List<WebQuoteItemRemote?>? = null, val message: String? = null
+    val region: String? = null, val items: List<WebQuoteItemRemote?>? = null, val message: String? = null,
+    val customerEmail: String? = null, val formalQuoteRequested: Boolean? = null,
+    val recipientName: String? = null, val replyChannel: String? = null
 )
 data class WebQuoteItemRemote(val species: String? = null, val specification: String? = null, val quantity: Int? = null)
 
@@ -73,8 +75,14 @@ object WebQuoteValidator {
                 check(quantity in 1..1_000_000)
                 WebQuoteItem(text(item.species, 80, 1), text(item.specification, 120, 0), quantity)
             }
+            val email = text(row.customerEmail ?: "", 254, 0)
+            val channel = row.replyChannel ?: "sms"
+            check(com.example.namufarm.quotation.validQuoteEmail(email) && channel in listOf("sms", "email", "both"))
+            check(channel == "sms" || email.isNotEmpty())
+            val recipient = text(row.recipientName ?: "", 100, 0)
+            check(recipient.none { it.code < 32 })
             WebQuoteRequestEntity(id, sequence, created, text(row.customerName, 50, 2), phone,
-                text(row.region, 100, 2), Gson().toJson(checkedItems), text(row.message, 1000, 0))
+                text(row.region, 100, 2), Gson().toJson(checkedItems), text(row.message, 1000, 0), customerEmail = email, formalQuoteRequested = row.formalQuoteRequested ?: false, recipientName = recipient, replyChannel = channel)
         }
     }
     private fun text(value: String?, max: Int, min: Int): String = checkNotNull(value).also { check(it.length in min..max && it == it.trim()) }

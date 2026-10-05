@@ -99,9 +99,15 @@ class LocalDataSource(
     fun upsertSpecies(species: SpeciesEntity): Long = dao.upsertSpecies(species)
     fun deactivateSpecies(speciesId: Int) = dao.deactivateSpecies(speciesId)
 
+    fun getQuoteByNumber(number: String): QuoteEntity? = dao.getQuoteByNumber(number).also { check(it.size <= 1) { "중복 견적번호를 확인해주세요." } }.singleOrNull()
+    fun insertQuoteContact(contact: com.example.namufarm.data.QuoteContactEntity) = dao.insertQuoteContact(contact)
+    fun getQuoteContact(number: String) = dao.getQuoteContact(number)
+    fun getQuoteDocument(number: String) = dao.getQuoteDocument(number)
+    fun getQuoteDocuments() = dao.getQuoteDocuments()
+    fun insertQuoteDocument(document: com.example.namufarm.data.QuoteDocumentEntity) = dao.insertQuoteDocument(document)
     fun insertQuote(quote: QuoteEntity) = dao.insertQuote(quote)
     fun getQuoteById(quoteId: Int): QuoteEntity? = dao.getQuoteById(quoteId)
-    fun deleteQuote(quote: QuoteEntity) = dao.deleteQuote(quote)
+    fun deleteQuote(quote: QuoteEntity) { dao.deleteQuote(quote); dao.deleteQuoteContact(quote.quoteNumber) }
     fun getLastQuoteId(): Int? = dao.getLastQuoteId()
     fun getQuotesForDate(datePrefix: String): List<QuoteEntity> =
         dao.getQuotesForDate(datePrefix)

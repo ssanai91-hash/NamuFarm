@@ -25,6 +25,8 @@ export default function QuoteHome() {
   const nextLine = useRef(1);
   const [name, setName] = useState(""); const [phone, setPhone] = useState("");
   const [region, setRegion] = useState(""); const [message, setMessage] = useState("");
+  const [email, setEmail] = useState(""); const [formalQuote, setFormalQuote] = useState(false);
+  const [recipient, setRecipient] = useState(""); const [replyChannel, setReplyChannel] = useState<"sms" | "email" | "both">("sms");
   const [website, setWebsite] = useState("");
   const [ready, setReady] = useState<boolean | null>(null);
   const [error, setError] = useState(""); const [notice, setNotice] = useState("");
@@ -43,7 +45,7 @@ export default function QuoteHome() {
       const restored = quoteSchema.safeParse(saved?.request);
       if (restored.success && Date.now() - saved.createdAt < 86400000) {
         const v = restored.data;
-        setName(v.customerName); setPhone(v.customerPhone); setRegion(v.region); setMessage(v.message);
+        setName(v.customerName); setPhone(v.customerPhone); setRegion(v.region); setMessage(v.message); setEmail(v.customerEmail ?? ""); setFormalQuote(v.formalQuoteRequested ?? false); setRecipient(v.recipientName ?? ""); setReplyChannel(v.replyChannel ?? "sms");
         setLines(v.items.map(item => ({ ...item, id: nextLine.current++, quantity: String(item.quantity) })));
         const { requestId, ...payload } = v;
         attempt.current = { id: requestId, fingerprint: requestFingerprint(payload) };
@@ -93,7 +95,7 @@ export default function QuoteHome() {
   }
   function prepare(event: FormEvent) {
     event.preventDefault(); setError("");
-    const candidate = { requestId: newRequestId(), customerName: name, customerPhone: phone, region, items: lines.map(({ species, specification, quantity }) => ({ species, specification, quantity: Number(quantity) })), message, processingBasis: "quote_request", website };
+    const candidate = { requestId: newRequestId(), customerName: name, customerPhone: phone, region, items: lines.map(({ species, specification, quantity }) => ({ species, specification, quantity: Number(quantity) })), message, processingBasis: "quote_request", website, customerEmail: email, formalQuoteRequested: formalQuote, recipientName: formalQuote ? recipient : "", replyChannel: formalQuote ? replyChannel : "sms" };
     const parsed = quoteSchema.safeParse(candidate);
     if (!parsed.success) { setError(parsed.error.issues[0]?.message ?? "입력 내용을 확인해주세요."); return; }
     const { requestId: _, ...payload } = parsed.data;
@@ -121,7 +123,7 @@ export default function QuoteHome() {
       if (!response.ok || result.requestId !== review.requestId) throw new Error(result.error || "접수 결과를 확인하지 못했어요. 다시 시도해주세요.");
       sessionStorage.removeItem("namufarm.pending-request");
       setUncertain(false); setSuccess(review.requestId); setReview(null); attempt.current = null;
-      setName(""); setPhone(""); setRegion(""); setMessage(""); setLines([emptyLine(nextLine.current++)]);
+      setName(""); setPhone(""); setRegion(""); setMessage(""); setEmail(""); setFormalQuote(false); setRecipient(""); setReplyChannel("sms"); setLines([emptyLine(nextLine.current++)]);
     } catch (e) { setError(e instanceof Error && e.name !== "TimeoutError" ? e.message : "접수 결과를 확인하지 못했어요. 같은 내용으로 다시 보내주세요."); }
     finally { setBusy(false); inFlight.current = false; }
   }
@@ -163,9 +165,18 @@ export default function QuoteHome() {
             <fieldset><legend><span>02</span>견적을 안내받을 정보를 남겨주세요</legend><div className="contact-grid">
               <div className="field"><Label htmlFor="name">성함 *</Label><Input id="name" autoComplete="name" required minLength={2} maxLength={50} placeholder="받으실 분 성함" value={name} onChange={e => setName(e.target.value)} /></div>
               <div className="field"><Label htmlFor="phone">연락처 *</Label><Input id="phone" type="tel" autoComplete="tel" inputMode="tel" required maxLength={20} placeholder="010-1234-5678" value={phone} onChange={e => setPhone(e.target.value)} /></div>
+              <div className="field full"><Label htmlFor="email">이메일 <small>{formalQuote && replyChannel !== "sms" ? "견적서 이메일 수신 시 필수" : "선택"}</small></Label><Input id="email" type="email" autoComplete="email" maxLength={254} required={formalQuote && replyChannel !== "sms"} placeholder="견적서를 이메일로 받고 싶다면 입력해주세요" value={email} onChange={e => setEmail(e.target.value)} /></div>
               <div className="field full"><Label htmlFor="region">배송 지역 *</Label><Input id="region" autoComplete="address-level2" required minLength={2} maxLength={100} placeholder="예: 경북 경산시 · 상세 주소는 필요 없어요" value={region} onChange={e => setRegion(e.target.value)} /></div>
               <div className="field full"><Label htmlFor="message">궁금한 점이나 요청사항 <small>선택</small></Label><Textarea id="message" maxLength={1000} placeholder="심을 장소, 희망 배송 시기 등을 편하게 남겨주세요." value={message} onChange={e => setMessage(e.target.value)} rows={3} /></div>
             </div></fieldset>
+            <fieldset className="formal-quote-options"><legend><span>03</span>공식 견적서가 필요하신가요?</legend>
+              <label className="quote-option-check"><input type="checkbox" checked={formalQuote} onChange={e => setFormalQuote(e.target.checked)} /><span>공식 견적서를 요청합니다 <small>선택</small></span></label>
+              {formalQuote && <div className="contact-grid">
+                <div className="field full"><Label htmlFor="recipient">견적서 수신인·회사명 <small>선택</small></Label><Input id="recipient" maxLength={100} placeholder="비워두면 입력하신 성함으로 작성합니다" value={recipient} onChange={e => setRecipient(e.target.value)} /></div>
+                <div className="field full"><Label htmlFor="reply-channel">견적서 받는 방법</Label><select id="reply-channel" value={replyChannel} onChange={e => setReplyChannel(e.target.value as "sms" | "email" | "both")}><option value="sms">문자 · 견적서 이미지</option><option value="email">이메일 · PDF 견적서</option><option value="both">이메일과 문자 · 둘 다</option></select></div>
+                <p className="field full submit-note">품목·가격과 배송 조건을 확인한 후 견적서를 작성해 안내드립니다.</p>
+              </div>}
+            </fieldset>
             <div className="honeypot" aria-hidden="true"><label htmlFor="website">Website</label><input id="website" tabIndex={-1} autoComplete="off" value={website} onChange={e => setWebsite(e.target.value)} /></div>
             <div className="processing-notice"><p>{quoteProcessingNotice}</p><a href="/privacy">개인정보 처리방침</a></div>
             <div ref={errorRef} tabIndex={-1} className={error ? "form-error" : ""} role={error ? "alert" : undefined}>{error}</div>
@@ -185,6 +196,6 @@ export default function QuoteHome() {
     </main>
     <footer className="site-footer"><div className="wrap footer-inner"><div><a href="#home" className="brand"><Sprout /><span>나무팜<small>NAMUFARM</small></span></a><p>당신의 내일에, 푸르름을 더합니다.</p></div><div><a href="#quote">묘목 견적 상담</a><a href="/privacy">개인정보 처리방침</a><small>© {new Date().getFullYear()} NAMUFARM. All rights reserved.</small></div></div></footer>
     <div className={`mobile-cta ${atForm || review ? "is-hidden" : ""}`}><span><strong>어떤 나무를 심을까요?</strong><small>품목과 수량만 알려주세요.</small></span><Button asChild><a href="#quote"><FileText />견적 요청</a></Button></div>
-    <Dialog open={!!review} onOpenChange={open => { if (!open && !busy && !uncertain) setReview(null); }}><DialogContent className="review-dialog" onInteractOutside={e => { if (busy || uncertain) e.preventDefault(); }} onEscapeKeyDown={e => { if (busy || uncertain) e.preventDefault(); }} showCloseButton={!busy && !uncertain}><DialogHeader><DialogTitle>보내기 전에 확인해주세요</DialogTitle><DialogDescription>아래 내용으로 묘목 견적 상담을 요청합니다.</DialogDescription></DialogHeader>{review && <><div className="review-items">{review.items.map((item, i) => <div key={i}><span><strong>{item.species}</strong><small>{item.specification || "규격 상담 희망"}</small></span><b>{item.quantity.toLocaleString()}주</b></div>)}</div><dl className="review-contact"><dt>성함</dt><dd>{review.customerName}</dd><dt>연락처</dt><dd>{review.customerPhone}</dd><dt>배송 지역</dt><dd>{review.region}</dd>{review.message && <><dt>요청사항</dt><dd>{review.message}</dd></>}</dl>{ready === false && <p className="service-notice">온라인 접수를 준비하고 있어요. 현재 요청은 전송할 수 없습니다.</p>}{uncertain && <p className="service-notice">접수 결과를 확인 중입니다. 같은 요청번호로 다시 보내면 중복 접수되지 않아요. 확인 전에는 내용을 수정할 수 없습니다.</p>}{error && <p className="form-error" role="alert">{error}</p>}<Button className="submit-button" type="button" disabled={busy || ready !== true} onClick={submit}>{busy ? <LoaderCircle className="animate-spin" /> : <CheckCheck />}{busy ? "접수 확인 중…" : "견적 요청 보내기"}</Button><Button type="button" variant="outline" onClick={() => setReview(null)} disabled={busy || uncertain}>내용 수정하기</Button><p className="submit-note">접수 완료 안내가 나오면 요청이 저장된 상태입니다.</p></>}</DialogContent></Dialog>
+    <Dialog open={!!review} onOpenChange={open => { if (!open && !busy && !uncertain) setReview(null); }}><DialogContent className="review-dialog" onInteractOutside={e => { if (busy || uncertain) e.preventDefault(); }} onEscapeKeyDown={e => { if (busy || uncertain) e.preventDefault(); }} showCloseButton={!busy && !uncertain}><DialogHeader><DialogTitle>보내기 전에 확인해주세요</DialogTitle><DialogDescription>아래 내용으로 묘목 견적 상담을 요청합니다.</DialogDescription></DialogHeader>{review && <><div className="review-items">{review.items.map((item, i) => <div key={i}><span><strong>{item.species}</strong><small>{item.specification || "규격 상담 희망"}</small></span><b>{item.quantity.toLocaleString()}주</b></div>)}</div><dl className="review-contact"><dt>성함</dt><dd>{review.customerName}</dd><dt>연락처</dt><dd>{review.customerPhone}</dd><dt>배송 지역</dt><dd>{review.region}</dd>{review.customerEmail && <><dt>이메일</dt><dd>{review.customerEmail}</dd></>}{review.formalQuoteRequested && <><dt>공식 견적서</dt><dd>{review.replyChannel === "email" ? "이메일 · PDF" : review.replyChannel === "both" ? "이메일과 문자" : "문자 · 이미지"}</dd><dt>견적서 수신인</dt><dd>{review.recipientName || review.customerName}</dd></>}{review.message && <><dt>요청사항</dt><dd>{review.message}</dd></>}</dl>{ready === false && <p className="service-notice">온라인 접수를 준비하고 있어요. 현재 요청은 전송할 수 없습니다.</p>}{uncertain && <p className="service-notice">접수 결과를 확인 중입니다. 같은 요청번호로 다시 보내면 중복 접수되지 않아요. 확인 전에는 내용을 수정할 수 없습니다.</p>}{error && <p className="form-error" role="alert">{error}</p>}<Button className="submit-button" type="button" disabled={busy || ready !== true} onClick={submit}>{busy ? <LoaderCircle className="animate-spin" /> : <CheckCheck />}{busy ? "접수 확인 중…" : "견적 요청 보내기"}</Button><Button type="button" variant="outline" onClick={() => setReview(null)} disabled={busy || uncertain}>내용 수정하기</Button><p className="submit-note">접수 완료 안내가 나오면 요청이 저장된 상태입니다.</p></>}</DialogContent></Dialog>
   </>;
 }
