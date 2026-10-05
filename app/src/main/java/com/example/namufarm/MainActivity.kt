@@ -34,8 +34,6 @@ import com.example.namufarm.ui.theme.NamuFarmTheme
 import com.example.namufarm.viewmodel.ManagementViewModel
 import com.example.namufarm.viewmodel.ManagementViewModelFactory
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import androidx.lifecycle.lifecycleScope
 import com.example.namufarm.ui.WebQuoteInboxDialog
 import com.example.namufarm.viewmodel.WebInboxViewModel
 import com.example.namufarm.viewmodel.WebInboxViewModelFactory
@@ -75,7 +73,6 @@ class MainActivity : ComponentActivity() {
 
         val webInbox = ViewModelProvider(this, WebInboxViewModelFactory(WebRequestConnection(this, repository)))[WebInboxViewModel::class.java]
 
-        androidx.lifecycle.lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) { try { repository.initializePrivacy(); repository.cleanupPrivacy() } catch(e: Exception) { viewModel.showMessage("고객정보 보관 상태를 확인해주세요. 보안 설정 화면에서 백업을 확인할 수 있어요.") } }
         setContent {
             NamuFarmTheme {
                 val navController = rememberNavController()

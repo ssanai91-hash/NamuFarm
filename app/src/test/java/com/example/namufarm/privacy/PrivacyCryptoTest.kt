@@ -15,6 +15,7 @@ import javax.crypto.spec.SecretKeySpec
 @Config(sdk=[28])
 class PrivacyCryptoTest {
     companion object { private val pair=HybridCrypto.generate() }
+    private data class Fixture(val publicKey:String,val privateKey:String,val reference:String,val plaintext:String,val encrypted:PrivacyEnvelope)
     @Test fun phoneAndKoreanNameRoundTripWithoutPlaintextStorage() {
         val plain="{\"customerName\":\"김나무\",\"customerPhone\":\"01012345678\"}"
         val envelope=HybridCrypto.seal(plain,pair.public,"quote","request")
@@ -34,7 +35,6 @@ class PrivacyCryptoTest {
         assertTrue(runCatching {HybridCrypto.open(e,other.private,other.public,"quote","one")}.isFailure)
     }
     @Test fun websiteWebCryptoFixtureDecryptsInActualAndroidProtocol() {
-        data class Fixture(val publicKey:String,val privateKey:String,val reference:String,val plaintext:String,val encrypted:PrivacyEnvelope)
         val f=Gson().fromJson(javaClass.classLoader!!.getResourceAsStream("website-crypto-test.json")!!.bufferedReader().use {it.readText()},Fixture::class.java)
         val public=HybridCrypto.publicKey(f.publicKey)
         val private=KeyFactory.getInstance("RSA").generatePrivate(PKCS8EncodedKeySpec(HybridCrypto.decode(f.privateKey)))
