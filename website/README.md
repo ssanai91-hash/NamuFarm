@@ -35,7 +35,9 @@ corepack pnpm start
 | `QUOTE_WEB_SECRET` | Apps Script의 `WEB_SECRET`과 같은 32자 이상 비밀키 |
 | `QUOTE_PRIVACY_NOTICE` | 운영자가 확정한 개인정보 처리방침(처리 근거·항목·목적·문의 연락처·보유·파기 기준 포함) |
 
-이 값들은 실제 운영 환경의 비밀 설정에 넣고 Git에 커밋하지 않습니다. 세 설정과 동의 없이 견적을 처리하는 접수 서버 v2의 `processingBases: ["quote_request"]` 응답이 모두 확인돼야 고객 접수가 활성화됩니다. 새 요청에는 `consent`를 보내지 않습니다. 과거에 동의한 요청의 재시도는 기존 값과 접수번호를 보존합니다. 전체 설정 순서와 Android·FCM 연결은 [홈페이지 접수 안내](../docs/WEB_QUOTE_REQUESTS.md)에 있습니다.
+이 값들은 실제 운영 환경의 비밀 설정에 넣고 Git에 커밋하지 않습니다. 세 설정과 동의 없이 견적을 처리하는 접수 서버 v3의 `processingBases: ["quote_request"]` 응답과 새 `requestFields` 네 항목이 모두 확인돼야 고객 접수가 활성화됩니다. 새 요청에는 `consent`를 보내지 않습니다. 과거에 동의한 요청의 재시도는 기존 값과 접수번호를 보존합니다. 전체 설정 순서와 Android·FCM 연결은 [홈페이지 접수 안내](../docs/WEB_QUOTE_REQUESTS.md)에 있습니다.
+
+이메일은 선택 입력이며, 공식 견적서 요청 시 문자 이미지·이메일 PDF·둘 다를 선택할 수 있습니다. 이메일 수신 선택 시 이메일이 필요합니다. 최종 확인 화면에서도 이메일·수신인·전달 방법을 다시 보여줍니다. PDF/JPG 견적서 작성과 발송 준비는 Android 앱에서 운영자가 수행합니다.
 
 ## 주요 소스
 

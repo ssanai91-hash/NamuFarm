@@ -19,7 +19,7 @@ import kotlinx.coroutines.sync.Mutex
         WebQuoteRequestEntity::class,
         QuoteContactEntity::class, QuoteDocumentEntity::class
     ],
-    version = 14, // 웹 견적 요청함: 주문/재고와 별도 저장
+    version = 14, // 요청 연락처와 변경 없는 발행 견적서 기록
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {

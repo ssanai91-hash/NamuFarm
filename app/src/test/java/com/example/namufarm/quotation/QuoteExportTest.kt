@@ -2,9 +2,7 @@ package com.example.namufarm.quotation
 
 import android.content.Intent
 import android.graphics.BitmapFactory
-import android.graphics.pdf.PdfRenderer
 import android.net.Uri
-import android.os.ParcelFileDescriptor
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -22,7 +20,9 @@ class QuoteExportTest {
         val files = QuoteDocumentRenderer.export(RuntimeEnvironment.getApplication(), QuoteTestData.document())
         assertEquals("%PDF", files.pdf.inputStream().use { String(it.readNBytes(4)) })
         assertEquals(1, files.images.size)
-        PdfRenderer(ParcelFileDescriptor.open(files.pdf, ParcelFileDescriptor.MODE_READ_ONLY)).use { assertEquals(files.images.size, it.pageCount) }
+        val pdf = files.pdf.readBytes().toString(Charsets.ISO_8859_1)
+        assertEquals(files.images.size, Regex("/Type /Page ").findAll(pdf).count())
+        assertTrue(pdf.trimEnd().endsWith("%%EOF"))
         val bitmap = BitmapFactory.decodeFile(files.images.single().path)
         assertEquals(1190, bitmap.width); assertEquals(1684, bitmap.height); bitmap.recycle()
         val output = File("build/outputs/quote-previews").apply { mkdirs() }
@@ -32,7 +32,9 @@ class QuoteExportTest {
     @Test fun manyItemsPaginateWithAnImageForEveryPdfPage() {
         val files = QuoteDocumentRenderer.export(RuntimeEnvironment.getApplication(), QuoteTestData.document(40))
         assertTrue(files.images.size > 1)
-        PdfRenderer(ParcelFileDescriptor.open(files.pdf, ParcelFileDescriptor.MODE_READ_ONLY)).use { assertEquals(files.images.size, it.pageCount) }
+        val pdf = files.pdf.readBytes().toString(Charsets.ISO_8859_1)
+        assertEquals(files.images.size, Regex("/Type /Page ").findAll(pdf).count())
+        assertTrue(pdf.trimEnd().endsWith("%%EOF"))
         assertTrue(files.images.all { it.length() > 1000 })
         val output = File("build/outputs/quote-previews").apply { mkdirs() }
         files.pdf.copyTo(File(output, "quote-multipage.pdf"), overwrite = true)

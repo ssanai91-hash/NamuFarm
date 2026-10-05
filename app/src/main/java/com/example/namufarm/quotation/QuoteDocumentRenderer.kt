@@ -6,7 +6,6 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Typeface
-import android.graphics.pdf.PdfDocument
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.text.SimpleDateFormat
@@ -14,7 +13,7 @@ import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 
-/** One drawing model supplies both the vector PDF and the MMS images. */
+/** One drawing model supplies both the high-resolution PDF and the MMS images. */
 object QuoteDocumentRenderer {
     private const val WIDTH = 595
     private const val HEIGHT = 842
@@ -136,14 +135,16 @@ object QuoteDocumentRenderer {
         root.listFiles()?.filter { it.isDirectory && it.name != doc.id && System.currentTimeMillis() - it.lastModified() > 7 * 86400000L }?.forEach { it.deleteRecursively() }
         val folder = File(root, doc.id).apply { check(mkdirs() || isDirectory) }
         val pdfFile = File(folder, "${doc.number}.pdf")
-        val pdf = PdfDocument()
-        try {
-            layout.forEachIndexed { i, page ->
-                val native = pdf.startPage(PdfDocument.PageInfo.Builder(WIDTH, HEIGHT, i + 1).create())
-                draw(native.canvas, doc, page, i + 1, layout.size); pdf.finishPage(native)
-            }
-            atomic(pdfFile) { file -> file.outputStream().use(pdf::writeTo) }
-        } finally { pdf.close() }
+        val printImages = layout.mapIndexed { i, page ->
+            val bitmap = Bitmap.createBitmap(WIDTH * 4, HEIGHT * 4, Bitmap.Config.ARGB_8888)
+            try {
+                val canvas = Canvas(bitmap); canvas.scale(4f, 4f); draw(canvas, doc, page, i + 1, layout.size)
+                val image = File(folder, "print-${i + 1}.jpg")
+                atomic(image) { file -> file.outputStream().use { check(bitmap.compress(Bitmap.CompressFormat.JPEG, 95, it)) } }; image
+            } finally { bitmap.recycle() }
+        }
+        atomic(pdfFile) { QuotePdfWriter.write(it, printImages, WIDTH * 4, HEIGHT * 4) }
+        printImages.forEach { it.delete() }
         val images = layout.mapIndexed { i, page ->
             val bitmap = Bitmap.createBitmap(WIDTH * 2, HEIGHT * 2, Bitmap.Config.ARGB_8888)
             try {

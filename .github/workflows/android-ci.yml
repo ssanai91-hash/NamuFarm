@@ -32,6 +32,23 @@ jobs:
       - name: Unit tests and debug build
         run: ./gradlew testDebugUnitTest assembleDebug
 
+      - name: Validate generated quote PDFs
+        run: |
+          python3 -m pip install --quiet pypdf
+          python3 - <<'PYTHON'
+          from pathlib import Path
+          from pypdf import PdfReader
+          expected = {'quote-example.pdf': 1, 'quote-multipage.pdf': None}
+          for name, count in expected.items():
+              reader = PdfReader(Path('app/build/outputs/quote-previews') / name, strict=True)
+              assert len(reader.pages) == count if count else len(reader.pages) > 1
+              for page in reader.pages:
+                  assert tuple(page.mediabox) == (0, 0, 595, 842)
+                  image = page['/Resources']['/XObject']['/Im0'].get_object()
+                  assert image['/Width'] == 2380 and image['/Height'] == 3368
+              print(name, 'valid pages:', len(reader.pages))
+          PYTHON
+
       - name: Report test totals
         if: always()
         run: |
