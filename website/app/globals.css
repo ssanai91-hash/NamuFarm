@@ -33,7 +33,7 @@ body{font-size:16px} .field label,.field input,.field textarea,.consent-row>labe
 .test-mode-notice p { margin-top: .5rem; font-size: .875rem; }
 .test-mode-notice button { padding: .25rem 0; color: #705521; font-size: .875rem; text-decoration: underline; }
 .formal-quote-heading { display: flex; align-items: center; gap: .6rem; }
-.sample-help-button { display: inline-flex; justify-content: center; align-items: center; min-width: 2rem; width: 2rem; height: 2rem; flex-shrink: 0; border: 1px solid #63846b; border-radius: 50%; background: white; color: #205844; font-size: 1rem; font-weight: 700; cursor: pointer; }
+.sample-help-button { display: inline-flex; justify-content: center; align-items: center; min-width: 1rem; width: 1rem; height: 1rem; padding: 0; flex-shrink: 0; border: 1px solid #63846b; border-radius: 50%; background: white; color: #205844; font-size: .75rem; line-height: 1; font-weight: 700; cursor: pointer; }
 .sample-help-button:hover { background: #eaf1e8; }
 .sample-help-button:focus-visible { outline: 3px solid #63846b; outline-offset: 3px; }
 .footer-brand-row { display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap; }
@@ -44,7 +44,7 @@ body{font-size:16px} .field label,.field input,.field textarea,.consent-row>labe
 .quote-sample-dialog [data-slot=dialog-description] { font-size: .875rem; line-height: 1.7; }
 .quote-sample-preview { border: 1px solid #d7ddd5; background: white; }
 .quote-sample-preview img { display: block; width: 100%; height: auto; }
-@media(max-width:767px) { .footer-brand-row { gap: 1rem; } .footer-business span { font-size: .875rem; } .formal-quote-heading { align-items: flex-start; } .sample-help-button { margin-top: .1rem; } .quote-sample-dialog { padding: 1.25rem; } }
+@media(max-width:767px) { .footer-brand-row { gap: 1rem; } .footer-business span { font-size: .875rem; } .quote-sample-dialog { padding: 1.25rem; } }
 
 /* Separate items, recipient details and quotation options in both steps. */
 .quote-form .quote-section-box{min-width:0;border:1px solid #b9cdbf;border-radius:14px;padding:18px;background:#f9fcf9;margin-bottom:24px}
@@ -59,3 +59,61 @@ body{font-size:16px} .field label,.field input,.field textarea,.consent-row>labe
 @media(max-width:767px){.quote-form .quote-section-box{padding:16px 12px}.review-section-box{padding:14px 12px}.review-section-box .review-contact{grid-template-columns:80px minmax(0,1fr)}}
 
 .receipt code{font-size:clamp(1rem,2.6vw,1.2rem);font-weight:650}.receipt .receipt-date-label{margin-top:18px;font-size:14px}.receipt>span:first-child{font-size:14px}.receipt time{font-size:15px;color:#365b39;font-variant-numeric:tabular-nums}
+
+/* A botanical catalog: shared illustration atlas, individual seedling names. */
+.catalog-section{padding-block:72px}
+.catalog-heading{align-items:center;gap:24px}
+.catalog-heading>div>p{text-align:left;margin-top:12px;font-size:1rem!important;color:#5b6e61}
+.catalog-total{display:inline-flex;align-items:center;gap:7px;flex-shrink:0;padding:10px 16px;border:1px solid #d4e3d8;border-radius:999px;background:#f0f6f1;color:#37634a;font-size:.875rem}
+.catalog-total svg{width:18px;height:18px}.catalog-total strong{font-size:1.125rem;font-weight:750;font-variant-numeric:tabular-nums}
+.catalog-controls{padding:22px 24px;border:1px solid #dce7de;background:#fff;border-radius:18px;box-shadow:0 6px 24px #20584405}
+.catalog-search{position:relative;display:flex;align-items:center;max-width:480px;margin-bottom:20px}
+.catalog-search>svg{position:absolute;left:15px;width:20px;height:20px;color:#658171;pointer-events:none}
+.catalog-search input{width:100%;height:50px;padding:12px 48px 12px 46px;border-radius:12px;background:#f5f8f5;border-color:#d5e2d7;font-size:1rem;box-shadow:none}
+.catalog-search input::placeholder{font-size:.875rem;color:#687a6b;letter-spacing:-.025em}
+.catalog-search input::-webkit-search-cancel-button{appearance:none}
+.catalog-search>button{position:absolute;right:3px;width:44px;height:44px;color:#5f7769}
+.initial-filter{display:flex;flex-wrap:wrap;gap:7px}
+.initial-button{height:44px;min-width:44px;padding:0 11px!important;border:1px solid #dfE8e0;border-radius:10px;background:white;color:#4a6453;font-size:1rem;box-shadow:none}
+.initial-button:first-child{min-width:58px;font-size:.875rem}
+.initial-button:hover{background:#edf4ee;border-color:#a6bfae}
+.initial-button[aria-pressed=true]{background:#205844;color:white;border-color:#205844;box-shadow:0 3px 9px #20584419}
+.catalog-results-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-block:25px 16px;font-size:.875rem;color:#647b6a}
+.catalog-results-heading p{min-width:0;overflow-wrap:anywhere;color:#425e4c}
+.catalog-results-heading strong{font-weight:750;color:#205844;margin-left:6px;white-space:nowrap}
+.catalog-results-heading>span{flex-shrink:0;font-size:.875rem}
+.catalog-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:16px}
+.catalog-card{display:flex;flex-direction:column;align-items:stretch;position:relative;min-width:0;padding:15px 16px 18px;border:1px solid #dce6dd;border-radius:18px;background:#f3f7f1;text-align:center;color:#254d37;transition:transform .2s,box-shadow .2s,border-color .2s}
+.catalog-card.art-persimmon,.catalog-card.art-fruit{background:#fbf4e8;border-color:#e9dfcb}
+.catalog-card.art-pink-blossom{background:#fbf1f1;border-color:#eedddd}
+.catalog-card.art-lilac,.catalog-card.art-hydrangea{background:#f3f2fa;border-color:#e3dfed}
+.catalog-card.art-pine,.catalog-card.art-conifer{background:#edf5ef;border-color:#d8e6dc}
+.catalog-card.art-perennial{background:#f9f6ee;border-color:#e9e3d6}
+.catalog-card:hover{transform:translateY(-4px);box-shadow:0 10px 24px #20584412;border-color:#8baa93}
+.catalog-card:focus-visible{outline:3px solid #205844;outline-offset:4px}
+.catalog-card.selected{border-color:#205844;box-shadow:inset 0 0 0 1px #205844,0 8px 22px #20584410}
+.catalog-card-top{display:flex;align-items:center;justify-content:space-between;width:100%;gap:8px;color:#657f6a}
+.catalog-card-top>span:first-child{width:26px;height:26px;display:grid;place-items:center;border-radius:8px;background:#ffffffa8;font-size:.875rem;font-weight:550}
+.catalog-card-action{width:32px;height:32px;display:grid;place-items:center;background:#ffffffc2;border:1px solid #20584413;border-radius:50%;color:#547960}
+.catalog-card-action svg{width:18px;height:18px}.selected .catalog-card-action{background:#205844;color:white;border-color:#205844}
+.catalog-art{display:block;flex-shrink:0;width:min(100%,154px);aspect-ratio:1;margin:4px auto 10px;background-image:url('/seedling-atlas.png');background-size:400% 300%;background-position:var(--art-x) var(--art-y);background-repeat:no-repeat;transition:transform .2s}
+.catalog-card:hover .catalog-art{transform:scale(1.04)}
+.catalog-card-name{display:flex;align-items:center;justify-content:center;min-height:3em;line-height:1.5;font-size:1rem;font-weight:700;letter-spacing:-.045em;overflow-wrap:anywhere;word-break:keep-all}
+.catalog-card-caption{display:block;border-top:1px solid #20584413;padding-top:10px;margin-top:10px;font-size:.875rem;color:#607462}
+.selected .catalog-card-caption{color:#205844;font-weight:600}
+.catalog-more{display:flex;justify-content:center;margin-top:26px}.catalog-more button{height:48px;min-width:200px;gap:16px;padding-inline:22px;border-radius:12px;font-size:.875rem;color:#205844;border-color:#bbd1c0;background:white;box-shadow:none}
+.catalog-more span{color:#69816f;font-size:.75rem;font-variant-numeric:tabular-nums}
+.catalog-empty{text-align:center;padding:42px 20px;background:#f4f8f3;border:1px dashed #c7d9ca;border-radius:16px}
+.catalog-empty>svg{width:32px;height:32px;margin:0 auto 12px;color:#77997b}.catalog-empty h3{font-size:1.125rem;font-weight:650}.catalog-empty p{font-size:1rem;color:#64786a;margin:8px 0 20px}.catalog-empty a{height:46px;font-size:.875rem;border-color:#b7cdbd;border-radius:10px;color:#205844}
+.catalog-note{line-height:1.8;color:#67786a;margin-top:22px}.catalog-note svg{margin-top:5px}
+@media(max-width:1100px){.catalog-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media(max-width:850px){.catalog-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.catalog-heading{align-items:flex-start}}
+@media(max-width:767px){
+ .catalog-section{padding-block:42px}.catalog-heading{position:relative;display:block}.catalog-heading>div>p{padding-right:0;line-height:1.75;font-size:.875rem!important}.catalog-total{margin-top:14px;padding:6px 12px}
+ .catalog-controls{padding:16px 13px;border-radius:14px}.catalog-search{margin-bottom:16px}.catalog-search input{padding-left:39px;height:48px}.catalog-search>svg{left:12px;width:18px}.catalog-search input::placeholder{font-size:.8125rem}
+ .initial-filter{gap:6px}.initial-button{flex:1 0 39px;min-width:39px;height:44px;padding:0 8px!important;border-radius:9px}.initial-button:first-child{min-width:50px}
+ .catalog-results-heading{margin-block:20px 13px;align-items:flex-start;flex-direction:column;gap:3px}.catalog-results-heading>span{font-size:.8125rem}
+ .catalog-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.catalog-card{padding:12px 12px 15px;border-radius:15px}.catalog-art{width:min(100%,134px);margin-top:1px;margin-bottom:5px}.catalog-card-name{font-size:1rem;line-height:1.45;min-height:2.9em}.catalog-card-caption{font-size:.8125rem;padding-top:9px;margin-top:8px}
+ .catalog-card-top>span:first-child{width:24px;height:24px;font-size:.8125rem}.catalog-card-action{width:29px;height:29px}.catalog-card-action svg{width:16px;height:16px}.catalog-note{font-size:.8125rem!important}
+}
+@media(prefers-reduced-motion:reduce){.catalog-card:hover,.catalog-card:hover .catalog-art{transform:none}}

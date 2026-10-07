@@ -62,9 +62,15 @@ PDF 견본은 `public/quote-sample.pdf`, 화면 미리보기는 같은 PDF를 �
 
 ## 주요 소스
 
+묘목 둘러보기는 2026-10-07에 정리한 186개 품목을 사용합니다. 원본 품목번호·이름을 유지하고, 초성 선택과 이름/초성 검색을 지원합니다. 품목 선택은 기존 견적 양식에 이름을 담으며, 가격·재고를 확정하지 않습니다. 같은 품목의 중복 선택은 기존 양식에서 확인하고, 한 요청에는 최대 20개 품목을 담습니다.
+
+`lib/species-data.json`은 사용 묘목 엑셀과 대조한 목록입니다. 보류 품목을 임의로 다시 추가하지 않습니다. `artwork`는 그림을 고르는 용도이며 판매 분류나 품종 판정이 아닙니다. `public/seedling-atlas.png`의 4열×3행 일러스트 12종을 공유해 모든 품목에 그림을 표시합니다. 실제 품종 사진을 대체하는 자료가 아닙니다.
+
 | 경로 | 역할 |
 |---|---|
 | `components/quote-home.tsx` | 소개·품목 선택·문의 입력·처리 안내·최종 확인 화면 |
+| `components/species-browser.tsx`, `lib/species-catalog.ts` | 초성·이름 검색, 묘목 카드와 견적 품목 선택 |
+| `lib/species-data.json`, `public/seedling-atlas.png` | 정리한 186개 품목과 계열별 묘목 일러스트 |
 | `app/privacy/page.tsx` | 개인정보 처리방침 및 접수 준비 안내 |
 | `app/globals.css`, `public/` | 스타일과 홈페이지 이미지 |
 | `lib/quote-schema.ts` | 입력 및 접수번호 검증 |

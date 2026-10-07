@@ -1,0 +1,1304 @@
+[
+  {
+    "id": "214",
+    "name": "가이즈까향나무",
+    "initial": "ㄱ",
+    "farmName": "가이즈까향나무",
+    "artwork": "conifer"
+  },
+  {
+    "id": "368",
+    "name": "가죽나무",
+    "initial": "ㄱ",
+    "farmName": "",
+    "artwork": "deciduous"
+  },
+  {
+    "id": "215",
+    "name": "감(대봉)",
+    "initial": "ㄱ",
+    "farmName": "",
+    "artwork": "persimmon"
+  },
+  {
+    "id": "439",
+    "name": "감(둥시)",
+    "initial": "ㄱ",
+    "farmName": "",
+    "artwork": "persimmon"
+  },
+  {
+    "id": "440",
+    "name": "감(야오끼)",
+    "initial": "ㄱ",
+    "farmName": "",
+    "artwork": "persimmon"
+  },
+  {
+    "id": "437",
+    "name": "감(월하단감)",
+    "initial": "ㄱ",
+    "farmName": "",
+    "artwork": "persimmon"
+  },
+  {
+    "id": "438",
+    "name": "감(차량단감)",
+    "initial": "ㄱ",
+    "farmName": "",
+    "artwork": "persimmon"
+  },
+  {
+    "id": "216",
+    "name": "개나리",
+    "initial": "ㄱ",
+    "farmName": "개나리",
+    "artwork": "shrub"
+  },
+  {
+    "id": "428",
+    "name": "개암",
+    "initial": "ㄱ",
+    "farmName": "",
+    "artwork": "fruit"
+  },
+  {
+    "id": "219",
+    "name": "계수나무",
+    "initial": "ㄱ",
+    "farmName": "계수나무",
+    "artwork": "deciduous"
+  },
+  {
+    "id": "336",
+    "name": "고로쇠",
+    "initial": "ㄱ",
+    "farmName": "",
+    "artwork": "deciduous"
+  },
+  {
+    "id": "221",
+    "name": "골담초",
+    "initial": "ㄱ",
+    "farmName": "골담초",
+    "artwork": "shrub"
+  },
+  {
+    "id": "222",
+    "name": "구기자",
+    "initial": "ㄱ",
+    "farmName": "구기자",
+    "artwork": "fruit"
+  },
+  {
+    "id": "223",
+    "name": "구상나무",
+    "initial": "ㄱ",
+    "farmName": "구상나무",
+    "artwork": "conifer"
+  },
+  {
+    "id": "227",
+    "name": "금송",
+    "initial": "ㄱ",
+    "farmName": "금송",
+    "artwork": "conifer"
+  },
+  {
+    "id": "229",
+    "name": "꽃잔디",
+    "initial": "ㄱ",
+    "farmName": "꽃잔디",
+    "artwork": "perennial"
+  },
+  {
+    "id": "464",
+    "name": "낙우송",
+    "initial": "ㄴ",
+    "farmName": "",
+    "artwork": "conifer"
+  },
+  {
+    "id": "231",
+    "name": "남경도",
+    "initial": "ㄴ",
+    "farmName": "남경도",
+    "artwork": "pink-blossom"
+  },
+  {
+    "id": "232",
+    "name": "남천",
+    "initial": "ㄴ",
+    "farmName": "남천",
+    "artwork": "shrub"
+  },
+  {
+    "id": "235",
+    "name": "눈주목",
+    "initial": "ㄴ",
+    "farmName": "눈주목",
+    "artwork": "conifer"
+  },
+  {
+    "id": "236",
+    "name": "느티나무",
+    "initial": "ㄴ",
+    "farmName": "느티나무",
+    "artwork": "deciduous"
+  },
+  {
+    "id": "237",
+    "name": "능소화",
+    "initial": "ㄴ",
+    "farmName": "능소화",
+    "artwork": "vine"
+  },
+  {
+    "id": "448",
+    "name": "다래(용성2호)",
+    "initial": "ㄷ",
+    "farmName": "",
+    "artwork": "vine"
+  },
+  {
+    "id": "239",
+    "name": "단풍나무",
+    "initial": "ㄷ",
+    "farmName": "단풍나무",
+    "artwork": "deciduous"
+  },
+  {
+    "id": "240",
+    "name": "담쟁이덩굴",
+    "initial": "ㄷ",
+    "farmName": "담쟁이덩굴",
+    "artwork": "vine"
+  },
+  {
+    "id": "241",
+    "name": "대왕송",
+    "initial": "ㄷ",
+    "farmName": "대왕송",
+    "artwork": "pine"
+  },
+  {
+    "id": "242",
+    "name": "대추(복조)",
+    "initial": "ㄷ",
+    "farmName": "",
+    "artwork": "deciduous"
+  },
+  {
+    "id": "429",
+    "name": "대추(사과)",
+    "initial": "ㄷ",
+    "farmName": "",
+    "artwork": "deciduous"
+  },
+  {
+    "id": "455",
+    "name": "대추(왕)",
+    "initial": "ㄷ",
+    "farmName": "",
+    "artwork": "deciduous"
+  },
+  {
+    "id": "244",
+    "name": "등나무",
+    "initial": "ㄷ",
+    "farmName": "등나무",
+    "artwork": "vine"
+  },
+  {
+    "id": "245",
+    "name": "때죽나무",
+    "initial": "ㄷ",
+    "farmName": "때죽나무",
+    "artwork": "deciduous"
+  },
+  {
+    "id": "246",
+    "name": "떡갈잎수국",
+    "initial": "ㄷ",
+    "farmName": "떡갈잎수국",
+    "artwork": "hydrangea"
+  },
+  {
+    "id": "247",
+    "name": "라일락",
+    "initial": "ㄹ",
+    "farmName": "라일락",
+    "artwork": "lilac"
+  },
+  {
+    "id": "248",
+    "name": "러시아올리브",
+    "initial": "ㄹ",
+    "farmName": "러시아올리브",
+    "artwork": "fruit"
+  },
+  {
+    "id": "249",
+    "name": "마가목",
+    "initial": "ㅁ",
+    "farmName": "마가목",
+    "artwork": "fruit"
+  },
+  {
+    "id": "250",
+    "name": "마로니에",
+    "initial": "ㅁ",
+    "farmName": "마로니에",
+    "artwork": "deciduous"
+  },
+  {
+    "id": "251",
+    "name": "마키베리",
+    "initial": "ㅁ",
+    "farmName": "마키베리",
+    "artwork": "fruit"
+  },
+  {
+    "id": "252",
+    "name": "만병초",
+    "initial": "ㅁ",
+    "farmName": "만병초",
+    "artwork": "shrub"
+  },
+  {
+    "id": "432",
+    "name": "매실(청)",
+    "initial": "ㅁ",
+    "farmName": "",
+    "artwork": "fruit"
+  },
+  {
+    "id": "253",
+    "name": "매실(홍)",
+    "initial": "ㅁ",
+    "farmName": "",
+    "artwork": "fruit"
+  },
+  {
+    "id": "254",
+    "name": "맥문동",
+    "initial": "ㅁ",
+    "farmName": "맥문동",
+    "artwork": "perennial"
+  },
+  {
+    "id": "255",
+    "name": "메타세쿼이아",
+    "initial": "ㅁ",
+    "farmName": "메타세쿼이아",
+    "artwork": "conifer"
+  },
+  {
+    "id": "256",
+    "name": "명자나무",
+    "initial": "ㅁ",
+    "farmName": "명자나무",
+    "artwork": "pink-blossom"
+  },
+  {
+    "id": "257",
+    "name": "모감주나무",
+    "initial": "ㅁ",
+    "farmName": "모감주나무",
+    "artwork": "deciduous"
+  },
+  {
+    "id": "258",
+    "name": "모과",
+    "initial": "ㅁ",
+    "farmName": "모과",
+    "artwork": "fruit"
+  },
+  {
+    "id": "442",
+    "name": "목련(백색)",
+    "initial": "ㅁ",
+    "farmName": "",
+    "artwork": "pink-blossom"
+  },
+  {
+    "id": "351",
+    "name": "목련(자색)",
+    "initial": "ㅁ",
+    "farmName": "",
+    "artwork": "pink-blossom"
+  },
+  {
+    "id": "260",
+    "name": "목백합",
+    "initial": "ㅁ",
+    "farmName": "목백합",
+    "artwork": "deciduous"
+  },
+  {
+    "id": "261",
+    "name": "무궁화",
+    "initial": "ㅁ",
+    "farmName": "무궁화",
+    "artwork": "pink-blossom"
+  },
+  {
+    "id": "262",
+    "name": "무늬호랑가시",
+    "initial": "ㅁ",
+    "farmName": "무늬호랑가시",
+    "artwork": "shrub"
+  },
+  {
+    "id": "263",
+    "name": "무스카리",
+    "initial": "ㅁ",
+    "farmName": "무스카리",
+    "artwork": "perennial"
+  },
+  {
+    "id": "264",
+    "name": "무화과",
+    "initial": "ㅁ",
+    "farmName": "무화과",
+    "artwork": "fruit"
+  },
+  {
+    "id": "456",
+    "name": "무화과(1년포트)",
+    "initial": "ㅁ",
+    "farmName": "",
+    "artwork": "fruit"
+  },
+  {
+    "id": "265",
+    "name": "문그로우",
+    "initial": "ㅁ",
+    "farmName": "문그로우",
+    "artwork": "conifer"
+  },
+  {
+    "id": "267",
+    "name": "미니백일홍",
+    "initial": "ㅁ",
+    "farmName": "미니백일홍",
+    "artwork": "shrub"
+  },
+  {
+    "id": "268",
+    "name": "미산딸나무",
+    "initial": "ㅁ",
+    "farmName": "미산딸나무",
+    "artwork": "deciduous"
+  },
+  {
+    "id": "269",
+    "name": "미스김라일락",
+    "initial": "ㅁ",
+    "farmName": "미스김라일락",
+    "artwork": "lilac"
+  },
+  {
+    "id": "270",
+    "name": "미측백나무",
+    "initial": "ㅁ",
+    "farmName": "미측백나무",
+    "artwork": "conifer"
+  },
+  {
+    "id": "271",
+    "name": "민들레",
+    "initial": "ㅁ",
+    "farmName": "민들레",
+    "artwork": "perennial"
+  },
+  {
+    "id": "272",
+    "name": "바이오체리",
+    "initial": "ㅂ",
+    "farmName": "바이오체리",
+    "artwork": "fruit"
+  },
+  {
+    "id": "273",
+    "name": "박태기",
+    "initial": "ㅂ",
+    "farmName": "박태기",
+    "artwork": "pink-blossom"
+  },
+  {
+    "id": "274",
+    "name": "반송",
+    "initial": "ㅂ",
+    "farmName": "반송",
+    "artwork": "pine"
+  },
+  {
+    "id": "446",
+    "name": "밤(대보)",
+    "initial": "ㅂ",
+    "farmName": "",
+    "artwork": "fruit"
+  },
+  {
+    "id": "275",
+    "name": "밤(옥광)",
+    "initial": "ㅂ",
+    "farmName": "",
+    "artwork": "fruit"
+  },
+  {
+    "id": "447",
+    "name": "밤(포르단)",
+    "initial": "ㅂ",
+    "farmName": "",
+    "artwork": "fruit"
+  },
+  {
+    "id": "276",
+    "name": "배",
+    "initial": "ㅂ",
+    "farmName": "배",
+    "artwork": "fruit"
+  },
+  {
+    "id": "461",
+    "name": "배(원왕배)",
+    "initial": "ㅂ",
+    "farmName": "",
+    "artwork": "fruit"
+  },
+  {
+    "id": "277",
+    "name": "백일홍",
+    "initial": "ㅂ",
+    "farmName": "백일홍",
+    "artwork": "shrub"
+  },
+  {
+    "id": "278",
+    "name": "벚나무",
+    "initial": "ㅂ",
+    "farmName": "벚나무",
+    "artwork": "pink-blossom"
+  },
+  {
+    "id": "279",
+    "name": "별목련",
+    "initial": "ㅂ",
+    "farmName": "별목련",
+    "artwork": "pink-blossom"
+  },
+  {
+    "id": "281",
+    "name": "보리수",
+    "initial": "ㅂ",
+    "farmName": "보리수",
+    "artwork": "fruit"
+  },
+  {
+    "id": "282",
+    "name": "복분자",
+    "initial": "ㅂ",
+    "farmName": "복분자",
+    "artwork": "fruit"
+  },
+  {
+    "id": "444",
+    "name": "복숭아(백도)",
+    "initial": "ㅂ",
+    "farmName": "",
+    "artwork": "fruit"
+  },
+  {
+    "id": "425",
+    "name": "복숭아(실생)",
+    "initial": "ㅂ",
+    "farmName": "",
+    "artwork": "fruit"
+  },
+  {
+    "id": "445",
+    "name": "복숭아(황도)",
+    "initial": "ㅂ",
+    "farmName": "",
+    "artwork": "fruit"
+  },
+  {
+    "id": "243",
+    "name": "분꽃(유럽)",
+    "initial": "ㅂ",
+    "farmName": "",
+    "artwork": "shrub"
+  },
+  {
+    "id": "285",
+    "name": "불두화",
+    "initial": "ㅂ",
+    "farmName": "불두화",
+    "artwork": "shrub"
+  },
+  {
+    "id": "286",
+    "name": "블랙초코베리",
+    "initial": "ㅂ",
+    "farmName": "블랙초코베리",
+    "artwork": "fruit"
+  },
+  {
+    "id": "287",
+    "name": "블랙커런트",
+    "initial": "ㅂ",
+    "farmName": "블랙커런트",
+    "artwork": "fruit"
+  },
+  {
+    "id": "288",
+    "name": "블루매트",
+    "initial": "ㅂ",
+    "farmName": "블루매트",
+    "artwork": "conifer"
+  },
+  {
+    "id": "289",
+    "name": "블루베리",
+    "initial": "ㅂ",
+    "farmName": "블루베리",
+    "artwork": "fruit"
+  },
+  {
+    "id": "290",
+    "name": "블루엔젤",
+    "initial": "ㅂ",
+    "farmName": "블루엔젤",
+    "artwork": "conifer"
+  },
+  {
+    "id": "292",
+    "name": "비파",
+    "initial": "ㅂ",
+    "farmName": "",
+    "artwork": "fruit"
+  },
+  {
+    "id": "311",
+    "name": "뽕(수양)",
+    "initial": "ㅂ",
+    "farmName": "",
+    "artwork": "fruit"
+  },
+  {
+    "id": "435",
+    "name": "뽕(오디)",
+    "initial": "ㅂ",
+    "farmName": "",
+    "artwork": "fruit"
+  },
+  {
+    "id": "294",
+    "name": "사계패랭이",
+    "initial": "ㅅ",
+    "farmName": "사계패랭이",
+    "artwork": "perennial"
+  },
+  {
+    "id": "295",
+    "name": "사과",
+    "initial": "ㅅ",
+    "farmName": "사과",
+    "artwork": "fruit"
+  },
+  {
+    "id": "297",
+    "name": "사철나무",
+    "initial": "ㅅ",
+    "farmName": "",
+    "artwork": "shrub"
+  },
+  {
+    "id": "449",
+    "name": "사철나무(황금)",
+    "initial": "ㅅ",
+    "farmName": "",
+    "artwork": "shrub"
+  },
+  {
+    "id": "298",
+    "name": "산딸나무",
+    "initial": "ㅅ",
+    "farmName": "산딸나무",
+    "artwork": "pink-blossom"
+  },
+  {
+    "id": "299",
+    "name": "산사나무",
+    "initial": "ㅅ",
+    "farmName": "산사나무",
+    "artwork": "fruit"
+  },
+  {
+    "id": "300",
+    "name": "산수국",
+    "initial": "ㅅ",
+    "farmName": "산수국",
+    "artwork": "hydrangea"
+  },
+  {
+    "id": "301",
+    "name": "산수유",
+    "initial": "ㅅ",
+    "farmName": "산수유",
+    "artwork": "fruit"
+  },
+  {
+    "id": "302",
+    "name": "산초(실생)",
+    "initial": "ㅅ",
+    "farmName": "",
+    "artwork": "fruit"
+  },
+  {
+    "id": "431",
+    "name": "산초(접목)",
+    "initial": "ㅅ",
+    "farmName": "",
+    "artwork": "fruit"
+  },
+  {
+    "id": "303",
+    "name": "살구",
+    "initial": "ㅅ",
+    "farmName": "살구",
+    "artwork": "fruit"
+  },
+  {
+    "id": "304",
+    "name": "상수리나무",
+    "initial": "ㅅ",
+    "farmName": "상수리나무",
+    "artwork": "deciduous"
+  },
+  {
+    "id": "316",
+    "name": "석류나무",
+    "initial": "ㅅ",
+    "farmName": "",
+    "artwork": "fruit"
+  },
+  {
+    "id": "306",
+    "name": "설중매",
+    "initial": "ㅅ",
+    "farmName": "설중매",
+    "artwork": "pink-blossom"
+  },
+  {
+    "id": "452",
+    "name": "소나무(백송)",
+    "initial": "ㅅ",
+    "farmName": "",
+    "artwork": "pine"
+  },
+  {
+    "id": "462",
+    "name": "소나무(황금소나무)",
+    "initial": "ㅅ",
+    "farmName": "",
+    "artwork": "pine"
+  },
+  {
+    "id": "307",
+    "name": "소사나무",
+    "initial": "ㅅ",
+    "farmName": "소사나무",
+    "artwork": "deciduous"
+  },
+  {
+    "id": "308",
+    "name": "수국",
+    "initial": "ㅅ",
+    "farmName": "수국",
+    "artwork": "hydrangea"
+  },
+  {
+    "id": "312",
+    "name": "수사해당화",
+    "initial": "ㅅ",
+    "farmName": "",
+    "artwork": "pink-blossom"
+  },
+  {
+    "id": "309",
+    "name": "수생식물",
+    "initial": "ㅅ",
+    "farmName": "수생식물",
+    "artwork": "grass"
+  },
+  {
+    "id": "310",
+    "name": "수선화",
+    "initial": "ㅅ",
+    "farmName": "수선화",
+    "artwork": "perennial"
+  },
+  {
+    "id": "314",
+    "name": "슈가메이플",
+    "initial": "ㅅ",
+    "farmName": "슈가메이플",
+    "artwork": "deciduous"
+  },
+  {
+    "id": "315",
+    "name": "슈퍼블랙베리",
+    "initial": "ㅅ",
+    "farmName": "슈퍼블랙베리",
+    "artwork": "vine"
+  },
+  {
+    "id": "317",
+    "name": "스카이로켓",
+    "initial": "ㅅ",
+    "farmName": "스카이로켓",
+    "artwork": "conifer"
+  },
+  {
+    "id": "318",
+    "name": "스트로브잣나무",
+    "initial": "ㅅ",
+    "farmName": "스트로브잣나무",
+    "artwork": "pine"
+  },
+  {
+    "id": "321",
+    "name": "아나벨수국",
+    "initial": "ㅇ",
+    "farmName": "아나벨수국",
+    "artwork": "hydrangea"
+  },
+  {
+    "id": "322",
+    "name": "아마릴리스",
+    "initial": "ㅇ",
+    "farmName": "아마릴리스",
+    "artwork": "perennial"
+  },
+  {
+    "id": "410",
+    "name": "앵두나무(백)",
+    "initial": "ㅇ",
+    "farmName": "",
+    "artwork": "fruit"
+  },
+  {
+    "id": "325",
+    "name": "앵두나무(빨강)",
+    "initial": "ㅇ",
+    "farmName": "",
+    "artwork": "fruit"
+  },
+  {
+    "id": "326",
+    "name": "양잔디",
+    "initial": "ㅇ",
+    "farmName": "양잔디",
+    "artwork": "grass"
+  },
+  {
+    "id": "430",
+    "name": "엄나무(가시없는)",
+    "initial": "ㅇ",
+    "farmName": "",
+    "artwork": "shrub"
+  },
+  {
+    "id": "327",
+    "name": "엄나무(가시있는)",
+    "initial": "ㅇ",
+    "farmName": "",
+    "artwork": "shrub"
+  },
+  {
+    "id": "328",
+    "name": "에메랄드 그린",
+    "initial": "ㅇ",
+    "farmName": "에메랄드그린",
+    "artwork": "conifer"
+  },
+  {
+    "id": "427",
+    "name": "오가피(가시없는)",
+    "initial": "ㅇ",
+    "farmName": "",
+    "artwork": "shrub"
+  },
+  {
+    "id": "213",
+    "name": "오가피(가시있는)",
+    "initial": "ㅇ",
+    "farmName": "",
+    "artwork": "shrub"
+  },
+  {
+    "id": "330",
+    "name": "오미자",
+    "initial": "ㅇ",
+    "farmName": "오미자",
+    "artwork": "vine"
+  },
+  {
+    "id": "332",
+    "name": "오이도",
+    "initial": "ㅇ",
+    "farmName": "오이도",
+    "artwork": "shrub"
+  },
+  {
+    "id": "334",
+    "name": "옥향",
+    "initial": "ㅇ",
+    "farmName": "옥향",
+    "artwork": "conifer"
+  },
+  {
+    "id": "367",
+    "name": "옻나무",
+    "initial": "ㅇ",
+    "farmName": "",
+    "artwork": "fruit"
+  },
+  {
+    "id": "339",
+    "name": "유칼립투스",
+    "initial": "ㅇ",
+    "farmName": "유칼립투스",
+    "artwork": "deciduous"
+  },
+  {
+    "id": "340",
+    "name": "으름",
+    "initial": "ㅇ",
+    "farmName": "으름",
+    "artwork": "vine"
+  },
+  {
+    "id": "341",
+    "name": "은목서",
+    "initial": "ㅇ",
+    "farmName": "은목서",
+    "artwork": "shrub"
+  },
+  {
+    "id": "342",
+    "name": "은청가문비",
+    "initial": "ㅇ",
+    "farmName": "은청가문비",
+    "artwork": "conifer"
+  },
+  {
+    "id": "343",
+    "name": "은테 사철",
+    "initial": "ㅇ",
+    "farmName": "은테사철",
+    "artwork": "shrub"
+  },
+  {
+    "id": "344",
+    "name": "은행나무",
+    "initial": "ㅇ",
+    "farmName": "은행나무",
+    "artwork": "deciduous"
+  },
+  {
+    "id": "345",
+    "name": "이팝나무",
+    "initial": "ㅇ",
+    "farmName": "이팝나무",
+    "artwork": "deciduous"
+  },
+  {
+    "id": "347",
+    "name": "일세다래",
+    "initial": "ㅇ",
+    "farmName": "일세다래",
+    "artwork": "vine"
+  },
+  {
+    "id": "349",
+    "name": "자귀나무",
+    "initial": "ㅈ",
+    "farmName": "자귀나무",
+    "artwork": "deciduous"
+  },
+  {
+    "id": "350",
+    "name": "자두(왕)",
+    "initial": "ㅈ",
+    "farmName": "",
+    "artwork": "fruit"
+  },
+  {
+    "id": "394",
+    "name": "자두(플럼코트)",
+    "initial": "ㅈ",
+    "farmName": "",
+    "artwork": "fruit"
+  },
+  {
+    "id": "353",
+    "name": "자작나무",
+    "initial": "ㅈ",
+    "farmName": "자작나무",
+    "artwork": "deciduous"
+  },
+  {
+    "id": "354",
+    "name": "잔디",
+    "initial": "ㅈ",
+    "farmName": "잔디",
+    "artwork": "grass"
+  },
+  {
+    "id": "355",
+    "name": "잣나무",
+    "initial": "ㅈ",
+    "farmName": "잣나무",
+    "artwork": "pine"
+  },
+  {
+    "id": "357",
+    "name": "전나무",
+    "initial": "ㅈ",
+    "farmName": "전나무",
+    "artwork": "deciduous"
+  },
+  {
+    "id": "358",
+    "name": "접목무궁화",
+    "initial": "ㅈ",
+    "farmName": "접목무궁화",
+    "artwork": "pink-blossom"
+  },
+  {
+    "id": "359",
+    "name": "조팝나무",
+    "initial": "ㅈ",
+    "farmName": "조팝나무",
+    "artwork": "shrub"
+  },
+  {
+    "id": "360",
+    "name": "좀눈향",
+    "initial": "ㅈ",
+    "farmName": "좀눈향",
+    "artwork": "conifer"
+  },
+  {
+    "id": "362",
+    "name": "주목",
+    "initial": "ㅈ",
+    "farmName": "주목",
+    "artwork": "conifer"
+  },
+  {
+    "id": "363",
+    "name": "쥐똥나무",
+    "initial": "ㅈ",
+    "farmName": "쥐똥나무",
+    "artwork": "shrub"
+  },
+  {
+    "id": "364",
+    "name": "직립꽝꽝이",
+    "initial": "ㅈ",
+    "farmName": "직립꽝꽝이",
+    "artwork": "shrub"
+  },
+  {
+    "id": "365",
+    "name": "직송",
+    "initial": "ㅈ",
+    "farmName": "직송",
+    "artwork": "pine"
+  },
+  {
+    "id": "366",
+    "name": "짐드롭",
+    "initial": "ㅈ",
+    "farmName": "짐드롭",
+    "artwork": "conifer"
+  },
+  {
+    "id": "369",
+    "name": "철쭉",
+    "initial": "ㅊ",
+    "farmName": "철쭉",
+    "artwork": "shrub"
+  },
+  {
+    "id": "371",
+    "name": "체리",
+    "initial": "ㅊ",
+    "farmName": "체리",
+    "artwork": "fruit"
+  },
+  {
+    "id": "373",
+    "name": "측백나무",
+    "initial": "ㅊ",
+    "farmName": "측백나무",
+    "artwork": "conifer"
+  },
+  {
+    "id": "372",
+    "name": "층층나무",
+    "initial": "ㅊ",
+    "farmName": "층층나무",
+    "artwork": "deciduous"
+  },
+  {
+    "id": "374",
+    "name": "치자나무",
+    "initial": "ㅊ",
+    "farmName": "치자나무",
+    "artwork": "shrub"
+  },
+  {
+    "id": "375",
+    "name": "칠자화",
+    "initial": "ㅊ",
+    "farmName": "칠자화",
+    "artwork": "shrub"
+  },
+  {
+    "id": "376",
+    "name": "칼슘나무",
+    "initial": "ㅋ",
+    "farmName": "칼슘나무",
+    "artwork": "fruit"
+  },
+  {
+    "id": "380",
+    "name": "코니카가문비",
+    "initial": "ㅋ",
+    "farmName": "코니카가문비",
+    "artwork": "conifer"
+  },
+  {
+    "id": "436",
+    "name": "키위(골드숫)",
+    "initial": "ㅋ",
+    "farmName": "",
+    "artwork": "vine"
+  },
+  {
+    "id": "384",
+    "name": "키위(골드암)",
+    "initial": "ㅋ",
+    "farmName": "",
+    "artwork": "vine"
+  },
+  {
+    "id": "385",
+    "name": "탱자",
+    "initial": "ㅌ",
+    "farmName": "탱자",
+    "artwork": "fruit"
+  },
+  {
+    "id": "388",
+    "name": "팜콘수국",
+    "initial": "ㅍ",
+    "farmName": "팜콘수국",
+    "artwork": "hydrangea"
+  },
+  {
+    "id": "387",
+    "name": "팥배나무",
+    "initial": "ㅍ",
+    "farmName": "팥배나무",
+    "artwork": "fruit"
+  },
+  {
+    "id": "389",
+    "name": "팽나무",
+    "initial": "ㅍ",
+    "farmName": "팽나무",
+    "artwork": "deciduous"
+  },
+  {
+    "id": "390",
+    "name": "편백나무",
+    "initial": "ㅍ",
+    "farmName": "편백나무",
+    "artwork": "conifer"
+  },
+  {
+    "id": "391",
+    "name": "포도",
+    "initial": "ㅍ",
+    "farmName": "포도",
+    "artwork": "fruit"
+  },
+  {
+    "id": "457",
+    "name": "포도(거봉)포트",
+    "initial": "ㅍ",
+    "farmName": "",
+    "artwork": "fruit"
+  },
+  {
+    "id": "392",
+    "name": "포포나무(실생)",
+    "initial": "ㅍ",
+    "farmName": "",
+    "artwork": "fruit"
+  },
+  {
+    "id": "441",
+    "name": "포포나무(접목)",
+    "initial": "ㅍ",
+    "farmName": "",
+    "artwork": "fruit"
+  },
+  {
+    "id": "395",
+    "name": "플루오트",
+    "initial": "ㅍ",
+    "farmName": "플루오트",
+    "artwork": "fruit"
+  },
+  {
+    "id": "396",
+    "name": "피라미드 수국",
+    "initial": "ㅍ",
+    "farmName": "피라미드수국",
+    "artwork": "hydrangea"
+  },
+  {
+    "id": "397",
+    "name": "피라칸타스",
+    "initial": "ㅍ",
+    "farmName": "",
+    "artwork": "fruit"
+  },
+  {
+    "id": "398",
+    "name": "피칸",
+    "initial": "ㅍ",
+    "farmName": "피칸",
+    "artwork": "fruit"
+  },
+  {
+    "id": "400",
+    "name": "하이드랑게아",
+    "initial": "ㅎ",
+    "farmName": "하이드랑게아",
+    "artwork": "hydrangea"
+  },
+  {
+    "id": "401",
+    "name": "해당화",
+    "initial": "ㅎ",
+    "farmName": "해당화",
+    "artwork": "shrub"
+  },
+  {
+    "id": "402",
+    "name": "해송",
+    "initial": "ㅎ",
+    "farmName": "해송",
+    "artwork": "pine"
+  },
+  {
+    "id": "403",
+    "name": "헛개나무",
+    "initial": "ㅎ",
+    "farmName": "헛개나무",
+    "artwork": "fruit"
+  },
+  {
+    "id": "404",
+    "name": "호두",
+    "initial": "ㅎ",
+    "farmName": "호두",
+    "artwork": "fruit"
+  },
+  {
+    "id": "405",
+    "name": "홀리",
+    "initial": "ㅎ",
+    "farmName": "홀리",
+    "artwork": "shrub"
+  },
+  {
+    "id": "406",
+    "name": "홍가시",
+    "initial": "ㅎ",
+    "farmName": "홍가시",
+    "artwork": "shrub"
+  },
+  {
+    "id": "407",
+    "name": "홍도화",
+    "initial": "ㅎ",
+    "farmName": "홍도화",
+    "artwork": "pink-blossom"
+  },
+  {
+    "id": "409",
+    "name": "화살나무",
+    "initial": "ㅎ",
+    "farmName": "화살나무",
+    "artwork": "shrub"
+  },
+  {
+    "id": "412",
+    "name": "황금꽝꽝이",
+    "initial": "ㅎ",
+    "farmName": "황금꽝꽝이",
+    "artwork": "shrub"
+  },
+  {
+    "id": "414",
+    "name": "황금주목",
+    "initial": "ㅎ",
+    "farmName": "황금주목",
+    "artwork": "conifer"
+  },
+  {
+    "id": "415",
+    "name": "황금측백",
+    "initial": "ㅎ",
+    "farmName": "황금측백",
+    "artwork": "conifer"
+  },
+  {
+    "id": "416",
+    "name": "황칠나무",
+    "initial": "ㅎ",
+    "farmName": "황칠나무",
+    "artwork": "deciduous"
+  },
+  {
+    "id": "417",
+    "name": "회양목",
+    "initial": "ㅎ",
+    "farmName": "회양목",
+    "artwork": "shrub"
+  },
+  {
+    "id": "418",
+    "name": "회화나무(황금)",
+    "initial": "ㅎ",
+    "farmName": "",
+    "artwork": "deciduous"
+  },
+  {
+    "id": "424",
+    "name": "히아신스",
+    "initial": "ㅎ",
+    "farmName": "히아신스",
+    "artwork": "perennial"
+  }
+]

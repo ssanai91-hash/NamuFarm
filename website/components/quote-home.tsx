@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Sprout, Leaf, TreePine, Flower2, Apple, Plus, Trash2, FileText, Check, CheckCheck, MessageCircle, MapPin, ShieldCheck, LoaderCircle, Menu, CircleCheck } from "lucide-react";
+import { Sprout, Plus, Trash2, FileText, CheckCheck, MessageCircle, MapPin, ShieldCheck, LoaderCircle, Menu, CircleCheck } from "lucide-react";
+import SpeciesBrowser from "@/components/species-browser";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,12 +16,6 @@ import { quoteItemSchema, quoteSchema, requestFingerprint, newRequestId, type Qu
 import { validatedQuoteReceipt, receiptTimeSeoul, type QuoteReceipt } from "@/lib/quote-receipt";
 
 type Line = { id: number; species: string; specification: string; quantity: string };
-const examples = [
-  { name: "감나무", type: "유실수", text: "가을을 기다리는 즐거움", icon: Apple, tone: "persimmon" },
-  { name: "대추나무", type: "유실수", text: "우리 땅에 익숙한 나무", icon: Leaf, tone: "jujube" },
-  { name: "소나무", type: "조경수", text: "사계절의 푸르름", icon: TreePine, tone: "pine" },
-  { name: "라일락", type: "꽃나무", text: "정원에 더하는 봄 향기", icon: Flower2, tone: "lilac" },
-];
 const emptyLine = (id: number): Line => ({ id, species: "", specification: "", quantity: "" });
 
 export default function QuoteHome({ initialTestMode = false, initialConfigured = false }: { initialTestMode?: boolean; initialConfigured?: boolean }) {
@@ -163,10 +158,7 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
       </section>
       <div className="benefits wrap" aria-label="견적 상담 안내"><div><FileText /><span><strong>필요한 만큼, 맞춤 견적</strong><small>한 품목부터 여러 품목까지</small></span></div><div><MessageCircle /><span><strong>규격이 어려워도 괜찮아요</strong><small>용도를 남기면 함께 상담해요</small></span></div><div><MapPin /><span><strong>배송까지 한 번에 확인</strong><small>지역에 맞춰 배송 방법 안내</small></span></div></div>
 
-      <section id="trees" className="trees-section wrap" aria-labelledby="trees-title"><div className="section-heading"><div><span className="overline">FIND YOUR TREE</span><h2 id="trees-title">어떤 나무를 찾으세요?</h2></div><p>품목을 골라 담거나<br className="desktop-only" /> 직접 이름을 적어주세요.</p></div>
-        <div className="tree-grid">{examples.map(({ name: tree, type, text, icon: Icon, tone }) => { const selected = lines.some(line => line.species === tree); return <button type="button" className={`tree-card ${tone} ${selected ? "selected" : ""}`} key={tree} onClick={() => selectSpecies(tree)} aria-label={`${tree} 견적 품목에 담기`} aria-pressed={selected}><div className="tree-card-top"><span className="tree-type">{type}</span><span className="tree-add">{selected ? <Check /> : <Plus />}</span></div><Icon className="tree-art" strokeWidth={1.1} /><div className="tree-card-copy"><h3>{tree}</h3><p>{text}</p><span>{selected ? "견적에 담았어요" : "견적에 담기"}</span></div></button>; })}</div>
-        <p className="section-note"><Leaf />문의 가능한 품목의 예시입니다. 실제 재고와 규격은 상담 시 확인해요.</p>
-      </section>
+      <SpeciesBrowser selectedNames={lines.map(line => line.species)} onSelect={selectSpecies} />
 
       <section id="quote" className="quote-section" aria-labelledby="quote-title"><div className="quote-layout wrap">
         <aside className="quote-intro"><span className="overline">LET’S GROW TOGETHER</span><h2 id="quote-title">좋은 시작은,<br />작은 문의에서.</h2><p>정확한 규격을 몰라도 괜찮아요.<br />심을 곳과 필요한 수량을 알려주세요.</p><div className="intro-promise"><ShieldCheck /><span>견적 요청만으로<br /><strong>주문이나 결제가 확정되지 않아요.</strong></span></div><div className="quote-progress"><span>01 <b>품목 작성</b></span><i /><span>02 <b>연락처 입력</b></span><i /><span>03 <b>상담</b></span></div></aside>
