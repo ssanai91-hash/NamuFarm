@@ -489,18 +489,24 @@ section {
 .catalog-art {
   background: #f8f9f3;
   border-radius: .65rem;
-  display: grid;
-  place-items: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
   width: 100%;
   height: 7rem;
+  padding: .5rem;
   margin-bottom: .3rem;
   overflow: hidden;
 }
 .catalog-art img {
+  display: block;
+  min-width: 0;
+  min-height: 0;
   width: 100%;
   height: 100%;
   object-fit: contain;
-  padding: .35rem;
+  object-position: center;
   mix-blend-mode: multiply;
 }
 .art-pending {
