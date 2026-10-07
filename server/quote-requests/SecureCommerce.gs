@@ -16,7 +16,8 @@ function secureServiceInfo_() {
     && rows_(sheet_()).every(row => { const raw = JSON.parse(row[15]); return raw.expired === true || !!raw.encryptedRequest; }); } catch (_) {}
   return {ok:true,service:'namufarm-quote-requests',version:4,processingBases:['quote_request'],
     requestFields:['customerEmail','formalQuoteRequested','recipientName','replyChannel'],encryptionReady:ready,
-    sellerKey:key,retentionDays:30,requestDeletionSync:true,commerceStates:['구매확정','입금확인','배송확인','판매완료','주문취소']};
+    sellerKey:key,retentionDays:30,requestDeletionSync:true,receiptFormat:'NFQ-YYYYMMDD-NNNN',receiptTimeZone:'Asia/Seoul',
+    commerceStates:['구매확정','입금확인','배송확인','판매완료','주문취소']};
 }
 function byteString_(value, minimum, maximum) {
   assert_(typeof value === 'string' && /^[A-Za-z0-9+/]+={0,2}$/.test(value) && value.length <= maximum*2);
@@ -90,25 +91,31 @@ function submitEncryptedRequest_(body) {
   assert_(!body.request && !body.customerName && !body.customerPhone,'INVALID');
   const encrypted = envelope_(body.encryptedRequest,sellerKey_());
   return lock_(() => {
-    const sheet = sheet_(); const rows = rows_(sheet); const existing = rows.find(row=>row[0]===body.requestId);
-    if (existing) { assert_(existing[11]===body.fingerprint,'CONFLICT'); return {requestId:body.requestId,duplicate:true}; }
+    const sheet = sheet_(); const rows = receiptRows_(sheet); const existingIndex = rows.findIndex(row=>row[0]===body.requestId);
+    assert_(receiptColumnsReady_(sheet),'NOT_READY');
+    if (existingIndex>=0) { const existing=rows[existingIndex]; assert_(existing[11]===body.fingerprint,'CONFLICT');
+      return Object.assign(assignReceipt_(sheet,existing,existingIndex,rows),{duplicate:true}); }
     const cache = CacheService.getScriptCache(); const cacheKey = 'rfq-rate:'+body.rateKey; const now = Date.now();
     const prior = JSON.parse(cache.get(cacheKey) || '{"count":0,"until":0}'); const bucket = prior.until>now ? prior : {count:0,until:now+600000};
     assert_(bucket.count<5,'RATE_LIMITED');
     const props=PropertiesService.getScriptProperties(); const seq=rows.reduce((m,r)=>Math.max(m,Number(r[1])||0),Number(props.getProperty('LAST_SEQUENCE'))||0)+1;
     assert_(Number.isSafeInteger(seq),'NOT_READY'); props.setProperty('LAST_SEQUENCE',String(seq));
-    const row=[body.requestId,seq,new Date(now).toISOString(),'','','','','','','신규','PENDING',body.fingerprint,0,new Date(now).toISOString(),'',JSON.stringify({encryptedRequest:encrypted})];
-    sheet.getRange(sheet.getLastRow()+1,1,1,16).setNumberFormat('@').setValues([row]); SpreadsheetApp.flush();
+    const createdAt=new Date(now).toISOString(),day=receiptDay_(createdAt);
+    const floor=rows.reduce((max,r)=>r[16] && receiptDay_(r[2])===day ? Math.max(max,receiptCounter_(r)) : max,0);
+    const receipt=reserveReceipt_(props,day,floor);
+    const row=[body.requestId,seq,createdAt,'','','','','','','신규','PENDING',body.fingerprint,0,createdAt,'',JSON.stringify({encryptedRequest:encrypted}),receipt.number,receiptTime_(createdAt)];
+    sheet.getRange(sheet.getLastRow()+1,1,1,18).setNumberFormat('@').setValues([row]); SpreadsheetApp.flush();
     cache.put(cacheKey,JSON.stringify({count:bucket.count+1,until:bucket.until}),Math.max(1,Math.ceil((bucket.until-now)/1000)));
-    return {requestId:body.requestId,duplicate:false};
+    return Object.assign(receiptDetails_(row),{duplicate:false});
   });
 }
 function listEncryptedRequests_(body) {
   assert_(Number.isSafeInteger(body.afterSequence) && body.afterSequence>=0);
-  const rows=rows_(sheet_()).filter(r=>Number(r[1])>body.afterSequence).sort((a,b)=>Number(a[1])-Number(b[1]));
+  const rows=receiptRows_(sheet_()).filter(r=>Number(r[1])>body.afterSequence).sort((a,b)=>Number(a[1])-Number(b[1]));
   const page=rows.slice(0,100).map(row=>{
     const expires=Date.parse(String(row[2]))+QUOTE_RETENTION_MS; const raw=JSON.parse(row[15]);
     const result={requestId:String(row[0]),sequence:Number(row[1]),createdAt:String(row[2]),expiresAt:expires};
+    if(row[16])Object.assign(result,receiptDetails_(row));
     if (raw.expired === true || expires<=Date.now()) return Object.assign(result,{expired:true});
     assert_(raw.encryptedRequest,'NOT_READY'); return Object.assign(result,{encryptedRequest:envelope_(raw.encryptedRequest,sellerKey_())});
   });

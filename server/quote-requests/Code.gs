@@ -5,6 +5,9 @@
 const RFQ_SHEET = '웹견적요청';
 const RFQ_HEADERS = ['요청번호','접수순번','접수시각(UTC)','성함','연락처','배송지역','희망묘목','품목JSON','요청사항','상태','알림상태','내용해시','알림시도','다음알림(UTC)','오류코드','원본JSON'];
 const RFQ_COL = { id:0, sequence:1, created:2, name:3, phone:4, region:5, summary:6, items:7, memo:8, status:9, notification:10, hash:11, attempts:12, next:13, error:14, raw:15 };
+// Preserve A:P and UUID identities used by existing Android/PC clients.
+const RFQ_RECEIPT_HEADERS = ['견적접수번호','접수시각(한국)'];
+const RFQ_RECEIPT_PATTERN = /^NFQ-(\d{8})-(\d{4,16})$/;
 
 function doPost(e) {
   try {
@@ -91,6 +94,63 @@ function sheet_() {
 // Prefix formula-like customer strings, preserving their exact original text on read.
 function cell_(value) { const text = String(value); return /^[=+\-@']/.test(text) ? "'" + text : text; }
 function rows_(sheet) { const count = sheet.getLastRow() - 1; return count > 0 ? sheet.getRange(2,1,count,RFQ_HEADERS.length).getValues() : []; }
+function receiptRows_(sheet) { const count=sheet.getLastRow()-1; return count>0 ? sheet.getRange(2,1,count,18).getValues() : []; }
+function receiptTime_(createdAt) {
+  const time=Date.parse(String(createdAt)); assert_(Number.isFinite(time),'NOT_READY');
+  return new Date(time+9*3600000).toISOString().slice(0,19).replace('T',' ');
+}
+function receiptDay_(createdAt) { return receiptTime_(createdAt).slice(0,10).replace(/-/g,''); }
+function receiptColumnsReady_(sheet) {
+  return JSON.stringify(sheet.getRange(1,17,1,2).getValues()[0])===JSON.stringify(RFQ_RECEIPT_HEADERS);
+}
+function receiptCounter_(row) {
+  const match=RFQ_RECEIPT_PATTERN.exec(String(row[16]||''));
+  assert_(match && match[1]===receiptDay_(row[2]) && Number.isSafeInteger(Number(match[2])) && Number(match[2])>0,'NOT_READY');
+  return Number(match[2]);
+}
+function reserveReceipt_(props,day,floor) {
+  const key='RFQ_RECEIPT_COUNTER:'+day, stored=Number(props.getProperty(key)||0);
+  assert_(Number.isSafeInteger(stored) && stored>=0,'NOT_READY');
+  const next=Math.max(stored,floor)+1; assert_(Number.isSafeInteger(next),'NOT_READY');
+  // Reserve before the row write. Failed writes may leave gaps, never reused numbers.
+  props.setProperty(key,String(next));
+  return {number:'NFQ-'+day+'-'+String(next).padStart(4,'0'),counter:next};
+}
+function receiptDetails_(row) {
+  receiptCounter_(row);
+  assert_(row[17]===receiptTime_(row[2]),'NOT_READY');
+  return {requestId:String(row[0]),receiptNumber:String(row[16]),createdAt:String(row[2]),createdAtSeoul:String(row[17])};
+}
+function assignReceipt_(sheet,row,index,allRows) {
+  assert_(receiptColumnsReady_(sheet),'NOT_READY');
+  if (!row[16]) {
+    const day=receiptDay_(row[2]);
+    const floor=allRows.reduce((max,r)=>r[16] && receiptDay_(r[2])===day ? Math.max(max,receiptCounter_(r)) : max,0);
+    row[16]=reserveReceipt_(PropertiesService.getScriptProperties(),day,floor).number;
+    row[17]=receiptTime_(row[2]);
+    sheet.getRange(index+2,17,1,2).setNumberFormat('@').setValues([[row[16],row[17]]]); SpreadsheetApp.flush();
+  }
+  return receiptDetails_(row);
+}
+/** Called under setup's lock. Backfill only new metadata; never alter original customer records/cursors. */
+function setupReceiptNumbers_(sheet,book) {
+  const header=sheet.getRange(1,17,1,2).getValues()[0];
+  assert_(header.every(v=>v==='') || JSON.stringify(header)===JSON.stringify(RFQ_RECEIPT_HEADERS),'NOT_READY');
+  const rows=receiptRows_(sheet), floors={},seen=new Set();
+  if(header.every(v=>v===''))assert_(rows.every(row=>!row[16] && !row[17]),'NOT_READY');
+  rows.forEach(row=>{const day=receiptDay_(row[2]);
+    if(row[16]){assert_(!seen.has(row[16]),'NOT_READY');seen.add(row[16]);floors[day]=Math.max(floors[day]||0,receiptCounter_(row));}
+    else assert_(!row[17],'NOT_READY');
+  });
+  sheet.getRange(1,17,1,2).setValues([RFQ_RECEIPT_HEADERS]).setBackground('#205844').setFontColor('#ffffff').setFontWeight('bold');
+  const props=PropertiesService.getScriptProperties();
+  rows.map((row,index)=>({row,index})).sort((a,b)=>Date.parse(a.row[2])-Date.parse(b.row[2]) || String(a.row[0]).localeCompare(String(b.row[0]))).forEach(({row,index})=>{
+    if(!row[16]){const day=receiptDay_(row[2]),next=reserveReceipt_(props,day,floors[day]||0); row[16]=next.number; floors[day]=next.counter;}
+    row[17]=receiptTime_(row[2]);
+    sheet.getRange(index+2,17,1,2).setNumberFormat('@').setValues([[row[16],row[17]]]);
+  });
+  book.setSpreadsheetTimeZone('Asia/Seoul'); sheet.setColumnWidth(17,220); sheet.setColumnWidth(18,210); SpreadsheetApp.flush();
+}
 function submitRequest_(body) { return submitEncryptedRequest_(body); }
 
 /** Run once as the owner. Never replaces or clears an existing Sheet. */
@@ -107,6 +167,7 @@ function setupQuoteRequests() {
       sheet.getRange('E:E').setNumberFormat('@');
     }
     sheet_();
+    setupReceiptNumbers_(sheet,book);
     if (!ScriptApp.getProjectTriggers().some(trigger => trigger.getHandlerFunction() === 'dispatchQuoteNotifications')) ScriptApp.newTrigger('dispatchQuoteNotifications').timeBased().everyMinutes(1).create();
     setupPrivacyStorage_();
   });

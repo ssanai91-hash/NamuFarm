@@ -1,6 +1,7 @@
 import { quoteSchema } from "@/lib/quote-schema";
 import { jsonResult, quoteSettings, quoteEncryptionKey } from "@/lib/quote-server";
 import { privateFingerprint, sealCustomer } from "@/lib/privacy-crypto";
+import { validatedQuoteReceipt } from "@/lib/quote-receipt";
 export async function POST(request: Request) {
   const settings = quoteSettings();
   if (!settings.ready) return jsonResult({ error: "온라인 접수를 준비하고 있습니다. 아직 요청이 전송되지 않았어요." }, 503);
@@ -37,7 +38,8 @@ export async function POST(request: Request) {
     url.searchParams.set("_nf", crypto.randomUUID());
     const response = await fetch(url, { method: "POST", redirect: "follow", cache: "no-store", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "submit_request", webSecret: settings.secret, rateKey, requestId: parsed.data.requestId, fingerprint, encryptedRequest }), signal: AbortSignal.timeout(60000) });
     const result = await response.json() as { ok?: boolean; requestId?: string; code?: string };
-    if (response.ok && result.ok && result.requestId === parsed.data.requestId) return jsonResult({ requestId: result.requestId, testMode: settings.testMode }, 201);
+    const receipt = validatedQuoteReceipt(result, parsed.data.requestId);
+    if (response.ok && result.ok && receipt) return jsonResult({ ...receipt, testMode: settings.testMode }, 201);
     if (result.code === "RATE_LIMITED") return jsonResult({ error: "잠시 후 다시 요청해주세요. 입력한 내용은 그대로 유지됩니다." }, 429);
     if (result.code === "CONFLICT") return jsonResult({ error: "같은 요청번호의 내용이 달라 확인이 필요합니다. 새 요청으로 작성해주세요." }, 409);
     return jsonResult({ error: "접수 결과를 확인하지 못했어요. 같은 내용으로 다시 보내면 중복 없이 확인합니다." }, 502);

@@ -12,6 +12,7 @@ import { testNotice, testRequestMessage } from "@/lib/quote-test";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { quoteItemSchema, quoteSchema, requestFingerprint, newRequestId, type QuoteRequest } from "@/lib/quote-schema";
+import { validatedQuoteReceipt, receiptTimeSeoul, type QuoteReceipt } from "@/lib/quote-receipt";
 
 type Line = { id: number; species: string; specification: string; quantity: string };
 const examples = [
@@ -39,7 +40,7 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
   const [review, setReview] = useState<QuoteRequest | null>(null);
   const [uncertain, setUncertain] = useState(false);
   const inFlight = useRef(false);
-  const [busy, setBusy] = useState(false); const [success, setSuccess] = useState("");
+  const [busy, setBusy] = useState(false); const [success, setSuccess] = useState<QuoteReceipt | null>(null);
   const [menuOpen, setMenuOpen] = useState(false); const [atForm, setAtForm] = useState(false);
   const attempt = useRef<{ fingerprint: string; id: string } | null>(null);
   const formRef = useRef<HTMLFormElement>(null); const errorRef = useRef<HTMLDivElement>(null);
@@ -87,7 +88,7 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
           if (inFlight.current || attempt.current) throw new Error("작성 중인 요청을 먼저 확인해주세요.");
           const items = quoteItemSchema.array().min(1).max(20).parse((input as { items?: unknown })?.items);
           setLines(items.map(item => ({ ...item, id: nextLine.current++, quantity: String(item.quantity) })));
-          setSuccess(""); setNotice(`${items.length}개 품목을 준비했어요. 내용을 확인하고 연락처를 입력해주세요.`);
+          setSuccess(null); setNotice(`${items.length}개 품목을 준비했어요. 내용을 확인하고 연락처를 입력해주세요.`);
           document.getElementById("quote")?.scrollIntoView({ behavior: "smooth" });
           return { stagedItems: items.length, submitted: false };
         },
@@ -104,7 +105,7 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
       setLines(old => old.length === 1 && !old[0].species && !old[0].specification && !old[0].quantity ? [{ ...old[0], species }] : [...old, { ...emptyLine(nextLine.current++), species }]);
       setNotice(`${species}를 견적 품목에 담았어요.`);
     }
-    setSuccess(""); document.getElementById("quote")?.scrollIntoView({ behavior: "smooth" });
+    setSuccess(null); document.getElementById("quote")?.scrollIntoView({ behavior: "smooth" });
   }
   function prepare(event: FormEvent) {
     event.preventDefault(); setError("");
@@ -132,12 +133,13 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
     try {
       const response = await fetch("/api/quote-requests", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(review), signal: AbortSignal.timeout(120000) });
       const result = await response.json() as { requestId?: string; error?: string };
+      const receipt = validatedQuoteReceipt(result, review.requestId);
       if ([400, 403, 413, 415, 429].includes(response.status)) {
         sessionStorage.removeItem("namufarm.pending-request"); setUncertain(false);
       }
-      if (!response.ok || result.requestId !== review.requestId) throw new Error(result.error || "접수 결과를 확인하지 못했어요. 다시 시도해주세요.");
+      if (!response.ok || !receipt) throw new Error(result.error || "접수 결과를 확인하지 못했어요. 같은 내용으로 다시 보내주세요.");
       sessionStorage.removeItem("namufarm.pending-request");
-      setUncertain(false); setSuccess(review.requestId); setReview(null); attempt.current = null;
+      setUncertain(false); setSuccess(receipt); setReview(null); attempt.current = null;
       setName(""); setPhone(""); setRegion(""); setMessage(""); setEmail(""); setFormalQuote(false); setRecipient(""); setReplyChannel("sms"); setLines([emptyLine(nextLine.current++)]);
     } catch (e) { setError(e instanceof Error && e.name !== "TimeoutError" ? e.message : "접수 결과를 확인하지 못했어요. 같은 내용으로 다시 보내주세요."); }
     finally { setBusy(false); inFlight.current = false; }
@@ -169,7 +171,7 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
       <section id="quote" className="quote-section" aria-labelledby="quote-title"><div className="quote-layout wrap">
         <aside className="quote-intro"><span className="overline">LET’S GROW TOGETHER</span><h2 id="quote-title">좋은 시작은,<br />작은 문의에서.</h2><p>정확한 규격을 몰라도 괜찮아요.<br />심을 곳과 필요한 수량을 알려주세요.</p><div className="intro-promise"><ShieldCheck /><span>견적 요청만으로<br /><strong>주문이나 결제가 확정되지 않아요.</strong></span></div><div className="quote-progress"><span>01 <b>품목 작성</b></span><i /><span>02 <b>연락처 입력</b></span><i /><span>03 <b>상담</b></span></div></aside>
         <form className="quote-form" ref={formRef} onSubmit={prepare}>
-          {success ? <div className="success-panel" role="status"><CircleCheck /><span className="overline">{testMode ? "TEST REQUEST SAVED" : "REQUEST RECEIVED"}</span><h3>{testMode ? "테스트 요청을 저장했어요." : "견적 요청을 접수했어요."}</h3><p>{testMode ? "테스트 요청만 저장됐습니다. 실제 상담·견적서 발송은 진행하지 않습니다." : <>남겨주신 품목을 확인한 후<br />입력하신 연락처로 안내드릴게요.</>}</p><div className="receipt"><span>접수번호</span><code>{success}</code></div><Button type="button" variant="outline" onClick={() => { setSuccess(""); setNotice(""); }}>{testMode ? "다른 테스트 요청하기" : "다른 견적 요청하기"}</Button></div> : <>
+          {success ? <div className="success-panel" role="status"><CircleCheck /><span className="overline">{testMode ? "TEST REQUEST SAVED" : "REQUEST RECEIVED"}</span><h3>{testMode ? "테스트 요청을 저장했어요." : "견적 요청을 접수했어요."}</h3><p>{testMode ? "테스트 요청만 저장됐습니다. 실제 상담·견적서 발송은 진행하지 않습니다." : <>남겨주신 품목을 확인한 후<br />입력하신 연락처로 안내드릴게요.</>}</p><div className="receipt"><span>견적접수번호</span><code>{success.receiptNumber}</code><span className="receipt-date-label">접수일시 · 한국시간</span><time dateTime={success.createdAt}>{receiptTimeSeoul(success.createdAt)}</time></div><Button type="button" variant="outline" onClick={() => { setSuccess(null); setNotice(""); }}>{testMode ? "다른 테스트 요청하기" : "다른 견적 요청하기"}</Button></div> : <>
             <div className="form-title"><div><FileText /><h3>묘목 견적 요청</h3></div><span>필수 항목 *</span></div>
             {testMode && <div className="test-mode-notice"><strong>{testNotice}</strong><p>연결 확인용 테스트 요청만 저장합니다. 실제 고객정보 대신 테스트용 정보를 입력해주세요.</p><Button type="button" variant="link" onClick={() => setTestNoticeOpen(true)}>테스트 안내 다시 보기</Button></div>}
             {ready === false && <div className="service-notice">온라인 접수를 준비하고 있어요.<br /><span>지금은 양식을 미리 살펴볼 수 있으며, 요청은 전송되지 않습니다.</span></div>}

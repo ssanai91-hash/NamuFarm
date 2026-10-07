@@ -14,9 +14,10 @@ function open(envelope,kind,reference) {
  aes.setAAD(Buffer.from(`namufarm:v1:${kind}:${reference}`));aes.setAuthTag(bytes.subarray(-16));
  return JSON.parse(Buffer.concat([aes.update(bytes.subarray(0,-16)),aes.final()]).toString('utf8'));
 }
-function fixture({configure=true}={}) {
+function fixture({configure=true,now=Date.now()}={}) {
  const properties={SPREADSHEET_ID:'test',WEB_SECRET:'a'.repeat(64)},book=new Map(),cache=new Map(),sent=[],triggers=['dispatchQuoteNotifications'];
- let locked=false,failCache=false,failWrite=false,failPush=false,failReceipt=false;
+ let locked=false,failCache=false,failWrite=false,failPush=false,failReceipt=false,clock=now,timeZone='';
+ class FixtureDate extends Date { constructor(...args){super(...(args.length?args:[clock]));} static now(){return clock;} }
  function sheet(name) {if(book.has(name))return book.get(name);const cells=[];
  const value={cells,getLastRow:()=>cells.length,getRange(r,c,n=1,m=1){return{
   getValues:()=>Array.from({length:n},(_,i)=>Array.from({length:m},(_,j)=>cells[r-1+i]?.[c-1+j]??'')),
@@ -24,7 +25,7 @@ function fixture({configure=true}={}) {
   setNumberFormat(){return this},setBackground(){return this},setFontColor(){return this},setFontWeight(){return this}
  }},setFrozenRows(){},setColumnWidth(){}};book.set(name,value);return value}
  const props={getProperty:k=>properties[k]??null,setProperty(k,v){properties[k]=v},getProperties:()=>({...properties}),deleteProperty:k=>delete properties[k]};
- const context=vm.createContext({console:{log(){}},PropertiesService:{getScriptProperties:()=>props},SpreadsheetApp:{openById:()=>({getSheetByName:name=>book.get(name),insertSheet:sheet}),flush(){}},
+ const context=vm.createContext({Date:FixtureDate,console:{log(){}},PropertiesService:{getScriptProperties:()=>props},SpreadsheetApp:{openById:()=>({getSheetByName:name=>book.get(name),insertSheet:sheet,setSpreadsheetTimeZone:value=>timeZone=value}),flush(){}},
  LockService:{getScriptLock:()=>({tryLock(){assert.equal(locked,false);locked=true;return true},releaseLock(){locked=false}})},
  CacheService:{getScriptCache:()=>({get:k=>cache.get(k),put(k,v){if(failCache){failCache=false;throw Error('cache failure')};cache.set(k,v)}})},
  Utilities:{DigestAlgorithm:{SHA_256:'sha256'},Charset:{UTF_8:'utf8'},computeDigest:(_,v)=>[...crypto.createHash('sha256').update(v).digest()],getUuid:()=>crypto.randomUUID(),base64Decode:v=>[...Buffer.from(v,'base64')],base64Encode:v=>Buffer.from(v.map(x=>(x+256)%256)).toString('base64')},
@@ -43,6 +44,6 @@ function fixture({configure=true}={}) {
  const cells=book.get('웹견적요청').cells;
  const saved=()=>open(JSON.parse(cells[1][15]).encryptedRequest,'quote',cells[1][0]);
  const readRequests=after=>{const page=context.listRequests_({afterSequence:after});return{...page,requests:page.requests.map(r=>r.expired?r:{...r,...open(r.encryptedRequest,'quote',r.requestId)})}};
- return{context,cells,properties,request,submit,post,sent,book,publicKey,keyId,seal,open,saved,readRequests,failCache:()=>failCache=true,failWrite:()=>failWrite=true,failPush:()=>failPush=true,failReceipt:()=>failReceipt=true};
+ return{context,cells,properties,request,submit,post,sent,book,publicKey,keyId,seal,open,saved,readRequests,setTime:value=>clock=Date.parse(value),getTimeZone:()=>timeZone,failCache:()=>failCache=true,failWrite:()=>failWrite=true,failPush:()=>failPush=true,failReceipt:()=>failReceipt=true};
 }
 module.exports={fixture,seal,open,publicKey,keyId,pair};

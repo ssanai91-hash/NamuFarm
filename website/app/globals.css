@@ -57,3 +57,5 @@ body{font-size:16px} .field label,.field input,.field textarea,.consent-row>labe
 .review-section-box .review-contact{margin:0;padding:0;border:0;grid-template-columns:92px minmax(0,1fr)}
 .review-section-box .review-contact dd{margin:0;min-width:0;white-space:pre-wrap;overflow-wrap:anywhere}
 @media(max-width:767px){.quote-form .quote-section-box{padding:16px 12px}.review-section-box{padding:14px 12px}.review-section-box .review-contact{grid-template-columns:80px minmax(0,1fr)}}
+
+.receipt code{font-size:clamp(1rem,2.6vw,1.2rem);font-weight:650}.receipt .receipt-date-label{margin-top:18px;font-size:14px}.receipt>span:first-child{font-size:14px}.receipt time{font-size:15px;color:#365b39;font-variant-numeric:tabular-nums}
