@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type CSSProperties } from "react";
-import { Check, Leaf, Plus, Search, X } from "lucide-react";
+import { Leaf, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { artworkSlots, catalogInitials, filterSpecies, speciesCatalog, type CatalogInitial } from "@/lib/species-catalog";
@@ -37,7 +37,6 @@ export default function SpeciesBrowser({ selectedNames, onSelect }: Props) {
       const slot = artworkSlots[species.artwork];
       const style = { "--art-x": `${(slot % 4) * 100 / 3}%`, "--art-y": `${Math.floor(slot / 4) * 50}%` } as CSSProperties;
       return <button type="button" key={species.id} data-species-id={species.id} className={`catalog-card art-${species.artwork}${isSelected ? " selected" : ""}`} onClick={() => onSelect(species.name)} aria-label={`${species.name}${isSelected ? ", 견적에 담긴 품목 확인" : " 견적 품목에 담기"}`} aria-pressed={isSelected}>
-        <span className="catalog-card-top"><span>{species.initial}</span><span className="catalog-card-action">{isSelected ? <Check /> : <Plus />}</span></span>
         <span className="catalog-art" style={style} aria-hidden="true" />
         <span className="catalog-card-name">{species.name}</span>
         <span className="catalog-card-caption">{isSelected ? "견적에 담았어요" : "견적에 담기"}</span>
