@@ -1,5 +1,6 @@
 import type { ZodIssue } from "zod";
 export type QuoteLine = { id: number; species: string; specification: string; quantity: string };
+export type RemovedQuoteLine = { line: QuoteLine; index: number };
 export const emptyLine = (id: number): QuoteLine => ({ id, species: "", specification: "", quantity: "" });
 export const isEmptyLine = (line: QuoteLine) => !line.species.trim() && !line.specification.trim() && !line.quantity;
 export type FieldProblem = { id: string; message: string };
@@ -24,4 +25,12 @@ export function addCatalogLine(lines: QuoteLine[], species: string, newId: numbe
   if (empty >= 0) return { lines: lines.map((line, i) => i === empty ? { ...line, species } : line), added: true, notice: `${species} · 견적에 담았어요. 계속 고르셔도 됩니다.` };
   if (lines.length >= 20) return { lines, added: false, notice: "한 번에 20종까지 요청할 수 있어요. 담은 목록에서 품목을 확인해주세요." };
   return { lines: [...lines, { ...emptyLine(newId), species }], added: true, notice: `${species} · 견적에 담았어요. 계속 고르셔도 됩니다.` };
+}
+export function toggleCatalogLine(lines: QuoteLine[], species: string, newId: number): { lines: QuoteLine[]; added: boolean; notice: string; removed: RemovedQuoteLine[] } {
+  const removed = lines.flatMap((line, index) => line.species.trim() === species ? [{ line, index }] : []);
+  if (removed.length) {
+    const remaining = lines.filter(line => line.species.trim() !== species);
+    return { lines: remaining.length ? remaining : [emptyLine(newId)], added: false, removed, notice: `${species} · 견적에서 뺐어요. 다시 누르면 담을 수 있어요.` };
+  }
+  return { ...addCatalogLine(lines, species, newId), removed: [] };
 }

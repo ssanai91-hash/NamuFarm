@@ -14,7 +14,7 @@ import { Dialog, DialogClose, DialogContent, DialogDescription, DialogHeader, Di
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { quoteItemSchema, quoteSchema, requestFingerprint, newRequestId, type QuoteRequest } from "@/lib/quote-schema";
 import { validatedQuoteReceipt, receiptTimeSeoul, type QuoteReceipt } from "@/lib/quote-receipt";
-import { addCatalogLine, emptyLine, isEmptyLine, quoteFieldProblems, type FieldProblem, type QuoteLine as Line } from "@/lib/quote-form";
+import { toggleCatalogLine, emptyLine, isEmptyLine, quoteFieldProblems, type FieldProblem, type RemovedQuoteLine, type QuoteLine as Line } from "@/lib/quote-form";
 
 export default function QuoteHome({ initialTestMode = false, initialConfigured = false }: { initialTestMode?: boolean; initialConfigured?: boolean }) {
   const [lines, setLines] = useState<Line[]>([emptyLine(0)]);
@@ -40,7 +40,7 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
   const reviewTitleRef = useRef<HTMLHeadingElement>(null);
   const successRef = useRef<HTMLDivElement>(null);
   const [problems, setProblems] = useState<FieldProblem[]>([]);
-  const [removed, setRemoved] = useState<{ line: Line; index: number } | null>(null);
+  const [removed, setRemoved] = useState<{ lines: RemovedQuoteLine[]; label: string } | null>(null);
   const [delayed, setDelayed] = useState(false);
   const [conflict, setConflict] = useState(false);
   const [copyNotice, setCopyNotice] = useState("");
@@ -115,15 +115,16 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
   };
   function selectSpecies(species: string) {
     if (locked) return;
-    const result = addCatalogLine(lines, species, nextLine.current++);
-    setLines(result.lines); setNotice(result.notice); setProblems([]); setRemoved(null);
+    const result = toggleCatalogLine(lines, species, nextLine.current++);
+    setLines(result.lines); setNotice(result.notice); setProblems([]);
+    setRemoved(result.removed.length ? { lines: result.removed, label: species } : null);
     if (result.added) setSuccess(null);
   }
   function removeLine(id: number) {
     if (locked) return;
     const index = lines.findIndex(line => line.id === id);
     if (index < 0) return;
-    setRemoved({ line: lines[index], index });
+    setRemoved({ lines: [{ line: lines[index], index }], label: lines[index].species || "빈 품목" });
     setNotice(`${lines[index].species || "빈 품목"} · 목록에서 뺐어요.`);
     setLines(lines.length === 1 ? [emptyLine(nextLine.current++)] : lines.filter(line => line.id !== id));
     setProblems([]);
@@ -131,8 +132,9 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
   function undoRemove() {
     if (!removed || locked) return;
     const remaining = lines.filter(line => !isEmptyLine(line));
-    if (remaining.length >= 20) { setNotice("20종까지 담을 수 있어요. 다른 품목을 뺀 뒤 되돌려주세요."); return; }
-    if (!remaining.some(line => removed.line.species && line.species.trim() === removed.line.species.trim())) remaining.splice(Math.min(removed.index, remaining.length), 0, removed.line);
+    const restore = removed.lines.filter(({ line }) => !remaining.some(current => current.id === line.id));
+    if (remaining.length + restore.length > 20) { setNotice("20종까지 담을 수 있어요. 다른 품목을 뺀 뒤 되돌려주세요."); return; }
+    for (const { line, index } of restore) remaining.splice(Math.min(index, remaining.length), 0, line);
     setLines(remaining.length ? remaining : [emptyLine(nextLine.current++)]); setRemoved(null); setNotice("품목을 되돌렸어요.");
   }
   function fieldAttrs(id: string, help?: string) {
@@ -217,7 +219,7 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
             <div className="form-title"><div><FileText /><h3>견적 상담 요청</h3></div><span>필수 항목을 확인해주세요</span></div>
             {testMode && <div className="test-mode-notice"><strong>{testNotice}</strong><p>실제 고객정보 대신 테스트용 정보를 입력해주세요.</p><Button type="button" variant="link" onClick={() => setTestNoticeOpen(true)}>테스트 안내 다시 보기</Button></div>}
             {!ready && <div className="service-notice">온라인 접수를 준비하고 있어요. 지금은 양식을 살펴볼 수 있으며 요청은 전송되지 않습니다.</div>}
-            {removed && <div className="undo-notice"><span>{removed.line.species || "빈 품목"} · 목록에서 뺐어요.</span><Button type="button" variant="ghost" onClick={undoRemove} disabled={locked}>되돌리기</Button></div>}
+            {removed && <div className="undo-notice"><span>{removed.label} · 목록에서 뺐어요.</span><Button type="button" variant="ghost" onClick={undoRemove} disabled={locked}>되돌리기</Button></div>}
             <fieldset className="quote-section-box" disabled={locked}><legend><span>1</span>견적 요청 묘목</legend><div className="line-list">{lines.map((line, index) => <div className="item-line" key={line.id}>
               <div className="item-number">품목 {index + 1}<Button type="button" variant="ghost" aria-label={`품목 ${index + 1} ${line.species} 빼기`} onClick={() => removeLine(line.id)}><Trash2 />빼기</Button></div>
               <div className="item-fields"><div className="field species-field"><Label htmlFor={`species-${line.id}`}>묘목 이름 <small>필수</small></Label><Input id={`species-${line.id}`} required maxLength={80} placeholder="예: 감나무" value={line.species} onChange={e => updateLine(line.id, "species", e.target.value)} {...fieldAttrs(`species-${line.id}`)} />{fieldError(`species-${line.id}`)}</div>

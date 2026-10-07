@@ -33,7 +33,7 @@ export default function SpeciesBrowser({ lines, onSelect, onRemove, notice, lock
       </div>
       <p className="catalog-note">그림은 종류를 알아보기 위한 참고용입니다.<br />실제 묘목의 상태는 견적 후 상담을 통해 가능합니다.</p>
       <p className="catalog-results-heading">여러 품목을 함께 담으세요</p>
-      <p className="catalog-live" role="status" aria-live="polite" aria-atomic="true">{notice || "카드를 누르면 견적에 담겨요."}</p>
+      <p className="catalog-live" role="status" aria-live="polite" aria-atomic="true">{notice || "카드를 누르면 담기고, 다시 누르면 빠져요."}</p>
       <div className="catalog-grid">{matches.slice(0, visibleCount).map((species, index) => {
         const isSelected = selected.has(species.name);
         return <button type="button" key={species.id} data-species-id={species.id} className={`catalog-card${isSelected ? " selected" : ""}`} disabled={locked} onClick={() => onSelect(species.name)} aria-label={`${species.name}, ${isSelected ? "견적에 담았어요" : "견적에 담기"}`} aria-pressed={isSelected}>
