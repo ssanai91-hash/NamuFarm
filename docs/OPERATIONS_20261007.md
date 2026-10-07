@@ -36,10 +36,12 @@
 - 기존 견적 파일 `1v--nBeLaSCnfhtawzTSngWFkjNbNCyBQpRZ54kRkztg` (`나무팜_홈페이지_견적접수`)은 휴지통 이동 완료. UI에서 30일 후 완전삭제 안내를 확인했다.
 - 별개 재고/품종 시트와 업로드된 품종 Excel 파일은 이 정리 대상이 아니다.
 
-## 남은 Google 콘솔 설정
+## Google 콘솔 설정 완료 (2026-10-08 00:40 KST)
 
-OAuth 승인 화면에 앱이 테스트 중이라고 표시됐다. 장기 운영 전에 소유자가 Google Cloud의 **Google 인증 플랫폼 → 대상 → 게시 상태**를 확인하여 **프로덕션**으로 게시해야 한다. 현재 작업 브라우저에서 Cloud 콘솔은 `Site Unavailable`을 반환하므로 이 설정은 직접 변경하지 못했다. Sheets·Drive 권한 승인과 API 활성화는 완료됐지만 OAuth 게시 상태까지 완료했다고 보고하지 않는다.
+소유자가 Google Cloud 프로젝트 `namufarm-web-requests`의 브랜딩을 저장하고 OAuth 앱을 프로덕션으로 게시했다. 00:38 KST에 제공된 화면에서 홈페이지 `https://namufarm.co.kr`, 개인정보처리방침 `https://namufarm.co.kr/privacy`, 승인된 도메인 `namufarm.co.kr` 및 브랜딩 저장 성공 메시지를 확인했다.
 
-Google 공식 문서에 따르면 외부 사용자 유형의 테스트 상태 앱은 기본 프로필 외 범위를 요청할 때 refresh token이 7일 뒤 만료된다. 앱 게시와 Google 검증 승인은 다른 절차다. 이 서버의 OAuth 주체는 소유자이며 홈페이지 고객에게 Google 로그인을 요구하지 않는다.
+00:40 KST에 제공된 **Google 인증 플랫폼 → 대상** 화면에서 **게시 상태: 프로덕션 단계**, **테스트로 돌아가기** 버튼 및 사용자 유형 **외부**를 확인했다. 남아 있던 OAuth 프로덕션 게시 항목을 완료로 기록한다. 이 확인은 사용자 제공 화면에 근거하며 작업 브라우저의 Cloud 콘솔 접속 오류와는 별개다.
 
-참고: https://developers.google.com/identity/protocols/oauth2#expiration
+앱 게시와 Google 검증 승인은 다른 절차다. 위 화면은 프로덕션 게시 전환을 입증하며 Google의 브랜드·범위 검증 심사 완료를 입증하지는 않는다. 이 서버의 OAuth 주체는 소유자이며 홈페이지 고객에게 Google 로그인을 요구하지 않는다. PC·Android 앱 구현과 실기기 알림 검증은 후속 작업이다.
+
+참고: https://support.google.com/cloud/answer/15549945
