@@ -344,9 +344,9 @@ class MainWindow(QMainWindow):
 
     def refresh_requests(self):
         query = self.request_search.text().casefold()
-        self.request_rows = [r for r in self.data["requests"] if query in (r["requestId"] + str(r["personal"])).casefold()]
+        self.request_rows = [r for r in self.data["requests"] if query in (r["requestId"] + r.get("receiptNumber", "") + str(r["personal"])).casefold()]
         self.request_table.blockSignals(True)
-        fill_table(self.request_table, [(r["requestId"], timestamp(r["createdAt"]), r["personal"]["customerName"], r["personal"]["customerPhone"],
+        fill_table(self.request_table, [(r.get("receiptNumber") or r["requestId"], timestamp(r["createdAt"]), r["personal"]["customerName"], r["personal"]["customerPhone"],
                    ", ".join(f"{i['species']} {i['quantity']}주" for i in r["personal"]["items"]), r["personal"]["region"],
                    "요청" if r["personal"].get("formalQuoteRequested") else "—") for r in self.request_rows])
         self.request_table.clearSelection()
@@ -359,7 +359,7 @@ class MainWindow(QMainWindow):
         index = self.request_table.currentRow()
         if 0 <= index < len(self.request_rows):
             row, person = self.request_rows[index], self.request_rows[index]["personal"]
-            text = [f"접수번호: {row['requestId']}", f"고객: {person['customerName']} / {person['customerPhone']}", f"이메일: {person.get('customerEmail') or '없음'}",
+            text = [f"접수번호: {row.get('receiptNumber') or row['requestId']}", f"고객: {person['customerName']} / {person['customerPhone']}", f"이메일: {person.get('customerEmail') or '없음'}",
                     f"배송지역: {person['region']}", "희망 묘목:"]
             text.extend(f"  · {i['species']} {i.get('specification', '')} / {i['quantity']:,}주" for i in person["items"])
             text.extend([f"요청사항: {person.get('message', '')}", f"공식 견적 수신인: {person.get('recipientName', '')}",
@@ -511,7 +511,7 @@ class MainWindow(QMainWindow):
         self.cost_confirmed.setChecked(order.get("costConfirmed", False))
         if row:
             meta = row["metadata"]
-            self.sale_info.setText(f"{meta['orderNumber']} · {meta['status']} · revision {meta['revision']}\n매출 {money(meta['totalPrice'])} / 세액 {money(meta['taxAmount'])}\n입금 {timestamp(meta['paidAt'])} · 배송 {timestamp(meta['deliveredAt'])}")
+            self.sale_info.setText(f"{meta['orderNumber']} · {meta['status']}\n매출 {money(meta['totalPrice'])} / 세액 {money(meta['taxAmount'])}\n입금 {timestamp(meta['paidAt'])} · 배송 {timestamp(meta['deliveredAt'])}")
             self.sale_items.setPlainText("\n".join(f"{i['species']} · {i['quantity']:,}주 × {money(i['unitPrice'])}" for i in meta["items"]))
             self.next_button.setText({"구매확정": "입금 확인", "입금확인": "배송 확인", "배송확인": "판매 완료"}.get(meta["status"], "처리 종료"))
             self.fields["customerPhone"].setReadOnly(bool(row["private"].get("quoteDocumentJson")))
@@ -697,12 +697,17 @@ def main():
     app.setOrganizationName("NamuFarm")
     app.setStyle("Fusion")
     app.setStyleSheet("QPushButton {padding:7px 12px;} QLineEdit,QComboBox,QDateEdit {padding:5px;} QTabBar::tab {padding:10px 20px;} QGroupBox {font-weight:600;}")
-    window = MainWindow()
-    window.show()
+    from .workspace import SellerWindow
+    window = SellerWindow()
+    window.showMaximized()
     if "--self-check" in sys.argv:
         app.processEvents()
-        require(window.tabs.count() == 4, "PC 화면 초기화에 실패했습니다.")
+        require(window.stack.count() == 7, "PC 화면 초기화에 실패했습니다.")
         window.close()
         return 0
+    if "--demo" in sys.argv:
+        from .demo import show_demo
+        show_demo(window)
+        return app.exec()
     QTimer.singleShot(0, window.open_vault)
     return app.exec()

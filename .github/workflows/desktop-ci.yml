@@ -2,7 +2,7 @@ name: Desktop manager CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, fix/local-first-integrity-review]
   pull_request:
     branches: [main]
   workflow_dispatch:

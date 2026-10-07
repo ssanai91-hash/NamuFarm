@@ -7,6 +7,8 @@ from .api import DEFAULT_URL, ScriptApi
 from .crypto import canonical, digest, SellerKey
 from .domain import (changed, integer, metadata, now_ms, require, valid_id, validate_metadata, validate_request, sale_expired)
 from .errors import UserError, ConflictError
+from .commerce import (validate_draft, order_from_draft, quote_document, tracking_fields,
+                       tracking_number, normalize_tracking)
 
 
 class Manager:
@@ -48,9 +50,90 @@ class Manager:
         for row in sales:
             private = self.decode_sale(row)
             decoded_sales.append({**row, "private": private})
+        drafts = self.vault.preference("drafts", [])
+        # Drafts contain personal data and follow the 30-day unpurchased retention rule.
+        deleted = set(self.vault.snapshot_marker()["deletedRequests"])
+        active = [d for d in drafts if d["createdAt"] > now_ms() - 30 * 86400000 and d["sourceRequestId"] not in deleted
+                  and not any(r["metadata"]["orderNumber"] == "PC_" + d["id"] for r in sales)]
+        if active != drafts:
+            self.vault.save_preference("drafts", active)
         return {"requests": sorted(decoded_requests, key=lambda r: r["sequence"], reverse=True),
                 "sales": sorted(decoded_sales, key=lambda r: r["sequence"], reverse=True),
-                "pending": self.vault.pending(), "paired": self.credentials.get("paired") is True}
+                "drafts": active, "pending": self.vault.pending(), "paired": self.credentials.get("paired") is True}
+
+    def save_draft(self, draft):
+        validate_draft(draft)
+        require(not any(r["metadata"]["orderNumber"] == "PC_" + draft["id"] for r in self.vault.rows("sales")), "구매 확정된 견적은 수정할 수 없습니다.")
+        drafts = self.view()["drafts"]
+        require(draft["createdAt"] > now_ms() - 30 * 86400000, "30일이 지난 견적은 새로 작성해주세요.")
+        drafts = [d for d in drafts if d["id"] != draft["id"]]
+        require(len(drafts) < 500, "보관 중인 초안을 정리해주세요.")
+        self.vault.save_preference("drafts", [copy.deepcopy(draft), *drafts])
+        return self.view()
+
+    def delete_draft(self, identifier):
+        require(valid_id(identifier))
+        self.vault.save_preference("drafts", [d for d in self.view()["drafts"] if d["id"] != identifier])
+        return self.view()
+
+    def confirm_draft(self, draft):
+        validate_draft(draft)
+        # Read cloud state before purchase confirmation; never replay a new order under a new ID.
+        snapshot = self.sync()
+        number = "PC_" + draft["id"]
+        require(not any(r["metadata"]["orderNumber"] == number for r in snapshot["sales"]), "이미 구매 확정된 견적입니다. 판매 관리에서 확인해주세요.")
+        source = draft["sourceRequestId"]
+        if source:
+            require(any(r["requestId"] == source for r in snapshot["requests"]), "접수된 문의가 삭제·만료되었거나 이미 구매 확정되었습니다.")
+            require(not any(r["private"]["order"].get("sourceRequestId") == source for r in snapshot["sales"]), "이미 판매로 등록된 문의입니다.")
+        self.save_draft(draft)
+        order = order_from_draft(draft)
+        private = {"order": order, "quoteDocumentJson": canonical(quote_document(draft))}
+        meta, event_id = metadata(order), str(uuid.uuid4())
+        envelope = self.seller.seal(private, "order", event_id)
+        payload = {"eventId": event_id, "metadata": meta, "encryptedPersonal": envelope,
+                   "fingerprint": digest(meta, envelope), "sourceRequestId": source}
+        require(len(canonical(payload).encode("utf-8")) <= 63000, "견적 품목이나 메모를 줄여주세요.")
+        self.vault.queue({"id": event_id, "action": "save_sale", "payload": payload},
+                         {**payload, "sequence": 0, "expired": False})
+        return self.sync()
+
+    def register_tracking(self, number, expected_revision, tracking):
+        value = normalize_tracking(tracking)
+        view = self.view()
+        row = next((r for r in view["sales"] if r["metadata"]["orderNumber"] == number), None)
+        require(row is not None and row["metadata"]["revision"] == expected_revision, "판매 기록을 다시 조회해주세요.")
+        require(all(r["metadata"]["orderNumber"] == number or tracking_number(r["private"]["order"]) != value for r in view["sales"]), "다른 주문에 등록된 송장번호입니다.")
+        return self.save_sale(number, expected_revision, tracking_fields(row["private"]["order"], value))
+
+    def import_tracking(self, assignments):
+        view = self.sync()
+        # Revalidate the entire preview against the latest cloud snapshot before writing.
+        seen = set()
+        for number, value in assignments.items():
+            value = normalize_tracking(value)
+            require(value not in seen, "중복 송장번호를 확인해주세요.")
+            seen.add(value)
+            row = next((r for r in view["sales"] if r["metadata"]["orderNumber"] == number), None)
+            require(row is not None, "주문이 변경되었습니다. 파일을 다시 확인해주세요.")
+            tracking_fields(row["private"]["order"], value)
+            old = tracking_number(row["private"]["order"])
+            require(not old or old == value, "기존 송장과 다릅니다. 개별 주문에서 확인해주세요.")
+            require(all(r["metadata"]["orderNumber"] == number or tracking_number(r["private"]["order"]) != value for r in view["sales"]), "다른 주문에 등록된 송장번호입니다.")
+        done = 0
+        for number, value in assignments.items():
+            row = next(r for r in view["sales"] if r["metadata"]["orderNumber"] == number)
+            if tracking_number(row["private"]["order"]) == value:
+                done += 1
+                continue
+            try:
+                view = self.register_tracking(number, row["metadata"]["revision"], value)
+            except ConflictError:
+                raise
+            except UserError as error:
+                raise UserError(f"{done}건 저장 확인 후 중단했습니다. 전송 대기를 동기화한 뒤 같은 CSV로 재시도하세요. {error}") from None
+            done += 1
+        return view
 
     def decode_sale(self, row):
         meta = validate_metadata(row["metadata"])

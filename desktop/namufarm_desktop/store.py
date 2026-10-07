@@ -97,6 +97,17 @@ class Vault:
         with self.mutex, self._db() as db:
             db.execute("UPDATE config SET value=? WHERE name='credentials'", (self._seal(value, "credentials"),))
 
+    def preference(self, name, default=None):
+        """Encrypted PC-only workspace data; survives cloud snapshot replacement."""
+        with self.mutex, self._db() as db:
+            row = db.execute("SELECT value FROM config WHERE name=?", ("workspace:" + name,)).fetchone()
+            return self._open(row[0], "workspace:" + name) if row else default
+
+    def save_preference(self, name, value):
+        with self.mutex, self._db() as db:
+            scope = "workspace:" + name
+            db.execute("INSERT OR REPLACE INTO config VALUES (?,?)", (scope, self._seal(value, scope)))
+
     def rows(self, kind):
         with self.mutex, self._db() as db:
             return [self._open(blob, kind + ":" + index) for index, blob in db.execute("SELECT id,body FROM cache WHERE kind=?", (kind,))]

@@ -49,7 +49,7 @@ class ScriptApi:
             if data is not None and len(data) > 65000:
                 raise UserError("전송할 기록이 너무 큽니다.")
             request = urllib.request.Request(self.url, data=data,
-                       headers={"Content-Type": "application/json", "User-Agent": "NamuFarmDesktop/0.1"})
+                       headers={"Content-Type": "application/json", "User-Agent": "NamuFarmDesktop/0.2"})
             with self.opener.open(request, timeout=REQUEST_TIMEOUT) as response:
                 raw = response.read(MAX_RESPONSE + 1)
                 if len(raw) > MAX_RESPONSE:
