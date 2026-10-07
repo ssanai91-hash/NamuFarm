@@ -23,7 +23,7 @@ export default function SpeciesBrowser({ selectedNames, onSelect }: Props) {
   return <section id="trees" className="trees-section wrap catalog-section" aria-labelledby="trees-title">
     <div className="section-heading catalog-heading">
       <div><span className="overline">FIND YOUR TREE</span><h2 id="trees-title">어떤 나무를 찾으세요?</h2><p>초성으로 찾아보고, 마음에 드는 묘목을 담아보세요.</p></div>
-      <p className="catalog-direct-note">찾으시는 묘목이 없다면, 아래 견적 요청란에 묘목 이름을 직접 적어주세요.</p>
+      <p className="catalog-direct-note">찾는 묘목이 없다면, 아래 견적 요청란에 묘목 이름을 직접 적어주세요.</p>
     </div>
     <div className="catalog-controls">
       <div className="catalog-search"><Search aria-hidden="true" /><label htmlFor="catalog-search" className="sr-only">묘목 이름 또는 초성 검색</label><Input id="catalog-search" type="search" autoComplete="off" maxLength={80} placeholder="묘목 이름 또는 초성 · 예: 수국, ㅅㄱ" value={query} onChange={event => { setQuery(event.target.value); setInitial(event.target.value.trim() ? "all" : "ㄱ"); setVisibleCount(pageSize); }} />{query && <Button type="button" variant="ghost" size="icon" aria-label="묘목 검색 지우기" onClick={() => chooseInitial("ㄱ")}><X /></Button>}</div>
