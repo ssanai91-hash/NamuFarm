@@ -13,7 +13,7 @@ function secureServiceInfo_() {
   const key = sellerKey_();
   let ready = false;
   try { ready = !!key && PropertiesService.getScriptProperties().getProperty('PRIVACY_SETUP') === '1'
-    && rows_(sheet_()).every(row => { const raw = JSON.parse(row[15]); return raw.expired === true || !!raw.encryptedRequest; }); } catch (_) {}
+    && quoteStorageReady_() && rows_(sheet_()).every(row => { const raw = JSON.parse(row[15]); return raw.expired === true || !!raw.encryptedRequest; }); } catch (_) {}
   return {ok:true,service:'namufarm-quote-requests',version:4,processingBases:['quote_request'],
     requestFields:['customerEmail','formalQuoteRequested','recipientName','replyChannel'],encryptionReady:ready,
     sellerKey:key,retentionDays:30,requestDeletionSync:true,receiptFormat:'NFQ-YYYYMMDD-NNNN',receiptTimeZone:'Asia/Seoul',
@@ -91,6 +91,7 @@ function submitEncryptedRequest_(body) {
   assert_(!body.request && !body.customerName && !body.customerPhone,'INVALID');
   const encrypted = envelope_(body.encryptedRequest,sellerKey_());
   return lock_(() => {
+    if(quoteStorageConfigured_()) return submitIndexedQuote_(body,encrypted);
     const sheet = sheet_(); const rows = receiptRows_(sheet); const existingIndex = rows.findIndex(row=>row[0]===body.requestId);
     assert_(receiptColumnsReady_(sheet),'NOT_READY');
     if (existingIndex>=0) { const existing=rows[existingIndex]; assert_(existing[11]===body.fingerprint,'CONFLICT');
@@ -109,21 +110,28 @@ function submitEncryptedRequest_(body) {
     return Object.assign(receiptDetails_(row),{duplicate:false});
   });
 }
+function quoteResponseRow_(row) {
+  const expires=Date.parse(String(row[2]))+QUOTE_RETENTION_MS,raw=JSON.parse(row[15]);
+  const result={requestId:String(row[0]),sequence:Number(row[1]),createdAt:String(row[2]),expiresAt:expires};
+  if(row[16])Object.assign(result,receiptDetails_(row));
+  if(raw.expired===true || expires<=Date.now())return Object.assign(result,{expired:true});
+  assert_(raw.encryptedRequest,'NOT_READY');
+  return Object.assign(result,{encryptedRequest:envelope_(raw.encryptedRequest,sellerKey_())});
+}
 function listEncryptedRequests_(body) {
   assert_(Number.isSafeInteger(body.afterSequence) && body.afterSequence>=0);
-  const rows=receiptRows_(sheet_()).filter(r=>Number(r[1])>body.afterSequence).sort((a,b)=>Number(a[1])-Number(b[1]));
-  const page=rows.slice(0,100).map(row=>{
-    const expires=Date.parse(String(row[2]))+QUOTE_RETENTION_MS; const raw=JSON.parse(row[15]);
-    const result={requestId:String(row[0]),sequence:Number(row[1]),createdAt:String(row[2]),expiresAt:expires};
-    if(row[16])Object.assign(result,receiptDetails_(row));
-    if (raw.expired === true || expires<=Date.now()) return Object.assign(result,{expired:true});
-    assert_(raw.encryptedRequest,'NOT_READY'); return Object.assign(result,{encryptedRequest:envelope_(raw.encryptedRequest,sellerKey_())});
+  if(quoteStorageConfigured_())return lock_(()=>{
+    const matches=indexedQuoteRecords_(body.afterSequence,true);
+    const requests=matches.slice(0,100).map(({entry,cache})=>quoteResponseRow_(quoteRecord_(entry,cache,false).row));
+    return {requests:requests,hasMore:matches.length>requests.length};
   });
-  return {requests:page,hasMore:rows.length>page.length};
+  const rows=receiptRows_(sheet_()).filter(r=>Number(r[1])>body.afterSequence).sort((a,b)=>Number(a[1])-Number(b[1]));
+  return {requests:rows.slice(0,100).map(quoteResponseRow_),hasMore:rows.length>100};
 }
 function closeRequest_(body) {
   assert_(UUID_PATTERN.test(body.requestId));
-  return lock_(()=>{const sheet=sheet_(); const rows=rows_(sheet); const i=rows.findIndex(r=>r[0]===body.requestId);
+  return lock_(()=>{if(quoteStorageConfigured_()){closeIndexedQuote_(body.requestId);return {closed:true,requestId:body.requestId};}
+    const sheet=sheet_(); const rows=rows_(sheet); const i=rows.findIndex(r=>r[0]===body.requestId);
     if (i>=0) expireQuoteRow_(sheet,rows[i],i); return {closed:true,requestId:body.requestId};});
 }
 function expireQuoteRow_(sheet,row,index) {
@@ -215,7 +223,7 @@ function saveSale_(body) {
     return {saved:true,orderNumber:meta.orderNumber,revision:meta.revision,fingerprint:digest};
   });
 }
-function closeLinkedRequest_(id) {if(!id)return;const sheet=sheet_(),rows=rows_(sheet);const q=rows.findIndex(r=>r[0]===id);if(q>=0 && JSON.parse(rows[q][15]).expired!==true)expireQuoteRow_(sheet,rows[q],q);}
+function closeLinkedRequest_(id) {if(!id)return;if(quoteStorageConfigured_()){closeIndexedQuote_(id);return;}const sheet=sheet_(),rows=rows_(sheet);const q=rows.findIndex(r=>r[0]===id);if(q>=0 && JSON.parse(rows[q][15]).expired!==true)expireQuoteRow_(sheet,rows[q],q);}
 function listSales_(body) {
   assert_(Number.isSafeInteger(body.afterSequence) && body.afterSequence>=0);
   const rows=namedRows_(namedSheet_(SALE_SHEET,SALE_HEADERS,false),20).filter(r=>Number(r[1])>body.afterSequence).sort((a,b)=>Number(a[1])-Number(b[1]));
@@ -243,7 +251,8 @@ function salesReport_(body) {
 function purgeExpiredCustomerData() {
   if(PropertiesService.getScriptProperties().getProperty('PRIVACY_SETUP')!=='1')return;
   lock_(()=>{
-    const sheet=sheet_();rows_(sheet).forEach((r,i)=>{if(Date.parse(String(r[2]))+QUOTE_RETENTION_MS<=Date.now() && JSON.parse(r[15]).expired!==true)expireQuoteRow_(sheet,r,i);});
+    if(quoteStorageConfigured_())purgeIndexedQuotes_();
+    else {const sheet=sheet_();rows_(sheet).forEach((r,i)=>{if(Date.parse(String(r[2]))+QUOTE_RETENTION_MS<=Date.now() && JSON.parse(r[15]).expired!==true)expireQuoteRow_(sheet,r,i);});}
     const sales=namedSheet_(SALE_SHEET,SALE_HEADERS,false);const rows=namedRows_(sales,20);const events=namedSheet_(SALE_EVENT_SHEET,SALE_EVENT_HEADERS,false);
     rows.forEach((r,i)=>{
       const meta=JSON.parse(r[15]); if(meta.archived || !['판매완료','주문취소'].includes(meta.status) || Date.parse(String(r[14]))>Date.now())return;

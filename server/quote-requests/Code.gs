@@ -219,7 +219,7 @@ function registerPush_(body, hash) {
 }
 function listRequests_(body) { return listEncryptedRequests_(body); }
 
-/** Durable outbox; network I/O never holds the request-submission lock. */
+/** Durable outbox; FCM network I/O never holds the request-submission lock. */
 function dispatchQuoteNotifications() { dispatchNotifications_(null); }
 function dispatchNotifications_(onlyId) {
   const work = lock_(() => {
@@ -228,13 +228,16 @@ function dispatchNotifications_(onlyId) {
     const devices = JSON.parse(props.getProperty('DEVICES') || '{}');
     const targets = Object.entries(devices).filter(entry => !!entry[1].fcmToken);
     if (!targets.length) return null;
-    const sheet = sheet_(); const now = Date.now(); const lease = new Date(now + 600000).toISOString();
+    const now = Date.now(); const lease = new Date(now + 600000).toISOString();
     const batch = [];
-    rows_(sheet).forEach((row, offset) => {
-      if (batch.length >= (onlyId ? 1 : 10) || (onlyId && row[0] !== onlyId) || row[10] !== 'PENDING' || Date.parse(String(row[2])) + 30*86400000 <= now || Date.parse(String(row[13])) > now) return;
-      sheet.getRange(offset+2,14,1,1).setValues([[lease]]);
+    const records=quoteStorageConfigured_()?indexedQuoteRecords_(-1).filter(({entry})=>entry.values[QI.status]!=='보관종료' && (!onlyId || entry.values[QI.id]===onlyId) && Date.parse(entry.values[QI.created])+QUOTE_RETENTION_MS>now):quoteRows_(sheet_());
+    for(const candidate of records){
+      if(batch.length >= (onlyId ? 1 : 10))break;
+      const {sheet,row,index}=candidate.entry?quoteRecord_(candidate.entry,candidate.cache,false):candidate;
+      if ((onlyId && row[0] !== onlyId) || row[10] !== 'PENDING' || Date.parse(String(row[2])) + 30*86400000 <= now || Date.parse(String(row[13])) > now) continue;
+      sheet.getRange(index+2,14,1,1).setValues([[lease]]);
       batch.push({ id:String(row[0]), lease:lease });
-    });
+    }
     SpreadsheetApp.flush();
     return { project:project, targets:targets, batch:batch };
   });
@@ -256,9 +259,11 @@ function dispatchNotifications_(onlyId) {
       } catch (_) { success = false; code = 'NETWORK'; }
     });
     lock_(() => {
-      const sheet = sheet_(); const rows = rows_(sheet); const index = rows.findIndex(row => row[0] === job.id);
-      if (index < 0 || rows[index][10] !== 'PENDING' || rows[index][13] !== job.lease) return;
-      const row = rows[index]; const attempts = (Number(row[12]) || 0) + 1;
+      let record;
+      if(quoteStorageConfigured_()){const entries=quoteIndexEntries_(),cache={};quoteRepairTransitions_(entries,cache);const entry=entries.find(e=>e.values[QI.id]===job.id);record=entry?quoteRecord_(entry,cache,false):null;}
+      else record=quoteFindRow_(sheet_(),job.id);
+      if(!record || record.row[10]!=='PENDING' || record.row[13]!==job.lease)return;
+      const {sheet,row,index}=record; const attempts = (Number(row[12]) || 0) + 1;
       const next = new Date(Date.now() + Math.min(21600000, Math.pow(2,Math.min(attempts,12))*60000)).toISOString();
       sheet.getRange(index+2,11,1,5).setValues([[success ? 'SENT' : 'PENDING', row[11], attempts, next, code]]);
       const props = PropertiesService.getScriptProperties(); const devices = JSON.parse(props.getProperty('DEVICES') || '{}');

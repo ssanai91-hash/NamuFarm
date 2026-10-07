@@ -31,7 +31,7 @@ RSA 3072 OAEP SHA-256/MGF1 SHA-256으로 각 기록의 임의 AES-256 키를 감
 
 | 시트 | 저장 내용 |
 |---|---|
-| 웹견적요청 | UUID, 독립 접수 순번·시각, 상태, HMAC 해시, 알림 outbox, 암호화 본문 |
+| 웹견적요청 또는 월별 파일의 날짜 시트 | UUID, 전체 기간 접수/변경 순번·시각, 상태, HMAC 해시, 알림 outbox, 암호화 본문 |
 | 판매기록 | 주문번호·revision, 상태·단계 시각, 수량·매출·세액·원가·비용·매출이익, 암호화 고객/견적서 본문 |
 | 판매변경이력 | 변경 이벤트 ID·주문번호·revision·내용 digest·서버 수신 시각 |
 
@@ -61,6 +61,8 @@ RSA 3072 OAEP SHA-256/MGF1 SHA-256으로 각 기록의 임의 AES-256 키를 감
 
 ## 서버 배포와 검사
 
-Apps Script에 `Code.gs`와 `SecureCommerce.gs`를 모두 넣습니다. 한 파일 편집기라면 순서대로 이어 붙여도 같습니다. manifest 권한은 기존과 같습니다. owner가 `setupQuoteRequests()`를 실행하면 시트와 알림/삭제 트리거를 생성합니다. 기존 Sheet 데이터는 초기화하지 않습니다. 기존 웹 앱 배포를 새 버전으로 갱신해 URL과 접근 설정을 유지합니다.
+Apps Script에 `Code.gs`, `SecureCommerce.gs`, `MonthlyStorage.gs`와 manifest를 모두 넣습니다. 최신 manifest는 월별 파일 생성을 위한 고급 Drive API v3와 `drive.file` 권한을 포함하므로 활성화/재승인이 필요합니다. owner가 `setupQuoteRequests()`를 실행하면 기존 시트와 알림/삭제 트리거를 생성합니다. 기존 Sheet 데이터는 초기화하지 않습니다. 기존 웹 앱 배포를 새 버전으로 갱신해 URL과 접근 설정을 유지합니다.
+
+월별 파일·날짜 시트·전체 접수 색인의 활성화는 별도입니다. [월별 저장 안내](MONTHLY_QUOTE_STORAGE.md)의 `setupMonthlyQuoteStorage()` → 감사 → `enableMonthlyQuoteStorage()` 순서를 따릅니다. 이전 자료는 제자리에서 계속 읽고 파기하며, 선택적인 복사 이관 후 남은 원본 사본도 파기 대상에 포함합니다.
 
 검사: `node --test server/quote-requests/tests/*.test.cjs`, `node --test website/tests/privacy-crypto.test.mjs`, `bash gradlew testDebugUnitTest assembleDebug`. 실제 기기의 백업 파일 선택·기존 서명 업데이트·FCM·이메일/MMS 전달은 휴대폰에서 확인해야 합니다.
