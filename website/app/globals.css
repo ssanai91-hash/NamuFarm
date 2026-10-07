@@ -452,11 +452,6 @@ section {
   color: #516951;
   font-size: 1rem;
 }
-.catalog-results-heading strong {
-  color: #205844;
-  white-space: nowrap;
-  margin-left: .4rem;
-}
 .catalog-live {
   font-size: 1rem;
   color: #205844;
@@ -846,23 +841,8 @@ section {
   font-size: 1.125rem;
   color: #526350;
 }
-.spec-details {
+.spec-field {
   margin-top: .9rem;
-}
-.spec-details summary {
-  cursor: pointer;
-  min-height: 3rem;
-  padding: .7rem 0;
-  font-size: 1rem;
-  color: #28523a;
-}
-.spec-details summary small {
-  margin-left: .4rem;
-  color: #64735c;
-  font-size: 1rem;
-}
-.spec-details>.field {
-  margin-top: .5rem;
 }
 .add-line {
   width: 100%;
@@ -1137,6 +1117,17 @@ section {
 .footer-inner small {
   font-size: .875rem;
   color: #526350;
+}
+.footer-phone-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0 .4rem;
+}
+.footer-phone-row a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 3rem;
 }
 .mobile-cta {
   display: none;
@@ -1523,9 +1514,6 @@ section {
   }
   .catalog-note {
     font-size: 1rem;
-  }
-  .catalog-results-heading>span {
-    display: none;
   }
   .catalog-grid {
     gap: .75rem;

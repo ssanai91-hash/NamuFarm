@@ -16,7 +16,7 @@ function PlantImage({ id, eager }: { id: string; eager: boolean }) {
     : <span className="art-pending"><Leaf strokeWidth={1.3} /><span>그림 준비 중</span></span>}</span>;
 }
 export default function SpeciesBrowser({ lines, onSelect, onRemove, notice, locked }: Props) {
-  const [initial, setInitial] = useState<CatalogInitial | "all">("all");
+  const [initial, setInitial] = useState<CatalogInitial | "all">("ㄱ");
   const [query, setQuery] = useState("");
   const [visibleCount, setVisibleCount] = useState(pageSize);
   const matches = filterSpecies(initial, query);
@@ -27,12 +27,12 @@ export default function SpeciesBrowser({ lines, onSelect, onRemove, notice, lock
     <div className="section-heading catalog-heading"><div><span className="overline">나무팜 묘목 안내</span><h2 id="trees-title">어떤 나무를 찾으세요?</h2></div><p className="catalog-direct-note">찾는 묘목이 없다면, 아래 견적 요청란에 묘목 이름을 직접 적어주세요.</p></div>
     <div className="catalog-layout"><div className="catalog-main">
       <div className="catalog-controls"><label className="search-label" htmlFor="catalog-search">묘목 이름으로 찾기</label>
-        <div className="catalog-search"><Search aria-hidden="true" /><Input id="catalog-search" type="search" autoComplete="off" maxLength={80} placeholder="예: 수국 또는 ㅅㄱ" aria-describedby="search-help" value={query} onChange={event => { setQuery(event.target.value); setInitial("all"); setVisibleCount(pageSize); }} />{query && <Button type="button" variant="ghost" size="icon" aria-label="묘목 검색 지우기" onClick={() => chooseInitial("all")}><X /></Button>}</div>
-        <p id="search-help" className="field-help">이름이나 초성으로 검색해요. 첫 글자로 찾으려면 아래 ㄱ·ㄴ을 누르세요.</p>
+        <div className="catalog-search"><Search aria-hidden="true" /><Input id="catalog-search" type="search" autoComplete="off" maxLength={80} placeholder="예: 수국 또는 ㅅㄱ" aria-describedby="search-help" value={query} onChange={event => { setQuery(event.target.value); setInitial(event.target.value.trim() ? "all" : "ㄱ"); setVisibleCount(pageSize); }} />{query && <Button type="button" variant="ghost" size="icon" aria-label="묘목 검색 지우기" onClick={() => chooseInitial("ㄱ")}><X /></Button>}</div>
+        <p id="search-help" className="field-help">이름이나 초성으로 검색해요.</p>
         <div className="initial-filter" role="group" aria-label="첫 글자로 묘목 찾기">{(["all", ...catalogInitials] as const).map(value => <Button type="button" variant="ghost" key={value} className="initial-button" aria-pressed={initial === value} onClick={() => chooseInitial(value)}>{value === "all" ? "전체" : value}</Button>)}</div>
       </div>
-      <p className="catalog-note">그림은 종류를 알아보기 위한 참고용입니다. 실제 묘목의 크기·꽃·열매 상태는 상담할 때 확인합니다.</p>
-      <div className="catalog-results-heading"><p role="status">{query.trim() ? `전체에서 ‘${query.trim()}’ 검색` : initial === "all" ? "전체 묘목" : `${initial}으로 시작하는 묘목`} <strong>{matches.length}종</strong></p><span>여러 품목을 함께 담으세요</span></div>
+      <p className="catalog-note">그림은 종류를 알아보기 위한 참고용입니다.<br />실제 묘목의 상태는 견적 후 상담을 통해 가능합니다.</p>
+      <p className="catalog-results-heading">여러 품목을 함께 담으세요</p>
       <p className="catalog-live" role="status" aria-live="polite" aria-atomic="true">{notice || "카드를 누르면 견적에 담겨요."}</p>
       <div className="catalog-grid">{matches.slice(0, visibleCount).map((species, index) => {
         const isSelected = selected.has(species.name);
