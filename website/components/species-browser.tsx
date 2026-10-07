@@ -1,49 +1,50 @@
 "use client";
-
-import { useState, type CSSProperties } from "react";
-import { Leaf, Search, X } from "lucide-react";
+import { useState } from "react";
+import { Leaf, Search, X, ShoppingBasket } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { artworkSlots, catalogInitials, filterSpecies, type CatalogInitial } from "@/lib/species-catalog";
-
-type Props = { selectedNames: string[]; onSelect: (name: string) => void };
+import { catalogInitials, filterSpecies, type CatalogInitial } from "@/lib/species-catalog";
+import { speciesIllustration } from "@/lib/species-illustrations";
+import type { QuoteLine } from "@/lib/quote-form";
+type Props = { lines: QuoteLine[]; onSelect: (name: string) => void; onRemove: (id: number) => void; notice: string; locked: boolean };
 const pageSize = 24;
-
-export default function SpeciesBrowser({ selectedNames, onSelect }: Props) {
-  const [initial, setInitial] = useState<CatalogInitial | "all">("ㄱ");
+function PlantImage({ id, eager }: { id: string; eager: boolean }) {
+  const [failed, setFailed] = useState(false);
+  const illustration = speciesIllustration(id);
+  return <span className="catalog-art" aria-hidden="true">{illustration && !failed
+    ? <img src={illustration.src} width={256} height={256} loading={eager ? "eager" : "lazy"} decoding="async" alt="" onError={() => setFailed(true)} />
+    : <span className="art-pending"><Leaf strokeWidth={1.3} /><span>그림 준비 중</span></span>}</span>;
+}
+export default function SpeciesBrowser({ lines, onSelect, onRemove, notice, locked }: Props) {
+  const [initial, setInitial] = useState<CatalogInitial | "all">("all");
   const [query, setQuery] = useState("");
   const [visibleCount, setVisibleCount] = useState(pageSize);
   const matches = filterSpecies(initial, query);
-  const selected = new Set(selectedNames);
-
-  function chooseInitial(value: CatalogInitial | "all") {
-    setInitial(value); setQuery(""); setVisibleCount(pageSize);
-  }
-
+  const selectedItems = lines.filter(line => line.species.trim());
+  const selected = new Set(selectedItems.map(line => line.species.trim()));
+  function chooseInitial(value: CatalogInitial | "all") { setInitial(value); setQuery(""); setVisibleCount(pageSize); }
   return <section id="trees" className="trees-section wrap catalog-section" aria-labelledby="trees-title">
-    <div className="section-heading catalog-heading">
-      <div><span className="overline">FIND YOUR TREE</span><h2 id="trees-title">어떤 나무를 찾으세요?</h2><p>초성으로 찾아보고, 마음에 드는 묘목을 담아보세요.</p></div>
-      <p className="catalog-direct-note">찾는 묘목이 없다면, 아래 견적 요청란에 묘목 이름을 직접 적어주세요.</p>
-    </div>
-    <div className="catalog-controls">
-      <div className="catalog-search"><Search aria-hidden="true" /><label htmlFor="catalog-search" className="sr-only">묘목 이름 또는 초성 검색</label><Input id="catalog-search" type="search" autoComplete="off" maxLength={80} placeholder="묘목 이름 또는 초성 · 예: 수국, ㅅㄱ" value={query} onChange={event => { setQuery(event.target.value); setInitial(event.target.value.trim() ? "all" : "ㄱ"); setVisibleCount(pageSize); }} />{query && <Button type="button" variant="ghost" size="icon" aria-label="묘목 검색 지우기" onClick={() => chooseInitial("ㄱ")}><X /></Button>}</div>
-      <div className="initial-filter" role="group" aria-label="묘목 초성 선택">
-        {(["all", ...catalogInitials] as const).map(value => <Button type="button" variant="ghost" key={value} className="initial-button" aria-pressed={initial === value} onClick={() => chooseInitial(value)}>{value === "all" ? "전체" : value}</Button>)}
+    <div className="section-heading catalog-heading"><div><span className="overline">나무팜 묘목 안내</span><h2 id="trees-title">어떤 나무를 찾으세요?</h2></div><p className="catalog-direct-note">찾는 묘목이 없다면, 아래 견적 요청란에 묘목 이름을 직접 적어주세요.</p></div>
+    <div className="catalog-layout"><div className="catalog-main">
+      <div className="catalog-controls"><label className="search-label" htmlFor="catalog-search">묘목 이름으로 찾기</label>
+        <div className="catalog-search"><Search aria-hidden="true" /><Input id="catalog-search" type="search" autoComplete="off" maxLength={80} placeholder="예: 수국 또는 ㅅㄱ" aria-describedby="search-help" value={query} onChange={event => { setQuery(event.target.value); setInitial("all"); setVisibleCount(pageSize); }} />{query && <Button type="button" variant="ghost" size="icon" aria-label="묘목 검색 지우기" onClick={() => chooseInitial("all")}><X /></Button>}</div>
+        <p id="search-help" className="field-help">이름이나 초성으로 검색해요. 첫 글자로 찾으려면 아래 ㄱ·ㄴ을 누르세요.</p>
+        <div className="initial-filter" role="group" aria-label="첫 글자로 묘목 찾기">{(["all", ...catalogInitials] as const).map(value => <Button type="button" variant="ghost" key={value} className="initial-button" aria-pressed={initial === value} onClick={() => chooseInitial(value)}>{value === "all" ? "전체" : value}</Button>)}</div>
       </div>
-    </div>
-    <div className="catalog-results-heading"><p role="status" aria-live="polite">{query.trim() ? `‘${query.trim()}’ 검색 결과` : initial === "all" ? "전체 묘목" : `${initial}으로 시작하는 묘목`} <strong>{matches.length}종</strong></p><span>선택하면 견적 요청에 담겨요</span></div>
-    <div className="catalog-grid">{matches.slice(0, visibleCount).map(species => {
-      const isSelected = selected.has(species.name);
-      const slot = artworkSlots[species.artwork];
-      const style = { "--art-x": `${(slot % 4) * 100 / 3}%`, "--art-y": `${Math.floor(slot / 4) * 50}%` } as CSSProperties;
-      return <button type="button" key={species.id} data-species-id={species.id} className={`catalog-card art-${species.artwork}${isSelected ? " selected" : ""}`} onClick={() => onSelect(species.name)} aria-label={`${species.name}${isSelected ? ", 견적에 담긴 품목 확인" : " 견적 품목에 담기"}`} aria-pressed={isSelected}>
-        <span className="catalog-art" style={style} aria-hidden="true" />
-        <span className="catalog-card-name">{species.name}</span>
-        <span className="catalog-card-caption">{isSelected ? "견적에 담았어요" : "견적에 담기"}</span>
-      </button>;
-    })}</div>
-    {matches.length === 0 && <div className="catalog-empty"><Leaf aria-hidden="true" /><h3>찾으시는 묘목이 없나요?</h3><p>다른 이름으로 검색하거나 견적 요청란에 직접 적어주세요.</p><Button asChild variant="outline"><a href="#quote">묘목 이름 직접 적기</a></Button></div>}
-    {matches.length > visibleCount && <div className="catalog-more"><Button type="button" variant="outline" onClick={() => setVisibleCount(count => count + pageSize)}>묘목 더 보기 <span>{Math.min(visibleCount, matches.length)} / {matches.length}</span></Button></div>}
-    <p className="section-note catalog-note"><Leaf aria-hidden="true" />그림은 묘목의 특징을 표현한 일러스트입니다. 실제 재고와 규격은 상담 시 확인해요.</p>
+      <p className="catalog-note">그림은 종류를 알아보기 위한 참고용입니다. 실제 묘목의 크기·꽃·열매 상태는 상담할 때 확인합니다.</p>
+      <div className="catalog-results-heading"><p role="status">{query.trim() ? `전체에서 ‘${query.trim()}’ 검색` : initial === "all" ? "전체 묘목" : `${initial}으로 시작하는 묘목`} <strong>{matches.length}종</strong></p><span>여러 품목을 함께 담으세요</span></div>
+      <p className="catalog-live" role="status" aria-live="polite" aria-atomic="true">{notice || "카드를 누르면 견적에 담겨요."}</p>
+      <div className="catalog-grid">{matches.slice(0, visibleCount).map((species, index) => {
+        const isSelected = selected.has(species.name);
+        return <button type="button" key={species.id} data-species-id={species.id} className={`catalog-card${isSelected ? " selected" : ""}`} disabled={locked} onClick={() => onSelect(species.name)} aria-label={`${species.name}, ${isSelected ? "견적에 담았어요" : "견적에 담기"}`} aria-pressed={isSelected}>
+          <PlantImage id={species.id} eager={index < 6} /><span className="catalog-card-name">{species.name}</span><span className="catalog-card-caption">{isSelected ? "견적에 담았어요" : "견적에 담기"}</span>
+        </button>;
+      })}</div>
+      {matches.length === 0 && <div className="catalog-empty"><Leaf aria-hidden="true" /><h3>검색 결과가 없어요.</h3><p>다른 이름으로 찾거나 묘목 이름을 직접 적어주세요.</p><Button asChild variant="outline"><a href="#quote">묘목 이름 직접 적기</a></Button></div>}
+      {matches.length > visibleCount && <div className="catalog-more"><Button type="button" variant="outline" onClick={() => setVisibleCount(count => count + pageSize)}>묘목 더 보기 <span>{Math.min(visibleCount, matches.length)} / {matches.length}</span></Button></div>}
+    </div><aside className="catalog-basket" aria-labelledby="basket-title"><div className="basket-title"><ShoppingBasket aria-hidden="true" /><h3 id="basket-title">담은 묘목 <span>{selectedItems.length}종</span></h3></div>
+      {selectedItems.length ? <ul>{selectedItems.map(line => <li key={line.id}><span><strong>{line.species}</strong><small>{line.quantity ? `${Number(line.quantity).toLocaleString()}주` : "수량을 입력해주세요"}</small></span><Button variant="ghost" type="button" disabled={locked} onClick={() => onRemove(line.id)} aria-label={`${line.species} 빼기`}>빼기</Button></li>)}</ul> : <p className="basket-empty">필요한 묘목을 담아보세요.<br />수량은 다음에 입력해요.</p>}
+      <Button asChild className="basket-next"><a href="#quote">{selectedItems.length ? "수량 입력하기" : "묘목 이름 직접 적기"}</a></Button><p className="field-help">견적을 요청해도 주문이나 결제가 확정되지 않아요.</p>
+    </aside></div>
   </section>;
 }

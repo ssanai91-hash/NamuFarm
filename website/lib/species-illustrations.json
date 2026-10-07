@@ -1,0 +1,1897 @@
+{
+  "213": {
+    "src": "",
+    "group": "",
+    "status": "pending",
+    "references": [],
+    "note": "명칭 확인 보류: 가시오가피 등과 유통명·실제 종이 일치하는지 확인 필요"
+  },
+  "214": {
+    "src": "/plants/v1/kaizuka-juniper.webp",
+    "group": "kaizuka-juniper",
+    "status": "illustrated",
+    "depictedTaxon": "Juniperus chinensis Kaizuka / 가이즈까향나무",
+    "artworkScope": "Young small Chinese juniper with slightly twisted rising branches and green scale-leaf sprays; asymmetrical curling compact juvenile silhouette, no berries.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/juniperus-chinensis-kaizuka/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "215": {
+    "src": "/plants/v1/persimmon.webp",
+    "group": "persimmon",
+    "status": "illustrated",
+    "depictedTaxon": "Diospyros kaki",
+    "artworkScope": "Youthful small persimmon tree with simple oval green smooth-margin leaves, visible central midrib and lateral veins, a slim upright brown trunk and sparse young branches.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/diospyros-kaki/common-name/kaki/"
+    ],
+    "note": "NC State Extension Diospyros kaki: 잎·과실은 종 수준 참고. 국내 대봉·둥시·야오끼·월하·차량의 품종별 과형 및 단감 여부는 이 출처로 검증하지 않음. Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "216": {
+    "src": "/plants/v1/forsythia.webp",
+    "group": "forsythia",
+    "status": "illustrated",
+    "depictedTaxon": "개나리 / Forsythia",
+    "artworkScope": "Young low forsythia shrub with several slender arching green-brown stems and simple pointed oval serrated green leaves. FOLIAGE ONLY, no flowers or buds.",
+    "references": [
+      "https://kna.forest.go.kr/kfsweb/cop/bbs/selectBoardArticle.do?bbsId=BBSMSTR_1102&ctgryLrcls=&ctgryMdcls=&ctgrySmcls=&mn=UKNA_05_03&ntcEndDt=&ntcStartDt=&nttId=2967716&pageIndex=29&pageUnit=12&searchWrd=&searchcont=&searchkey=&searchtitle=title&searchwriter="
+    ],
+    "note": "국립수목원 수목원의 오늘: 개나리 노란 바람 불어오는 봄. 노란 개화 모습 참고. Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "219": {
+    "src": "/plants/v1/katsura.webp",
+    "group": "katsura",
+    "status": "illustrated",
+    "depictedTaxon": "계수나무 / Cercidiphyllum japonicum",
+    "artworkScope": "Slender young katsura tree, paired round heart-shaped green leaves with softly scalloped edges, thin reddish-brown twigs. No flowers.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/cercidiphyllum-japonicum/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "221": {
+    "src": "/plants/v1/caragana.webp",
+    "group": "caragana",
+    "status": "illustrated",
+    "depictedTaxon": "골담초 / Caragana sinica",
+    "artworkScope": "Small young shrub with slender upright arching stems and pinnate leaves made of FOUR small smooth oval green leaflets, two pairs. No flowers.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/caragana-sinica/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "222": {
+    "src": "/plants/v1/goji.webp",
+    "group": "goji",
+    "status": "illustrated",
+    "depictedTaxon": "구기자 / Lycium",
+    "artworkScope": "Small youthful goji-type shrub with slender arching twigs, sparse small narrow lanceolate green simple leaves. No berries, no flowers. Generic Lycium foliage, no cultivar claims.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/lycium/"
+    ],
+    "note": "NC State Extension Lycium: 관목·가느다란 가지·작은 열매의 속 수준 자료. 국내 공급 구기자 종과 정확한 과형은 추가 확인. Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "223": {
+    "src": "/plants/v1/korean-fir.webp",
+    "group": "korean-fir",
+    "status": "illustrated",
+    "depictedTaxon": "구상나무 / Abies koreana",
+    "artworkScope": "Small young conical Korean fir with layered branches, short flat linear green needles with rounded or shallow-notched tips, a few needles turned to hint pale undersides. No cones. Clearly fir, not scale-leaved conifer.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/abies-koreana/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "227": {
+    "src": "/plants/v1/umbrella-pine.webp",
+    "group": "umbrella-pine",
+    "status": "illustrated",
+    "depictedTaxon": "금송 / Sciadopitys verticillata",
+    "artworkScope": "Youthful upright umbrella pine with whorls of thick long linear dark-green leaves radiating like umbrella spokes near branch ends; modest slender trunk, no cones.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/sciadopitys-verticillata/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "229": {
+    "src": "/plants/v1/phlox.webp",
+    "group": "phlox",
+    "status": "illustrated",
+    "depictedTaxon": "Phlox subulata",
+    "artworkScope": "Low spreading cushion mat of fine green needle-like foliage, with a FEW small pink five-lobed flowers scattered lightly on the foliage.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/phlox-subulata/"
+    ],
+    "note": "NC State Extension Phlox subulata: 낮게 퍼지는 매트형, 바늘처럼 가는 잎, 다섯 갈래 꽃. Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "231": {
+    "src": "",
+    "group": "",
+    "status": "pending",
+    "references": [],
+    "note": "명칭 확인 보류: 남경도라는 유통명만으로 품종·꽃색·겹꽃 여부 확정 불가"
+  },
+  "232": {
+    "src": "/plants/v1/nandina.webp",
+    "group": "nandina",
+    "status": "illustrated",
+    "depictedTaxon": "Nandina domestica",
+    "artworkScope": "Young heavenly bamboo nandina with cane-like slender stems and finely divided bipinnate or tripinnate foliage made of pointed oval narrow green leaflets; no fruit or flowers.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/nandina-domestica/"
+    ],
+    "note": "NC State Extension Nandina domestica: 가는 줄기와 2~3회 깃꼴겹잎. Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "235": {
+    "src": "/plants/v1/prostrate-yew.webp",
+    "group": "prostrate-yew",
+    "status": "illustrated",
+    "depictedTaxon": "눈주목 / prostrate Taxus",
+    "artworkScope": "Young low spreading yew shrub, several low arching woody stems, dark green flat short linear needles in orderly ranks along slender twigs. Broad low silhouette, no berries, not upright tree.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/taxus-cuspidata/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "236": {
+    "src": "/plants/v1/zelkova.webp",
+    "group": "zelkova",
+    "status": "illustrated",
+    "depictedTaxon": "느티나무 / Zelkova serrata",
+    "artworkScope": "Young slim zelkova sapling with slightly spreading branches and simple pointed oval green leaves with distinct sawtooth serrations and straight lateral veins, short petioles. No flowers.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/zelkova-serrata/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "237": {
+    "src": "/plants/v1/trumpet-vine.webp",
+    "group": "trumpet-vine",
+    "status": "illustrated",
+    "depictedTaxon": "Campsis grandiflora",
+    "artworkScope": "Young trumpet vine with pinnate compound leaves comprising serrated pointed leaflets and ONE small orange trumpet-shaped flower. No trellis.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/campsis-grandiflora/common-name/trumpet-creeper/"
+    ],
+    "note": "NC State Extension Campsis grandiflora: 깃꼴겹잎, 주황~붉은 나팔형 꽃. 공급 교잡종 여부는 별도 확인. Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "239": {
+    "src": "/plants/v1/japanese-maple.webp",
+    "group": "japanese-maple",
+    "status": "illustrated",
+    "depictedTaxon": "단풍나무 / Acer palmatum",
+    "artworkScope": "Young slender maple sapling with green deeply palmately divided leaves, five to seven narrow pointed lobes with finely serrated edges. Green foliage only, no red autumn color.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/acer-palmatum/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "240": {
+    "src": "/plants/v1/boston-ivy.webp",
+    "group": "boston-ivy",
+    "status": "illustrated",
+    "depictedTaxon": "담쟁이덩굴 / Parthenocissus tricuspidata",
+    "artworkScope": "Young short climbing vine with simple broadly three-lobed green leaves, serrated margins, and thin branching tendrils ending in tiny adhesive discs. No support structure, fruit or flowers. Leaves are single blades not compound.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/parthenocissus-tricuspidata/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "241": {
+    "src": "/plants/v1/longleaf-pine.webp",
+    "group": "longleaf-pine",
+    "status": "illustrated",
+    "depictedTaxon": "대왕송 / Pinus palustris",
+    "artworkScope": "Young small pine sapling with a short stem and very long slender green needles gathered in bundles of THREE, forming soft fountain-like tufts at branch tips. No cones, no mature thick trunk.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/pinus-palustris/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "242": {
+    "src": "/plants/v1/jujube.webp",
+    "group": "jujube",
+    "status": "illustrated",
+    "depictedTaxon": "Ziziphus jujuba",
+    "artworkScope": "Young branched jujube sapling with small glossy oval green leaves and THREE clearly distinct basal veins running upward from each leaf base, tiny finely serrated leaf margins.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/ziziphus-jujuba/"
+    ],
+    "note": "NC State Extension Ziziphus jujuba: 광택 있는 작은 잎과 기부에서 뚜렷한 세 잎맥. 복조·사과·왕의 국내 품종 인증은 아님. Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "243": {
+    "src": "",
+    "group": "",
+    "status": "pending",
+    "references": [],
+    "note": "명칭 확인 보류: 분꽃 유럽이라는 표기만으로 분꽃나무류인지 초화인지 확정 불가"
+  },
+  "244": {
+    "src": "/plants/v1/wisteria.webp",
+    "group": "wisteria",
+    "status": "illustrated",
+    "depictedTaxon": "Wisteria floribunda",
+    "artworkScope": "Youthful wisteria vine with pinnate compound green leaves and ONE small drooping pale lavender flower raceme. No trellis.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/wisteria-floribunda/"
+    ],
+    "note": "NC State Extension Wisteria floribunda: 깃꼴겹잎과 늘어진 총상꽃차례. 납품종·꽃색 확인 필요. Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "245": {
+    "src": "/plants/v1/styrax.webp",
+    "group": "styrax",
+    "status": "illustrated",
+    "depictedTaxon": "때죽나무 / Styrax japonicus",
+    "artworkScope": "Young slender upright styrax sapling with small elliptic pointed green leaves, finely serrated edges, thin spreading brown twigs. Leaves only, no flowers.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/styrax-japonicus/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "246": {
+    "src": "/plants/v1/oakleaf-hydrangea.webp",
+    "group": "oakleaf-hydrangea",
+    "status": "illustrated",
+    "depictedTaxon": "Hydrangea quercifolia",
+    "artworkScope": "Low young oakleaf hydrangea shrub with deeply lobed oak-like green leaves, and ONE small cream conical flower cluster as a secondary accent.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/hydrangea-quercifolia/"
+    ],
+    "note": "NC State Extension Hydrangea quercifolia: 떡갈잎 같은 갈래잎과 원추형 꽃차례. Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "247": {
+    "src": "/plants/v1/lilac.webp",
+    "group": "lilac",
+    "status": "illustrated",
+    "depictedTaxon": "라일락 / Syringa",
+    "artworkScope": "Youthful common lilac-type shrub with several thin woody stems and opposite simple broad heart-shaped green leaves with smooth edges. No flowers or buds, no cultivar color claims.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/syringa-vulgaris/"
+    ],
+    "note": "NC State Extension Syringa pubescens subsp. patula: Miss Kim은 일반 라일락보다 작은 수형, 타원형 잎. 일반 라일락과 완전히 같은 그림 승인 근거는 아님. Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "248": {
+    "src": "/plants/v1/russian-olive.webp",
+    "group": "russian-olive",
+    "status": "illustrated",
+    "depictedTaxon": "러시아올리브 / Elaeagnus angustifolia",
+    "artworkScope": "Young Russian olive sapling, slim brown stems and narrow lanceolate leaves with restrained silvery sage-green upper surfaces and pale silver undersides. Clearly narrow leaves, no olives, berries or flowers.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/elaeagnus-angustifolia/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "249": {
+    "src": "/plants/v1/rowan.webp",
+    "group": "rowan",
+    "status": "illustrated",
+    "depictedTaxon": "마가목 / Sorbus",
+    "artworkScope": "Young rowan sapling with pinnate compound green leaves comprising many narrow pointed serrated leaflets along each central rachis, paired leaflets plus one terminal. No berries or flowers.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/sorbus-commixta/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "250": {
+    "src": "/plants/v1/horse-chestnut.webp",
+    "group": "horse-chestnut",
+    "status": "illustrated",
+    "depictedTaxon": "마로니에 / Aesculus",
+    "artworkScope": "Young horse-chestnut-type sapling with PALMATELY COMPOUND green leaves; five to seven broad pointed serrated leaflets radiating from one leaf-stalk tip. Slender juvenile woody stem. No nuts, flowers or seed pods.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/aesculus-hippocastanum/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "251": {
+    "src": "",
+    "group": "",
+    "status": "pending",
+    "references": [],
+    "note": "명칭 확인 보류: 마키베리의 정확한 종·판매 라벨을 확보하지 못함"
+  },
+  "252": {
+    "src": "/plants/v1/rhododendron.webp",
+    "group": "rhododendron",
+    "status": "illustrated",
+    "depictedTaxon": "만병초 / Rhododendron",
+    "artworkScope": "Small young evergreen rhododendron shrub with broad leathery dark green elliptic leaves, smooth slightly rolled edges, leaves clustered toward stem ends. Leaf-only genus-level illustration, no flowers or buds.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/rhododendron/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "253": {
+    "src": "/plants/v1/ume.webp",
+    "group": "ume",
+    "status": "illustrated",
+    "depictedTaxon": "매실 / Prunus mume",
+    "artworkScope": "Young slender Prunus mume sapling with simple oval green leaves, pointed tips and finely serrated edges, slim branching woody twigs. No flowers, fruit, flower-color or fruit-color claims.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/prunus-mume/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "254": {
+    "src": "/plants/v1/liriope.webp",
+    "group": "liriope",
+    "status": "illustrated",
+    "depictedTaxon": "Liriope muscari",
+    "artworkScope": "Young compact clump of long narrow arching green strap leaves and ONE modest slender purple flower spike.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/liriope-muscari/"
+    ],
+    "note": "NC State Extension Liriope muscari: 좁고 휘는 잎이 모인 포기와 보라색 꽃대. 국내 공급종 학명은 별도 확인. Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "255": {
+    "src": "/plants/v1/dawn-redwood.webp",
+    "group": "dawn-redwood",
+    "status": "illustrated",
+    "depictedTaxon": "메타세쿼이아 / Metasequoia glyptostroboides",
+    "artworkScope": "Youthful narrow conical dawn-redwood sapling with delicate layered twigs and soft flat linear green leaves clearly arranged in OPPOSITE pairs on branchlets. Feathery foliage, no cones.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/metasequoia-glyptostroboides/"
+    ],
+    "note": "NC State Extension Metasequoia glyptostroboides: 낙엽침엽수이며 부드러운 잎이 마주남. Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "256": {
+    "src": "/plants/v1/flowering-quince.webp",
+    "group": "flowering-quince",
+    "status": "illustrated",
+    "depictedTaxon": "명자나무 / Chaenomeles",
+    "artworkScope": "Small youthful woody flowering-quince shrub with thin spreading branches, glossy simple oval green leaves with finely serrated edges and pointed tips; a few small unobtrusive stem thorns. No flowers, buds or fruit.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/chaenomeles-speciosa/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "257": {
+    "src": "/plants/v1/golden-rain-tree.webp",
+    "group": "golden-rain-tree",
+    "status": "illustrated",
+    "depictedTaxon": "모감주나무 / Koelreuteria paniculata",
+    "artworkScope": "Young slender golden-rain-tree sapling with pinnate green compound leaves, several irregularly lobed and coarsely toothed pointed leaflets on each rachis. Open juvenile branches. No flowers, seed pods, golden foliage or fruit.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/koelreuteria-paniculata/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "258": {
+    "src": "/plants/v1/chinese-quince.webp",
+    "group": "chinese-quince",
+    "status": "illustrated",
+    "depictedTaxon": "모과 / Pseudocydonia sinensis",
+    "artworkScope": "Young slender Chinese quince sapling with simple glossy oval green leaves, short pointed tips, fine serrated margins and thin thornless woody twigs. Juvenile brown trunk without exaggerated peeling mature bark. No flowers or fruit.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/pseudocydonia-sinensis/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "260": {
+    "src": "/plants/v1/tuliptree.webp",
+    "group": "tuliptree",
+    "status": "illustrated",
+    "depictedTaxon": "목백합 / Liriodendron tulipifera",
+    "artworkScope": "Young slender tuliptree sapling with distinctive broad four-lobed green leaves, central top of each leaf appearing squared-off or shallowly notched, rounded base and pointed side lobes. Smooth leaf margins. No flowers or fruit.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/liriodendron-tulipifera/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "261": {
+    "src": "/plants/v1/hibiscus.webp",
+    "group": "hibiscus",
+    "status": "illustrated",
+    "depictedTaxon": "Hibiscus syriacus",
+    "artworkScope": "Young woody hibiscus shrub with small serrated green leaves, many leaves shallowly three-lobed. NO BLOOMS, buds, flowers or fruit.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/hibiscus-syriacus/common-name/rose-of-sharon/"
+    ],
+    "note": "NC State Extension Hibiscus syriacus: 갈라지는 잎, 큰 꽃과 다양한 꽃색·겹꽃. 접목 여부만으로 꽃색 확정 불가. Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "262": {
+    "src": "",
+    "group": "",
+    "status": "pending",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/ilex-cornuta/"
+    ],
+    "note": "상품명에 있는 잎 색·무늬를 일반 녹색 그림으로 대신할 수 없음"
+  },
+  "263": {
+    "src": "/plants/v1/muscari.webp",
+    "group": "muscari",
+    "status": "illustrated",
+    "depictedTaxon": "무스카리 / Muscari",
+    "artworkScope": "Small single young grape-hyacinth clump with several narrow fleshy linear green basal leaves gently arching and curling downward; no bulbs exposed. FOLIAGE ONLY, no flowers, buds, fruit, no other plant.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/muscari/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "264": {
+    "src": "/plants/v1/fig.webp",
+    "group": "fig",
+    "status": "illustrated",
+    "depictedTaxon": "Ficus carica",
+    "artworkScope": "Slim young fig stem with several large 3–5-lobed palmate leaves. Distinct long rounded fig leaf lobes and palmate veins.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/ficus-carica/"
+    ],
+    "note": "NC State Extension Ficus carica: 큰 손바닥형 3~5갈래 잎. 특정 공급 품종·1년포트 실물 규격 인증은 아님. Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "265": {
+    "src": "",
+    "group": "",
+    "status": "pending",
+    "references": [],
+    "note": "명칭 확인 보류: 문그로우의 영문 품종명·종 확인 전 특정 향나무로 확정 불가"
+  },
+  "267": {
+    "src": "",
+    "group": "",
+    "status": "pending",
+    "references": [],
+    "note": "명칭 확인 보류: 미니백일홍이 초화인지 배롱나무 왜성종인지 불명확"
+  },
+  "268": {
+    "src": "/plants/v1/american-dogwood.webp",
+    "group": "american-dogwood",
+    "status": "illustrated",
+    "depictedTaxon": "미산딸나무 / Cornus florida",
+    "artworkScope": "Young slender flowering-dogwood sapling with simple opposite oval green leaves, pointed tips, smooth slightly wavy edges and strong curved lateral veins arching toward leaf tips. No flowers, bracts, berries or cultivar color claims.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/cornus-florida/"
+    ],
+    "note": "NC State Extension Cornus kousa: 네 장의 뾰족한 포엽. 미산딸나무 등 다른 종에 그대로 적용하지 말고 비교용으로만 사용. Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "269": {
+    "src": "/plants/v1/miss-kim-lilac.webp",
+    "group": "miss-kim-lilac",
+    "status": "illustrated",
+    "depictedTaxon": "미스김라일락 / Syringa pubescens subsp. patula foliage reference",
+    "artworkScope": "Young compact lilac shrub with thin twigs and opposite small elliptic-oval green leaves, smooth margins and pointed tips; leaves distinctly smaller and less heart-shaped than common lilac. No flowers, buds, named-cultivar bloom claims.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/syringa-pubescens-subsp-patula/"
+    ],
+    "note": "NC State Extension Syringa pubescens subsp. patula: Miss Kim은 일반 라일락보다 작은 수형, 타원형 잎. 일반 라일락과 완전히 같은 그림 승인 근거는 아님. Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "270": {
+    "src": "/plants/v1/american-arborvitae.webp",
+    "group": "american-arborvitae",
+    "status": "illustrated",
+    "depictedTaxon": "미측백나무 / Thuja occidentalis",
+    "artworkScope": "Young narrow conical arborvitae with flat fanlike green sprays made of tiny overlapping scale leaves; small slender trunk and visible young layered branches. No pine needles, cones or berries.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/thuja-occidentalis/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "271": {
+    "src": "/plants/v1/dandelion.webp",
+    "group": "dandelion",
+    "status": "illustrated",
+    "depictedTaxon": "민들레 / Taraxacum",
+    "artworkScope": "Single youthful dandelion basal rosette of elongated green leaves with deep backward-pointing triangular teeth radiating close to ground. No stem, no flowers, no seed head, no cultivar or native-status claim.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/taraxacum-officinale/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "272": {
+    "src": "",
+    "group": "",
+    "status": "pending",
+    "references": [],
+    "note": "명칭 확인 보류: 바이오체리라는 유통명만으로 교잡종·과형을 확정할 수 없음"
+  },
+  "273": {
+    "src": "/plants/v1/redbud.webp",
+    "group": "redbud",
+    "status": "illustrated",
+    "depictedTaxon": "박태기 / Cercis chinensis",
+    "artworkScope": "Young small Chinese redbud shrub with slender woody stems and large alternate simple rounded heart-shaped green leaves with smooth margins and palmate veins. No flowers or pods.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/cercis-chinensis/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "274": {
+    "src": "/plants/v1/rounded-pine.webp",
+    "group": "rounded-pine",
+    "status": "illustrated",
+    "depictedTaxon": "Pinus densiflora Umbraculifera",
+    "artworkScope": "Young low rounded multistem pine with a broad low rounded silhouette. Several short woody stems from the base, distinct slender pine needles grouped along branches. Not a single tall trunk, no cones.",
+    "references": [
+      "https://landscapeplants.oregonstate.edu/plants/pinus-densiflora-umbraculifera"
+    ],
+    "note": "Oregon State University Pinus densiflora Umbraculifera: 낮고 둥글며 보통 여러 줄기의 수형. 판매 실물과 접목 상태 확인 필요. Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "275": {
+    "src": "/plants/v1/chestnut.webp",
+    "group": "chestnut",
+    "status": "illustrated",
+    "depictedTaxon": "밤 / Castanea crenata",
+    "artworkScope": "Young slender chestnut sapling with long elliptic-lanceolate green leaves, strong straight lateral veins and prominent pointed sawteeth along margins. No nuts, burrs, flowers or cultivar claims.",
+    "references": [
+      "https://arboretum.harvard.edu/arnoldia-stories/castanea-mollissima-a-chinese-chestnut-for-the-northeast/"
+    ],
+    "note": "국립산림과학원 우리나라 주요 밤 재배품종: 대보·옥광 품종명 확인. 열람한 서지·목차만으로 과형과 포르단 품종은 검증하지 않음. Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "276": {
+    "src": "/plants/v1/pear.webp",
+    "group": "pear",
+    "status": "illustrated",
+    "depictedTaxon": "배 / Pyrus",
+    "artworkScope": "Young slender pear sapling with simple glossy broad oval green leaves, pointed tips and finely serrated margins on thin woody branches. No fruit, flowers or cultivar claims.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/pyrus-pyrifolia/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "277": {
+    "src": "",
+    "group": "",
+    "status": "pending",
+    "references": [],
+    "note": "명칭 확인 보류: 백일홍은 초화와 목백일홍의 유통명 혼동 가능"
+  },
+  "278": {
+    "src": "/plants/v1/flowering-cherry.webp",
+    "group": "flowering-cherry",
+    "status": "illustrated",
+    "depictedTaxon": "벚나무 / Prunus serrulata group",
+    "artworkScope": "Young slender cherry sapling with alternate pointed oval green leaves, clearly serrated margins, short petioles and fine slim brown branching stems. No fruit, flowers, buds or cultivar bloom claims.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/prunus-serrulata/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "279": {
+    "src": "/plants/v1/star-magnolia.webp",
+    "group": "star-magnolia",
+    "status": "illustrated",
+    "depictedTaxon": "별목련 / Magnolia stellata",
+    "artworkScope": "Young small star-magnolia shrub with slender woody branches and simple obovate green leaves, smooth entire margins, short pointed tips; leaves relatively narrow and soft-looking. No flowers or buds.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/magnolia-stellata/"
+    ],
+    "note": "NC State Extension Magnolia stellata: 여러 장의 좁은 꽃잎으로 별 모양 꽃을 이룸. 공급 꽃색은 별도 확인. Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "281": {
+    "src": "",
+    "group": "",
+    "status": "pending",
+    "references": [],
+    "note": "명칭 확인 보류: 보리수 명칭만으로 실제 공급종·왕보리수 등 구별 불가"
+  },
+  "282": {
+    "src": "/plants/v1/korean-black-raspberry.webp",
+    "group": "korean-black-raspberry",
+    "status": "illustrated",
+    "depictedTaxon": "복분자 / Rubus coreanus",
+    "artworkScope": "Young arching Rubus coreanus bramble with slim slightly prickly canes and odd-pinnate compound green leaves consisting of FIVE to SEVEN serrated oval pointed leaflets per mature compound leaf. No fruit, flowers or cultivar claims.",
+    "references": [
+      "https://www.efloras.org/florataxon.aspx?flora_id=2&taxon_id=200011387"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "285": {
+    "src": "/plants/v1/snowball-viburnum.webp",
+    "group": "snowball-viburnum",
+    "status": "illustrated",
+    "depictedTaxon": "불두화 / Viburnum opulus foliage reference",
+    "artworkScope": "Young low viburnum shrub with opposite broad GREEN THREE-LOBED leaves, serrated edges and palmate veins on thin woody stems. Distinct maple-like leaves, not hydrangea leaves. No flowers or berries.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/viburnum-opulus/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "286": {
+    "src": "/plants/v1/black-chokeberry.webp",
+    "group": "black-chokeberry",
+    "status": "illustrated",
+    "depictedTaxon": "블랙초코베리 / Aronia melanocarpa",
+    "artworkScope": "Small young multistem chokeberry shrub with simple alternate glossy oval green leaves, finely serrated margins and pointed tips. No berries, flowers or red autumn color.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/aronia-melanocarpa/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "287": {
+    "src": "/plants/v1/blackcurrant.webp",
+    "group": "blackcurrant",
+    "status": "illustrated",
+    "depictedTaxon": "블랙커런트 / Ribes nigrum",
+    "artworkScope": "Small young blackcurrant shrub with thin branching stems and broad simple green leaves with three to five rounded palmate lobes and toothed edges, palmate veins. No fruit or flowers.",
+    "references": [
+      "https://www.rhs.org.uk/plants/106234/ribes-nigrum-b/details"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "288": {
+    "src": "",
+    "group": "",
+    "status": "pending",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/juniperus-horizontalis/common-name/creeping-juniper/"
+    ],
+    "note": "명칭 확인 보류: 블루매트의 정확한 품종을 확인하지 못했으며 직립 원추형이 맞는지도 불명"
+  },
+  "289": {
+    "src": "/plants/v1/blueberry.webp",
+    "group": "blueberry",
+    "status": "illustrated",
+    "depictedTaxon": "Vaccinium",
+    "artworkScope": "Delicate young multistem blueberry shrub with many small oval green simple leaves, slim branching woody stems. No fruit or blossoms.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/vaccinium/common-name/blueberries/"
+    ],
+    "note": "NC State Extension Vaccinium: 관목, 작은 열매와 과분·항아리형 꽃. 판매 블루베리의 정확한 종·품종은 미확인. Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "290": {
+    "src": "",
+    "group": "",
+    "status": "pending",
+    "references": [],
+    "note": "명칭 확인 보류: 블루엔젤의 종·품종을 이름만으로 확정할 수 없음"
+  },
+  "292": {
+    "src": "/plants/v1/loquat.webp",
+    "group": "loquat",
+    "status": "illustrated",
+    "depictedTaxon": "비파 / Eriobotrya japonica",
+    "artworkScope": "Young slender loquat sapling with large leathery elongated obovate green leaves, deeply impressed parallel side veins, coarse serrated edges, clustered near stem tips. A few turned leaves show soft pale underside. No flowers or fruit.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/eriobotrya-japonica/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "294": {
+    "src": "/plants/v1/dianthus.webp",
+    "group": "dianthus",
+    "status": "illustrated",
+    "depictedTaxon": "사계패랭이 / Dianthus foliage reference",
+    "artworkScope": "Small single young Dianthus clump with narrow linear gray-green leaves, opposite leaves on short fine stems, compact low tuft. FOLIAGE ONLY. No flowers or buds, no specific cultivar or bloom-color claims.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/dianthus/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "295": {
+    "src": "/plants/v1/apple.webp",
+    "group": "apple",
+    "status": "illustrated",
+    "depictedTaxon": "사과 / Malus domestica",
+    "artworkScope": "Young slender apple sapling with simple oval green leaves, pointed tips, finely serrated margins and subtly matte slightly fuzzy undersides; thin branching woody stems. No fruit, flowers or cultivar claims.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/malus-domestica/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "297": {
+    "src": "/plants/v1/euonymus.webp",
+    "group": "euonymus",
+    "status": "illustrated",
+    "depictedTaxon": "사철나무 / Euonymus japonicus species-level foliage",
+    "artworkScope": "Young compact evergreen euonymus shrub with opposite small leathery glossy oval green leaves with finely toothed edges, thin woody stems. Green species-level leaves only: no golden coloration, variegation or exact cultivar claims. No flowers or berries.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/euonymus-japonicus/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "298": {
+    "src": "/plants/v1/kousa-dogwood.webp",
+    "group": "kousa-dogwood",
+    "status": "illustrated",
+    "depictedTaxon": "산딸나무 / Cornus kousa",
+    "artworkScope": "Young slim kousa dogwood sapling with simple opposite elliptic green leaves, pointed tips, smooth slightly wavy margins and conspicuous curved lateral veins arching toward tips. No flowers, bracts, fruit or bloom-color claims.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/cornus-kousa/"
+    ],
+    "note": "NC State Extension Cornus kousa: 네 장의 뾰족한 포엽. 미산딸나무 등 다른 종에 그대로 적용하지 말고 비교용으로만 사용. Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "299": {
+    "src": "/plants/v1/hawthorn.webp",
+    "group": "hawthorn",
+    "status": "illustrated",
+    "depictedTaxon": "산사나무 / Crataegus pinnatifida foliage reference",
+    "artworkScope": "Young slim hawthorn sapling with alternate green leaves deeply divided into several pointed lobes and serrated edges, thin woody branches with a few short sparse thorns. No berries, flowers or exact supplier-species claim.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/crataegus-pinnatifida/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "300": {
+    "src": "/plants/v1/mountain-hydrangea.webp",
+    "group": "mountain-hydrangea",
+    "status": "illustrated",
+    "depictedTaxon": "Hydrangea serrata",
+    "artworkScope": "Young mountain hydrangea shrub with serrated pointed simple leaves and ONE small lacecap flower: tiny central fertile florets surrounded by a small loose ring of larger pale outer florets, clearly flat lacecap not mophead.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/hydrangea-serrata/common-name/tea-of-heaven/"
+    ],
+    "note": "NC State Extension Hydrangea serrata: 가운데 작은 꽃과 바깥쪽 큰 장식꽃이 있는 평평한 꽃차례. 공형 품종도 있어 공급종 확인 필요. Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "301": {
+    "src": "/plants/v1/cornelian-dogwood.webp",
+    "group": "cornelian-dogwood",
+    "status": "illustrated",
+    "depictedTaxon": "산수유 / Cornus officinalis",
+    "artworkScope": "Young slender dogwood sapling with simple opposite green oval leaves, pointed tips, entire margins and curved lateral veins sweeping toward leaf tips. No flowers, berries or buds.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/cornus-officinalis/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "302": {
+    "src": "/plants/v1/korean-pepper.webp",
+    "group": "korean-pepper",
+    "status": "illustrated",
+    "depictedTaxon": "산초 / Zanthoxylum schinifolium",
+    "artworkScope": "Young small woody shrub with pinnate compound green leaves consisting of many small oval slightly serrated leaflets in paired rows and a terminal leaflet, slender rachis; a few small scattered twigs spines. No fruit, flowers, grafting mark or cultivar claims.",
+    "references": [
+      "https://www.efloras.org/florataxon.aspx?flora_id=2&taxon_id=200012485"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "303": {
+    "src": "/plants/v1/apricot.webp",
+    "group": "apricot",
+    "status": "illustrated",
+    "depictedTaxon": "살구 / Prunus armeniaca",
+    "artworkScope": "Young slender apricot sapling with alternate broad rounded-oval green leaves, slightly heart-shaped bases, pointed tips, finely serrated edges and thin reddish petioles. No flowers or fruit.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/prunus-armeniaca/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "304": {
+    "src": "/plants/v1/sawtooth-oak.webp",
+    "group": "sawtooth-oak",
+    "status": "illustrated",
+    "depictedTaxon": "상수리나무 / Quercus acutissima",
+    "artworkScope": "Young slim oak sapling with elongated lanceolate green leaves, straight prominent lateral veins, and evenly spaced sharp sawteeth each ending in a small bristle. No acorns, catkins or flowers.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/quercus-acutissima/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "306": {
+    "src": "",
+    "group": "",
+    "status": "pending",
+    "references": [],
+    "note": "명칭 확인 보류: 설중매는 유통명만으로 종·겹꽃·꽃색 확정 불가"
+  },
+  "307": {
+    "src": "/plants/v1/korean-hornbeam.webp",
+    "group": "korean-hornbeam",
+    "status": "illustrated",
+    "depictedTaxon": "소사나무 / Carpinus turczaninowii",
+    "artworkScope": "Young small hornbeam sapling with delicate twiggy branching, small oval pointed green leaves with pronounced double serrations and close straight lateral veins. Slender juvenile brown trunk, no bonsai pot or mature gnarled trunk.",
+    "references": [
+      "https://efloras.org/florataxon.aspx?flora_id=3&taxon_id=200006205"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "308": {
+    "src": "/plants/v1/bigleaf-hydrangea.webp",
+    "group": "bigleaf-hydrangea",
+    "status": "illustrated",
+    "depictedTaxon": "수국 / Hydrangea macrophylla foliage reference",
+    "artworkScope": "Young low hydrangea shrub with several thin stems and large broad opposite green oval leaves, pointed tips, clear serrated margins and prominent veins. FOLIAGE ONLY, no flowers, buds or cultivar color claims.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/hydrangea-macrophylla/"
+    ],
+    "note": "NC State Extension Hydrangea macrophylla: 품종에 따라 공형·평평한 꽃차례와 꽃색 차이. 하이드랑게아의 구체적 종을 확정하지 않음. Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "309": {
+    "src": "",
+    "group": "",
+    "status": "pending",
+    "references": [],
+    "note": "명칭 확인 보류: 수생식물은 여러 생육형을 포함하는 범주이며 잔디형 하나로 확정 불가"
+  },
+  "310": {
+    "src": "/plants/v1/daffodil.webp",
+    "group": "daffodil",
+    "status": "illustrated",
+    "depictedTaxon": "수선화 / Narcissus foliage reference",
+    "artworkScope": "Single young daffodil clump with several long upright strap-shaped blue-green leaves, flat blades with rounded to pointed tips, gently bending outward. No exposed bulb, flowers or buds. Genus-level foliage reference only.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/narcissus/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "311": {
+    "src": "/plants/v1/weeping-mulberry.webp",
+    "group": "weeping-mulberry",
+    "status": "illustrated",
+    "depictedTaxon": "뽕 수양 / Morus weeping foliage reference",
+    "artworkScope": "Small young weeping mulberry sapling with slender bending branches curving downward and simple broad heart-based green leaves, serrated margins, some shallowly lobed leaves. No fruit or flowers; modest juvenile droop, no mature umbrella tree.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/morus-alba/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "312": {
+    "src": "",
+    "group": "",
+    "status": "pending",
+    "references": [],
+    "note": "명칭 확인 보류: 수사해당화 표기를 수사해당 등의 특정 종으로 자동 정정할 수 없음"
+  },
+  "314": {
+    "src": "/plants/v1/sugar-maple.webp",
+    "group": "sugar-maple",
+    "status": "illustrated",
+    "depictedTaxon": "슈가메이플 / Acer saccharum",
+    "artworkScope": "Young slender sugar maple sapling with broad green palmately five-lobed leaves, pointed lobes, broad rounded sinuses and a few larger shallow teeth rather than fine serrations. No autumn color, flowers or seeds.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/acer-saccharum/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "315": {
+    "src": "",
+    "group": "",
+    "status": "pending",
+    "references": [],
+    "note": "명칭 확인 보류: 슈퍼가 특정 품종·무가시 여부를 보장하지 않으며 범용 덩굴 잎도 불일치 가능"
+  },
+  "316": {
+    "src": "/plants/v1/pomegranate.webp",
+    "group": "pomegranate",
+    "status": "illustrated",
+    "depictedTaxon": "석류나무 / Punica granatum",
+    "artworkScope": "Small young pomegranate shrub with slender woody stems and narrow simple glossy green oval-lanceolate leaves, smooth entire margins and short petioles, leaves opposite or clustered. No flowers or fruit.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/punica-granatum/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "317": {
+    "src": "",
+    "group": "",
+    "status": "pending",
+    "references": [],
+    "note": "명칭 확인 보류: 스카이로켓의 정확한 종·원어 품종 라벨 확인 필요"
+  },
+  "318": {
+    "src": "/plants/v1/eastern-white-pine.webp",
+    "group": "eastern-white-pine",
+    "status": "illustrated",
+    "depictedTaxon": "스트로브잣나무 / Pinus strobus",
+    "artworkScope": "Young narrow upright white pine sapling with delicate open layered branches and long very fine soft green needles in bundles of FIVE, needles gently drooping at the ends. No cones.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/pinus-strobus/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "321": {
+    "src": "/plants/v1/annabelle-hydrangea.webp",
+    "group": "annabelle-hydrangea",
+    "status": "illustrated",
+    "depictedTaxon": "Hydrangea arborescens Annabelle",
+    "artworkScope": "Young Annabelle hydrangea shrub with broad serrated green leaves and ONE modest white round flowerhead; foliage is main feature.",
+    "references": [
+      "https://hoke.ces.ncsu.edu/wp-content/uploads/2017/04/2017MarHortHokeScotNL.pdf?fwd=no"
+    ],
+    "note": "NC State Extension 2017 hydrangea 자료: Annabelle을 포함한 미국수국의 흰 구형 꽃 참고. 실제 공급 라벨 확인 필요. Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "322": {
+    "src": "",
+    "group": "",
+    "status": "pending",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/hippeastrum/",
+      "https://plants.ces.ncsu.edu/plants/amaryllis-belladonna/"
+    ],
+    "note": "유통명만으로 Amaryllis와 Hippeastrum 중 어느 식물인지 확정할 수 없음"
+  },
+  "325": {
+    "src": "/plants/v1/nanking-cherry.webp",
+    "group": "nanking-cherry",
+    "status": "illustrated",
+    "depictedTaxon": "앵두나무 / Prunus tomentosa",
+    "artworkScope": "Small young multistem Nanking cherry shrub with simple alternate oval green leaves, pointed tips, serrated margins and softly textured slightly hairy leaf surfaces. No flowers, fruit or fruit-color claims.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/prunus-tomentosa/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "326": {
+    "src": "",
+    "group": "",
+    "status": "pending",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/zoysia/"
+    ],
+    "note": "명칭 확인 보류: 양잔디는 여러 종·혼합종을 포함; 긴 억새형 그림으로 확정 불가"
+  },
+  "327": {
+    "src": "/plants/v1/prickly-castor.webp",
+    "group": "prickly-castor",
+    "status": "illustrated",
+    "depictedTaxon": "엄나무 가시있는 / Kalopanax septemlobus",
+    "artworkScope": "Young slim prickly castor tree sapling with large simple green palmately lobed leaves, five to seven pointed lobes with serrated edges on long petioles. Slender gray-brown stem with a few clearly visible short stout triangular spines. No flowers or fruit.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/kalopanax-septemlobus/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "328": {
+    "src": "",
+    "group": "",
+    "status": "pending",
+    "references": [],
+    "note": "명칭 확인 보류: 에메랄드 그린 원어 라벨과 공급 종을 본 자료로 확정할 수 없음"
+  },
+  "330": {
+    "src": "/plants/v1/schisandra.webp",
+    "group": "schisandra",
+    "status": "illustrated",
+    "depictedTaxon": "오미자 / Schisandra chinensis",
+    "artworkScope": "Young climbing schisandra plant with slender woody stem in a gentle loose S bend and simple oval green leaves, pointed tips and finely toothed edges. EVERY SIDE SHOOT ENDS IN A LEAF; no tendrils, curled threads, hooks or tight spirals. No fruit, flowers, trellis or pot.",
+    "references": [
+      "https://www.rhs.org.uk/plants/16803/schisandra-chinensis/details"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "332": {
+    "src": "",
+    "group": "",
+    "status": "pending",
+    "references": [],
+    "note": "명칭 확인 보류: 오이도에 대응하는 식물 품종·학명을 확인하지 못함"
+  },
+  "334": {
+    "src": "",
+    "group": "",
+    "status": "pending",
+    "references": [],
+    "note": "명칭 확인 보류: 옥향이라는 유통명만으로 정확한 종·왜성 수형 확정 불가"
+  },
+  "336": {
+    "src": "/plants/v1/gorosoe-maple.webp",
+    "group": "gorosoe-maple",
+    "status": "illustrated",
+    "depictedTaxon": "고로쇠 / Acer pictum group",
+    "artworkScope": "Slender young maple with broad green palmately lobed leaves, usually five broad pointed lobes and mostly smooth edges between tips. No red foliage, flowers or seeds.",
+    "references": [
+      "https://www.nibr.go.kr/aiibook/access/ecatalogt.jsp?Dir=1316&callmode=admin&eclang=ko&start=136&um=s"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "339": {
+    "src": "",
+    "group": "",
+    "status": "pending",
+    "references": [],
+    "note": "명칭 확인 보류: 유칼립투스는 종·유엽과 성엽에 따라 모양이 크게 달라 범용 그림 확정 불가"
+  },
+  "340": {
+    "src": "/plants/v1/akebia.webp",
+    "group": "akebia",
+    "status": "illustrated",
+    "depictedTaxon": "Akebia quinata",
+    "artworkScope": "Young delicate akebia vine with clearly palmate compound leaves: each cluster has FIVE rounded oval leaflets radiating from a common point. No fruit, flowers or trellis.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/akebia-quinata/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "341": {
+    "src": "/plants/v1/sweet-osmanthus.webp",
+    "group": "sweet-osmanthus",
+    "status": "illustrated",
+    "depictedTaxon": "은목서 / Osmanthus fragrans foliage reference",
+    "artworkScope": "Young compact woody osmanthus shrub with opposite simple leathery glossy green elliptic leaves, pointed tips, mostly smooth margins with occasional slight teeth near tips. No flowers, berries or bloom-color claims.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/osmanthus-fragrans/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "342": {
+    "src": "/plants/v1/blue-spruce.webp",
+    "group": "blue-spruce",
+    "status": "illustrated",
+    "depictedTaxon": "은청가문비 / Picea pungens foliage reference",
+    "artworkScope": "Young small conical spruce with modest layered branches, short stiff sharp individual needles arranged radially around each twig, restrained natural blue-green to silver-green foliage. Clearly individual spruce needles, not scale leaves or pine bundles. No cones, no artificially saturated blue.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/picea-pungens/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "343": {
+    "src": "",
+    "group": "",
+    "status": "pending",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/euonymus-japonicus/"
+    ],
+    "note": "상품명에 있는 잎 색·무늬를 일반 녹색 그림으로 대신할 수 없음"
+  },
+  "344": {
+    "src": "/plants/v1/ginkgo.webp",
+    "group": "ginkgo",
+    "status": "illustrated",
+    "depictedTaxon": "Ginkgo biloba",
+    "artworkScope": "Slender young ginkgo sapling with clearly FAN-SHAPED green leaves, a shallow central notch on some fans and fine radiating veins.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/ginkgo-biloba/"
+    ],
+    "note": "NC State Extension Ginkgo biloba: 부채형 잎과 갈라지는 잎맥. Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "345": {
+    "src": "/plants/v1/chinese-fringetree.webp",
+    "group": "chinese-fringetree",
+    "status": "illustrated",
+    "depictedTaxon": "이팝나무 / Chionanthus retusus",
+    "artworkScope": "Young slender fringetree sapling with opposite simple glossy oval green leaves, rounded-to-pointed tips, smooth entire margins, some lighter green new leaves. No flowers, fringe petals or fruit.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/chionanthus-retusus/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "347": {
+    "src": "",
+    "group": "",
+    "status": "pending",
+    "references": [],
+    "note": "명칭 확인 보류: 일세다래를 특정 영문 품종으로 자동 확정할 수 없음"
+  },
+  "349": {
+    "src": "/plants/v1/silk-tree.webp",
+    "group": "silk-tree",
+    "status": "illustrated",
+    "depictedTaxon": "자귀나무 / Albizia julibrissin",
+    "artworkScope": "Young slender silk-tree sapling with delicate BIPINNATE compound green leaves: each main rachis carries paired side pinnae, each pinna bears many tiny narrow oval paired leaflets. Fine airy feathery silhouette. No flowers or pods.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/albizia-julibrissin/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "350": {
+    "src": "",
+    "group": "",
+    "status": "pending",
+    "references": [],
+    "note": "명칭 확인 보류: 왕자두의 특정 품종·과피색·과형을 이름만으로 확정 불가"
+  },
+  "351": {
+    "src": "/plants/v1/magnolia-purple-foliage.webp",
+    "group": "magnolia-purple-foliage",
+    "status": "illustrated",
+    "depictedTaxon": "목련 자색 / Magnolia, unspecified supplied species",
+    "artworkScope": "Young deciduous magnolia-type shrub with two or three slender woody stems and large simple elliptic-obovate green leaves with smooth entire margins. FOLIAGE ONLY. No flowers, buds, bloom color, cultivar or precise species claims.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/magnolia/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "353": {
+    "src": "/plants/v1/birch.webp",
+    "group": "birch",
+    "status": "illustrated",
+    "depictedTaxon": "자작나무 / Betula platyphylla foliage reference",
+    "artworkScope": "Young slim birch sapling with delicate brown twigs, simple triangular-oval green leaves with pointed tips and double-serrated margins. Juvenile trunk is slender gray-brown, only subtle pale hints, NOT thick mature chalk-white peeling bark. No catkins.",
+    "references": [
+      "https://www.efloras.org/florataxon.aspx?flora_id=2&taxon_id=200006161"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "354": {
+    "src": "/plants/v1/zoysia.webp",
+    "group": "zoysia",
+    "status": "illustrated",
+    "depictedTaxon": "잔디 / Zoysia genus-level foliage reference",
+    "artworkScope": "Small low compact patch of healthy young lawn grass with short narrow stiff green blades arising densely from the base, a subtle small ground shadow. Genus-level turf foliage only, no flower spikes, seed heads, rolled sod, cut tile edges, pots or product-format claims.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/zoysia/"
+    ],
+    "note": "NC State Extension Zoysia: 낮고 조밀하게 퍼지는 잔디. 양잔디 품종·혼합종을 동정하는 자료는 아님. Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "355": {
+    "src": "/plants/v1/korean-pine.webp",
+    "group": "korean-pine",
+    "status": "illustrated",
+    "depictedTaxon": "잣나무 / Pinus koraiensis",
+    "artworkScope": "Young small upright Korean pine sapling with open layered branches and straight-to-gently-curved medium-long green needles in bundles of FIVE, dense distinct tufts near branch tips. No cones, no nuts, no mature thick trunk.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/pinus-koraiensis/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "357": {
+    "src": "/plants/v1/fir.webp",
+    "group": "fir",
+    "status": "illustrated",
+    "depictedTaxon": "Abies holophylla",
+    "artworkScope": "Young narrow upright fir sapling with flat linear pointed needles arranged along visible layered branches. Clearly flat individual needles, not scale foliage, not pine needle bundles. Small single slender trunk.",
+    "references": [
+      "https://species.nibr.go.kr/home/mainHome.do?contCd=009002&cont_link=009&ktsn=120000059946&pageMode=view&subMenu=009002"
+    ],
+    "note": "국립생물자원관 한반도의 생물다양성: 전나무 Abies holophylla는 상록 침엽수이며 선형 잎을 가짐. Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "358": {
+    "src": "/plants/v1/hibiscus.webp",
+    "group": "hibiscus",
+    "status": "illustrated",
+    "depictedTaxon": "Hibiscus syriacus",
+    "artworkScope": "Young woody hibiscus shrub with small serrated green leaves, many leaves shallowly three-lobed. NO BLOOMS, buds, flowers or fruit.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/hibiscus-syriacus/common-name/rose-of-sharon/"
+    ],
+    "note": "NC State Extension Hibiscus syriacus: 갈라지는 잎, 큰 꽃과 다양한 꽃색·겹꽃. 접목 여부만으로 꽃색 확정 불가. Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "359": {
+    "src": "/plants/v1/spirea.webp",
+    "group": "spirea",
+    "status": "illustrated",
+    "depictedTaxon": "조팝나무 / Spiraea prunifolia foliage reference",
+    "artworkScope": "Small young spirea shrub with thin arching brown stems and many small simple oval green leaves, short pointed tips and finely serrated margins, alternate arrangement. No flowers, buds or cultivar bloom claims.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/spiraea-prunifolia/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "360": {
+    "src": "/plants/v1/creeping-juniper.webp",
+    "group": "creeping-juniper",
+    "status": "illustrated",
+    "depictedTaxon": "좀눈향 / low prostrate Juniperus foliage reference",
+    "artworkScope": "Young low spreading creeping juniper with several short prostrate woody stems, compact flat broad silhouette and dense short pointed green awl-like needle leaves in small whorls. No tall central tree trunk, berries or cones. No specific cultivar claim.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/juniperus-procumbens/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "362": {
+    "src": "/plants/v1/yew.webp",
+    "group": "yew",
+    "status": "illustrated",
+    "depictedTaxon": "주목 / Taxus cuspidata",
+    "artworkScope": "Young small upright yew sapling with a thin trunk and sparse gently spreading branches, dark green flat short linear needles in two ranks along the twigs. No red arils, berries or cones. Clearly flat needles, not scales.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/taxus-cuspidata/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "363": {
+    "src": "/plants/v1/privet.webp",
+    "group": "privet",
+    "status": "illustrated",
+    "depictedTaxon": "쥐똥나무 / Ligustrum obtusifolium",
+    "artworkScope": "Young small privet shrub with several slender woody stems and opposite small simple oval green leaves, mostly blunt rounded tips, smooth entire margins. No berries or flowers.",
+    "references": [
+      "https://www.efloras.org/florataxon.aspx?flora_id=2&taxon_id=200017795"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "364": {
+    "src": "/plants/v1/upright-japanese-holly.webp",
+    "group": "upright-japanese-holly",
+    "status": "illustrated",
+    "depictedTaxon": "직립꽝꽝이 / upright Ilex crenata foliage reference",
+    "artworkScope": "Young narrow upright Japanese holly shrub with several slender vertical stems and many tiny glossy oval dark-green leaves with small rounded crenate teeth. Compact vertical juvenile habit, no spiny holly leaves, berries or exact cultivar claims.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/ilex-crenata/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "365": {
+    "src": "",
+    "group": "",
+    "status": "pending",
+    "references": [],
+    "note": "명칭 확인 보류: 직송은 수형·상품 분류일 수 있어 종·규격을 확정할 수 없음"
+  },
+  "366": {
+    "src": "",
+    "group": "",
+    "status": "pending",
+    "references": [],
+    "note": "명칭 확인 보류: 짐드롭의 정확한 원어 품종명을 확인하지 못함"
+  },
+  "367": {
+    "src": "/plants/v1/lacquer-tree.webp",
+    "group": "lacquer-tree",
+    "status": "illustrated",
+    "depictedTaxon": "옻나무 / Toxicodendron vernicifluum",
+    "artworkScope": "Young slender lacquer-tree sapling with odd-pinnate compound green leaves made of paired broad oval pointed leaflets with smooth entire margins and one terminal leaflet. Thin juvenile stem. No fruits or flowers.",
+    "references": [
+      "https://efloras.org/florataxon.aspx?flora_id=2&taxon_id=200012744"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "368": {
+    "src": "",
+    "group": "",
+    "status": "pending",
+    "references": [
+      "https://www.nongsaro.go.kr/portal/ps/psq/psqb/farmTermSimpleDicLst.ps?menuId=PS00064&sWordNm=%EC%B0%B8%EC%A3%BD%EC%88%9C%EB%82%98%EB%AC%BC&searchTagWord=%EC%B0%B8%EC%A3%BD%EC%88%9C%EB%82%98%EB%AC%BC"
+    ],
+    "note": "명칭 확인 보류: 가죽나무와 식용 참죽나무의 유통명 혼동 가능; 현재 단엽 같은 그림으로 확정 불가"
+  },
+  "369": {
+    "src": "/plants/v1/azalea.webp",
+    "group": "azalea",
+    "status": "illustrated",
+    "depictedTaxon": "철쭉 / Rhododendron schlippenbachii foliage reference",
+    "artworkScope": "Young low deciduous azalea shrub with thin woody branches and soft green obovate leaves clustered near shoot tips, leaves broader toward their tips and narrowing at the base, entire edges. No flowers or buds, no bloom-color claims.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/rhododendron-schlippenbachii/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "371": {
+    "src": "/plants/v1/sweet-cherry.webp",
+    "group": "sweet-cherry",
+    "status": "illustrated",
+    "depictedTaxon": "체리 / Prunus avium foliage reference",
+    "artworkScope": "Young slender sweet-cherry sapling with simple alternate elliptic-oval green leaves, pointed tips and serrated edges, relatively long petioles and thin branching brown twigs. No fruit, flowers or cultivar claims.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/prunus-avium/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "372": {
+    "src": "/plants/v1/pagoda-dogwood.webp",
+    "group": "pagoda-dogwood",
+    "status": "illustrated",
+    "depictedTaxon": "층층나무 / Cornus controversa",
+    "artworkScope": "Young slender dogwood sapling with a few gently horizontal tiered branches and ALTERNATE simple broad oval green leaves, pointed tips, entire slightly wavy edges and curved lateral veins. Modest young tiers only, no grand mature crown, no flowers or fruit.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/cornus-controversa/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "373": {
+    "src": "/plants/v1/oriental-arborvitae.webp",
+    "group": "oriental-arborvitae",
+    "status": "illustrated",
+    "depictedTaxon": "측백나무 / Platycladus orientalis",
+    "artworkScope": "Young compact upright oriental arborvitae sapling with thin central trunk and distinctive flattened fanlike green scale-leaf sprays held mostly in VERTICAL planes. Dense tiny overlapping scale leaves, no pine needles, cones or golden foliage.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/platycladus-orientalis/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "374": {
+    "src": "/plants/v1/gardenia.webp",
+    "group": "gardenia",
+    "status": "illustrated",
+    "depictedTaxon": "치자나무 / Gardenia jasminoides foliage reference",
+    "artworkScope": "Young small gardenia shrub with opposite or whorled glossy dark-green elliptic leaves, smooth entire margins, pointed tips and strong central veins; short thin woody stems. No flowers, buds or fruit.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/gardenia-jasminoides/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "375": {
+    "src": "/plants/v1/seven-son-flower.webp",
+    "group": "seven-son-flower",
+    "status": "illustrated",
+    "depictedTaxon": "칠자화 / Heptacodium miconioides",
+    "artworkScope": "Young small multistem shrub with large opposite ovate green leaves, pointed tips, smooth slightly wavy margins and THREE prominent veins running from leaf base toward tip. Thin brown stems, no flowers or red calyces.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/heptacodium-miconioides/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "376": {
+    "src": "",
+    "group": "",
+    "status": "pending",
+    "references": [],
+    "note": "명칭 확인 보류: 칼슘나무는 판매명만으로 품종·학명 확정 불가"
+  },
+  "380": {
+    "src": "/plants/v1/conica-spruce.webp",
+    "group": "conica-spruce",
+    "status": "illustrated",
+    "depictedTaxon": "코니카가문비 / Picea glauca Conica foliage reference",
+    "artworkScope": "Young compact dwarf spruce with a dense small CONICAL silhouette, short fine individual green needles arranged all around tiny twigs, modest central leader and small visible juvenile trunk. No cones, no pine needle bundles, no blue needles.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/picea-laxa-conica/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "384": {
+    "src": "/plants/v1/kiwi.webp",
+    "group": "kiwi",
+    "status": "illustrated",
+    "depictedTaxon": "Actinidia chinensis juvenile kiwi",
+    "artworkScope": "One youthful kiwi plant with a sturdy brown stem bending gently in a loose S shape, and large broad heart-shaped slightly hairy green leaves with fine serrations. EVERY SIDE SHOOT ENDS IN A LEAF. ABSOLUTELY NO TENDRILS, NO CURLY THREADS, NO SPIRALS, NO HOOKS, NO GRAPEVINE CURLS. Actinidia climbs by the main stem winding, not by tendrils. Show only gentle stem bends, no tight spirals. No fruit, flowers or support.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/actinidia-chinensis/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "385": {
+    "src": "/plants/v1/trifoliate-orange.webp",
+    "group": "trifoliate-orange",
+    "status": "illustrated",
+    "depictedTaxon": "탱자 / Citrus trifoliata",
+    "artworkScope": "Young slender trifoliate-orange sapling with green woody branches bearing stout straight green thorns and distinct TRIFOLIATE leaves: THREE smooth green leaflets on each leaf stalk, central leaflet larger than the two side leaflets. No fruit, flowers or buds.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/citrus-trifoliata/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "387": {
+    "src": "/plants/v1/korean-mountain-ash.webp",
+    "group": "korean-mountain-ash",
+    "status": "illustrated",
+    "depictedTaxon": "팥배나무 / Sorbus alnifolia",
+    "artworkScope": "Young slim tree with simple single oval green leaves, pointed tips, sharply serrated margins and prominent straight lateral veins, alternate arrangement. Leaves are SIMPLE, NOT pinnate compound leaves. No fruit or flowers.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/sorbus-alnifolia/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "388": {
+    "src": "",
+    "group": "",
+    "status": "pending",
+    "references": [],
+    "note": "명칭 확인 보류: 팜콘 표기를 팝콘 수국 등으로 임의 정정할 수 없음"
+  },
+  "389": {
+    "src": "/plants/v1/hackberry.webp",
+    "group": "hackberry",
+    "status": "illustrated",
+    "depictedTaxon": "팽나무 / Celtis sinensis",
+    "artworkScope": "Young slim hackberry sapling with simple alternate oval green leaves, asymmetrical bases, pointed tips, three prominent basal veins, upper half of leaf margin serrated and lower margin smoother. No berries or flowers.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/celtis-sinensis/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "390": {
+    "src": "/plants/v1/hinoki-cypress.webp",
+    "group": "hinoki-cypress",
+    "status": "illustrated",
+    "depictedTaxon": "편백나무 / Chamaecyparis obtusa",
+    "artworkScope": "Young narrow upright hinoki cypress with soft flattened fanlike sprays of small overlapping dark-green SCALE leaves, slightly rounded branchlet tips, a few sprays turned to hint pale markings underneath. Thin juvenile trunk. No needles, cones or berries.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/chamaecyparis-obtusa/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "391": {
+    "src": "/plants/v1/grape.webp",
+    "group": "grape",
+    "status": "illustrated",
+    "depictedTaxon": "Vitis",
+    "artworkScope": "Youthful grape vine with clearly lobed serrated broad leaves and curling tendrils. A short gracefully bending slender vine, no trellis and no fruit.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/vitis-vinifera/common-name/wine-grape/"
+    ],
+    "note": "NC State Extension Vitis vinifera: 목본 덩굴, 갈래잎과 덩굴손. 거봉의 정확한 교잡 혈통을 이 자료로 확정하지 않음. Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "392": {
+    "src": "/plants/v1/pawpaw.webp",
+    "group": "pawpaw",
+    "status": "illustrated",
+    "depictedTaxon": "Asimina triloba",
+    "artworkScope": "Youthful slender pawpaw stem with large long obovate green simple leaves hanging gently downward. Leaves widest toward their upper half, entire smooth margins, strong midrib.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/asimina-triloba/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "394": {
+    "src": "",
+    "group": "",
+    "status": "pending",
+    "references": [],
+    "note": "명칭 확인 보류: 플럼코트 계열 안에서도 품종별 모양 차이; 단일 과형 확정 불가"
+  },
+  "395": {
+    "src": "",
+    "group": "",
+    "status": "pending",
+    "references": [],
+    "note": "명칭 확인 보류: 플루오트라는 계열명으로 특정 품종의 열매를 정할 수 없음"
+  },
+  "396": {
+    "src": "/plants/v1/panicle-hydrangea.webp",
+    "group": "panicle-hydrangea",
+    "status": "illustrated",
+    "depictedTaxon": "Hydrangea paniculata",
+    "artworkScope": "Young panicle hydrangea shrub with serrated pointed green leaves and ONE small conical cream flowerhead; foliage is main feature.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/hydrangea-paniculata/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "397": {
+    "src": "/plants/v1/pyracantha.webp",
+    "group": "pyracantha",
+    "status": "illustrated",
+    "depictedTaxon": "피라칸타스 / Pyracantha genus-level foliage reference",
+    "artworkScope": "Young small woody firethorn shrub with slender branching stems, a few short thorns and many small oval glossy green leaves, fine toothed margins and rounded-to-pointed tips. No berries, fruit, flowers or species/color claims.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/pyracantha-coccinea/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "398": {
+    "src": "/plants/v1/pecan.webp",
+    "group": "pecan",
+    "status": "illustrated",
+    "depictedTaxon": "Carya illinoinensis",
+    "artworkScope": "Young pecan tree with a thin upright trunk and pinnate compound leaves of NUMEROUS narrow pointed slightly serrated green leaflets, elongated fine and feathery compound leaf silhouette.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/carya-illinoinensis/"
+    ],
+    "note": "NC State Extension Carya illinoinensis: 여러 피침형 소엽으로 이루어진 깃꼴겹잎. Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "400": {
+    "src": "",
+    "group": "",
+    "status": "pending",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/hydrangea-macrophylla/"
+    ],
+    "note": "명칭 확인 보류: 하이드랑게아는 수국류 범용 명칭으로 기존 수국과 관계·정확한 종 불명확"
+  },
+  "401": {
+    "src": "/plants/v1/rugosa-rose.webp",
+    "group": "rugosa-rose",
+    "status": "illustrated",
+    "depictedTaxon": "해당화 / Rosa rugosa",
+    "artworkScope": "Young low rose shrub with slender prickly stems and pinnate compound green leaves of five to nine oval leaflets, serrated margins and clearly wrinkled deeply textured surfaces. No flowers, rose hips or buds.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/rosa-rugosa/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "402": {
+    "src": "/plants/v1/black-pine.webp",
+    "group": "black-pine",
+    "status": "illustrated",
+    "depictedTaxon": "해송 / Pinus thunbergii",
+    "artworkScope": "Young small upright Japanese black pine sapling with sparse open branches and stiff straight deep-green pine needles in bundles of TWO, distinct pointed needles and tiny pale terminal buds. No cones or mature thick bark.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/pinus-thunbergii/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "403": {
+    "src": "/plants/v1/hove-tree.webp",
+    "group": "hove-tree",
+    "status": "illustrated",
+    "depictedTaxon": "헛개나무 / Hovenia dulcis",
+    "artworkScope": "Young slim Hovenia sapling with simple broad oval-to-heart-based green leaves, pointed tips, fine serrations and THREE conspicuous basal veins. Thin branching woody stems. No fruit or swollen fruit stalks, no flowers.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/hovenia-dulcis/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "404": {
+    "src": "/plants/v1/walnut.webp",
+    "group": "walnut",
+    "status": "illustrated",
+    "depictedTaxon": "Juglans regia",
+    "artworkScope": "Young walnut stem with pinnate compound leaves comprising broad oval green leaflets, about 5–9 leaflets per compound leaf with a large terminal leaflet. Broad smooth leaves, distinct from narrow pecan leaflets.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/juglans-regia/"
+    ],
+    "note": "NC State Extension Juglans regia: 깃꼴겹잎, 녹색 껍질에 싸인 견과. Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "405": {
+    "src": "",
+    "group": "",
+    "status": "pending",
+    "references": [],
+    "note": "명칭 확인 보류: 홀리는 여러 Ilex 종·품종을 포함; 가시잎과 무가시잎 확정 불가"
+  },
+  "406": {
+    "src": "/plants/v1/red-tip-photinia.webp",
+    "group": "red-tip-photinia",
+    "status": "illustrated",
+    "depictedTaxon": "홍가시 / Photinia glabra foliage reference",
+    "artworkScope": "Young small Photinia shrub with glossy simple elliptic green mature leaves and a restrained small flush of natural muted bronze-red young leaves at branch tips. Finely serrated leaf edges, slender woody stems. Most foliage is mature green. No flowers or fruit, no cultivar-specific red saturation claim.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/photinia-glabra/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "407": {
+    "src": "/plants/v1/peach.webp",
+    "group": "peach",
+    "status": "illustrated",
+    "depictedTaxon": "Prunus persica",
+    "artworkScope": "Thin young peach stems with long narrow lanceolate green leaves and finely serrated margins. Sparse graceful upright young tree silhouette, no flowers.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/prunus-persica/"
+    ],
+    "note": "NC State Extension Prunus persica: 길고 좁은 잎과 품종별 꽃·과실 차이. 백도·황도·실생의 개별 과형 확정 근거는 아님. Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "409": {
+    "src": "/plants/v1/winged-euonymus.webp",
+    "group": "winged-euonymus",
+    "status": "illustrated",
+    "depictedTaxon": "화살나무 / Euonymus alatus",
+    "artworkScope": "Young small branching shrub with opposite oval green leaves, pointed tips and finely serrated edges. Several visible brown twigs have clear thin longitudinal corky WINGS along their sides, diagnostic winged stems. No autumn red foliage, fruit or flowers.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/euonymus-alatus/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "410": {
+    "src": "/plants/v1/nanking-cherry.webp",
+    "group": "nanking-cherry",
+    "status": "illustrated",
+    "depictedTaxon": "앵두나무 / Prunus tomentosa",
+    "artworkScope": "Small young multistem Nanking cherry shrub with simple alternate oval green leaves, pointed tips, serrated margins and softly textured slightly hairy leaf surfaces. No flowers, fruit or fruit-color claims.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/prunus-tomentosa/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "412": {
+    "src": "",
+    "group": "",
+    "status": "pending",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/ilex-crenata/"
+    ],
+    "note": "상품명에 있는 잎 색·무늬를 일반 녹색 그림으로 대신할 수 없음"
+  },
+  "414": {
+    "src": "",
+    "group": "",
+    "status": "pending",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/taxus-cuspidata/"
+    ],
+    "note": "상품명에 있는 잎 색·무늬를 일반 녹색 그림으로 대신할 수 없음"
+  },
+  "415": {
+    "src": "",
+    "group": "",
+    "status": "pending",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/platycladus-orientalis/"
+    ],
+    "note": "상품명에 있는 잎 색·무늬를 일반 녹색 그림으로 대신할 수 없음"
+  },
+  "416": {
+    "src": "/plants/v1/dendropanax.webp",
+    "group": "dendropanax",
+    "status": "illustrated",
+    "depictedTaxon": "황칠나무 / Dendropanax morbiferus juvenile foliage reference",
+    "artworkScope": "Young slender evergreen Dendropanax sapling with glossy green simple juvenile leaves, most palmately divided into FIVE deep narrow pointed lobes, a few leaves with THREE broader lobes. Smooth entire lobe margins, long petioles, slender green-brown stem. No flowers or fruit.",
+    "references": [
+      "https://pubmed.ncbi.nlm.nih.gov/22146140/",
+      "https://species.nibr.go.kr/usef/species/SpeciesTabDetail.do?cmd=t2&currentPage=1&pageIndex=1&specSeq=120000062641&surveyId=NIBR201600102E"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "417": {
+    "src": "/plants/v1/boxwood.webp",
+    "group": "boxwood",
+    "status": "illustrated",
+    "depictedTaxon": "회양목 / Buxus microphylla foliage reference",
+    "artworkScope": "Young small compact boxwood shrub with many tiny opposite oval green leaves, smooth entire edges and rounded tips, dense fine woody branching. No flowers, fruit, yellow variegation, clipped topiary or pot.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/buxus-microphylla/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "418": {
+    "src": "",
+    "group": "",
+    "status": "pending",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/styphnolobium-japonicum/"
+    ],
+    "note": "상품명에 있는 잎 색·무늬를 일반 녹색 그림으로 대신할 수 없음"
+  },
+  "424": {
+    "src": "/plants/v1/hyacinth.webp",
+    "group": "hyacinth",
+    "status": "illustrated",
+    "depictedTaxon": "히아신스 / Hyacinthus orientalis foliage reference",
+    "artworkScope": "One young hyacinth plant with a compact basal rosette of several thick fleshy broad strap-shaped green leaves, smooth edges, gently cupped upright blades and rounded pointed tips. No exposed bulb, flowers, buds or cultivar bloom-color claim.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/hyacinthus-orientalis/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "425": {
+    "src": "/plants/v1/peach.webp",
+    "group": "peach",
+    "status": "illustrated",
+    "depictedTaxon": "Prunus persica",
+    "artworkScope": "Thin young peach stems with long narrow lanceolate green leaves and finely serrated margins. Sparse graceful upright young tree silhouette, no flowers.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/prunus-persica/"
+    ],
+    "note": "NC State Extension Prunus persica: 길고 좁은 잎과 품종별 꽃·과실 차이. 백도·황도·실생의 개별 과형 확정 근거는 아님. Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "427": {
+    "src": "",
+    "group": "",
+    "status": "pending",
+    "references": [],
+    "note": "명칭 확인 보류: 오가피 명칭과 가시없는 상품의 실제 종·선발계통 확인 필요"
+  },
+  "428": {
+    "src": "/plants/v1/hazel.webp",
+    "group": "hazel",
+    "status": "illustrated",
+    "depictedTaxon": "개암 / Corylus",
+    "artworkScope": "Young hazel shrub, several slender stems, broad rounded to heart-shaped green leaves with pointed tips, double-serrated margins and clear lateral veins. No nuts or catkins.",
+    "references": [
+      "https://www.bris.go.kr/portal/book/nativeCropsDetailPopup.do?biorsrcMngNo=MANUIP3300500012&menuId=81&pMenuId="
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "429": {
+    "src": "/plants/v1/jujube.webp",
+    "group": "jujube",
+    "status": "illustrated",
+    "depictedTaxon": "Ziziphus jujuba",
+    "artworkScope": "Young branched jujube sapling with small glossy oval green leaves and THREE clearly distinct basal veins running upward from each leaf base, tiny finely serrated leaf margins.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/ziziphus-jujuba/"
+    ],
+    "note": "NC State Extension Ziziphus jujuba: 광택 있는 작은 잎과 기부에서 뚜렷한 세 잎맥. 복조·사과·왕의 국내 품종 인증은 아님. Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "430": {
+    "src": "",
+    "group": "",
+    "status": "pending",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/kalopanax-septemlobus/",
+      "https://www.forest.go.kr/kfs/images/data/down/imsan/imsan_05_07.pdf"
+    ],
+    "note": "일반 엄나무 자료만으로 가시 없는 판매 형질을 확인할 수 없음"
+  },
+  "431": {
+    "src": "/plants/v1/korean-pepper.webp",
+    "group": "korean-pepper",
+    "status": "illustrated",
+    "depictedTaxon": "산초 / Zanthoxylum schinifolium",
+    "artworkScope": "Young small woody shrub with pinnate compound green leaves consisting of many small oval slightly serrated leaflets in paired rows and a terminal leaflet, slender rachis; a few small scattered twigs spines. No fruit, flowers, grafting mark or cultivar claims.",
+    "references": [
+      "https://www.efloras.org/florataxon.aspx?flora_id=2&taxon_id=200012485"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "432": {
+    "src": "/plants/v1/ume.webp",
+    "group": "ume",
+    "status": "illustrated",
+    "depictedTaxon": "매실 / Prunus mume",
+    "artworkScope": "Young slender Prunus mume sapling with simple oval green leaves, pointed tips and finely serrated edges, slim branching woody twigs. No flowers, fruit, flower-color or fruit-color claims.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/prunus-mume/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "435": {
+    "src": "/plants/v1/mulberry.webp",
+    "group": "mulberry",
+    "status": "illustrated",
+    "depictedTaxon": "뽕 오디 / Morus",
+    "artworkScope": "Young slim mulberry sapling with simple broad heart-based green leaves, serrated margins, a mixture of unlobed oval leaves and a few shallow three-lobed leaves. Upright youthful branching habit. No fruit or flowers.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/morus-alba/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "436": {
+    "src": "/plants/v1/kiwi.webp",
+    "group": "kiwi",
+    "status": "illustrated",
+    "depictedTaxon": "Actinidia chinensis juvenile kiwi",
+    "artworkScope": "One youthful kiwi plant with a sturdy brown stem bending gently in a loose S shape, and large broad heart-shaped slightly hairy green leaves with fine serrations. EVERY SIDE SHOOT ENDS IN A LEAF. ABSOLUTELY NO TENDRILS, NO CURLY THREADS, NO SPIRALS, NO HOOKS, NO GRAPEVINE CURLS. Actinidia climbs by the main stem winding, not by tendrils. Show only gentle stem bends, no tight spirals. No fruit, flowers or support.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/actinidia-chinensis/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "437": {
+    "src": "",
+    "group": "",
+    "status": "pending",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/diospyros-kaki/common-name/kaki/"
+    ],
+    "note": "명칭 확인 보류: 월하단감이라는 판매명과 실제 품종·떫은맛 구분을 이 자료만으로 확정할 수 없음"
+  },
+  "438": {
+    "src": "/plants/v1/persimmon.webp",
+    "group": "persimmon",
+    "status": "illustrated",
+    "depictedTaxon": "Diospyros kaki",
+    "artworkScope": "Youthful small persimmon tree with simple oval green smooth-margin leaves, visible central midrib and lateral veins, a slim upright brown trunk and sparse young branches.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/diospyros-kaki/common-name/kaki/"
+    ],
+    "note": "NC State Extension Diospyros kaki: 잎·과실은 종 수준 참고. 국내 대봉·둥시·야오끼·월하·차량의 품종별 과형 및 단감 여부는 이 출처로 검증하지 않음. Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "439": {
+    "src": "/plants/v1/persimmon.webp",
+    "group": "persimmon",
+    "status": "illustrated",
+    "depictedTaxon": "Diospyros kaki",
+    "artworkScope": "Youthful small persimmon tree with simple oval green smooth-margin leaves, visible central midrib and lateral veins, a slim upright brown trunk and sparse young branches.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/diospyros-kaki/common-name/kaki/"
+    ],
+    "note": "NC State Extension Diospyros kaki: 잎·과실은 종 수준 참고. 국내 대봉·둥시·야오끼·월하·차량의 품종별 과형 및 단감 여부는 이 출처로 검증하지 않음. Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "440": {
+    "src": "/plants/v1/persimmon.webp",
+    "group": "persimmon",
+    "status": "illustrated",
+    "depictedTaxon": "Diospyros kaki",
+    "artworkScope": "Youthful small persimmon tree with simple oval green smooth-margin leaves, visible central midrib and lateral veins, a slim upright brown trunk and sparse young branches.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/diospyros-kaki/common-name/kaki/"
+    ],
+    "note": "NC State Extension Diospyros kaki: 잎·과실은 종 수준 참고. 국내 대봉·둥시·야오끼·월하·차량의 품종별 과형 및 단감 여부는 이 출처로 검증하지 않음. Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "441": {
+    "src": "/plants/v1/pawpaw.webp",
+    "group": "pawpaw",
+    "status": "illustrated",
+    "depictedTaxon": "Asimina triloba",
+    "artworkScope": "Youthful slender pawpaw stem with large long obovate green simple leaves hanging gently downward. Leaves widest toward their upper half, entire smooth margins, strong midrib.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/asimina-triloba/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "442": {
+    "src": "/plants/v1/magnolia-white-foliage.webp",
+    "group": "magnolia-white-foliage",
+    "status": "illustrated",
+    "depictedTaxon": "목련 백색 / Magnolia, unspecified supplied species",
+    "artworkScope": "Young deciduous magnolia-type sapling, slim light brown stem and several large simple broad obovate green leaves with smooth entire margins, pointed tips. FOLIAGE ONLY. No flowers, buds, bloom color, cultivar or precise species claims.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/magnolia/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "444": {
+    "src": "/plants/v1/peach.webp",
+    "group": "peach",
+    "status": "illustrated",
+    "depictedTaxon": "Prunus persica",
+    "artworkScope": "Thin young peach stems with long narrow lanceolate green leaves and finely serrated margins. Sparse graceful upright young tree silhouette, no flowers.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/prunus-persica/"
+    ],
+    "note": "NC State Extension Prunus persica: 길고 좁은 잎과 품종별 꽃·과실 차이. 백도·황도·실생의 개별 과형 확정 근거는 아님. Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "445": {
+    "src": "/plants/v1/peach.webp",
+    "group": "peach",
+    "status": "illustrated",
+    "depictedTaxon": "Prunus persica",
+    "artworkScope": "Thin young peach stems with long narrow lanceolate green leaves and finely serrated margins. Sparse graceful upright young tree silhouette, no flowers.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/prunus-persica/"
+    ],
+    "note": "NC State Extension Prunus persica: 길고 좁은 잎과 품종별 꽃·과실 차이. 백도·황도·실생의 개별 과형 확정 근거는 아님. Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "446": {
+    "src": "/plants/v1/chestnut.webp",
+    "group": "chestnut",
+    "status": "illustrated",
+    "depictedTaxon": "밤 / Castanea crenata",
+    "artworkScope": "Young slender chestnut sapling with long elliptic-lanceolate green leaves, strong straight lateral veins and prominent pointed sawteeth along margins. No nuts, burrs, flowers or cultivar claims.",
+    "references": [
+      "https://arboretum.harvard.edu/arnoldia-stories/castanea-mollissima-a-chinese-chestnut-for-the-northeast/"
+    ],
+    "note": "국립산림과학원 우리나라 주요 밤 재배품종: 대보·옥광 품종명 확인. 열람한 서지·목차만으로 과형과 포르단 품종은 검증하지 않음. Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "447": {
+    "src": "",
+    "group": "",
+    "status": "pending",
+    "references": [
+      "https://book.nifos.go.kr/main.do/10120/contents/5796586"
+    ],
+    "note": "명칭 확인 보류: 포르단 표기의 원어 품종과 종·교잡 여부 확인 필요"
+  },
+  "448": {
+    "src": "/plants/v1/hardy-kiwi.webp",
+    "group": "hardy-kiwi",
+    "status": "illustrated",
+    "depictedTaxon": "Actinidia arguta juvenile hardy kiwi",
+    "artworkScope": "One youthful hardy kiwi plant with a slender brown stem bending gently in a loose S shape, and oval-to-heart-based relatively smooth green leaves with serrated margins and pointed tips. EVERY SIDE SHOOT ENDS IN A LEAF. ABSOLUTELY NO TENDRILS, NO CURLY THREADS, NO SPIRALS, NO HOOKS, NO GRAPEVINE CURLS. Actinidia climbs by the main stem winding, not by tendrils. Show only gentle stem bends, no tight spirals. No fruit, flowers or support.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/actinidia-arguta/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "449": {
+    "src": "",
+    "group": "",
+    "status": "pending",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/euonymus-japonicus/"
+    ],
+    "note": "상품명에 있는 잎 색·무늬를 일반 녹색 그림으로 대신할 수 없음"
+  },
+  "452": {
+    "src": "/plants/v1/lacebark-pine.webp",
+    "group": "lacebark-pine",
+    "status": "illustrated",
+    "depictedTaxon": "백송 / Pinus bungeana",
+    "artworkScope": "Young small upright pine sapling with restrained thin brown-gray juvenile bark and straight slender green needles in bundles of THREE on open sparse branches. NO white mature patchwork bark, no cones.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/pinus-bungeana/"
+    ],
+    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "455": {
+    "src": "/plants/v1/jujube.webp",
+    "group": "jujube",
+    "status": "illustrated",
+    "depictedTaxon": "Ziziphus jujuba",
+    "artworkScope": "Young branched jujube sapling with small glossy oval green leaves and THREE clearly distinct basal veins running upward from each leaf base, tiny finely serrated leaf margins.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/ziziphus-jujuba/"
+    ],
+    "note": "NC State Extension Ziziphus jujuba: 광택 있는 작은 잎과 기부에서 뚜렷한 세 잎맥. 복조·사과·왕의 국내 품종 인증은 아님. Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "456": {
+    "src": "/plants/v1/fig.webp",
+    "group": "fig",
+    "status": "illustrated",
+    "depictedTaxon": "Ficus carica",
+    "artworkScope": "Slim young fig stem with several large 3–5-lobed palmate leaves. Distinct long rounded fig leaf lobes and palmate veins.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/ficus-carica/"
+    ],
+    "note": "NC State Extension Ficus carica: 큰 손바닥형 3~5갈래 잎. 특정 공급 품종·1년포트 실물 규격 인증은 아님. Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "457": {
+    "src": "/plants/v1/grape.webp",
+    "group": "grape",
+    "status": "illustrated",
+    "depictedTaxon": "Vitis",
+    "artworkScope": "Youthful grape vine with clearly lobed serrated broad leaves and curling tendrils. A short gracefully bending slender vine, no trellis and no fruit.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/vitis-vinifera/common-name/wine-grape/"
+    ],
+    "note": "NC State Extension Vitis vinifera: 목본 덩굴, 갈래잎과 덩굴손. 거봉의 정확한 교잡 혈통을 이 자료로 확정하지 않음. Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  },
+  "461": {
+    "src": "",
+    "group": "",
+    "status": "pending",
+    "references": [],
+    "note": "명칭 확인 보류: 원왕배가 원어·등록 품종인지 다른 품종의 표기인지 확인되지 않음"
+  },
+  "462": {
+    "src": "",
+    "group": "",
+    "status": "pending",
+    "references": [],
+    "note": "명칭 확인 보류: 황금소나무의 정확한 품종과 계절별 색이 확인되지 않음"
+  },
+  "464": {
+    "src": "/plants/v1/bald-cypress.webp",
+    "group": "bald-cypress",
+    "status": "illustrated",
+    "depictedTaxon": "낙우송 / Taxodium distichum",
+    "artworkScope": "Young narrow upright bald-cypress sapling with sparse layered branches and soft fine linear green needles arranged ALTERNATELY along delicate feathery branchlets. No cones, no swamp or roots.",
+    "references": [
+      "https://plants.ces.ncsu.edu/plants/taxodium-distichum/"
+    ],
+    "note": "NC State Extension Taxodium distichum: 낙엽침엽수, 납작하고 가는 잎과 어린 원추형 수형. Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
+  }
+}
