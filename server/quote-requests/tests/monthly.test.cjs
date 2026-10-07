@@ -12,6 +12,13 @@ const dayWrite=op=>/^\d{4}-\d{2}-\d{2}$/.test(op.sheetName)&&op.row>1;
 const phaseWrite=phase=>op=>op.sheetName==='전체견적색인'&&op.row>1&&op.values[0][9]===phase;
 const successful=f=>{const response=f.submit();assert.equal(response.ok,true,JSON.stringify(response));return response};
 
+test('plain-text persisted copy flags and existing boolean flags keep receipts readable; malformed flags fail closed',()=>{
+ const f=create();const first=successful(f);assert.equal(entry(f)[10],'false');
+ assert.equal(f.readRequests(0).requests.length,1);assert.equal(successful(f).receiptNumber,first.receiptNumber);
+ entry(f)[10]=false;assert.equal(f.context.auditMonthlyQuoteStorage().committed,1);
+ entry(f)[10]='unexpected';assert.throws(()=>f.readRequests(0));
+});
+
 test('creates one registered monthly file and only days with receipts; registry survives file rename',()=>{
  const f=create();assert.equal(f.files.size,0);successful(f);successful(f);
  f.setTime('2026-10-08T03:00:00Z');assert.equal(f.submit(another(f)).ok,true);

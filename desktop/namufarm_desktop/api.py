@@ -7,7 +7,7 @@ import urllib.request
 from .crypto import canonical
 from .errors import ConflictError, NetworkError, UserError
 
-DEFAULT_URL = "https://script.google.com/macros/s/AKfycby0dlMj7qKxXZDsShc92WQn0DW0YyOHjJIEsVCM4xrd8PDzVqVL1JuQLkPuxPxxyGDR/exec"
+DEFAULT_URL = "https://script.google.com/macros/s/AKfycbw8uqBWveIhqmXielALjSLnY1yDenKAwl070FT6Lsxsj7Xiod1C5JSBDZGfQtlrl6A-CQ/exec"
 MAX_RESPONSE = 8 * 1024 * 1024
 # Allow the server's 15-second lock wait plus connection/startup overhead.
 # urllib applies this to blocking I/O, not the entire redirect/request chain.

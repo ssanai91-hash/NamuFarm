@@ -23,14 +23,18 @@ function quoteTables_() {
 function quoteWriteVerified_(sheet, rowNumber, values) {
   const maximum=sheet.getMaxRows();
   if(rowNumber>maximum)sheet.insertRowsAfter(maximum,Math.max(100,rowNumber-maximum));
-  sheet.getRange(rowNumber,1,1,values.length).setNumberFormat('@').setValues([values]);
+  // Plain-text Sheets cells persist booleans as strings after the write cache
+  // expires. Encode explicitly so immediate and later reads have the same type.
+  const stored=values.map(value=>typeof value==='boolean'?String(value):value);
+  sheet.getRange(rowNumber,1,1,stored.length).setNumberFormat('@').setValues([stored]);
   SpreadsheetApp.flush();
-  assert_(JSON.stringify(sheet.getRange(rowNumber,1,1,values.length).getValues()[0]) === JSON.stringify(values),'NOT_READY');
+  assert_(JSON.stringify(sheet.getRange(rowNumber,1,1,stored.length).getValues()[0]) === JSON.stringify(stored),'NOT_READY');
 }
 function quoteIndexEntries_() {
   const sheet=quoteTables_().index, seen=new Set(), sequences=new Set(), receipts=new Set();
   return namedRows_(sheet,QUOTE_INDEX_HEADERS.length).map((values,i)=>({values:values,index:i})).filter(e=>e.values.some(v=>v!=='')).map(e=>{
     const v=e.values;
+    if(v[QI.copy]==='true' || v[QI.copy]==='false')v[QI.copy]=v[QI.copy]==='true';
     assert_(UUID_PATTERN.test(v[QI.id]) && !seen.has(v[QI.id]),'NOT_READY'); seen.add(v[QI.id]);
     assert_(v[QI.day]===receiptTime_(v[QI.created]).slice(0,10) && v[QI.seoul]===receiptTime_(v[QI.created]),'NOT_READY');
     const receipt=RFQ_RECEIPT_PATTERN.exec(v[QI.receipt]);
