@@ -64,8 +64,7 @@ body{font-size:16px} .field label,.field input,.field textarea,.consent-row>labe
 .catalog-section{padding-block:72px}
 .catalog-heading{align-items:center;gap:24px}
 .catalog-heading>div>p{text-align:left;margin-top:12px;font-size:1rem!important;color:#5b6e61}
-.catalog-total{display:inline-flex;align-items:center;gap:7px;flex-shrink:0;padding:10px 16px;border:1px solid #d4e3d8;border-radius:999px;background:#f0f6f1;color:#37634a;font-size:.875rem}
-.catalog-total svg{width:18px;height:18px}.catalog-total strong{font-size:1.125rem;font-weight:750;font-variant-numeric:tabular-nums}
+.catalog-direct-note{max-width:310px;flex-shrink:0;font-size:.875rem;line-height:1.8;color:#5b6e61;text-align:right}
 .catalog-controls{padding:22px 24px;border:1px solid #dce7de;background:#fff;border-radius:18px;box-shadow:0 6px 24px #20584405}
 .catalog-search{position:relative;display:flex;align-items:center;max-width:480px;margin-bottom:20px}
 .catalog-search>svg{position:absolute;left:15px;width:20px;height:20px;color:#658171;pointer-events:none}
@@ -105,7 +104,7 @@ body{font-size:16px} .field label,.field input,.field textarea,.consent-row>labe
 @media(max-width:1100px){.catalog-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
 @media(max-width:850px){.catalog-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.catalog-heading{align-items:flex-start}}
 @media(max-width:767px){
- .catalog-section{padding-block:42px}.catalog-heading{position:relative;display:block}.catalog-heading>div>p{padding-right:0;line-height:1.75;font-size:.875rem!important}.catalog-total{margin-top:14px;padding:6px 12px}
+ .catalog-section{padding-block:42px}.catalog-heading{position:relative;display:block}.catalog-heading>div>p{padding-right:0;line-height:1.75;font-size:.875rem!important}.catalog-direct-note{max-width:none;margin-top:12px;text-align:left}
  .catalog-controls{padding:16px 13px;border-radius:14px}.catalog-search{margin-bottom:16px}.catalog-search input{padding-left:39px;height:48px}.catalog-search>svg{left:12px;width:18px}.catalog-search input::placeholder{font-size:.8125rem}
  .initial-filter{gap:6px}.initial-button{flex:1 0 39px;min-width:39px;height:44px;padding:0 8px!important;border-radius:9px}.initial-button:first-child{min-width:50px}
  .catalog-results-heading{margin-block:20px 13px;align-items:flex-start;flex-direction:column;gap:3px}.catalog-results-heading>span{font-size:.8125rem}
