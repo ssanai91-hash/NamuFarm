@@ -9,7 +9,8 @@ from unittest.mock import patch, Mock
 
 import xlrd
 import xlwt
-from PySide6.QtWidgets import QApplication, QDialog
+from PySide6.QtWidgets import QDialog
+from qt_support import QtTestCase
 
 from namufarm_desktop.errors import UserError
 from namufarm_desktop.shipping_excel import (HEADERS, UPLOAD_SHEET, MATCH_SHEET, shipping_xls,
@@ -113,11 +114,7 @@ class ShippingExcelTest(unittest.TestCase):
             parse_tracking_xls(b"0" * (2 * 1024 * 1024 + 1), rows)
 
 
-class ShippingDialogTest(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.app = QApplication.instance() or QApplication([])
-
+class ShippingDialogTest(QtTestCase):
     def test_review_requires_fare_and_code_and_preserves_box_count(self):
         rows = [row_for_test(), row_for_test()]
         dialog = ShippingExportDialog(rows, SENDER)
