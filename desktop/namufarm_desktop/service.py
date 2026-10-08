@@ -3,7 +3,7 @@ import json
 import uuid
 from datetime import datetime, timezone
 
-from .api import DEFAULT_URL, ScriptApi
+from .api import DEFAULT_URL, RETIRED_URL, ScriptApi
 from .crypto import canonical, digest, customer_digest, SellerKey
 from .domain import (changed, integer, metadata, now_ms, require, valid_id, validate_metadata, validate_request, sale_expired)
 from .errors import UserError, ConflictError
@@ -15,6 +15,10 @@ class Manager:
     def __init__(self, vault, api=None):
         self.vault = vault
         self.credentials = vault.credentials()
+        if api is None and self.credentials.get("url") == RETIRED_URL:
+            # The deleted backend cannot retain device authorization. Preserve local work.
+            self.credentials.update(url=DEFAULT_URL, paired=False)
+            vault.save_credentials(self.credentials)
         self.seller = SellerKey(self.credentials["privateKey"], self.credentials["publicKey"]) if self.credentials.get("privateKey") else None
         self.api = api or ScriptApi(self.credentials.get("url", DEFAULT_URL), self.credentials["deviceToken"])
 
@@ -366,3 +370,4 @@ class Manager:
             integer(bucket.get("knownProfit"), -9007199254740991)
             require(bucket["unknownProfitOrders"] <= bucket["orders"])
         return report
+

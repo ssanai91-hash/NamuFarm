@@ -14,6 +14,7 @@ from namufarm_desktop.service import Manager
 from namufarm_desktop.store import Vault
 from namufarm_desktop.commerce import new_draft
 from support import Bridge, TestApi, manager_at, PASSWORD
+from namufarm_desktop.api import DEFAULT_URL, RETIRED_URL
 
 
 class TestAccount:
@@ -53,6 +54,29 @@ class DeviceVaultTest(unittest.TestCase):
         with self.assertRaises(UserError):
             Vault.create_device(self.path, self.account)
         self.assertEqual(original, self.path.read_bytes())
+
+    def test_retired_backend_moves_to_new_url_without_losing_local_work(self):
+        vault = Vault.create_device(self.path, self.account)
+        credentials = vault.credentials()
+        credentials.update(url=RETIRED_URL, paired=True)
+        vault.save_credentials(credentials)
+        vault.save_preference('drafts', [{'customerName': '저장한 초안'}])
+        vault.queue({'id': 'unchanged-event', 'action': 'close_request', 'payload': {'requestId': 'test'}})
+        pending = vault.pending()
+        manager = Manager(vault)
+        self.assertEqual(DEFAULT_URL, manager.api.url)
+        self.assertFalse(vault.credentials()['paired'])
+        self.assertEqual(credentials['deviceToken'], vault.credentials()['deviceToken'])
+        self.assertEqual(pending, vault.pending())
+        self.assertEqual([{'customerName': '저장한 초안'}], vault.preference('drafts'))
+
+    def test_custom_backend_is_preserved(self):
+        vault = Vault.create_device(self.path, self.account)
+        credentials = vault.credentials()
+        credentials.update(url='https://script.google.com/macros/s/AKcustomBackend01234567890/exec', paired=True)
+        vault.save_credentials(credentials)
+        self.assertEqual(credentials['url'], Manager(vault).api.url)
+        self.assertEqual(credentials, vault.credentials())
 
     def test_legacy_conversion_preserves_cache_token_and_pending_id(self):
         bridge = Bridge()
@@ -130,3 +154,4 @@ class KeylessFlowTest(unittest.TestCase):
         self.assertEqual(before, self.vault.snapshot_marker())
         self.manager.restore_legacy(self.bridge.initial['backup'], PASSWORD)
         self.assertEqual(1, len(self.manager.sync()['requests']))
+

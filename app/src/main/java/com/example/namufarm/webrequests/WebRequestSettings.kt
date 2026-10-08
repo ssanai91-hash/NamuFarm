@@ -1,6 +1,7 @@
 package com.example.namufarm.webrequests
 
 import android.content.Context
+import com.example.namufarm.BuildConfig
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
@@ -14,6 +15,10 @@ import javax.crypto.spec.GCMParameterSpec
 
 /** Per-device credentials, encrypted with a non-exportable Android Keystore key. */
 class WebRequestSettings(context: Context, private val deviceKeyProvider: (() -> SecretKey)? = null) {
+    private var endpoint: String = BuildConfig.WEB_REQUEST_SCRIPT_URL
+    internal constructor(context: Context, endpoint: String, deviceKeyProvider: () -> SecretKey) : this(context, deviceKeyProvider) {
+        this.endpoint = endpoint
+    }
     private val prefs = context.applicationContext.getSharedPreferences("web_request_connection", Context.MODE_PRIVATE)
     private fun key(): SecretKey {
         deviceKeyProvider?.let { return it() }
@@ -38,7 +43,10 @@ class WebRequestSettings(context: Context, private val deviceKeyProvider: (() ->
         val bytes = cipher.iv + cipher.doFinal(value.toString().toByteArray(Charsets.UTF_8))
         check(prefs.edit().putString("payload", Base64.encodeToString(bytes, Base64.NO_WRAP)).commit()) { "기기 연결 정보를 저장하지 못했습니다." }
     }
-    val paired: Boolean get() = synchronized(LOCK) { read().optBoolean("paired", false) }
+    val paired: Boolean get() = synchronized(LOCK) {
+        val value = read()
+        value.optBoolean("paired", false) && value.optString("endpoint", RETIRED_ENDPOINT) == endpoint
+    }
     val deviceToken: String get() = synchronized(LOCK) { read().optString("token", "") }
     val fcmToken: String get() = synchronized(LOCK) { read().optString("fcm", "") }
     fun prepareToken(): String = synchronized(LOCK) {
@@ -48,7 +56,12 @@ class WebRequestSettings(context: Context, private val deviceKeyProvider: (() ->
             update { it.put("token", value) }; value
         }
     }
-    fun markPaired() = update { it.put("paired", true) }
+    fun markPaired() = update { it.put("paired", true); it.put("endpoint", endpoint) }
     fun saveFcmToken(value: String) = update { it.put("fcm", value) }
-    companion object { private val LOCK = Any(); private const val KEY_ALIAS = "namufarm_web_request_key_v1" }
+    companion object {
+        private val LOCK = Any()
+        private const val KEY_ALIAS = "namufarm_web_request_key_v1"
+        private const val RETIRED_ENDPOINT = "https://script.google.com/macros/s/AKfycbw8uqBWveIhqmXielALjSLnY1yDenKAwl070FT6Lsxsj7Xiod1C5JSBDZGfQtlrl6A-CQ/exec"
+    }
 }
+
