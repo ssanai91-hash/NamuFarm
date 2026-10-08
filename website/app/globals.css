@@ -1139,6 +1139,14 @@ section {
   display: none;
 }
 [data-slot=dialog-content] {
+  /* Keep one centering rule across viewport sizes, without translation offsets. */
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  width: calc(100% - 2rem);
+  max-width: 32rem;
+  height: fit-content;
+  max-height: calc(100vh - 2rem);
   max-height: calc(100dvh - 2rem);
   overflow: auto;
   font-size: 1.125rem;
@@ -1185,7 +1193,7 @@ section {
 }
 .review-dialog {
   width: min(40rem,calc(100vw - 2rem));
-  max-width: 40rem!important;
+  max-width: 40rem;
   gap: 1.1rem;
 }
 .review-section-box {
@@ -1677,16 +1685,7 @@ section {
     display: none;
   }
   .review-dialog {
-    top: 0!important;
-    left: 0!important;
-    transform: none!important;
-    translate: none!important;
-    width: 100%!important;
-    max-width: 100%!important;
-    height: 100dvh;
-    max-height: 100dvh!important;
-    border-radius: 0;
-    padding: 1.5rem 1rem max(1.5rem,env(safe-area-inset-bottom));
+    padding: 1.5rem 1rem;
     align-content: start;
   }
   .review-dialog [data-slot=dialog-title] {
@@ -1788,3 +1787,12 @@ section {
     scroll-behavior: auto!important;
   }
 }
+
+/* A pending submission never traps the visitor inside its dialog. */
+.pending-request-notice p { margin: .5rem 0 1rem; }
+.pending-request-notice .support-call { display: flex; flex-wrap: wrap; font-size: 1rem; }
+.pending-request-notice details { margin-top: 1rem; }
+.pending-request-notice summary { cursor: pointer; text-decoration: underline; padding: .5rem 0; }
+.pending-confirm { display: flex; gap: .6rem; align-items: flex-start; margin: .8rem 0; }
+.pending-confirm input { margin-top: .4rem; width: 1.1rem; height: 1.1rem; flex-shrink: 0; }
+.review-dialog [data-slot=dialog-header] { padding-right: 2rem; }
