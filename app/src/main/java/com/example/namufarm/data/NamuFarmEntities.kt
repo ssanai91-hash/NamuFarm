@@ -5,11 +5,17 @@ import androidx.room.Entity
 import androidx.room.PrimaryKey
 
 object OrderStatus {
+    const val PURCHASED = "구매확정"
     const val CONFIRMED = "입금확인"
+    const val DELIVERED = "배송확인"
+    const val COMPLETED = "판매완료"
     const val CANCELED = "주문취소"
 
     fun isValid(value: String): Boolean =
-        value == CONFIRMED || value == CANCELED
+        value in listOf(PURCHASED, CONFIRMED, DELIVERED, COMPLETED, CANCELED)
+
+    fun next(value: String): String? = when (value) { PURCHASED -> CONFIRMED; CONFIRMED -> DELIVERED; DELIVERED -> COMPLETED; else -> null }
+    fun canCancel(value: String): Boolean = value == PURCHASED || value == CONFIRMED
 }
 
 // 1. 농원 정보 테이블
@@ -102,7 +108,8 @@ data class QuoteEntity(
     @ColumnInfo(name = "customer_phone") val customerPhone: String,
     @ColumnInfo(name = "total_qty") val totalQty: Int,
     @ColumnInfo(name = "total_price") val totalPrice: Int,
-    @ColumnInfo(name = "item_summary") val itemSummary: String
+    @ColumnInfo(name = "item_summary") val itemSummary: String,
+    @ColumnInfo(name = "sent_at", defaultValue = "0") val sentAt: Long = 0
 )
 
 // 7. 🚨 주문서 저장 테이블 (배송정보 및 상태 필드 추가!)
@@ -130,7 +137,23 @@ data class OrderEntity(
     @ColumnInfo(name = "zip_no", defaultValue = "''") val zipNo: String = "",
     @ColumnInfo(name = "road_address", defaultValue = "''") val roadAddress: String = "",
     @ColumnInfo(name = "detail_address", defaultValue = "''") val detailAddress: String = "",
-    @ColumnInfo(name = "note", defaultValue = "''") val note: String = ""
+    @ColumnInfo(name = "note", defaultValue = "''") val note: String = "",
+    @ColumnInfo(name = "customer_name", defaultValue = "''") val customerName: String = "",
+    @ColumnInfo(name = "customer_email", defaultValue = "''") val customerEmail: String = "",
+    @ColumnInfo(name = "source_request_id", defaultValue = "''") val sourceRequestId: String = "",
+    @ColumnInfo(name = "source_quote_number", defaultValue = "''") val sourceQuoteNumber: String = "",
+    @ColumnInfo(name = "revision", defaultValue = "0") val revision: Long = 0,
+    @ColumnInfo(name = "purchased_at", defaultValue = "0") val purchasedAt: Long = 0,
+    @ColumnInfo(name = "paid_at", defaultValue = "0") val paidAt: Long = 0,
+    @ColumnInfo(name = "delivered_at", defaultValue = "0") val deliveredAt: Long = 0,
+    @ColumnInfo(name = "completed_at", defaultValue = "0") val completedAt: Long = 0,
+    @ColumnInfo(name = "updated_at", defaultValue = "0") val updatedAt: Long = 0,
+    @ColumnInfo(name = "cost_total", defaultValue = "0") val costTotal: Long = 0,
+    @ColumnInfo(name = "expense_total", defaultValue = "0") val expenseTotal: Long = 0,
+    @ColumnInfo(name = "cost_confirmed", defaultValue = "0") val costConfirmed: Boolean = false,
+    @ColumnInfo(name = "profit_mode", defaultValue = "'resale'") val profitMode: String = "resale",
+    @ColumnInfo(name = "commission_bps", defaultValue = "3000") val commissionBps: Int = 3000,
+    @ColumnInfo(name = "tax_amount", defaultValue = "0") val taxAmount: Long = 0
 )
 
 // --- 🌐 구글 시트 연동용 DTO (Data Transfer Object) ---

@@ -8,12 +8,62 @@ import androidx.room.Query
 
 @Dao
 interface ManagementDao {
+    @Query("SELECT cursor FROM privacy_sync WHERE name = :name")
+    fun privacyCursor(name: String): Long?
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun savePrivacyCursor(value: PrivacySyncEntity)
+    @Query("DELETE FROM web_quote_request WHERE requestId = :id")
+    fun deleteWebRequest(id: String)
+    @Query("SELECT * FROM quote_list")
+    fun getAllQuotes(): List<QuoteEntity>
+    @Query("SELECT * FROM order_list")
+    fun getAllOrders(): List<OrderEntity>
+    @Query("SELECT * FROM quote_contact")
+    fun getAllQuoteContacts(): List<QuoteContactEntity>
+    @Query("DELETE FROM order_list WHERE order_number = :number")
+    fun deleteOrder(number: String)
+    @Query("DELETE FROM quote_document WHERE documentId = :id")
+    fun deleteQuoteDocument(id: String)
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun replaceWebRequest(value: WebQuoteRequestEntity)
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun replaceQuoteContact(value: QuoteContactEntity)
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun replaceQuoteDocument(value: QuoteDocumentEntity)
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun replaceQuote(value: QuoteEntity)
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun replacePending(value: PendingSyncEntity)
+    @Query("SELECT * FROM web_quote_request ORDER BY sequence DESC")
+    fun getWebRequests(): List<WebQuoteRequestEntity>
+
+    @Query("SELECT * FROM web_quote_request WHERE requestId = :id")
+    fun getWebRequest(id: String): WebQuoteRequestEntity?
+
+    @Query("SELECT COALESCE(MAX(sequence), 0) FROM web_quote_request")
+    fun webRequestCursor(): Long
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    fun insertWebRequest(request: WebQuoteRequestEntity)
+
+    @Query("UPDATE web_quote_request SET readAt = :readAt WHERE requestId = :id AND readAt IS NULL")
+    fun markWebRequestRead(id: String, readAt: Long)
+
 
     @Query("SELECT * FROM farm_info ORDER BY farm_name ASC")
     fun getAllFarms(): List<FarmEntity>
 
     @Query("SELECT * FROM species WHERE is_active = 1 ORDER BY species_name ASC")
     fun getAllSpecies(): List<SpeciesEntity>
+
+    @Query("SELECT * FROM species ORDER BY species_id ASC")
+    fun getAllSpeciesIncludingInactive(): List<SpeciesEntity>
+
+    @Query("SELECT * FROM farm_inventory")
+    fun getAllInventoryEntities(): List<FarmInventoryEntity>
+
+    @Query("SELECT item_summary FROM quote_list UNION ALL SELECT item_summary FROM order_list WHERE status != '주문취소'")
+    fun getOpenCommerceSummaries(): List<String>
 
     // 🚨 1. 수정됨: size, plantType(AS plantType) Select 추가!
     @Query("""
@@ -53,7 +103,7 @@ interface ManagementDao {
         FROM farm_inventory AS f
         INNER JOIN species AS s ON f.species_id = s.species_id
         INNER JOIN farm_info AS fm ON f.farm_id = fm.farm_id
-        WHERE f.quantity > 0
+        WHERE f.quantity > 0 AND s.is_active = 1
         ORDER BY s.species_name ASC, f.age ASC, 
             CASE f.quality WHEN '특묘' THEN 1 WHEN '상묘' THEN 2 WHEN '중묘' THEN 3 WHEN '하묘' THEN 4 ELSE 5 END ASC
     """)
@@ -84,10 +134,28 @@ interface ManagementDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     fun insertSpecies(species: SpeciesEntity)
 
+    @Query("SELECT * FROM quote_list WHERE quote_number = :number")
+    fun getQuoteByNumber(number: String): List<QuoteEntity>
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    fun insertQuoteContact(contact: QuoteContactEntity)
+    @Query("SELECT * FROM quote_contact WHERE quoteNumber = :number")
+    fun getQuoteContact(number: String): QuoteContactEntity?
+    @Query("DELETE FROM quote_contact WHERE quoteNumber = :number")
+    fun deleteQuoteContact(number: String)
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    fun insertQuoteDocument(document: QuoteDocumentEntity)
+    @Query("SELECT * FROM quote_document WHERE quoteNumber = :number")
+    fun getQuoteDocument(number: String): QuoteDocumentEntity?
+    @Query("SELECT * FROM quote_document ORDER BY issuedAt DESC")
+    fun getQuoteDocuments(): List<QuoteDocumentEntity>
+
     // --- 📋 견적서 & 주문서 관리 ---
 
     @Insert
     fun insertQuote(quote: QuoteEntity)
+
+    @Query("SELECT * FROM quote_list WHERE quote_id = :quoteId")
+    fun getQuoteById(quoteId: Int): QuoteEntity?
 
     @Query("SELECT MAX(quote_id) FROM quote_list")
     fun getLastQuoteId(): Int?
@@ -117,6 +185,9 @@ interface ManagementDao {
 
     @Query("SELECT * FROM order_list WHERE order_number = :orderNumber LIMIT 1")
     fun getOrderByNumber(orderNumber: String): OrderEntity?
+
+    @Query("SELECT COUNT(*) FROM order_list WHERE order_number = :orderNumber")
+    fun countOrdersByNumber(orderNumber: String): Int
 
     // ✅ 추가: 주문서 배송정보 업데이트
     @Query("""
@@ -173,6 +244,9 @@ interface ManagementDao {
 
     @Query("SELECT * FROM pending_sync ORDER BY sync_id ASC")
     fun getAllPendingSync(): List<PendingSyncEntity>
+
+    @Query("SELECT * FROM pending_sync WHERE sync_id = :syncId")
+    fun getPendingSyncById(syncId: Int): PendingSyncEntity?
 
     @Query("DELETE FROM pending_sync WHERE sync_id = :syncId")
     fun deletePendingSync(syncId: Int)

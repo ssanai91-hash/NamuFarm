@@ -5,6 +5,7 @@ import androidx.room.Entity
 import androidx.room.PrimaryKey
 
 object PendingSyncType {
+    const val SALE = "secure_sale"
     const val INVENTORY = "inventory"
     const val ORDER = "order"
     const val CANCEL_ORDER = "cancel_order"

@@ -1,0 +1,68 @@
+name: Desktop manager CI
+
+on:
+  push:
+    branches: [main, fix/local-first-integrity-review]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install Qt runtime libraries
+        run: sudo apt-get update && sudo apt-get install -y libegl1 libopengl0
+      - name: Install desktop manager
+        run: python -m pip install -e desktop
+      - name: Desktop data integrity and Qt tests
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python -m unittest discover -s desktop/tests -v
+      - name: Server regression tests
+        run: node --test server/quote-requests/tests/*.test.cjs
+
+  windows:
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install desktop and packager
+        run: python -m pip install -e desktop 'pyinstaller>=6.11,<7'
+      - name: Windows Qt and data tests
+        env:
+          QT_QPA_PLATFORM: offscreen
+          PYTHONUTF8: '1'
+        run: python -m unittest discover -s desktop/tests -v
+      - name: Build Windows executable
+        working-directory: desktop
+        run: python -m PyInstaller --noconfirm --clean --onefile --windowed --name NamuFarm-PC run_desktop.py
+      - name: Verify packaged Windows Qt startup
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          $check = Start-Process -FilePath desktop/dist/NamuFarm-PC.exe -ArgumentList '--self-check' -Wait -PassThru
+          if ($check.ExitCode -ne 0) { throw "Packaged application failed with exit code $($check.ExitCode)" }
+      - name: Upload Windows executable and instructions
+        uses: actions/upload-artifact@v4
+        with:
+          name: NamuFarm-PC-Windows
+          path: |
+            desktop/dist/NamuFarm-PC.exe
+            desktop/README.md

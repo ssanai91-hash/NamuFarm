@@ -9,6 +9,13 @@ import androidx.compose.ui.unit.sp
 private val AppFont = FontFamily.Default
 
 val Typography = Typography(
+    headlineMedium = TextStyle(
+        fontFamily = AppFont,
+        fontWeight = FontWeight.Bold,
+        fontSize = 28.sp,
+        lineHeight = 36.sp,
+        letterSpacing = (-0.4).sp
+    ),
     displaySmall = TextStyle(
         fontFamily = AppFont,
         fontWeight = FontWeight.ExtraBold,

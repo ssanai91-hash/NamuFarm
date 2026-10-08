@@ -6,6 +6,7 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import kotlinx.coroutines.sync.Mutex
 
 @Database(
     entities = [
@@ -14,12 +15,17 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         FarmInventoryEntity::class,
         QuoteEntity::class,
         OrderEntity::class,
-        PendingSyncEntity::class
+        PendingSyncEntity::class,
+        WebQuoteRequestEntity::class,
+        QuoteContactEntity::class, QuoteDocumentEntity::class, PrivacySyncEntity::class
     ],
-    version = 12, // 현재 스키마: 배송비/선불여부 + 주문상태 포함
+    version = 16, // 발송 확인 시각을 저장하고 입금 후에도 견적 원본 유지
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
+
+    // Serialize network work across repositories sharing this DB, never local writes.
+    internal val syncMutex = Mutex()
 
     abstract fun managementDao(): ManagementDao
 
@@ -594,31 +600,98 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
-        fun getDatabase(context: Context): AppDatabase {
-            return instance ?: synchronized(this) {
-                val newInstance = Room.databaseBuilder(
-                    context.applicationContext,
-                    AppDatabase::class.java,
-                    "NamuFarm.db"
-                )
-                    .addMigrations(
-                        MIGRATION_1_7,
-                        MIGRATION_2_7,
-                        MIGRATION_3_7,
-                        MIGRATION_4_7,
-                        MIGRATION_5_7,
-                        MIGRATION_6_7,
-                        MIGRATION_7_8,
-                        MIGRATION_8_9,
-                        MIGRATION_9_10,
-                        MIGRATION_10_12,
-                        MIGRATION_11_12
+        private val MIGRATION_12_13 = object : Migration(12, 13) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS web_quote_request (
+                        requestId TEXT NOT NULL PRIMARY KEY,
+                        sequence INTEGER NOT NULL, createdAt TEXT NOT NULL,
+                        customerName TEXT NOT NULL, customerPhone TEXT NOT NULL,
+                        region TEXT NOT NULL, itemsJson TEXT NOT NULL,
+                        message TEXT NOT NULL, readAt INTEGER
                     )
-                    .build()
-
-                instance = newInstance
-                newInstance
+                """.trimIndent())
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_web_quote_request_sequence ON web_quote_request(sequence)")
             }
         }
+
+        private val MIGRATION_13_14 = object : Migration(13, 14) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE web_quote_request ADD COLUMN customerEmail TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE web_quote_request ADD COLUMN formalQuoteRequested INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE web_quote_request ADD COLUMN recipientName TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE web_quote_request ADD COLUMN replyChannel TEXT NOT NULL DEFAULT 'sms'")
+                db.execSQL("CREATE TABLE IF NOT EXISTS quote_contact (quoteNumber TEXT NOT NULL PRIMARY KEY, recipientJson TEXT NOT NULL)")
+                db.execSQL("CREATE TABLE IF NOT EXISTS quote_document (documentId TEXT NOT NULL PRIMARY KEY, quoteNumber TEXT NOT NULL, issuedNumber TEXT NOT NULL, issuedAt INTEGER NOT NULL, snapshotJson TEXT NOT NULL)")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_quote_document_quoteNumber ON quote_document(quoteNumber)")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_quote_document_issuedNumber ON quote_document(issuedNumber)")
+            }
+        }
+
+        private val MIGRATION_14_15 = object : Migration(14, 15) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE order_list ADD COLUMN customer_name TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE order_list ADD COLUMN customer_email TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE order_list ADD COLUMN source_request_id TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE order_list ADD COLUMN source_quote_number TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE order_list ADD COLUMN revision INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE order_list ADD COLUMN purchased_at INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE order_list ADD COLUMN paid_at INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE order_list ADD COLUMN delivered_at INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE order_list ADD COLUMN completed_at INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE order_list ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE order_list ADD COLUMN cost_total INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE order_list ADD COLUMN expense_total INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE order_list ADD COLUMN cost_confirmed INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE order_list ADD COLUMN profit_mode TEXT NOT NULL DEFAULT 'resale'")
+                db.execSQL("ALTER TABLE order_list ADD COLUMN commission_bps INTEGER NOT NULL DEFAULT 3000")
+                db.execSQL("ALTER TABLE order_list ADD COLUMN tax_amount INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("CREATE TABLE IF NOT EXISTS privacy_sync (name TEXT NOT NULL PRIMARY KEY, cursor INTEGER NOT NULL)")
+                db.execSQL("INSERT OR IGNORE INTO privacy_sync(name,cursor) SELECT 'web', COALESCE(MAX(sequence),0) FROM web_quote_request")
+            }
+        }
+
+        private val MIGRATION_15_16 = object : Migration(15, 16) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE quote_list ADD COLUMN sent_at INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+        internal val ALL_MIGRATIONS = arrayOf(
+            MIGRATION_1_7, MIGRATION_2_7, MIGRATION_3_7,
+            MIGRATION_4_7, MIGRATION_5_7, MIGRATION_6_7,
+            MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10,
+            MIGRATION_10_12, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16
+        )
+
+        fun getDatabase(context: Context): AppDatabase {
+            return instance ?: synchronized(this) {
+                instance ?: createDatabase(context).also { instance = it }
+            }
+        }
+
+        internal fun createDatabase(context: Context): AppDatabase = Room.databaseBuilder(
+            context.applicationContext,
+            AppDatabase::class.java,
+            "NamuFarm.db"
+        )
+            .addMigrations(*ALL_MIGRATIONS)
+            .addCallback(object : RoomDatabase.Callback() {
+                override fun onOpen(db: SupportSQLiteDatabase) {
+                    // This PRAGMA returns a row, so Android requires query(), not execSQL().
+                    // Pin the writable connection: WAL reads may use a separate connection.
+                    db.beginTransaction()
+                    try {
+                        db.query("PRAGMA secure_delete=ON").use { cursor ->
+                            check(cursor.moveToFirst() && cursor.getInt(0) == 1) {
+                                "고객정보 삭제 보호 설정을 적용하지 못했습니다."
+                            }
+                        }
+                        db.setTransactionSuccessful()
+                    } finally {
+                        db.endTransaction()
+                    }
+                }
+            })
+            .build()
     }
 }

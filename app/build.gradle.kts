@@ -9,7 +9,7 @@ plugins {
 val localProperties = Properties().apply {
     val file = rootProject.file("local.properties")
     if (file.exists()) {
-        file.inputStream().use { load(it) }
+        file.reader(Charsets.UTF_8).use { load(it) }
     }
 }
 
@@ -19,7 +19,20 @@ fun localProperty(name: String, defaultValue: String = ""): String {
         .replace("\"", "\\\"")
 }
 
+// Release signing belongs to the build environment, never the repository or APK.
+val signingNames = listOf("NAMUFARM_KEYSTORE", "NAMUFARM_STORE_PASSWORD", "NAMUFARM_KEY_ALIAS", "NAMUFARM_KEY_PASSWORD")
+val releaseSigning = signingNames.associateWith { providers.environmentVariable(it).orNull.orEmpty() }
+val hasReleaseSigning = releaseSigning.values.all { it.isNotBlank() }
+
 android {
+    signingConfigs {
+        if (hasReleaseSigning) create("sellerRelease") {
+            storeFile = file(releaseSigning.getValue("NAMUFARM_KEYSTORE"))
+            storePassword = releaseSigning.getValue("NAMUFARM_STORE_PASSWORD")
+            keyAlias = releaseSigning.getValue("NAMUFARM_KEY_ALIAS")
+            keyPassword = releaseSigning.getValue("NAMUFARM_KEY_PASSWORD")
+        }
+    }
     namespace = "com.example.namufarm"
 
     compileSdk {
@@ -29,11 +42,15 @@ android {
     }
 
     defaultConfig {
+        listOf("WEB_REQUEST_SCRIPT_URL", "FIREBASE_APPLICATION_ID", "FIREBASE_API_KEY", "FIREBASE_PROJECT_ID", "FIREBASE_SENDER_ID").forEach { name ->
+            buildConfigField("String", name, "\"${localProperty(name, if(name=="WEB_REQUEST_SCRIPT_URL") "https://script.google.com/macros/s/AKfycbw8uqBWveIhqmXielALjSLnY1yDenKAwl070FT6Lsxsj7Xiod1C5JSBDZGfQtlrl6A-CQ/exec" else "")}\"")
+        }
+
         applicationId = "com.example.namufarm"
         minSdk = 24
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 3
+        versionName = "1.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -58,6 +75,7 @@ android {
 
     buildTypes {
         release {
+            if (hasReleaseSigning) signingConfig = signingConfigs.getByName("sellerRelease")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -71,6 +89,10 @@ android {
         targetCompatibility = JavaVersion.VERSION_11
     }
 
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+    }
+
     buildFeatures {
         compose = true
         buildConfig = true
@@ -78,6 +100,8 @@ android {
 }
 
 dependencies {
+    implementation("com.google.firebase:firebase-messaging:24.1.0")
+    implementation("androidx.work:work-runtime-ktx:2.9.1")
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
@@ -88,6 +112,11 @@ dependencies {
     implementation(libs.androidx.compose.material3)
 
     testImplementation(libs.junit)
+    testImplementation("org.robolectric:robolectric:4.16.1")
+    testImplementation("com.squareup.okhttp3:mockwebserver:3.14.9")
+    testImplementation("com.squareup.okhttp3:okhttp-tls:3.14.9")
+    testImplementation(libs.androidx.compose.ui.test.junit4)
+    testImplementation("io.github.takahirom.roborazzi:roborazzi:1.50.0")
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
@@ -109,3 +138,12 @@ dependencies {
 base {
     archivesName.set("NamuFarm")
 }
+
+// Fail closed: release tasks must never silently produce unsigned or debug-signed APKs.
+val validateSellerSigning by tasks.registering {
+    doLast {
+        check(hasReleaseSigning) { "Configure the persistent NamuFarm release keystore before building a release." }
+        check(file(releaseSigning.getValue("NAMUFARM_KEYSTORE")).isFile) { "The release keystore is missing." }
+    }
+}
+tasks.matching { it.name == "preReleaseBuild" }.configureEach { dependsOn(validateSellerSigning) }

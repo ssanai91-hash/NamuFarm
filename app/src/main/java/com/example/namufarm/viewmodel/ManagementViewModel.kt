@@ -13,9 +13,15 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update // 🚨 핵심 방패 추가!
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import com.example.namufarm.data.remote.JusoItem
-import com.example.namufarm.data.remote.SheetOrderItemDto
 import com.example.namufarm.domain.order.OrderLine
+import com.example.namufarm.domain.order.OrderAmounts
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import java.util.UUID
+import java.util.Locale
+import java.util.concurrent.atomic.AtomicBoolean
 import com.example.namufarm.domain.order.OrderLineSource
 import com.example.namufarm.domain.order.OrderSummaryCodec
 
@@ -38,9 +44,18 @@ data class ManagementUiState(
     val estimateCart: List<CartItem> = emptyList(),
 
     val customerPhone: String = "",
+    val quoteRecipient: com.example.namufarm.quotation.QuoteRecipient = com.example.namufarm.quotation.QuoteRecipient(),
+    val quoteDocuments: List<QuoteDocumentEntity> = emptyList(),
     val recentCallList: List<CallLogItem> = emptyList(),
+    val allQuotes: List<QuoteEntity> = emptyList(),
+    val quotesByRequest: Map<String, QuoteEntity> = emptyMap(),
+    val editingRequest: WebQuoteRequestEntity? = null,
     val todayQuotes: List<QuoteEntity> = emptyList(),
     val todayOrders: List<OrderEntity> = emptyList(),
+    val allOrders: List<OrderEntity> = emptyList(),
+    val salesReport: com.example.namufarm.sales.SalesReport? = null, val salesBusy: Boolean = false,
+    val isSavingQuote: Boolean = false,
+    val confirmingQuoteNumber: String? = null,
 
     val farmList: List<FarmEntity> = emptyList(),
     val selectedFarm: FarmEntity? = null,
@@ -68,39 +83,29 @@ class ManagementViewModel(
     private val _uiState = MutableStateFlow(ManagementUiState())
     val uiState: StateFlow<ManagementUiState> = _uiState.asStateFlow()
 
+    private val quoteSaveInProgress = AtomicBoolean(false)
+    private val orderConfirmInProgress = AtomicBoolean(false)
+
+    private fun launchOperation(block: suspend CoroutineScope.() -> Unit) =
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                block()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _uiState.update { it.copy(message = "❌ 처리 실패: ${e.message}") }
+            }
+        }
+
     init {
-        loadInitialData()
-        loadTodayData()
+        launchOperation { repository.initializePrivacy();repository.cleanupPrivacy();loadInitialData();loadTodayData() }
     }
 
     private fun loadInitialData() {
-        viewModelScope.launch(Dispatchers.IO) {
+        launchOperation {
             var allSpecies = repository.getAllSpecies()
             var farms = repository.getAllFarms()
             var allInventory = repository.getAllSellingInventory()
-
-            if (farms.isEmpty() || allSpecies.isEmpty()) {
-                _uiState.update {
-                    it.copy(message = "🔄 최초 실행: 전체 농원/묘목 마스터 데이터 가져오는 중...")
-                }
-
-                val farmSyncCount = repository.syncFarmMaster()
-                val speciesSyncCount = repository.syncSpeciesMaster()
-
-                allSpecies = repository.getAllSpecies()
-                farms = repository.getAllFarms()
-                allInventory = repository.getAllSellingInventory()
-
-                _uiState.update {
-                    it.copy(
-                        message = if (farmSyncCount < 0 || speciesSyncCount < 0) {
-                            "⚠️ 최초 마스터 동기화 일부 실패. 네트워크 확인 후 다시 동기화하세요."
-                        } else {
-                            "✅ 마스터 데이터 초기 세팅 완료!"
-                        }
-                    )
-                }
-            }
 
             val firstChosung = findFirstAvailableSellingChosung(allInventory)
 
@@ -118,15 +123,15 @@ class ManagementViewModel(
 
 
     private fun todayDatePrefix(): String =
-        java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.KOREA)
+        java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.KOREA).apply { timeZone=java.util.TimeZone.getTimeZone("Asia/Seoul") }
             .format(java.util.Date())
 
     private fun refreshLocalState() {
         val farms = repository.getAllFarms()
         val allSpecies = repository.getAllSpecies()
         val allInventory = repository.getAllSellingInventory()
-        val quotes = repository.getQuotesForDate(todayDatePrefix())
-        val orders = repository.getOrdersForDate(todayDatePrefix())
+        val quotes = repository.sentQuotesForDate(todayDatePrefix())
+        val orders = repository.paidOrdersForDate(todayDatePrefix())
 
         _uiState.update { current ->
             val activeChosung = if (
@@ -148,8 +153,10 @@ class ManagementViewModel(
                 filteredSellingInventory = allInventory.filter {
                     checkChosung(it.speciesName, it.chosung, activeChosung)
                 },
-                todayQuotes = quotes,
-                todayOrders = orders
+                allQuotes = repository.getAllQuotes(), quotesByRequest = repository.quotesByRequest(), todayQuotes = quotes,
+                todayOrders = orders, allOrders=repository.getAllOrders(), quoteDocuments = repository.getQuoteDocuments(),
+                selectedFarm = farms.find { it.farmId == current.selectedFarm?.farmId },
+                selectedSpecies = allSpecies.find { it.speciesId == current.selectedSpecies?.speciesId }
             )
         }
     }
@@ -262,6 +269,10 @@ class ManagementViewModel(
 
     // 판매 / 견적 / 통화기록
     fun addToCart(item: SellingDisplayRow, qty: Int) {
+        if (qty <= 0 || qty > item.quantity) {
+            showMessage("⚠️ 재고 수량 범위에서 입력해주세요.")
+            return
+        }
         _uiState.update { currentState ->
             val currentCart = currentState.estimateCart.toMutableList()
             val existingIndex = currentCart.indexOfFirst {
@@ -273,9 +284,9 @@ class ManagementViewModel(
                         it.item.plantType == item.plantType}
 
             if (existingIndex != -1) {
-                val newQty = currentCart[existingIndex].orderQuantity + qty
-                if (newQty <= item.quantity) {
-                    currentCart[existingIndex] = currentCart[existingIndex].copy(orderQuantity = newQty)
+                val newQty = currentCart[existingIndex].orderQuantity.toLong() + qty
+                if (qty > 0 && newQty <= item.quantity) {
+                    currentCart[existingIndex] = currentCart[existingIndex].copy(orderQuantity = newQty.toInt())
                     currentState.copy(estimateCart = currentCart, message = "✅ 장바구니 담김")
                 } else {
                     currentState.copy(message = "⚠️ 재고 수량(${item.quantity}주)을 초과할 수 없습니다.")
@@ -333,9 +344,9 @@ class ManagementViewModel(
 
             if (existingIndex >= 0) {
                 val existing = cart[existingIndex]
-                cart[existingIndex] = existing.copy(
-                    orderQuantity = existing.orderQuantity + quantity
-                )
+                val newQuantity = existing.orderQuantity.toLong() + quantity
+                if (newQuantity > Int.MAX_VALUE) return@update current.copy(message = "수량 범위를 초과했습니다.")
+                cart[existingIndex] = existing.copy(orderQuantity = newQuantity.toInt())
             } else {
                 cart.add(
                     CartItem(
@@ -363,10 +374,60 @@ class ManagementViewModel(
 
     fun clearCart() { _uiState.update { it.copy(estimateCart = emptyList()) } }
     fun clearMessage() { _uiState.update { it.copy(message = null) } }
-    fun updateCustomerPhone(phone: String) { _uiState.update { it.copy(customerPhone = phone) } }
+    fun updateCustomerPhone(phone: String) {
+        if (_uiState.value.isSavingQuote) return
+        _uiState.update { current ->
+            val same = phone.replace(Regex("[\\s()-]"), "") == current.customerPhone.replace(Regex("[\\s()-]"), "")
+            current.copy(customerPhone = phone, quoteRecipient = if (same) current.quoteRecipient else com.example.namufarm.quotation.QuoteRecipient())
+        }
+    }
+    fun updateQuoteRecipient(recipient: com.example.namufarm.quotation.QuoteRecipient) {
+        if (!_uiState.value.isSavingQuote) _uiState.update { it.copy(quoteRecipient = recipient) }
+    }
+    fun useWebRequestForQuote(request: WebQuoteRequestEntity) {
+        if (!_uiState.value.isSavingQuote) _uiState.update { it.copy(editingRequest = request, customerPhone = request.customerPhone, quoteRecipient = com.example.namufarm.quotation.QuoteRecipient.from(request)) }
+    }
+    fun dismissManualQuote() { _uiState.update { it.copy(editingRequest = null) } }
+    suspend fun markQuoteSent(number: String) = withContext(Dispatchers.IO) {
+        val quote = repository.markQuoteSent(number)
+        refreshLocalState()
+        quote
+    }
+    fun saveManualQuote(lines: List<OrderLine>, phone: String, recipient: com.example.namufarm.quotation.QuoteRecipient,
+                        prepaid: Boolean, fee: Int, issueOptions: com.example.namufarm.quotation.QuoteIssueOptions? = null, existingQuoteNumber: String? = null, onSaved: (QuoteEntity) -> Unit) {
+        if (!quoteSaveInProgress.compareAndSet(false, true)) return
+        _uiState.update { it.copy(isSavingQuote = true) }
+        launchOperation {
+            try {
+                require(Regex("0[0-9]{8,10}").matches(phone.replace(Regex("[\\s()-]"), ""))) { "고객 전화번호를 확인해주세요." }
+                require(lines.isNotEmpty() && lines.all { it.source == OrderLineSource.MANUAL })
+                val summary = OrderSummaryCodec.encode(lines)
+                val amounts = OrderAmounts.calculate(lines, prepaid, fee)
+                val date = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.KOREA).apply { timeZone = java.util.TimeZone.getTimeZone("Asia/Seoul") }.format(java.util.Date())
+                val number = existingQuoteNumber ?: "QUOTE_${UUID.randomUUID()}"
+                val quote = QuoteEntity(quoteNumber = number, saveDate = date, customerPhone = phone.replace(Regex("[\\s()-]"), ""),
+                    totalQty = amounts.quantity, totalPrice = amounts.price, itemSummary = summary, isPrepaid = prepaid, shippingFee = fee)
+                repository.insertQuoteWithContact(quote, recipient.checked(), issueOptions, replaceDraft = existingQuoteNumber != null)
+                refreshLocalState()
+                val saved = repository.getSavedQuote(number) ?: error("저장한 견적을 확인해주세요.")
+                withContext(Dispatchers.Main) { onSaved(saved) }
+            } finally {
+                quoteSaveInProgress.set(false)
+                _uiState.update { it.copy(isSavingQuote = false) }
+            }
+        }
+    }
+    suspend fun savedQuote(number: String) = withContext(Dispatchers.IO) { repository.getSavedQuote(number) }
+    suspend fun quoteRecipient(number: String) = withContext(Dispatchers.IO) { repository.getQuoteRecipient(number) }
+    suspend fun quoteDocument(number: String) = withContext(Dispatchers.IO) { repository.getQuoteDocument(number) }
+    suspend fun issueDocument(number: String, issuer: com.example.namufarm.quotation.QuoteIssuer, recipient: com.example.namufarm.quotation.QuoteRecipient, tax: Long, validUntil: String, notes: String, account: String) = withContext(Dispatchers.IO) {
+        val result = repository.issueQuoteDocument(number, issuer, tax, validUntil, notes, account, recipient)
+        _uiState.update { it.copy(quoteDocuments = repository.getQuoteDocuments(),allOrders=repository.getAllOrders()) }
+        result
+    }
 
     fun fetchRecentCallLogs(context: android.content.Context) {
-        viewModelScope.launch(Dispatchers.IO) {
+        launchOperation {
             try {
                 val cursor = context.contentResolver.query(
                     android.provider.CallLog.Calls.CONTENT_URI,
@@ -397,6 +458,8 @@ class ManagementViewModel(
                 else _uiState.update { it.copy(message = "⚠️ 통화 기록이 없습니다.") }
             } catch (e: SecurityException) {
                 _uiState.update { it.copy(message = "🚫 통화 기록 권한이 거부되었습니다.") }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _uiState.update { it.copy(message = "❌ 오류: ${e.message}") }
             }
@@ -404,94 +467,77 @@ class ManagementViewModel(
     }
 
     // 견적 저장
-    fun saveCurrentQuote(isPrepaid: Boolean = false, shippingFee: Int = 0) {
+    fun saveCurrentQuote(isPrepaid: Boolean = false, shippingFee: Int = 0, onSaved: (QuoteEntity) -> Unit = {}) {
         val state = _uiState.value
         if (state.estimateCart.isEmpty()) return
+        if (!quoteSaveInProgress.compareAndSet(false, true)) return
+        _uiState.update { it.copy(isSavingQuote = true) }
 
         val now = java.util.Date()
         val datePart = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.KOREA).format(now)
-        val displayDate = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.KOREA).format(now)
+        val displayDate = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.KOREA).apply { timeZone=java.util.TimeZone.getTimeZone("Asia/Seoul") }.format(now)
 
-        viewModelScope.launch(Dispatchers.IO) {
-            val lastId = repository.getLastQuoteId() ?: 0
-            val quoteNumber = "QUOTE_${datePart}_${String.format("%03d", lastId + 1)}"
+        launchOperation {
+            try {
+                val quoteNumber = "QUOTE_${datePart}_${UUID.randomUUID()}"
 
-            val detailSummary = OrderSummaryCodec.encode(
-                state.estimateCart.map { cartItem ->
-                    OrderLine(
-                        speciesName = cartItem.item.speciesName,
-                        quality = cartItem.item.quality,
-                        age = cartItem.item.age,
-                        size = cartItem.item.size,
-                        plantType = cartItem.item.plantType,
-                        orderQty = cartItem.orderQuantity,
-                        retailPrice = cartItem.item.retailPrice,
-                        farmName = cartItem.item.farmName,
-                        wholesalePrice = cartItem.item.wholesalePrice,
-                        source = cartItem.source
+                val detailSummary = OrderSummaryCodec.encode(
+                    state.estimateCart.map { cartItem ->
+                        OrderLine(
+                            speciesName = cartItem.item.speciesName,
+                            quality = cartItem.item.quality,
+                            age = cartItem.item.age,
+                            size = cartItem.item.size,
+                            plantType = cartItem.item.plantType,
+                            orderQty = cartItem.orderQuantity,
+                            retailPrice = cartItem.item.retailPrice,
+                            farmName = cartItem.item.farmName,
+                            wholesalePrice = cartItem.item.wholesalePrice,
+                            source = cartItem.source
+                        )
+                    }
+                )
+
+                val amounts = OrderAmounts.calculate(OrderSummaryCodec.parseStrict(detailSummary), isPrepaid, shippingFee)
+
+                val savedQuote = QuoteEntity(
+                        quoteNumber = quoteNumber,
+                        saveDate = displayDate,
+                        customerPhone = state.customerPhone,
+                        totalQty = amounts.quantity,
+                        totalPrice = amounts.price,
+                        itemSummary = detailSummary,
+                        isPrepaid = isPrepaid,
+                        shippingFee = shippingFee
+                    )
+                repository.insertQuoteWithContact(savedQuote, state.quoteRecipient)
+
+                loadTodayData()
+                _uiState.update {
+                    it.copy(
+                        estimateCart = if (it.estimateCart == state.estimateCart) emptyList() else it.estimateCart,
+                        message = "💾 견적 저장완료: $quoteNumber"
                     )
                 }
-            )
-
-            val cartTotal = state.estimateCart.sumOf {
-                it.item.retailPrice * it.orderQuantity
+                withContext(Dispatchers.Main) { onSaved(savedQuote) }
+            } finally {
+                quoteSaveInProgress.set(false)
+                _uiState.update { it.copy(isSavingQuote = false) }
             }
-            val finalTotalPrice = cartTotal + if (isPrepaid) shippingFee else 0
-
-            repository.insertQuote(
-                QuoteEntity(
-                    quoteNumber = quoteNumber,
-                    saveDate = displayDate,
-                    customerPhone = state.customerPhone,
-                    totalQty = state.estimateCart.sumOf { it.orderQuantity },
-                    totalPrice = finalTotalPrice,
-                    itemSummary = detailSummary,
-                    isPrepaid = isPrepaid,
-                    shippingFee = shippingFee
-                )
-            )
-
-            loadTodayData()
-            clearCart()
-            _uiState.update { it.copy(message = "💾 견적 저장완료: $quoteNumber") }
         }
-    }
-
-    // 일자별 로컬 주문 순번
-    private fun getNextOrderSequence(context: android.content.Context): Int {
-        val pref = context.getSharedPreferences("NamuFarmPrefs", android.content.Context.MODE_PRIVATE)
-        val today = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.KOREA).format(java.util.Date())
-        val lastDate = pref.getString("last_order_date", "")
-
-        var currentSeq = pref.getInt("last_order_seq", 0)
-
-        // 날짜가 바뀌었으면 카운터 리셋, 같으면 계속 증가
-        if (today != lastDate) {
-            currentSeq = 1
-        } else {
-            currentSeq += 1
-        }
-
-        // 변경된 값 저장
-        pref.edit().apply {
-            putString("last_order_date", today)
-            putInt("last_order_seq", currentSeq)
-            apply()
-        }
-
-        return currentSeq
     }
 
     // 견적 → 주문 확정
-    fun convertQuoteToOrder(quote: QuoteEntity, context: Context) {
-        viewModelScope.launch(Dispatchers.IO) {
+    fun convertQuoteToOrder(quote: QuoteEntity, onConfirmed: (OrderEntity) -> Unit = {}) {
+        if (!orderConfirmInProgress.compareAndSet(false, true)) return
+        _uiState.update { it.copy(confirmingQuoteNumber = quote.quoteNumber) }
+        launchOperation {
             try {
                 val now = java.util.Date()
                 val datePart = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.KOREA).format(now)
-                val displayDate = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.KOREA).format(now)
+                val displayDate = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.KOREA).apply { timeZone=java.util.TimeZone.getTimeZone("Asia/Seoul") }.format(now)
 
-                val currentSeq = getNextOrderSequence(context)
-                val orderNumber = "ORDER_${datePart}_${String.format("%03d", currentSeq)}"
+                val orderNumber = "ORDER_${datePart}_${UUID.randomUUID()}"
 
                 val newOrder = OrderEntity(
                     orderNumber = orderNumber,
@@ -505,31 +551,12 @@ class ManagementViewModel(
                     roadAddress = "",
                     detailAddress = "",
                     note = "",
-                    status = OrderStatus.CONFIRMED,
+                    status = OrderStatus.PURCHASED,
                     isPrepaid = quote.isPrepaid,
                     shippingFee = quote.shippingFee
                 )
 
-                val itemsToDeduct = OrderSummaryCodec.parseStrict(quote.itemSummary)
-                    .filter { it.isInventoryBacked }
-                    .map { line ->
-                        SheetOrderItemDto(
-                            species_name = line.speciesName,
-                            quality = line.quality,
-                            age = line.age,
-                            size = line.size,
-                            plant_type = line.plantType,
-                            order_qty = line.orderQty,
-                            retail_price = line.retailPrice,
-                            farm_name = line.farmName
-                        )
-                    }
-
-                val result = repository.confirmOrder(
-                    quote = quote,
-                    newOrder = newOrder,
-                    itemsToDeduct = itemsToDeduct
-                )
+                val result = repository.confirmOrder(quote, newOrder, paid = true)
 
                 refreshLocalState()
 
@@ -542,26 +569,33 @@ class ManagementViewModel(
                         }
                     )
                 }
+                val saved=repository.getOrder(newOrder.orderNumber) ?: error("저장된 주문을 확인해주세요.")
+                withContext(Dispatchers.Main) { onConfirmed(saved) }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 android.util.Log.e("NamuFarm", "주문확정 실패", e)
                 refreshLocalState()
                 _uiState.update {
                     it.copy(message = "❌ 주문확정 실패: ${e.message}")
                 }
+            } finally {
+                orderConfirmInProgress.set(false)
+                _uiState.update { it.copy(confirmingQuoteNumber = null) }
             }
         }
     }
 
     fun loadTodayData() {
-        viewModelScope.launch(Dispatchers.IO) {
-            val quotes = repository.getQuotesForDate(todayDatePrefix())
-            val orders = repository.getOrdersForDate(todayDatePrefix())
-            _uiState.update { it.copy(todayQuotes = quotes, todayOrders = orders) }
+        launchOperation {
+            val quotes = repository.sentQuotesForDate(todayDatePrefix())
+            val orders = repository.paidOrdersForDate(todayDatePrefix())
+            _uiState.update { it.copy(allQuotes = repository.getAllQuotes(), quotesByRequest = repository.quotesByRequest(), todayQuotes = quotes, todayOrders = orders, quoteDocuments = repository.getQuoteDocuments(),allOrders=repository.getAllOrders()) }
         }
     }
 
     fun deleteQuote(quote: QuoteEntity) {
-        viewModelScope.launch(Dispatchers.IO) {
+        launchOperation {
             repository.deleteQuote(quote)
             refreshLocalState()
             _uiState.update { it.copy(message = "🗑️ 견적서가 삭제되었습니다.") }
@@ -577,20 +611,16 @@ class ManagementViewModel(
             return
         }
 
-        if (newStatus == OrderStatus.CONFIRMED) {
-            _uiState.update {
-                it.copy(
-                    message = if (order.status == OrderStatus.CONFIRMED) {
-                        "ℹ️ 이미 입금확인 상태입니다."
-                    } else {
-                        "⚠️ 취소된 주문을 입금확인으로 되돌리는 기능은 지원하지 않습니다."
-                    }
-                )
+        if(newStatus != OrderStatus.CANCELED) {
+            launchOperation {
+                val result=repository.updateSaleStatus(order.orderNumber,order.revision,newStatus)
+                refreshLocalState()
+                _uiState.update { it.copy(message=if(result.cloudSynced) "$newStatus 저장 완료" else "$newStatus 로컬 저장 완료 · 시트 전송 대기") }
             }
             return
         }
 
-        viewModelScope.launch(Dispatchers.IO) {
+        launchOperation {
             val result = repository.cancelOrder(order.orderNumber)
             refreshLocalState()
 
@@ -610,6 +640,19 @@ class ManagementViewModel(
                     }
                 )
             }
+        }
+    }
+    fun updateSaleCosts(order: OrderEntity,cost: Long,expense: Long,mode: String,bps: Int,confirmed: Boolean) = launchOperation {
+        val result=repository.updateSaleCosts(order.orderNumber,order.revision,cost,expense,mode,bps,confirmed)
+        refreshLocalState();_uiState.update { it.copy(message=if(result.cloudSynced) "원가·비용 저장 완료" else "원가·비용 로컬 저장 완료 · 시트 전송 대기") }
+    }
+    private val reportInProgress=AtomicBoolean(false)
+    fun loadSalesReport(granularity: String,from: String,to: String) {
+        if(!reportInProgress.compareAndSet(false,true)) return
+        _uiState.update { it.copy(salesBusy=true,salesReport=null) }
+        launchOperation {
+            try { val report=repository.salesReport(granularity,from,to);_uiState.update { it.copy(salesReport=report) } }
+            finally { reportInProgress.set(false);_uiState.update { it.copy(salesBusy=false) } }
         }
     }
     // 🚨 1. 농원 선택 시, 이미 선택된 묘목이 있다면 재고 목록을 바로 불러오도록 수정!
@@ -640,9 +683,13 @@ class ManagementViewModel(
     }
 
     private fun loadInventory(farmId: Int, speciesId: Int) {
-        viewModelScope.launch(Dispatchers.IO) {
+        launchOperation {
             val rows = repository.getInventoryRows(farmId, speciesId)
-            _uiState.update { it.copy(inventoryList = rows) }
+            _uiState.update {
+                if (it.selectedFarm?.farmId == farmId && it.selectedSpecies?.speciesId == speciesId) {
+                    it.copy(inventoryList = rows)
+                } else it
+            }
         }
     }
 
@@ -654,10 +701,14 @@ class ManagementViewModel(
 
     fun updateAge(age: String) { _uiState.update { it.copy(inputAge = age) } }
     fun updateQuality(q: String) { _uiState.update { it.copy(inputQuality = q) } }
-    fun addQuantity(amount: Int) { _uiState.update { it.copy(inputQuantity = it.inputQuantity + amount) } }
-    fun addWholesale(amount: Int) { _uiState.update { it.copy(inputWholesale = it.inputWholesale + amount) } }
-    fun addRetail(amount: Int) { _uiState.update { it.copy(inputRetail = it.inputRetail + amount) } }
+    fun addQuantity(amount: Int) { _uiState.update { it.copy(inputQuantity = (it.inputQuantity.toLong() + amount).coerceIn(0, Int.MAX_VALUE.toLong()).toInt()) } }
+    fun addWholesale(amount: Int) { _uiState.update { it.copy(inputWholesale = (it.inputWholesale.toLong() + amount).coerceIn(0, Int.MAX_VALUE.toLong()).toInt()) } }
+    fun addRetail(amount: Int) { _uiState.update { it.copy(inputRetail = (it.inputRetail.toLong() + amount).coerceIn(0, Int.MAX_VALUE.toLong()).toInt()) } }
     fun resetInput() { _uiState.update { it.copy(inputQuantity = 0, inputWholesale = 0, inputRetail = 0) } }
+
+    fun setQuantity(value: Int) { if (value >= 0) _uiState.update { it.copy(inputQuantity = value) } }
+    fun setWholesale(value: Int) { if (value >= 0) _uiState.update { it.copy(inputWholesale = value) } }
+    fun setRetail(value: Int) { if (value >= 0) _uiState.update { it.copy(inputRetail = value) } }
     fun resetQuantityToSoldOut() { _uiState.update { it.copy(inputQuantity = 0, inputWholesale = 0, inputRetail = 0) } }
     fun resetWholesale() { _uiState.update { it.copy(inputWholesale = 0) } }
     fun resetRetail() { _uiState.update { it.copy(inputRetail = 0) } }
@@ -697,8 +748,8 @@ class ManagementViewModel(
             return
         }
 
-        viewModelScope.launch(Dispatchers.IO) {
-            val sizeStr = "${String.format("%.1f", state.inputSizeMeters)}m"
+        launchOperation {
+            val sizeStr = "${String.format(Locale.US, "%.1f", state.inputSizeMeters)}m"
             val isDelete = state.inputQuantity <= 0
 
             val targetEntity = FarmInventoryEntity(
@@ -748,42 +799,20 @@ class ManagementViewModel(
 
     // 🚨 2. 추가됨: 동기화 버튼을 눌렀을 때 실행될 함수!
     fun syncDataWithGoogleSheet() {
-        viewModelScope.launch(Dispatchers.IO) {
+        launchOperation {
             _uiState.update { it.copy(message = "🔄 미동기화 항목 재전송 중...") }
 
-            val result = repository.syncAll()
+            val result = repository.syncCommerce()
             refreshLocalState()
+            _uiState.update { it.copy(message = if (result.pendingFailureCount > 0)
+                "주문은 로컬에 저장되었습니다 · 서버 전송 대기: ${result.errorMessage.orEmpty()}"
+                else "주문 동기화 완료 · ${result.orderSyncCount ?: 0}건") }
 
-            if (result.pendingFailureCount > 0) {
-                _uiState.update {
-                    it.copy(
-                        message = "⚠️ 미동기화 항목 전송 실패. Pull을 중단했습니다. 네트워크 확인 후 다시 동기화하세요."
-                    )
-                }
-                return@launch
-            }
-
-            val inventoryResult = result.inventoryResult
-            val orderCount = result.orderSyncCount ?: -1
-
-            _uiState.update {
-                it.copy(
-                    message = if (
-                        inventoryResult == null ||
-                        inventoryResult.errorMessage != null ||
-                        orderCount < 0
-                    ) {
-                        "⚠️ 재고/주문 동기화 일부 실패"
-                    } else {
-                        "✅ 동기화 완료 (재전송 ${result.resentSuccess}건, 재고 ${inventoryResult.upserted}건, 주문 ${orderCount}건)"
-                    }
-                )
-            }
         }
     }
 
     fun syncFarmMasterFromGoogleSheet() {
-        viewModelScope.launch(Dispatchers.IO) {
+        launchOperation {
             _uiState.update { it.copy(message = "🏡 농원목록 동기화 중...") }
             val result = repository.syncFarmMaster()
             refreshLocalState()
@@ -800,7 +829,7 @@ class ManagementViewModel(
     }
 
     fun syncSpeciesMasterFromGoogleSheet() {
-        viewModelScope.launch(Dispatchers.IO) {
+        launchOperation {
             _uiState.update { it.copy(message = "🌱 묘목목록 동기화 중...") }
             val result = repository.syncSpeciesMaster()
             refreshLocalState()
@@ -821,6 +850,7 @@ class ManagementViewModel(
             it.copy(
                 estimateCart = emptyList(),
                 customerPhone = "",
+                quoteRecipient = com.example.namufarm.quotation.QuoteRecipient(),
                 message = null
             )
         }
@@ -846,10 +876,10 @@ class ManagementViewModel(
         val sb = StringBuilder()
         sb.append("[나무팜 견적서]\n\n")
 
-        var totalRetail = 0
+        var totalRetail = 0L
 
         cart.forEach { cartItem ->
-            val lineTotal = cartItem.item.retailPrice * cartItem.orderQuantity
+            val lineTotal = cartItem.item.retailPrice.toLong() * cartItem.orderQuantity
             totalRetail += lineTotal
 
             val specText = buildSpecText(
@@ -870,7 +900,7 @@ class ManagementViewModel(
 
         sb.append("================\n")
 
-        if (isPrepaid && shippingFee > 0) {
+        if (isPrepaid) {
             sb.append("상품 합계: ${String.format("%,d", totalRetail)}원\n")
             sb.append("배송비(선불): ${String.format("%,d", shippingFee)}원\n")
             sb.append(
@@ -893,7 +923,13 @@ class ManagementViewModel(
         val sb = StringBuilder()
         sb.append("[나무팜 견적서]\n\n")
 
-        OrderSummaryCodec.parseStrict(quote.itemSummary).forEach { line ->
+        val lines = try {
+            OrderSummaryCodec.parseStrict(quote.itemSummary)
+        } catch (e: Exception) {
+            showMessage("견적 품목을 읽을 수 없습니다: ${e.message}")
+            return ""
+        }
+        lines.forEach { line ->
             val specText = buildSpecText(
                 quality = line.quality,
                 age = line.age,
@@ -901,7 +937,7 @@ class ManagementViewModel(
                 plantType = line.plantType,
                 separator = " / "
             )
-            val lineTotal = line.orderQty * line.retailPrice
+            val lineTotal = line.orderQty.toLong() * line.retailPrice
 
             sb.append("🌱 ${line.speciesName}")
             if (specText.isNotBlank()) sb.append(" ($specText)")
@@ -913,7 +949,7 @@ class ManagementViewModel(
 
         sb.append("================\n")
 
-        if (quote.isPrepaid && quote.shippingFee > 0) {
+        if (quote.isPrepaid) {
             val itemTotal = quote.totalPrice - quote.shippingFee
             sb.append("상품 합계: ${String.format("%,d", itemTotal)}원\n")
             sb.append("배송비(선불): ${String.format("%,d", quote.shippingFee)}원\n")
@@ -941,12 +977,14 @@ class ManagementViewModel(
             return
         }
 
-        viewModelScope.launch(Dispatchers.IO) {
+        launchOperation {
             try {
                 val results = repository.searchAddress(JUSO_API_KEY, keyword)
                 _uiState.update {
                     it.copy(jusoResults = results)
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 android.util.Log.e("Juso", "주소 검색 실패", e)
                 _uiState.update {
@@ -966,15 +1004,15 @@ class ManagementViewModel(
         detailAddress: String,
         note: String
     ) {
-        viewModelScope.launch(Dispatchers.IO) {
+        launchOperation {
             if (receiverName.isBlank()) {
                 _uiState.update { it.copy(message = "받는사람 이름을 입력해주세요.") }
-                return@launch
+                return@launchOperation
             }
 
             if (roadAddress.isBlank()) {
                 _uiState.update { it.copy(message = "기본 주소를 선택해주세요.") }
-                return@launch
+                return@launchOperation
             }
 
             val result = repository.updateOrderDeliveryInfo(
@@ -1006,7 +1044,7 @@ class ManagementViewModel(
         phone: String,
         memo: String
     ) {
-        viewModelScope.launch(Dispatchers.IO) {
+        launchOperation {
             val result = repository.saveFarm(farmId, farmName, address, phone, memo)
 
             refreshLocalState()
@@ -1029,7 +1067,7 @@ class ManagementViewModel(
     }
 
     fun deleteFarm(farmId: Int) {
-        viewModelScope.launch(Dispatchers.IO) {
+        launchOperation {
             val result = repository.deleteFarm(farmId)
             refreshLocalState()
 
@@ -1061,7 +1099,7 @@ class ManagementViewModel(
         memo: String,
         isActive: Int = 1
     ) {
-        viewModelScope.launch(Dispatchers.IO) {
+        launchOperation {
             val result = repository.saveSpecies(
                 speciesId = speciesId,
                 speciesName = speciesName,
@@ -1086,7 +1124,7 @@ class ManagementViewModel(
     }
 
     fun deleteSpecies(speciesId: Int) {
-        viewModelScope.launch(Dispatchers.IO) {
+        launchOperation {
             val result = repository.deleteSpecies(speciesId)
             refreshLocalState()
 

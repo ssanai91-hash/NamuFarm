@@ -1,16 +1,9 @@
 package com.example.namufarm
 
-import android.Manifest
-import android.content.BroadcastReceiver
-import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
-import android.content.pm.PackageManager
 import android.os.Bundle
-import android.telephony.TelephonyManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -20,11 +13,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModelProvider
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -36,33 +27,32 @@ import com.example.namufarm.data.repository.NamuFarmRepository
 import com.example.namufarm.data.remote.RetrofitClient
 import com.example.namufarm.ui.ManagementModeScreen
 import com.example.namufarm.ui.SellingModeScreen
+import com.example.namufarm.ui.IncomingCallAssistDialog
+import com.example.namufarm.phone.CallAssistRequest
+import androidx.compose.runtime.saveable.rememberSaveable
 import com.example.namufarm.ui.theme.NamuFarmTheme
 import com.example.namufarm.viewmodel.ManagementViewModel
 import com.example.namufarm.viewmodel.ManagementViewModelFactory
 import kotlinx.coroutines.delay
+import com.example.namufarm.ui.WebQuoteInboxDialog
+import com.example.namufarm.viewmodel.WebInboxViewModel
+import com.example.namufarm.viewmodel.WebInboxViewModelFactory
+import com.example.namufarm.webrequests.WebRequestConnection
+import com.example.namufarm.webrequests.WebRequestPush
 
 class MainActivity : ComponentActivity() {
 
-    // 🚨 뷰모델을 클래스 전역에서 쓸 수 있게 빼줌
     private lateinit var viewModel: ManagementViewModel
-
-    // 🚨 통화 상태를 실시간으로 감시할 스파이(리시버)
-    private var phoneStateReceiver: BroadcastReceiver? = null
-
-    // 🚨 앱 시작 시 권한을 물어보는 런처
-    private val requestPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
-    ) { permissions ->
-        val phoneStateGranted = permissions[Manifest.permission.READ_PHONE_STATE] ?: false
-        val callLogGranted = permissions[Manifest.permission.READ_CALL_LOG] ?: false
-
-        if (phoneStateGranted && callLogGranted) {
-            registerPhoneStateReceiver() // 권한 받으면 감시자 투입!
-        }
-    }
+    private var webRequestId by mutableStateOf<String?>(null)
+    private var callAssistRequest by mutableStateOf<CallAssistRequest?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        webRequestId = if (savedInstanceState == null) WebRequestPush.fromIntent(intent) else savedInstanceState.getString("web_request_id")
+        callAssistRequest = if (savedInstanceState == null) CallAssistRequest.fromIntent(intent)
+        else savedInstanceState.getString("incoming_caller_id")?.let {
+            CallAssistRequest(it, savedInstanceState.getBoolean("incoming_reply"))
+        }
 
         // 1. DB와 DAO 가져오기
         val database = AppDatabase.getDatabase(this)
@@ -70,22 +60,29 @@ class MainActivity : ComponentActivity() {
 
         // 2. 데이터 계층 조립
         val api = RetrofitClient.api
-        val localDataSource = LocalDataSource(database, dao)
-        val syncManager = SyncManager(localDataSource, api)
+        val keys = com.example.namufarm.privacy.SellerKeys(this)
+        val localDataSource = LocalDataSource(database, dao, keys)
+        val syncManager = SyncManager(localDataSource, api, com.example.namufarm.sales.DeviceSalesGateway(com.example.namufarm.webrequests.WebRequestSettings(this),keys))
+        com.example.namufarm.privacy.PrivacyCleanupWorker.schedule(this)
         val repository = NamuFarmRepository(localDataSource, syncManager, RetrofitClient.jusoApi)
 
         // 3. ViewModel은 Repository만 바라본다.
         val factory = ManagementViewModelFactory(repository)
 
-        // 🚨 위에서 선언한 전역 변수에 뷰모델 할당!
         viewModel = ViewModelProvider(this, factory)[ManagementViewModel::class.java]
 
-        // 🚨 4. 권한 체크 및 통화 감시자 작동 시작!
-        checkAndRequestPermissions()
+        val webInbox = ViewModelProvider(this, WebInboxViewModelFactory(WebRequestConnection(this, repository)))[WebInboxViewModel::class.java]
 
         setContent {
             NamuFarmTheme {
                 val navController = rememberNavController()
+                var showWebInbox by rememberSaveable { mutableStateOf(false) }
+                val webState by webInbox.state.collectAsState()
+                LaunchedEffect(showWebInbox, webRequestId) {
+                    if ((showWebInbox || webRequestId != null) && webState.paired) webInbox.refresh()
+                }
+                var showCallAssist by rememberSaveable { mutableStateOf(false) }
+                val uiState by viewModel.uiState.collectAsState()
 
                 NavHost(navController = navController, startDestination = "splash") {
                     composable("splash") {
@@ -98,7 +95,13 @@ class MainActivity : ComponentActivity() {
                     composable("selling") {
                         SellingModeScreen(
                             viewModel = viewModel,
-                            onNavigateToManagement = { navController.navigate("management") }
+                            onNavigateToManagement = { navController.navigate("management") },
+                            onCallAssist = { showCallAssist = true },
+                            onWebInbox = { if (webState.paired) webInbox.refresh() else showWebInbox = true },
+                            onWebSettings = { showWebInbox = true },
+                            webRequests = webState.requests, webBusy = webState.busy,
+                            onRequest = { request -> if (!uiState.isSavingQuote) { viewModel.useWebRequestForQuote(request); webInbox.read(request.requestId) } },
+                            webUnread = webState.unread
                         )
                     }
                     composable("management") {
@@ -108,56 +111,61 @@ class MainActivity : ComponentActivity() {
                         )
                     }
                 }
-            }
-        }
-    }
-
-    // --- 🚨 [통화 감시 관련 핵심 로직] ---
-
-    private fun checkAndRequestPermissions() {
-        val hasPhoneState = ContextCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED
-        val hasCallLog = ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CALL_LOG) == PackageManager.PERMISSION_GRANTED
-
-        if (hasPhoneState && hasCallLog) {
-            registerPhoneStateReceiver() // 이미 권한 있으면 바로 감시자 투입
-        } else {
-            // 없으면 권한 요청 팝업 띄우기
-            requestPermissionLauncher.launch(
-                arrayOf(Manifest.permission.READ_PHONE_STATE, Manifest.permission.READ_CALL_LOG)
-            )
-        }
-    }
-
-    private fun registerPhoneStateReceiver() {
-        if (phoneStateReceiver != null) return
-
-        phoneStateReceiver = object : BroadcastReceiver() {
-            override fun onReceive(context: Context?, intent: Intent?) {
-                if (intent?.action == TelephonyManager.ACTION_PHONE_STATE_CHANGED) {
-                    val state = intent.getStringExtra(TelephonyManager.EXTRA_STATE)
-                    val incomingNumber = intent.getStringExtra(TelephonyManager.EXTRA_INCOMING_NUMBER)
-
-                    // 🚨 전화벨이 울리거나(RINGING) 통화가 연결되었을 때(OFFHOOK)!
-                    if (state == TelephonyManager.EXTRA_STATE_RINGING || state == TelephonyManager.EXTRA_STATE_OFFHOOK) {
-                        if (!incomingNumber.isNullOrBlank()) {
-                            // 뷰모델의 전화번호 업데이트 함수를 쏴버림! -> UI에 마법처럼 촥 꽂힘
-                            viewModel.updateCustomerPhone(incomingNumber)
-                            android.util.Log.d("NamuFarm", "통화 감지됨! 번호: $incomingNumber")
-                        }
+                LaunchedEffect(webState.message, showWebInbox, webRequestId) {
+                    if (!showWebInbox && webRequestId == null) webState.message?.let {
+                        viewModel.showMessage(it); webInbox.clearMessage()
                     }
+                }
+                LaunchedEffect(webState.busy) { if (!webState.busy) viewModel.loadTodayData() }
+                if (showWebInbox || webRequestId != null) {
+                    WebQuoteInboxDialog(webState, webRequestId, uiState.customerPhone, uiState.estimateCart.size,
+                        onRefresh = webInbox::refresh, onPair = webInbox::pair, onRead = webInbox::read,
+                        onRestore=webInbox::restore,onClose=webInbox::close,
+                        onUseRequest = { request ->
+                            if (uiState.isSavingQuote) webInbox.showMessage("견적 저장이 끝난 뒤 고객 번호를 적용해주세요.")
+                            else {
+                                viewModel.useWebRequestForQuote(request)
+                                viewModel.showMessage("희망 묘목을 불러왔어요. 규격과 판매 단가를 입력해주세요.")
+                                showWebInbox = false; webRequestId = null
+                            }
+                        }, onMessageConsumed = webInbox::clearMessage,
+                        onDismiss = { showWebInbox = false; webRequestId = null })
+                } else if (showCallAssist || callAssistRequest != null) {
+                    IncomingCallAssistDialog(
+                        request = callAssistRequest,
+                        customerPhone = uiState.customerPhone,
+                        cartItemCount = uiState.estimateCart.size,
+                        onUseNumber = { phone ->
+                            if (uiState.isSavingQuote) {
+                                viewModel.showMessage("견적 저장이 끝난 뒤 고객 번호를 적용해주세요.")
+                            } else {
+                                viewModel.updateCustomerPhone(phone)
+                                viewModel.showMessage("고객 번호를 적용했어요. 판매화면에서 품목을 담고 견적을 작성해주세요.")
+                            }
+                            showCallAssist = false
+                            callAssistRequest = null
+                        },
+                        onDismiss = { showCallAssist = false; callAssistRequest = null }
+                    )
                 }
             }
         }
-
-        // 안드로이드 시스템에 우리 감시자를 정식으로 등록
-        val filter = IntentFilter(TelephonyManager.ACTION_PHONE_STATE_CHANGED)
-        registerReceiver(phoneStateReceiver, filter)
     }
 
-    override fun onDestroy() {
-        super.onDestroy()
-        // 앱 꺼질 때 감시자도 같이 퇴근시킴 (메모리 누수 방지)
-        phoneStateReceiver?.let { unregisterReceiver(it) }
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        WebRequestPush.fromIntent(intent)?.let { webRequestId = it }
+        CallAssistRequest.fromIntent(intent)?.let { callAssistRequest = it }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        webRequestId?.let { outState.putString("web_request_id", it) }
+        callAssistRequest?.let {
+            outState.putString("incoming_caller_id", it.callerId)
+            outState.putBoolean("incoming_reply", it.reply)
+        }
+        super.onSaveInstanceState(outState)
     }
 }
 

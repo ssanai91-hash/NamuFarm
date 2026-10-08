@@ -26,5 +26,102 @@ jobs:
       - name: Make Gradle executable
         run: chmod +x gradlew
 
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Website protocol and legacy compatibility tests
+        run: node --test website/tests/privacy-crypto.test.mjs website/tests/quote-service.test.mjs
+
+      - name: Quote request server tests
+        run: node --test server/quote-requests/tests/*.test.cjs
+
       - name: Unit tests and debug build
+        env:
+          # Opt-in, read-only live diagnostic on the active repair branch only.
+          NAMUFARM_LIVE_TRANSPORT_CHECK: ${{ github.head_ref == 'fix/local-first-integrity-review' && '1' || '0' }}
         run: ./gradlew testDebugUnitTest assembleDebug
+
+      - name: Verify Android key backup in Python desktop
+        env:
+          PYTHONPATH: desktop
+        run: |
+          python3 -m pip install --quiet 'cryptography>=44,<52'
+          python3 desktop/tests/check_android_backup.py app/build/outputs/desktop-interop/android-backup.json
+
+      - name: Validate generated quote PDFs
+        run: |
+          python3 -m pip install --quiet pypdf
+          python3 - <<'PYTHON'
+          from pathlib import Path
+          from pypdf import PdfReader
+          expected = {'quote-example.pdf': 1, 'quote-multipage.pdf': None}
+          for name, count in expected.items():
+              reader = PdfReader(Path('app/build/outputs/quote-previews') / name, strict=True)
+              assert len(reader.pages) == count if count else len(reader.pages) > 1
+              for page in reader.pages:
+                  assert tuple(page.mediabox) == (0, 0, 595, 842)
+                  image = page['/Resources']['/XObject']['/Im0'].get_object()
+                  assert image['/Width'] == 2380 and image['/Height'] == 3368
+              print(name, 'valid pages:', len(reader.pages))
+          PYTHON
+
+      - name: Report test totals
+        if: always()
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          totals = dict(tests=0, failures=0, errors=0, skipped=0)
+          for path in Path('app/build/test-results/testDebugUnitTest').glob('TEST-*.xml'):
+              suite = ET.parse(path).getroot()
+              for key in totals:
+                  totals[key] += int(suite.get(key, 0))
+              for failed in suite.findall('.//failure'):
+                  print(failed.text)
+          print('JUnit totals:', totals)
+          PY
+
+      - name: Upload UI previews and test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: namufarm-ui-review
+          path: |
+            app/build/outputs/ui-previews/*.png
+            app/build/outputs/quote-previews/*
+            app/build/reports/tests/testDebugUnitTest/
+
+      # Debug APKs are for tests only. Ephemeral runner signing keys are never distributed.
+      - name: Prepare persistent release signing
+        id: signing
+        if: success() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          SIGNING_BASE64: ${{ secrets.NAMUFARM_KEYSTORE_BASE64 }}
+          NAMUFARM_STORE_PASSWORD: ${{ secrets.NAMUFARM_STORE_PASSWORD }}
+          NAMUFARM_KEY_ALIAS: ${{ secrets.NAMUFARM_KEY_ALIAS }}
+          NAMUFARM_KEY_PASSWORD: ${{ secrets.NAMUFARM_KEY_PASSWORD }}
+          NAMUFARM_SIGNING_SHA256: ${{ vars.NAMUFARM_SIGNING_SHA256 }}
+        run: python3 scripts/prepare_android_signing.py
+
+      - name: Build signed seller APK
+        if: steps.signing.outputs.ready == 'true'
+        env:
+          NAMUFARM_KEYSTORE: ${{ runner.temp }}/namufarm-release.jks
+          NAMUFARM_STORE_PASSWORD: ${{ secrets.NAMUFARM_STORE_PASSWORD }}
+          NAMUFARM_KEY_ALIAS: ${{ secrets.NAMUFARM_KEY_ALIAS }}
+          NAMUFARM_KEY_PASSWORD: ${{ secrets.NAMUFARM_KEY_PASSWORD }}
+        run: ./gradlew assembleRelease
+
+      - name: Upload signed seller APK
+        if: steps.signing.outputs.ready == 'true' && success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: namufarm-release-apk
+          path: app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
+
+      - name: Remove temporary release keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/namufarm-release.jks"
