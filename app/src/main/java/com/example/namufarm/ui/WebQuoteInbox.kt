@@ -90,6 +90,7 @@ internal fun WebQuoteInboxDialog(
                         Text("관리자에게 받은 연결 코드를 입력해주세요.", style = MaterialTheme.typography.bodyMedium)
                         OutlinedTextField(invite, { invite = it.trim() }, label = { Text("기기 연결 코드") }, modifier = Modifier.fillMaxWidth(), singleLine = true, visualTransformation = PasswordVisualTransformation())
                         Button(onClick = { onPair(invite) }, enabled = invite.length == 64 && !state.busy, modifier = Modifier.fillMaxWidth()) { Text("요청함 연결") }
+                        Text("나무팜 ${com.example.namufarm.BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
                 if(state.paired) item {

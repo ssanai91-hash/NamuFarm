@@ -38,6 +38,9 @@ jobs:
         run: node --test server/quote-requests/tests/*.test.cjs
 
       - name: Unit tests and debug build
+        env:
+          # Opt-in, read-only live diagnostic on the active repair branch only.
+          NAMUFARM_LIVE_TRANSPORT_CHECK: ${{ github.head_ref == 'fix/local-first-integrity-review' && '1' || '0' }}
         run: ./gradlew testDebugUnitTest assembleDebug
 
       - name: Verify Android key backup in Python desktop

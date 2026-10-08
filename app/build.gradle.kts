@@ -36,8 +36,8 @@ android {
         applicationId = "com.example.namufarm"
         minSdk = 24
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.0.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -99,6 +99,8 @@ dependencies {
 
     testImplementation(libs.junit)
     testImplementation("org.robolectric:robolectric:4.16.1")
+    testImplementation("com.squareup.okhttp3:mockwebserver:3.14.9")
+    testImplementation("com.squareup.okhttp3:okhttp-tls:3.14.9")
     testImplementation(libs.androidx.compose.ui.test.junit4)
     testImplementation("io.github.takahirom.roborazzi:roborazzi:1.50.0")
     androidTestImplementation(libs.androidx.junit)
