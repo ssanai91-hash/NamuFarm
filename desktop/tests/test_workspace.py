@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from PySide6.QtWidgets import QApplication, QTableWidgetItem
+from PySide6.QtWidgets import QTableWidgetItem
 from PySide6.QtGui import QTextDocument
 from PySide6.QtPrintSupport import QPrinter
 from namufarm_desktop.commerce import (new_draft, draft_amounts, order_from_draft, quote_document,
@@ -18,6 +18,7 @@ from namufarm_desktop.errors import UserError, NetworkError
 from namufarm_desktop.workspace import SellerWindow, QuoteDialog
 from namufarm_desktop.demo import show_demo
 from support import Bridge, manager_at
+from qt_support import QtTestCase
 
 
 def draft_for_test():
@@ -204,11 +205,7 @@ class WorkspaceServiceTest(unittest.TestCase):
         self.assertEqual(3, row['metadata']['revision'])
 
 
-class SellerUiTest(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.app = QApplication.instance() or QApplication([])
-
+class SellerUiTest(QtTestCase):
     def test_fhd_pages_readonly_demo_and_clear_on_lock(self):
         window = SellerWindow()
         show_demo(window)

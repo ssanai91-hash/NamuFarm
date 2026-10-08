@@ -7,15 +7,16 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from PySide6.QtWidgets import QApplication, QMessageBox
+from PySide6.QtWidgets import QMessageBox
 from namufarm_desktop.app import MainWindow
 from support import Bridge, manager_at
+from qt_support import QtTestCase
 
 
-class UiTest(unittest.TestCase):
+class UiTest(QtTestCase):
     @classmethod
     def setUpClass(cls):
-        cls.app = QApplication.instance() or QApplication([])
+        super().setUpClass()
         cls.bridge = Bridge()
         cls.tmp = tempfile.TemporaryDirectory()
         cls.manager = manager_at(Path(cls.tmp.name) / 'ui.db', cls.bridge)
@@ -29,6 +30,7 @@ class UiTest(unittest.TestCase):
         cls.tmp.cleanup()
 
     def setUp(self):
+        super().setUp()
         self.window = MainWindow(Path(self.tmp.name) / 'ui.db')
         self.window.accept_manager((self.manager, self.manager.view()))
         self.window.show()
@@ -37,8 +39,6 @@ class UiTest(unittest.TestCase):
     def tearDown(self):
         self.window.dirty = False
         self.window.close()
-        self.window.deleteLater()
-        self.app.processEvents()
 
     def wait_job(self):
         deadline = time.monotonic() + 10
