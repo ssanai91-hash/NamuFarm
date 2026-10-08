@@ -62,7 +62,7 @@ class QuoteDocumentStorageTest {
     @Test fun unfinishedManualQuoteResumesWithoutCreatingAnotherRecord() = runBlocking {
         val source = QuoteTestData.quote()
         val line = com.example.namufarm.domain.order.OrderLine("감나무", "2년생", "", "", "", 30, 1000, "수기견적", 0, com.example.namufarm.domain.order.OrderLineSource.MANUAL)
-        val quote = source.copy(totalQty = 30, totalPrice = 30000, itemSummary = com.example.namufarm.domain.order.OrderSummaryCodec.encode(listOf(line)))
+        val quote = source.copy(isPrepaid = false, shippingFee = 0, totalQty = 30, totalPrice = 30000, itemSummary = com.example.namufarm.domain.order.OrderSummaryCodec.encode(listOf(line)))
         repo.insertQuoteWithContact(quote, QuoteTestData.recipient)
         val changed = quote.copy(totalPrice = 45000, itemSummary = com.example.namufarm.domain.order.OrderSummaryCodec.encode(listOf(line.copy(retailPrice = 1500))))
         repo.insertQuoteWithContact(changed, QuoteTestData.recipient, replaceDraft = true)
