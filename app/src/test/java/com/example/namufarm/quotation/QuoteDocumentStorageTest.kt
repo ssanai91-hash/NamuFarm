@@ -59,6 +59,25 @@ class QuoteDocumentStorageTest {
         assertNull(repo.getQuoteDocument(quote.quoteNumber))
         assertEquals(QuoteRecipient(), repo.getQuoteRecipient(quote.quoteNumber))
     }
+    @Test fun unfinishedManualQuoteResumesWithoutCreatingAnotherRecord() = runBlocking {
+        val source = QuoteTestData.quote()
+        val line = com.example.namufarm.domain.order.OrderLine("감나무", "2년생", "", "", "", 30, 1000, "수기견적", 0, com.example.namufarm.domain.order.OrderLineSource.MANUAL)
+        val quote = source.copy(totalQty = 30, totalPrice = 30000, itemSummary = com.example.namufarm.domain.order.OrderSummaryCodec.encode(listOf(line)))
+        repo.insertQuoteWithContact(quote, QuoteTestData.recipient)
+        val changed = quote.copy(totalPrice = 45000, itemSummary = com.example.namufarm.domain.order.OrderSummaryCodec.encode(listOf(line.copy(retailPrice = 1500))))
+        repo.insertQuoteWithContact(changed, QuoteTestData.recipient, replaceDraft = true)
+        assertEquals(1, repo.getAllQuotes().size)
+        assertEquals(45000, repo.getSavedQuote(quote.quoteNumber)!!.totalPrice)
+        repo.markQuoteSent(quote.quoteNumber)
+        assertTrue(runCatching { repo.insertQuoteWithContact(quote, QuoteTestData.recipient, replaceDraft = true) }.isFailure)
+        assertEquals(45000, repo.getSavedQuote(quote.quoteNumber)!!.totalPrice)
+    }
+    @Test fun officialSnapshotPreventsDraftOverwrite() = runBlocking {
+        val quote = QuoteTestData.quote()
+        repo.insertQuoteWithContact(quote, QuoteTestData.recipient, QuoteIssueOptions())
+        assertTrue(runCatching { repo.insertQuoteWithContact(quote, QuoteTestData.recipient, replaceDraft = true) }.isFailure)
+        assertNotNull(repo.getQuoteDocument(quote.quoteNumber))
+    }
     @Test fun missingOrInvalidQuoteNeverCreatesIssuedRecord() = runBlocking {
         assertTrue(runCatching { repo.issueQuoteDocument("missing", QuoteTestData.issuer, 0, "7일", "", "") }.isFailure)
         repo.insertQuoteWithContact(QuoteTestData.quote(), QuoteTestData.recipient)

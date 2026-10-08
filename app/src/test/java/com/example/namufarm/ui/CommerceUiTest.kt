@@ -272,6 +272,29 @@ class CommerceUiTest {
         assertEquals(listOf("quick", "quotes", "orders"), calls)
     }
 
+    @Test
+    @Config(qualifiers = "ko-rKR-w360dp-h740dp-xhdpi")
+    fun compactPhoneKeepsSendingActionsVisible() {
+        compose.setContent { NamuFarmTheme {
+            ManualQuoteEditor(webRequest, false, null, {}, { _, _ -> })
+        } }
+        compose.onNodeWithText("문자 보내기").assertIsDisplayed()
+        compose.onNodeWithText("메일 보내기").assertIsDisplayed()
+        compose.onNodeWithTag("unit_price_1").performScrollTo().performTextInput("900")
+        compose.onNodeWithContentDescription("2번 단가 올리기").performClick()
+        compose.onNodeWithTag("unit_price_1").assertTextContains("1900")
+        capture("seller-compact-phone", compose.onNodeWithTag("namu_dialog"))
+    }
+
+    @Test fun quotePaymentConfirmationIncludesOfficialTax() {
+        val quote = com.example.namufarm.data.QuoteEntity(quoteNumber = "TAX", saveDate = "2026-10-08", customerPhone = "01012345678", totalQty = 12, totalPrice = 130000, itemSummary = order.itemSummary)
+        compose.setContent { NamuFarmTheme {
+            QuoteDetailsDialog(quote, false, SnackbarHostState(), {}, {}, {}, {}, taxAmount = 13000)
+        } }
+        compose.onNodeWithText("입금 완료 · 주문 등록").performClick()
+        compose.onNodeWithText("최종 견적 143,000원의 실제 입금을 확인해주세요. 입금 확인 시 오늘 주문이 증가하고 발송한 견적 기록은 유지됩니다.").assertIsDisplayed()
+    }
+
     @Test fun searchAndStatusKeepNewestMatchingRequestsFirst() {
         val first = webRequest.copy(sequence = 1)
         val latest = webRequest.copy(requestId = "new", sequence = 2)

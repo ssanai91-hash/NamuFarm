@@ -27,22 +27,22 @@ private val draftSaver = Saver<SellerQuoteDraft, String>(
 
 @Composable
 internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean, message: String?,
-    onDismiss: () -> Unit, onSave: (SellerQuoteDraft, QuoteDelivery) -> Unit) {
+    onDismiss: () -> Unit, onSave: (SellerQuoteDraft, QuoteDelivery) -> Unit, initialDraft: SellerQuoteDraft? = null, draftKey: String? = request?.requestId) {
     val context = LocalContext.current
-    var draft by rememberSaveable(request?.requestId, stateSaver = draftSaver) {
-        mutableStateOf(SellerQuoteDraft.from(request, QuoteIssuerSettings(context).load()))
+    var draft by rememberSaveable(draftKey, stateSaver = draftSaver) {
+        mutableStateOf(initialDraft ?: SellerQuoteDraft.from(request, QuoteIssuerSettings(context).load()))
     }
     var contactExpanded by rememberSaveable { mutableStateOf(request == null) }
     var step by rememberSaveable { mutableIntStateOf(1000) }
     var error by rememberSaveable { mutableStateOf<String?>(null) }
     var discard by remember { mutableStateOf(false) }
-    val initial = remember(request?.requestId) { SellerQuoteDraft.from(request, QuoteIssuerSettings(context).load()) }
+    val initial = remember(draftKey) { initialDraft ?: SellerQuoteDraft.from(request, QuoteIssuerSettings(context).load()) }
     fun close() { if (!saving) { if (draft != initial) discard = true else onDismiss() } }
     fun submit(action: QuoteDelivery) {
         try { draft.validate(action); error = null; onSave(draft, action) }
         catch (e: Exception) { error = if (e is ArithmeticException) "견적 수량이나 금액이 너무 큽니다." else e.message }
     }
-    val amount = runCatching { draft.rows.sumOf { it.line().orderQty.toLong() * it.line().retailPrice } + draft.shipping() +
+    val amount = runCatching { com.example.namufarm.domain.order.OrderAmounts.calculate(draft.rows.map { it.line() }, draft.prepaid, draft.shipping()).price.toLong() +
         if (draft.recipient.formalQuoteRequested) draft.options.taxAmount() else 0L }.getOrNull()
     NamuDialog("견적 작성", request?.let { "${it.customerName} · ${it.region}" } ?: "빠른 견적 · 고객과 품목 직접 입력", onDismiss = ::close, actions = {
         (error ?: message?.takeIf { it.startsWith("❌") })?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }

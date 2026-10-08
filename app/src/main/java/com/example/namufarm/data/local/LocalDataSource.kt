@@ -177,6 +177,7 @@ class LocalDataSource(
 
     fun getQuoteByNumber(number: String): QuoteEntity? = dao.getQuoteByNumber(number).map { quoteRow(it, false) }.also { check(it.size <= 1) { "중복 견적번호를 확인해주세요." } }.singleOrNull()
     fun insertQuoteContact(contact: com.example.namufarm.data.QuoteContactEntity) = dao.insertQuoteContact(contact.copy(recipientJson=protect(contact.recipientJson)))
+    fun replaceQuoteContact(contact: com.example.namufarm.data.QuoteContactEntity) = dao.replaceQuoteContact(contact.copy(recipientJson=protect(contact.recipientJson)))
     fun getQuoteContact(number: String) = dao.getQuoteContact(number)?.let { it.copy(recipientJson=reveal(it.recipientJson)) }
     fun getQuoteDocument(number: String) = dao.getQuoteDocument(number)?.let { it.copy(snapshotJson=reveal(it.snapshotJson)) }
     fun getQuoteDocuments() = dao.getQuoteDocuments().map { it.copy(snapshotJson=reveal(it.snapshotJson)) }

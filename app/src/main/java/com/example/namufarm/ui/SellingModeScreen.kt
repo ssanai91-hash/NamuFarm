@@ -155,6 +155,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
     var showTodayOrdersDialog by remember { mutableStateOf(false) }
     var showQuoteDetailDialog by remember { mutableStateOf(false) }
     var showQuickQuoteDialog by rememberSaveable { mutableStateOf(false) }
+    var editSavedNumber by rememberSaveable { mutableStateOf<String?>(null) }
     var deliveryNumber by rememberSaveable { mutableStateOf<String?>(null) }
     var deliveryAction by rememberSaveable { mutableStateOf(QuoteDelivery.SAVE.name) }
 
@@ -221,7 +222,11 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
         onAddToCart = viewModel::addToCart,
         onCallAssist = onCallAssist,
         onWebInbox = onWebInbox, webUnread = webUnread, webRequests = webRequests, webBusy = webBusy, onRequest = onRequest,
-        onSavedQuote = { selectedQuote = it; showQuoteDetailDialog = true }
+        onSavedQuote = { quote ->
+            val manual = runCatching { com.example.namufarm.domain.order.OrderSummaryCodec.parseStrict(quote.itemSummary).all { it.source == com.example.namufarm.domain.order.OrderLineSource.MANUAL } }.getOrDefault(false)
+            if (manual && quote.sentAt == 0L && uiState.quoteDocuments.none { it.quoteNumber == quote.quoteNumber } && uiState.allOrders.none { it.sourceQuoteNumber == quote.quoteNumber }) editSavedNumber = quote.quoteNumber
+            else { selectedQuote = quote; showQuoteDetailDialog = true }
+        }
     )
 
     if (showCartDialog) {
@@ -354,6 +359,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
             quote, uiState.confirmingQuoteNumber == quote.quoteNumber, snackbarHostState,
             onSms = { deliveryAction = QuoteDelivery.SMS.name; deliveryNumber = quote.quoteNumber; showQuoteDetailDialog = false },
             onEmail = { deliveryAction = QuoteDelivery.EMAIL.name; deliveryNumber = quote.quoteNumber; showQuoteDetailDialog = false },
+            taxAmount = uiState.quoteTax(quote.quoteNumber),
             onConfirm = {
                 viewModel.convertQuoteToOrder(quote) { order ->
                     selectedOrder = order
@@ -369,6 +375,12 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
             ordered = uiState.allOrders.any { it.sourceQuoteNumber == quote.quoteNumber },
             onOrder = { selectedOrder = uiState.allOrders.first { it.sourceQuoteNumber == quote.quoteNumber }; showQuoteDetailDialog = false; showOrderDetailDialog = true }
         )
+    }
+    editSavedNumber?.let { number ->
+        val requestId = uiState.quotesByRequest.entries.firstOrNull { it.value.quoteNumber == number }?.key
+        SavedQuoteEditor(viewModel, number, webRequests.firstOrNull { it.requestId == requestId },
+            onSaved = { savedNumber, action -> editSavedNumber = null; deliveryAction = action.name; deliveryNumber = savedNumber },
+            onDismiss = { if (!uiState.isSavingQuote) editSavedNumber = null })
     }
     deliveryNumber?.let { number ->
         QuoteDeliveryDialog(viewModel, number, QuoteDelivery.valueOf(deliveryAction),

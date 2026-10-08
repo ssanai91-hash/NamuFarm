@@ -178,7 +178,7 @@ internal fun SellingHome(
                                 Text(request.customerPhone, style = MaterialTheme.typography.bodySmall)
                                 Text("${requestDateLabel(request.createdAt)} · ${when (request.replyChannel) { "email" -> "메일 희망"; "both" -> "문자 + 메일 희망"; else -> "문자 희망" }}${if (request.formalQuoteRequested) " · 공식 견적서" else ""}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
-                            Text(if (quote == null) "견적 작성" else money(quote.totalPrice.toLong()), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                            Text(if (quote == null) "견적 작성" else money(quote.totalPrice.toLong() + state.quoteTax(quote.quoteNumber)), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
                             Icon(Icons.Outlined.ChevronRight, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
                         }
                     }
@@ -191,7 +191,7 @@ internal fun SellingHome(
                         state.quotesByRequest.entries.firstOrNull { it.value.quoteNumber == quote.quoteNumber }?.key?.let { Text("접수번호 $it", style = MaterialTheme.typography.labelMedium) }
                         Text(quote.customerPhone, fontWeight = FontWeight.Bold)
                         Text(com.example.namufarm.domain.order.OrderSummaryCodec.parseStrict(quote.itemSummary).joinToString(" · ") { "${it.speciesName} ${it.orderQty}주" })
-                        Text("${quote.totalQty}주 · ${money(quote.totalPrice.toLong())} · ${if (quote.sentAt > 0) "발송 완료" else "작성 중"}")
+                        Text("${quote.totalQty}주 · ${money(quote.totalPrice.toLong() + state.quoteTax(quote.quoteNumber))} · ${if (quote.sentAt > 0) "발송 완료" else "작성 중"}")
                     }
                 }
             }
@@ -257,3 +257,7 @@ internal fun requestDateLabel(value: String): String = runCatching {
     val date = source.parse(value.take(19)) ?: error("date")
     java.text.SimpleDateFormat("MM.dd HH:mm", java.util.Locale.KOREA).apply { timeZone = java.util.TimeZone.getTimeZone("Asia/Seoul") }.format(date)
 }.getOrDefault(value.take(16).replace('T', ' '))
+
+internal fun ManagementUiState.quoteTax(number: String): Long = quoteDocuments.firstOrNull { it.quoteNumber == number }?.let {
+    com.example.namufarm.quotation.QuoteDocument.read(it.snapshotJson).taxAmount
+} ?: 0L

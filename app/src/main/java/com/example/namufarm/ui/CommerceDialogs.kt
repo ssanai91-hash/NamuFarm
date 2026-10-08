@@ -190,12 +190,12 @@ private fun HistoryCard(phone: String, date: String, summary: String, amount: In
 }
 
 @Composable
-internal fun QuoteDetailsDialog(quote: QuoteEntity, confirming: Boolean, snackbar: SnackbarHostState, onSms: () -> Unit, onConfirm: () -> Unit, onDelete: () -> Unit, onDismiss: () -> Unit, onDocument: () -> Unit = {}, sentAction: @Composable () -> Unit = {}, ordered: Boolean = false, onOrder: () -> Unit = {}, onEmail: () -> Unit = {}) {
+internal fun QuoteDetailsDialog(quote: QuoteEntity, confirming: Boolean, snackbar: SnackbarHostState, onSms: () -> Unit, onConfirm: () -> Unit, onDelete: () -> Unit, onDismiss: () -> Unit, onDocument: () -> Unit = {}, sentAction: @Composable () -> Unit = {}, ordered: Boolean = false, onOrder: () -> Unit = {}, onEmail: () -> Unit = {}, taxAmount: Long = 0) {
     var confirm by remember { mutableStateOf(false) }
     if (confirm) AlertDialog(
         onDismissRequest = { confirm = false },
         title = { Text("실제 입금을 확인하셨나요?") },
-        text = { Text("입금 내역과 최종 견적 금액을 확인한 뒤 등록해주세요. 입금 확인 시 오늘 주문이 증가하고 발송한 견적 기록은 유지됩니다.") },
+        text = { Text("최종 견적 ${money(quote.totalPrice.toLong() + taxAmount)}의 실제 입금을 확인해주세요. 입금 확인 시 오늘 주문이 증가하고 발송한 견적 기록은 유지됩니다.") },
         confirmButton = { Button(onClick = { confirm = false; onConfirm() }) { Text("입금 완료 · 주문 등록") } },
         dismissButton = { TextButton(onClick = { confirm = false }) { Text("다시 확인") } }
     )
@@ -211,7 +211,7 @@ internal fun QuoteDetailsDialog(quote: QuoteEntity, confirming: Boolean, snackba
             TextButton(onClick = onDelete, enabled = !confirming && !ordered && quote.sentAt == 0L, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) { Text("견적 삭제") }
         }
     }) {
-        CommerceDetailBody(quote.customerPhone, "", quote.quoteNumber, quote.itemSummary, quote.totalQty, quote.totalPrice, quote.isPrepaid, quote.shippingFee)
+        CommerceDetailBody(quote.customerPhone, "", quote.quoteNumber, quote.itemSummary, quote.totalQty, quote.totalPrice, quote.isPrepaid, quote.shippingFee, taxAmount = taxAmount)
     }
 }
 
@@ -238,13 +238,13 @@ internal fun OrderDetailsDialog(order: OrderEntity, snackbar: SnackbarHostState,
             colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
         ) { Text(if (order.status == "주문취소") "취소된 주문입니다" else "주문취소") }
     }) {
-        CommerceDetailBody(order.customerPhone, order.receiverName.ifBlank { "주문자 미입력" }, order.orderNumber, order.itemSummary, order.totalQty, order.totalPrice, order.isPrepaid, order.shippingFee, order.status)
+        CommerceDetailBody(order.customerPhone, order.receiverName.ifBlank { "주문자 미입력" }, order.orderNumber, order.itemSummary, order.totalQty, order.totalPrice, order.isPrepaid, order.shippingFee, order.status, taxAmount = order.taxAmount)
     }
 }
 
 /** Shipping addresses intentionally belong only to the delivery editor. */
 @Composable
-internal fun CommerceDetailBody(phone: String, customer: String, number: String, summary: String, quantity: Int, amount: Int, prepaid: Boolean, fee: Int, status: String? = null) {
+internal fun CommerceDetailBody(phone: String, customer: String, number: String, summary: String, quantity: Int, amount: Int, prepaid: Boolean, fee: Int, status: String? = null, taxAmount: Long = 0) {
     LazyColumn(Modifier.testTag("commerce_detail"), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         item {
             Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surface) {
@@ -268,6 +268,6 @@ internal fun CommerceDetailBody(phone: String, customer: String, number: String,
                 }
             } else CommerceItemCard(item.species, buildSpecText(item.quality, item.age, item.size, item.plantType, " · "), item.qty, item.retailPrice, item.wholesalePrice, item.farmName, item.source)
         }
-        item { AmountSummary(amount.toLong(), quantity.toLong(), prepaid, fee) }
+        item { AmountSummary(amount.toLong() + taxAmount, quantity.toLong(), prepaid, fee, if (taxAmount > 0) "최종 합계 · 추가 세액 ${money(taxAmount)} 포함" else "합계") }
     }
 }

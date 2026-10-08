@@ -3,6 +3,8 @@ package com.example.namufarm.quotation
 import com.example.namufarm.BuildConfig
 import com.example.namufarm.data.WebQuoteItem
 import com.example.namufarm.data.WebQuoteRequestEntity
+import com.example.namufarm.data.QuoteEntity
+import com.example.namufarm.domain.order.OrderSummaryCodec
 import com.example.namufarm.domain.order.OrderAmounts
 import com.example.namufarm.domain.order.OrderLine
 import com.example.namufarm.domain.order.OrderLineSource
@@ -56,6 +58,12 @@ data class SellerQuoteDraft(
         return lines
     }
     companion object {
+        fun from(quote: QuoteEntity, recipient: QuoteRecipient, issuer: QuoteIssuer): SellerQuoteDraft {
+            val lines = OrderSummaryCodec.parseStrict(quote.itemSummary)
+            require(lines.all { it.source == OrderLineSource.MANUAL })
+            return SellerQuoteDraft(lines.map { SellerQuoteRow(it.speciesName, listOf(it.quality, it.age, it.size, it.plantType).filter(String::isNotBlank).joinToString(" / "), it.orderQty.toString(), it.retailPrice.toString()) },
+                quote.customerPhone, recipient, quote.isPrepaid, quote.shippingFee.toString(), QuoteIssueOptions(issuer))
+        }
         fun from(request: WebQuoteRequestEntity?, issuer: QuoteIssuer): SellerQuoteDraft = SellerQuoteDraft(
             rows = request?.let { Gson().fromJson(it.itemsJson, Array<WebQuoteItem>::class.java).map { row ->
                 SellerQuoteRow(row.species, row.specification, row.quantity.toString())

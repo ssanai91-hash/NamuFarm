@@ -154,7 +154,7 @@ class ManagementViewModel(
                     checkChosung(it.speciesName, it.chosung, activeChosung)
                 },
                 allQuotes = repository.getAllQuotes(), quotesByRequest = repository.quotesByRequest(), todayQuotes = quotes,
-                todayOrders = orders, allOrders=repository.getAllOrders(),
+                todayOrders = orders, allOrders=repository.getAllOrders(), quoteDocuments = repository.getQuoteDocuments(),
                 selectedFarm = farms.find { it.farmId == current.selectedFarm?.farmId },
                 selectedSpecies = allSpecies.find { it.speciesId == current.selectedSpecies?.speciesId }
             )
@@ -394,7 +394,7 @@ class ManagementViewModel(
         quote
     }
     fun saveManualQuote(lines: List<OrderLine>, phone: String, recipient: com.example.namufarm.quotation.QuoteRecipient,
-                        prepaid: Boolean, fee: Int, issueOptions: com.example.namufarm.quotation.QuoteIssueOptions? = null, onSaved: (QuoteEntity) -> Unit) {
+                        prepaid: Boolean, fee: Int, issueOptions: com.example.namufarm.quotation.QuoteIssueOptions? = null, existingQuoteNumber: String? = null, onSaved: (QuoteEntity) -> Unit) {
         if (!quoteSaveInProgress.compareAndSet(false, true)) return
         _uiState.update { it.copy(isSavingQuote = true) }
         launchOperation {
@@ -404,10 +404,10 @@ class ManagementViewModel(
                 val summary = OrderSummaryCodec.encode(lines)
                 val amounts = OrderAmounts.calculate(lines, prepaid, fee)
                 val date = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.KOREA).apply { timeZone = java.util.TimeZone.getTimeZone("Asia/Seoul") }.format(java.util.Date())
-                val number = "QUOTE_${UUID.randomUUID()}"
+                val number = existingQuoteNumber ?: "QUOTE_${UUID.randomUUID()}"
                 val quote = QuoteEntity(quoteNumber = number, saveDate = date, customerPhone = phone.replace(Regex("[\\s()-]"), ""),
                     totalQty = amounts.quantity, totalPrice = amounts.price, itemSummary = summary, isPrepaid = prepaid, shippingFee = fee)
-                repository.insertQuoteWithContact(quote, recipient.checked(), issueOptions)
+                repository.insertQuoteWithContact(quote, recipient.checked(), issueOptions, replaceDraft = existingQuoteNumber != null)
                 refreshLocalState()
                 val saved = repository.getSavedQuote(number) ?: error("저장한 견적을 확인해주세요.")
                 withContext(Dispatchers.Main) { onSaved(saved) }

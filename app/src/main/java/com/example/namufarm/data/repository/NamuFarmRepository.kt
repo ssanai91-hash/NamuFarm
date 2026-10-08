@@ -28,6 +28,7 @@ import com.example.namufarm.data.remote.JusoItem
 import com.example.namufarm.data.remote.SheetOrderItemDto
 import com.example.namufarm.domain.order.OrderSummaryCodec
 import com.google.gson.Gson
+import com.example.namufarm.domain.order.OrderLineSource
 import com.example.namufarm.domain.order.OrderAmounts
 import kotlinx.coroutines.CancellationException
 
@@ -151,9 +152,22 @@ class NamuFarmRepository(
         }
         local.insertQuote(quote)
     }
-    suspend fun insertQuoteWithContact(quote: QuoteEntity, recipient: com.example.namufarm.quotation.QuoteRecipient, options: com.example.namufarm.quotation.QuoteIssueOptions? = null) = local.transaction {
-        this@NamuFarmRepository.insertQuote(quote)
-        insertQuoteContact(com.example.namufarm.data.QuoteContactEntity(quote.quoteNumber, Gson().toJson(recipient.checked())))
+    suspend fun insertQuoteWithContact(quote: QuoteEntity, recipient: com.example.namufarm.quotation.QuoteRecipient, options: com.example.namufarm.quotation.QuoteIssueOptions? = null, replaceDraft: Boolean = false) = local.transaction {
+        val contact = com.example.namufarm.data.QuoteContactEntity(quote.quoteNumber, Gson().toJson(recipient.checked()))
+        if (replaceDraft) {
+            val previous = getQuoteByNumber(quote.quoteNumber) ?: error("수정할 견적을 찾을 수 없습니다.")
+            check(previous.sentAt == 0L && getQuoteDocument(quote.quoteNumber) == null && getAllOrders().none { it.sourceQuoteNumber == quote.quoteNumber }) { "이미 발송·발행·주문한 견적은 수정할 수 없습니다." }
+            check(this@NamuFarmRepository.getQuoteRecipient(quote.quoteNumber).sourceRequestId == recipient.sourceRequestId) { "원래 견적 요청을 유지해주세요." }
+            val lines = OrderSummaryCodec.parseStrict(quote.itemSummary)
+            check(lines.all { it.source == OrderLineSource.MANUAL } && OrderSummaryCodec.parseStrict(previous.itemSummary).all { it.source == OrderLineSource.MANUAL }) { "수기 견적만 수정할 수 있습니다." }
+            val amounts = OrderAmounts.calculate(lines, quote.isPrepaid, quote.shippingFee)
+            require(quote.totalQty == amounts.quantity && quote.totalPrice == amounts.price)
+            replaceQuote(quote.copy(quoteId = previous.quoteId, sentAt = 0))
+            replaceQuoteContact(contact)
+        } else {
+            this@NamuFarmRepository.insertQuote(quote)
+            insertQuoteContact(contact)
+        }
         if (options != null) {
             val document = com.example.namufarm.quotation.QuoteDocument.create(quote, recipient, options.issuer,
                 options.taxAmount(), options.validUntil, options.notes, options.account)
