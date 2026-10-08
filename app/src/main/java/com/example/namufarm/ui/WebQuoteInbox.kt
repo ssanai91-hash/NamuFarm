@@ -92,8 +92,12 @@ internal fun WebQuoteInboxDialog(
                         Text("나무팜 ${com.example.namufarm.BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
-                if(state.paired) item {
-                    TextButton(onClick={showSecurity=true},enabled=!state.busy) { Text("이전 자료 복원 (필요한 경우)") }
+                if(state.paired && state.deferredCount > 0) item {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("이전 자료 ${state.deferredCount}건 별도 보관", style = MaterialTheme.typography.titleSmall)
+                        Text("새 견적은 복원 없이 가져옵니다. 이전 자료가 필요할 때만 예전 백업을 선택해주세요.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        TextButton(onClick={showSecurity=true},enabled=!state.busy) { Text("이전 자료 열기 (선택)") }
+                    }
                 }
                 if (state.paired) item {
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -177,3 +181,4 @@ internal fun WebRequestCustomerActions(request: WebQuoteRequestEntity, customerP
         confirmButton = { TextButton(onClick = { confirm = false; onUsePhone(request.customerPhone) }) { Text("번호 변경") } },
         dismissButton = { TextButton(onClick = { confirm = false }) { Text("돌아가기") } })
 }
+

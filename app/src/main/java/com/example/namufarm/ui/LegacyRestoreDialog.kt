@@ -18,11 +18,11 @@ internal fun LegacyRestoreDialog(state: WebInboxState, onRestore: (Uri, CharArra
     val open = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) { onRestore(uri, password.toCharArray()); password = "" }
     }
-    NamuDialog("이전 자료 복원", "구버전에서 암호화한 자료가 있을 때만 사용", onDismiss, actions = {
+    NamuDialog("이전 자료 열기", "새 견적을 받는 데에는 필요하지 않아요", onDismiss, actions = {
         OutlinedButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) { Text("닫기") }
     }) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            Text("새 견적과 주문은 연결 후 바로 사용할 수 있습니다. 이전 버전의 자료를 열라는 안내가 나온 경우에만 당시 저장한 백업을 선택해주세요.")
+            Text("새 견적은 ‘요청 동기화’로 서버에서 바로 가져옵니다. 별도 보관한 이전 자료 ${state.deferredCount}건이 필요한 경우에만 당시 저장한 백업을 선택해주세요. 백업이 없어도 새 견적 작성에는 지장이 없습니다.")
             OutlinedTextField(password, { password = it }, label = { Text("이전 백업 비밀번호") },
                 visualTransformation = PasswordVisualTransformation(), singleLine = true, modifier = Modifier.fillMaxWidth())
             Button(onClick = { open.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) },
@@ -31,3 +31,4 @@ internal fun LegacyRestoreDialog(state: WebInboxState, onRestore: (Uri, CharArra
         }
     }
 }
+

@@ -17,9 +17,10 @@ import kotlinx.coroutines.sync.Mutex
         OrderEntity::class,
         PendingSyncEntity::class,
         WebQuoteRequestEntity::class,
+        DeferredWebRequestEntity::class,
         QuoteContactEntity::class, QuoteDocumentEntity::class, PrivacySyncEntity::class
     ],
-    version = 16, // 발송 확인 시각을 저장하고 입금 후에도 견적 원본 유지
+    version = 17, // 이전 암호문을 보존하면서 새 견적 동기화를 계속 진행
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -656,11 +657,17 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE quote_list ADD COLUMN sent_at INTEGER NOT NULL DEFAULT 0")
             }
         }
+        private val MIGRATION_16_17 = object : Migration(16, 17) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS deferred_web_request (requestId TEXT NOT NULL PRIMARY KEY, sequence INTEGER NOT NULL, createdAt TEXT NOT NULL, envelopeJson TEXT NOT NULL)")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_deferred_web_request_sequence ON deferred_web_request(sequence)")
+            }
+        }
         internal val ALL_MIGRATIONS = arrayOf(
             MIGRATION_1_7, MIGRATION_2_7, MIGRATION_3_7,
             MIGRATION_4_7, MIGRATION_5_7, MIGRATION_6_7,
             MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10,
-            MIGRATION_10_12, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16
+            MIGRATION_10_12, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17
         )
 
         fun getDatabase(context: Context): AppDatabase {

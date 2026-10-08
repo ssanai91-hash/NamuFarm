@@ -677,6 +677,7 @@ class NamuFarmRepository(
     }
 
     fun getWebRequests() = local.getWebRequests()
+    fun deferredWebRequestCount() = local.deferredWebRequestCount()
     suspend fun markWebRequestRead(id: String) = local.transaction { markWebRequestRead(id, System.currentTimeMillis()) }
 
     /** Immutable enquiries are independent of the legacy inventory outbox. Commit rows and cursor together. */
@@ -686,15 +687,36 @@ class NamuFarmRepository(
             val cursor = local.webRequestCursor()
             val response = api.request(url, mapOf("action" to "list_requests", "deviceToken" to deviceToken, "afterSequence" to cursor))
             val page = WebQuoteValidator.checkedPage(response, cursor, decrypt)
-            local.transaction {
-                insertWebRequests(page.rows)
+            val added = local.transaction {
+                val inserted = insertWebRequests(page.rows)
+                insertDeferredWebRequests(page.deferred)
                 page.expiredIds.forEach { purgeRequestCopies(it) }
                 advanceWebCursor(page.cursor)
+                inserted
             }
-            imported += page.rows.size
+            imported += added
             if (response.hasMore == false) return@serializedSync imported
         }
         imported // Bounded work; the next refresh resumes from the committed Room cursor.
+    }
+
+    /** Optional recovery uses saved envelopes; it never rewinds or skips the main inbox cursor. */
+    suspend fun restoreDeferredWebRequests(
+        decrypt: (com.example.namufarm.data.remote.WebQuoteRemote) -> com.example.namufarm.data.remote.WebQuoteRemote,
+        now: Long = System.currentTimeMillis()
+    ): Int = local.serializedSync {
+        var restored = 0
+        local.getDeferredWebRequests().forEach { saved ->
+            if (com.example.namufarm.privacy.PrivacyRetention.quoteTime(saved.createdAt) + com.example.namufarm.privacy.PrivacyRetention.QUOTE_MS <= now) {
+                local.transaction { purgeRequestCopies(saved.requestId) }
+            } else {
+                val outer = Gson().fromJson(saved.envelopeJson, com.example.namufarm.data.remote.WebQuoteRemote::class.java)
+                check(outer.requestId == saved.requestId && outer.sequence == saved.sequence && outer.createdAt == saved.createdAt)
+                val page = WebQuoteValidator.checkedPage(com.example.namufarm.data.remote.WebQuoteEnvelope(ok = true, requests = listOf(outer), hasMore = false), saved.sequence - 1, decrypt)
+                restored += local.transaction { insertWebRequests(page.rows) }
+            }
+        }
+        restored
     }
 
     suspend fun syncAll(): GeneralSyncResult = local.serializedSync {
@@ -782,3 +804,4 @@ class NamuFarmRepository(
 
 
 }
+
