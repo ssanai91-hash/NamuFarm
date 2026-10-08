@@ -255,7 +255,9 @@ function submitIndexedQuote_(body,stored) {
     const row=[v[QI.id],0,v[QI.created],...quoteCustomerCells_(expired?{}:stored),expired?'보관종료':'신규',expired?'STOPPED':'PENDING',v[QI.hash],0,v[QI.created],'',JSON.stringify(expired?{expired:true}:stored),v[QI.receipt],v[QI.seoul]];
     quoteWriteVerified_(sheet,slot,row);record=quoteRecord_(entry,cache,false);
   }
-  quotePublish_(entry,entries,record);quoteRefreshSummaryBestEffort_(entry,entries);
+  // Derived monthly totals are rebuilt by maintainMonthlyQuoteStorage.
+  // A customer only waits for the verified, recoverable receipt commit.
+  quotePublish_(entry,entries,record);
   rateCache.put(cacheKey,JSON.stringify({count:bucket.count+1,until:bucket.until}),Math.max(1,Math.ceil((bucket.until-now)/1000)));
   return Object.assign(receiptDetails_(record.row),{duplicate:false});
 }

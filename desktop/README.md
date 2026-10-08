@@ -1,4 +1,4 @@
-# 나무팜 PC 판매관리 0.4
+# 나무팜 PC 판매관리 0.4.1
 
 Windows에서 견적 접수·작성, 구매 확정, 입금·배송 확인, 로젠 송장번호, 매출·이익을 관리합니다. Google Sheets API v5와 기기 인증을 사용합니다. 별도 보안키·JSON 백업·새 비밀번호 설정이 필요 없습니다.
 
@@ -24,10 +24,10 @@ Windows 계정이나 PC를 바꾸면 새로 기기 인증하고 서버에 동기
 운영 API는 기본 입력되어 있습니다:
 
 ```
-https://script.google.com/macros/s/AKfycbw8uqBWveIhqmXielALjSLnY1yDenKAwl070FT6Lsxsj7Xiod1C5JSBDZGfQtlrl6A-CQ/exec
+https://script.google.com/macros/s/AKfycbzY7JKzXYmS9APLNFDt15k8dv09zb4EXKFHOOv_T1vpFmkr6TLwbqGznGLgpd2cIVgD/exec
 ```
 
-현재 서버는 독립형 `Code.gs + SecureCommerce.gs + MonthlyStorage.gs` 배포입니다. 이 버전을 설치하기 전에 서버를 API v5로 갱신해야 합니다. 기존 운영 시트는 재생성하지 않습니다. 월별·일별 요청 시트는 서버가 관리하고 PC는 통합 조회합니다.
+현재 서버는 복구된 비공개 관리 시트에 연결한 API v5입니다. `Code.gs + SecureCommerce.gs + MonthlyStorage.gs + RecoverySetup.gs` 소스를 사용합니다. 삭제된 서버를 사용하던 PC는 최초 한 번 새 연결 코드가 필요하며 초안과 미전송 내역은 유지합니다. 월별·일별 요청 시트는 서버가 관리하고 PC는 통합 조회합니다. 자세한 운영 정보는 `docs/GOOGLE_SERVER_RECOVERY_20261009.md`를 확인합니다.
 
 ## 업무 화면
 
@@ -116,3 +116,4 @@ QT_QPA_PLATFORM=offscreen python -m namufarm_desktop --self-check
 실제 Apps Script 소스를 메모리 시트 fixture에서 실행하며 테스트 고객·키만 사용합니다. 운영 시트에 테스트 주문을 넣지 않습니다. GitHub CI는 Linux 테스트 후 Windows에서도 검사하고 실행 파일을 만들며 패키지 시작을 확인합니다.
 
 설계 참고: [카페24 주문·배송 관리](https://www.cafe24.com/commerce/manage/order.html)의 상태별 업무·일괄 송장 입력, [로젠 공식 조회](https://www.ilogen.com/web/personal/tkSearch?t=1)의 11자리 송장 안내. 화면과 코드는 나무팜 업무에 맞게 별도로 작성했습니다.
+

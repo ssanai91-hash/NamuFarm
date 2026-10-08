@@ -21,7 +21,7 @@ function fixture({configure=true,now=Date.now(),monthly=false}={}) {
  class FixtureDate extends Date { constructor(...args){super(...(args.length?args:[clock]));} static now(){return clock;} }
  function makeBook(id,name) {
   const sheets=new Map();
-  const result={id,name,sheets,timeZone:'',getId:()=>id,getName:()=>name,getSheets:()=>[...sheets.values()],getSheetByName:n=>sheets.get(n)||null,getSheetById:n=>[...sheets.values()].find(s=>s.getSheetId()===n)||null,setSpreadsheetTimeZone(value){result.timeZone=value;return this},insertSheet(n){
+  const result={id,name,sheets,timeZone:'',getId:()=>id,getUrl:()=>`https://docs.google.com/spreadsheets/d/${id}/edit`,getName:()=>name,getSheets:()=>[...sheets.values()],getSheetByName:n=>sheets.get(n)||null,getSheetById:n=>[...sheets.values()].find(s=>s.getSheetId()===n)||null,setSpreadsheetTimeZone(value){result.timeZone=value;return this},insertSheet(n){
    if(sheets.has(n))throw Error('duplicate sheet name');
    const cells=[],sheetId=nextSheet++;
    const value={cells,maxRows:1000,getMaxRows:()=>value.maxRows,insertRowsAfter(after,count){assert.ok(after<=value.maxRows);value.maxRows+=count;return this},getName:()=>n,getParent:()=>result,getSheetId:()=>sheetId,getLastRow:()=>{let i=cells.length;while(i>0&&(!cells[i-1]||cells[i-1].every(v=>v==='')))i--;return i},getRange(r,c,count=1,width=1){if(typeof r==='number')assert.ok(r+count-1<=value.maxRows,'range exceeds sheet grid');return{
@@ -55,7 +55,7 @@ function fixture({configure=true,now=Date.now(),monthly=false}={}) {
  if(url.endsWith('/api/internal/encrypt')) {const request=context.validateRequest_({...payload.request,website:''});return{getResponseCode:()=>200,getContentText:()=>JSON.stringify({ok:true,encryptedRequest:seal(request,'quote',request.requestId),fingerprint:crypto.createHmac('sha256',properties.WEB_SECRET).update(JSON.stringify(request)).digest('hex')})}}
  return{getResponseCode:()=>200,getContentText:()=> '{}'}}}
  });
- for(const file of ['Code.gs','SecureCommerce.gs','MonthlyStorage.gs'])vm.runInContext(fs.readFileSync(require('node:path').join(__dirname,'..',file),'utf8'),context);
+ for(const file of ['Code.gs','SecureCommerce.gs','MonthlyStorage.gs','RecoverySetup.gs'])vm.runInContext(fs.readFileSync(require('node:path').join(__dirname,'..',file),'utf8'),context);
  vm.runInContext('setupQuoteRequests()',context);
  if(configure)context.configurePrivacy_({publicKey});
  if(monthly){context.setupMonthlyQuoteStorage();context.enableMonthlyQuoteStorage()}
@@ -72,3 +72,4 @@ function fixture({configure=true,now=Date.now(),monthly=false}={}) {
  failNextWrite:(predicate,{after=false}={})=>writeFailure={predicate,after},failCreate:({after=false}={})=>createFailure={after},failLock:()=>lockFailure=true,onNextWrite:hook=>writeHook=hook};
 }
 module.exports={fixture,seal,open,publicKey,keyId,pair};
+

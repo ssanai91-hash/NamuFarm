@@ -237,7 +237,7 @@ test('migrated request disposal clears both copies before publishing; source era
 test('notification failure does not cancel monthly receipt; retry stays on the correct UUID',()=>{
  const f=create();f.properties.FIREBASE_PROJECT_ID='test-project';f.properties.DEVICES=JSON.stringify({device:{fcmToken:'token'}});f.failPush();
  successful(f);assert.equal(row(f)[10],'PENDING');assert.equal(successful(f).duplicate,true);assert.equal(index(f).length,1);
- assert.ok(f.sent.length>0);const payload=JSON.stringify(f.sent);assert.ok(!payload.includes('김나무'));assert.ok(!payload.includes('01012345678'));
+ assert.equal(f.sent.length,0);f.context.dispatchQuoteNotifications();assert.ok(f.sent.length>0);const payload=JSON.stringify(f.sent);assert.ok(!payload.includes('김나무'));assert.ok(!payload.includes('01012345678'));
 });
 
 test('monthly audit makes no writes and detects missing, orphan or duplicate records',()=>{
@@ -289,12 +289,13 @@ test('purchase closes a monthly quote while leaving encrypted sales in their exi
 test('derived summary failure cannot undo a receipt and maintenance rebuilds totals',()=>{
  const f=create();f.failNextWrite(op=>op.sheetName==='월간현황'&&op.row>1);successful(f);
  const book=f.books.get(months(f)[0][1]);assert.equal(book.getSheetByName('월간현황').cells.length,1);
- f.context.maintainMonthlyQuoteStorage();assert.equal(book.getSheetByName('월간현황').cells[1][1],1);
+ assert.throws(()=>f.context.maintainMonthlyQuoteStorage());f.context.maintainMonthlyQuoteStorage();assert.equal(book.getSheetByName('월간현황').cells[1][1],1);
 });
 
 test('successful monthly notifications update only the matching record, independently of sync sequence',()=>{
  const f=create();successful(f);const firstSequence=entry(f)[8],other=another(f);
  f.properties.FIREBASE_PROJECT_ID='test-project';f.properties.DEVICES=JSON.stringify({device:{fcmToken:'token'}});
- assert.equal(f.submit(other).ok,true);assert.equal(row(f,other.requestId)[10],'SENT');assert.equal(row(f)[10],'PENDING');
+ assert.equal(f.submit(other).ok,true);assert.equal(row(f,other.requestId)[10],'PENDING');assert.equal(row(f)[10],'PENDING');assert.equal(f.sent.length,0);
  f.context.dispatchQuoteNotifications();assert.equal(row(f)[10],'SENT');assert.equal(entry(f)[8],firstSequence);
 });
+

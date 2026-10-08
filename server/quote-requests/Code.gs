@@ -19,8 +19,8 @@ function doPost(e) {
       const secret = PropertiesService.getScriptProperties().getProperty('WEB_SECRET');
       assert_(secret && secret.length >= 32 && equal_(body.webSecret, secret), 'UNAUTHORIZED');
       value = submitRequest_(body);
-      // Receipt is committed first. Push failure must never roll it back.
-      try { dispatchNotifications_(value.requestId); } catch (_) { /* Minute trigger retries the durable outbox. */ }
+      // The durable PENDING outbox is delivered by the existing minute trigger.
+      // Return the committed receipt without waiting for FCM or another lock.
     } else if (body.action === 'pair_device') value = pairDevice_(body);
     else {
       const device = authenticateDevice_(body.deviceToken);

@@ -43,14 +43,14 @@ android {
 
     defaultConfig {
         listOf("WEB_REQUEST_SCRIPT_URL", "FIREBASE_APPLICATION_ID", "FIREBASE_API_KEY", "FIREBASE_PROJECT_ID", "FIREBASE_SENDER_ID").forEach { name ->
-            buildConfigField("String", name, "\"${localProperty(name, if(name=="WEB_REQUEST_SCRIPT_URL") "https://script.google.com/macros/s/AKfycbw8uqBWveIhqmXielALjSLnY1yDenKAwl070FT6Lsxsj7Xiod1C5JSBDZGfQtlrl6A-CQ/exec" else "")}\"")
+            buildConfigField("String", name, "\"${localProperty(name, if(name=="WEB_REQUEST_SCRIPT_URL") "https://script.google.com/macros/s/AKfycbzY7JKzXYmS9APLNFDt15k8dv09zb4EXKFHOOv_T1vpFmkr6TLwbqGznGLgpd2cIVgD/exec" else "")}\"")
         }
 
         applicationId = "com.example.namufarm"
         minSdk = 24
         targetSdk = 36
-        versionCode = 4
-        versionName = "1.1.1"
+        versionCode = 5
+        versionName = "1.1.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -147,4 +147,5 @@ val validateSellerSigning by tasks.registering {
     }
 }
 tasks.matching { it.name == "preReleaseBuild" }.configureEach { dependsOn(validateSellerSigning) }
+
 

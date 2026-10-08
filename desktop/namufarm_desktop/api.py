@@ -7,7 +7,8 @@ import urllib.request
 from .crypto import canonical
 from .errors import ConflictError, NetworkError, UserError
 
-DEFAULT_URL = "https://script.google.com/macros/s/AKfycbw8uqBWveIhqmXielALjSLnY1yDenKAwl070FT6Lsxsj7Xiod1C5JSBDZGfQtlrl6A-CQ/exec"
+RETIRED_URL = "https://script.google.com/macros/s/AKfycbw8uqBWveIhqmXielALjSLnY1yDenKAwl070FT6Lsxsj7Xiod1C5JSBDZGfQtlrl6A-CQ/exec"
+DEFAULT_URL = "https://script.google.com/macros/s/AKfycbzY7JKzXYmS9APLNFDt15k8dv09zb4EXKFHOOv_T1vpFmkr6TLwbqGznGLgpd2cIVgD/exec"
 MAX_RESPONSE = 8 * 1024 * 1024
 # Allow the server's 15-second lock wait plus connection/startup overhead.
 # urllib applies this to blocking I/O, not the entire redirect/request chain.
@@ -89,3 +90,4 @@ class ScriptApi:
         if not re.fullmatch(r"[a-f0-9]{64}", self.token):
             raise UserError("PC 기기 연결을 먼저 완료해주세요.")
         return self._send({"action": action, "deviceToken": self.token, **fields})
+
