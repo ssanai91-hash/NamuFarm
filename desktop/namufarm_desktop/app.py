@@ -703,6 +703,8 @@ def main():
     if "--self-check" in sys.argv:
         app.processEvents()
         require(window.stack.count() == 7, "PC 화면 초기화에 실패했습니다.")
+        from .shipping_excel import check_excel_runtime
+        check_excel_runtime()
         window.close()
         return 0
     if "--demo" in sys.argv:

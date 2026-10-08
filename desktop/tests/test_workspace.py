@@ -133,6 +133,18 @@ class WorkspaceServiceTest(unittest.TestCase):
         self.assertEqual([], self.manager.view()['drafts'])
         self.assertEqual([], self.manager.vault.preference('drafts'))
 
+    def test_shipping_export_preferences_are_encrypted_and_do_not_advance_sale(self):
+        row = self.manager.confirm_draft(draft_for_test())['sales'][0]
+        before = self.manager.view()['sales']
+        sender = {'name': '출고 설정 테스트', 'address': '테스트 출고지', 'phone': '01012345678', 'mobile': ''}
+        number = row['metadata']['orderNumber']
+        self.manager.remember_shipping_export(sender, {number: {}})
+        settings = self.manager.shipping_export_preferences()
+        self.assertEqual(sender, settings['sender'])
+        self.assertIn(number, settings['history'])
+        self.assertEqual(before, self.manager.view()['sales'])
+        self.assertNotIn(sender['name'].encode(), self.manager.vault.path.read_bytes())
+
     def test_request_to_sale_closes_request_and_preserves_document(self):
         self.bridge.send(control='submit')
         view = self.manager.sync()

@@ -144,6 +144,8 @@ def shipping_problem(order):
         return "입금 확인 필요"
     if not order.get("receiverName", "").strip():
         return "수령인 입력"
+    if not re.fullmatch(r"0[0-9]{8,10}", order.get("customerPhone", "")):
+        return "연락처 확인"
     if not re.fullmatch(r"[0-9]{5}", order.get("zipNo", "")):
         return "우편번호 확인"
     if not order.get("roadAddress", "").strip():
@@ -183,9 +185,14 @@ def parse_tracking_csv(raw, rows):
             require(False, "UTF-8 또는 한글 CSV 파일을 선택해주세요.")
     reader = csv.DictReader(io.StringIO(text, newline=""))
     require(reader.fieldnames and len(set(reader.fieldnames)) == len(reader.fieldnames) and {"주문번호", "송장번호"} <= set(reader.fieldnames), "CSV 첫 줄에 주문번호, 송장번호 열이 필요합니다.")
+    return parse_tracking_records(reader, rows)
+
+
+def parse_tracking_records(records, rows):
+    """Shared, all-or-nothing validation for CSV and legacy Excel imports."""
     known = {r["metadata"]["orderNumber"]: r for r in rows}
     assignments, used = {}, {}
-    for index, record in enumerate(reader, 2):
+    for index, record in enumerate(records, 2):
         require(index <= 501, "한 번에 최대 500건을 가져오세요.")
         number, value = (record.get("주문번호") or "").strip(), record.get("송장번호") or ""
         require(number in known and number not in assignments, f"{index}행: 주문번호가 없거나 중복되었습니다.")

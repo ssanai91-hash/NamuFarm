@@ -71,6 +71,20 @@ class Manager:
         self.vault.save_preference("drafts", [copy.deepcopy(draft), *drafts])
         return self.view()
 
+    def shipping_export_preferences(self):
+        return self.vault.preference("shipping_export", {"sender": {}, "history": {}})
+
+    def remember_shipping_export(self, sender, parcels):
+        """Called only after the XLS file is committed. Does not change sale state."""
+        from .shipping_excel import sender_settings
+        preferences = self.shipping_export_preferences()
+        clock = now_ms()
+        history = {k: v for k, v in preferences.get("history", {}).items()
+                   if v > clock - 30 * 86400000}
+        history.update({number: clock for number in parcels})
+        history = dict(sorted(history.items(), key=lambda p: p[1], reverse=True)[:2000])
+        self.vault.save_preference("shipping_export", {"sender": sender_settings(sender), "history": history})
+
     def delete_draft(self, identifier):
         require(valid_id(identifier))
         self.vault.save_preference("drafts", [d for d in self.view()["drafts"] if d["id"] != identifier])
@@ -131,7 +145,7 @@ class Manager:
             except ConflictError:
                 raise
             except UserError as error:
-                raise UserError(f"{done}건 저장 확인 후 중단했습니다. 전송 대기를 동기화한 뒤 같은 CSV로 재시도하세요. {error}") from None
+                raise UserError(f"{done}건 저장 확인 후 중단했습니다. 전송 대기를 동기화한 뒤 같은 파일로 재시도하세요. {error}") from None
             done += 1
         return view
 

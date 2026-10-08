@@ -4,19 +4,20 @@ import json
 from datetime import datetime
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QUrl
+from PySide6.QtCore import Qt, QUrl, QSaveFile, QIODevice
 from PySide6.QtGui import QColor, QDesktopServices, QFont, QKeySequence, QShortcut, QTextDocument, QPageSize
 from PySide6.QtPrintSupport import QPrinter, QPrintDialog
 from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDialog, QFileDialog, QFormLayout,
     QFrame, QGridLayout, QGroupBox, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QListWidget,
     QMessageBox, QPlainTextEdit, QPushButton, QScrollArea, QSplitter, QStackedWidget,
-    QTableWidgetItem, QTextBrowser, QVBoxLayout, QWidget)
+    QTableWidgetItem, QTextBrowser, QVBoxLayout, QWidget, QSpinBox)
 
 from .app import MainWindow, table, fill_table, money, timestamp
 from .commerce import (ISSUER, new_draft, draft_amounts, validate_draft, quote_html, quote_document_html, shipping_html,
-                       shipping_problem, shipping_csv, parse_tracking_csv, tracking_number)
+                       shipping_problem, parse_tracking_csv, tracking_number)
 from .domain import SEOUL, profit, require
 from .errors import UserError
+from .shipping_excel import shipping_xls, parse_tracking_xls, export_orders, UPLOAD_SHEET
 
 STYLE = """
 QWidget{font-family:'Malgun Gothic','NanumGothic',sans-serif;font-size:13px;color:#263e35;}
@@ -43,7 +44,7 @@ QPushButton:disabled{background:#ecefea;color:#9aa69d;border-color:#e1e6df;}
 QPushButton#primary{background:#286547;color:#fff;border-color:#286547;}
 QPushButton#primary:hover{background:#1b5036;} QPushButton#primary:disabled{background:#a3b7a7;border-color:#a3b7a7;color:#eef2ed;}
 QPushButton#danger{color:#ac5a40;}
-QLineEdit,QComboBox,QDateEdit,QDoubleSpinBox,QPlainTextEdit{background:#fff;border:1px solid #d5dfd6;border-radius:6px;padding:7px;selection-background-color:#d3e5d7;selection-color:#173b2e;}
+QLineEdit,QComboBox,QDateEdit,QDoubleSpinBox,QSpinBox,QPlainTextEdit{background:#fff;border:1px solid #d5dfd6;border-radius:6px;padding:7px;selection-background-color:#d3e5d7;selection-color:#173b2e;}
 QLineEdit:focus,QPlainTextEdit:focus{border:1px solid #4b805d;}
 QLineEdit:disabled,QComboBox:disabled,QPlainTextEdit:disabled{background:#f2f4f0;color:#829085;}
 QTableWidget{background:#fff;alternate-background-color:#fafbf8;border:1px solid #dfe7df;border-radius:8px;gridline-color:#edf1eb;selection-background-color:#e3efdf;selection-color:#183d2c;}
@@ -305,6 +306,108 @@ class QuoteDialog(QDialog):
             QMessageBox.warning(self, "견적 입력 확인", str(error))
 
 
+class ShippingExportDialog(QDialog):
+    def __init__(self, rows, saved_sender=None, parent=None):
+        super().__init__(parent)
+        self.rows = copy.deepcopy(export_orders(rows))
+        self.setWindowTitle("로젠 XLS · 출고자료 확인")
+        self.resize(1240, 740)
+        layout = QVBoxLayout(self)
+        layout.addWidget(label(f"입금확인 {len(rows)}건 · 로젠 엑셀 저장", "sectionTitle"))
+        layout.addWidget(label("첨부 양식의 A~X열과 빈 열을 유지합니다. 첫 줄은 제목, 실제 주문은 2행부터입니다.", "muted", True))
+        sender_group = QGroupBox("발송인 · 실제 출고지를 확인하세요")
+        form = QGridLayout(sender_group)
+        defaults = {"name": ISSUER["businessName"], "address": ISSUER["address"], "phone": ISSUER["phone"], "mobile": ""}
+        defaults.update(saved_sender or {})
+        form.setColumnStretch(1, 3)
+        form.setColumnStretch(3, 2)
+        self.sender_inputs = {}
+        for index, (key, title) in enumerate((("name", "발송인명"), ("phone", "전화"), ("address", "주소"), ("mobile", "휴대폰(선택)"))):
+            widget = QLineEdit(defaults[key])
+            widget.setMaxLength(300 if key == "address" else 100 if key == "name" else 20)
+            self.sender_inputs[key] = widget
+            form.addWidget(label(title), index // 2, index % 2 * 2)
+            form.addWidget(widget, index // 2, index % 2 * 2 + 1)
+        layout.addWidget(sender_group)
+        common = QHBoxLayout()
+        self.common_freight = QSpinBox()
+        self.common_freight.setRange(-1, 99999999)
+        self.common_freight.setValue(-1)
+        self.common_freight.setSpecialValueText("직접 입력")
+        self.common_freight.setSuffix(" 원")
+        self.common_code = QLineEdit()
+        self.common_code.setMaxLength(3)
+        self.common_code.setPlaceholderText("예: 1 또는 010")
+        self.common_jeju = QLineEdit()
+        self.common_jeju.setMaxLength(3)
+        self.common_jeju.setPlaceholderText("미사용 시 빈칸")
+        common.addWidget(label("공통 운임"))
+        common.addWidget(self.common_freight)
+        common.addWidget(label("선착불 코드"))
+        common.addWidget(self.common_code)
+        common.addWidget(label("제주 코드"))
+        common.addWidget(self.common_jeju)
+        common.addWidget(button("입력값 전체 적용", self.apply_common))
+        layout.addLayout(common)
+        layout.addWidget(label("운임은 주문별 계약 운임 합계입니다. 고객에게 받은 배송비와 구분해 입력하세요. 선착불 코드는 로젠 설정을 확인해 입력합니다.", "muted", True))
+        self.parcel_table = table(["주문번호", "수령인", "묘목 수량", "고객 배송비", "박스 수", "계약 운임", "선착불 코드", "제주 코드"])
+        fill_table(self.parcel_table, [(r["metadata"]["orderNumber"], r["private"]["order"]["receiverName"],
+            f"{r['metadata']['totalQty']}주", "선불" if r["private"]["order"]["isPrepaid"] else "착불", "", "", "", "") for r in rows])
+        self.parcel_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+        for index, width in enumerate((270, 110, 90, 100, 85, 125, 120, 120)):
+            self.parcel_table.setColumnWidth(index, width)
+        self.parcel_inputs = []
+        for y in range(len(rows)):
+            self.parcel_table.setRowHeight(y, 56)
+            boxes, freight = QSpinBox(), QSpinBox()
+            boxes.setRange(1, 999)
+            boxes.setValue(1)
+            freight.setRange(-1, 99999999)
+            freight.setValue(-1)
+            freight.setSpecialValueText("입력 필요")
+            fare, jeju = QLineEdit(), QLineEdit()
+            fare.setMaxLength(3)
+            jeju.setMaxLength(3)
+            fare.setPlaceholderText("입력 필요")
+            for x, widget in enumerate((boxes, freight, fare, jeju), 4):
+                self.parcel_table.setCellWidget(y, x, widget)
+            self.parcel_inputs.append((boxes, freight, fare, jeju))
+        layout.addWidget(self.parcel_table, 1)
+        layout.addWidget(label("박스 수는 묘목 수량과 별도입니다. 여러 박스의 송장은 로젠에서 각각 확인하세요. 나무팜에는 현재 주문별 대표 송장 1개를 등록합니다.", "muted", True))
+        self.error_label = label("", "notice", True)
+        self.error_label.hide()
+        layout.addWidget(self.error_label)
+        actions = QHBoxLayout()
+        actions.addWidget(label("저장한 XLS를 로젠에 불러온 후 공식 송장을 출력합니다.", "muted", True), 1)
+        actions.addWidget(button("취소", self.reject))
+        actions.addWidget(button("확인 후 XLS 저장", self.validate_export, True))
+        layout.addLayout(actions)
+
+    def apply_common(self):
+        for _, freight, fare, jeju in self.parcel_inputs:
+            if self.common_freight.value() >= 0:
+                freight.setValue(self.common_freight.value())
+            if self.common_code.text().strip():
+                fare.setText(self.common_code.text().strip())
+            jeju.setText(self.common_jeju.text().strip())
+
+    def collect(self):
+        sender = {k: widget.text().strip() for k, widget in self.sender_inputs.items()}
+        parcels = {row["metadata"]["orderNumber"]: {"boxes": widgets[0].value(), "freight": widgets[1].value(),
+                    "fareCode": widgets[2].text().strip(), "jejuCode": widgets[3].text().strip()}
+                   for row, widgets in zip(self.rows, self.parcel_inputs)}
+        return sender, parcels
+
+    def validate_export(self):
+        try:
+            self.sender, self.parcels = self.collect()
+            self.xls_data = shipping_xls(self.rows, self.parcels, self.sender)
+            self.accept()
+        except (UserError, UnicodeError) as error:
+            self.error_label.setText(str(error))
+            self.error_label.show()
+
+
 class SellerWindow(MainWindow):
     PAGES = (("오늘의 업무", "OVERVIEW"), ("온라인 견적 요청", "INBOX"), ("견적 작업대", "QUOTATIONS"),
              ("판매 · 고객 관리", "ORDERS"), ("배송 · 로젠 송장", "FULFILLMENT"), ("매출 · 이익 분석", "REPORTS"), ("연결 · 설정", "SETTINGS"))
@@ -350,7 +453,7 @@ class SellerWindow(MainWindow):
         side.addWidget(label("  나무를 파는 일에\n  더 집중할 수 있도록.", "navFoot"))
         side.addSpacing(16)
         side.addWidget(self.lock_button)
-        side.addWidget(label("  NAMUFARM DESKTOP  /  0.2", "navFoot"))
+        side.addWidget(label("  NAMUFARM DESKTOP  /  0.3", "navFoot"))
         outer.addWidget(sidebar)
         content = QWidget()
         content_layout = QVBoxLayout(content)
@@ -489,7 +592,7 @@ class SellerWindow(MainWindow):
         page = QWidget()
         layout = QVBoxLayout(page)
         layout.addWidget(label("출고 준비부터 송장번호까지 한 번에", "sectionTitle"))
-        layout.addWidget(label("① 출고 CSV를 엑셀에서 열어 로젠 양식에 맞춰 저장  →  ② 로젠에서 발급·공식 송장 출력  →  ③ 송장번호 가져오기", "muted", True))
+        layout.addWidget(label("① 입금확인 주문 선택 · 로젠 XLS 저장  →  ② 로젠에 불러오기 · 송장 일괄 출력  →  ③ 송장번호 가져오기", "muted", True))
         bar = QHBoxLayout()
         self.shipping_search = QLineEdit()
         self.shipping_search.setPlaceholderText("주문번호 · 수령인 · 주소 · 송장번호 검색")
@@ -505,6 +608,11 @@ class SellerWindow(MainWindow):
         self.shipping_table.setSelectionMode(self.shipping_table.SelectionMode.ExtendedSelection)
         self.shipping_table.itemSelectionChanged.connect(self.select_shipping)
         layout.addWidget(self.shipping_table, 1)
+        selection = QHBoxLayout()
+        selection.addWidget(button("목록 전체 선택", self.shipping_table.selectAll))
+        selection.addWidget(button("선택 해제", self.shipping_table.clearSelection))
+        selection.addStretch()
+        layout.addLayout(selection)
         self.shipping_status = label("주문을 선택하세요. Ctrl 또는 Shift로 여러 주문을 선택할 수 있습니다.", "muted", True)
         layout.addWidget(self.shipping_status)
         panel, box = card("송장번호 등록 · 출력")
@@ -520,8 +628,8 @@ class SellerWindow(MainWindow):
         box.addLayout(line)
         box.addWidget(label("송장번호는 기존 암호화 배송 메모에 함께 저장되어 휴대폰 수정 후에도 유지됩니다.", "muted", True))
         actions = QHBoxLayout()
-        self.export_button = button("선택 주문 출고 CSV", self.export_shipping)
-        self.import_button = button("송장 CSV 가져오기", self.import_shipping)
+        self.export_button = button("선택 주문 로젠 XLS 저장", self.export_shipping, True)
+        self.import_button = button("송장 XLS / CSV 가져오기", self.import_shipping)
         self.print_button = button("송장번호 · 출고 확인서 출력", self.print_shipping)
         actions.addWidget(self.export_button)
         actions.addWidget(self.import_button)
@@ -529,7 +637,7 @@ class SellerWindow(MainWindow):
         actions.addWidget(self.print_button)
         box.addLayout(actions)
         layout.addWidget(panel)
-        layout.addWidget(label("택배 부착용 운송장은 로젠 프로그램에서 출력합니다. 직접 API 발급·인쇄는 로젠 계약·키 발급·실물 송장 검수 후 연결할 수 있습니다.", "muted", True))
+        layout.addWidget(label("택배 부착용 운송장은 로젠 프로그램에서 출력합니다. 나무팜은 첨부 로젠 양식의 XLS 파일로 주문을 전달합니다.", "muted", True))
         return page
 
     def navigate(self, index):
@@ -725,28 +833,63 @@ class SellerWindow(MainWindow):
         self.message.setText("송장번호를 운영 시트에 저장했습니다. 송장 등록만으로 배송완료 처리되지 않습니다.")
 
     def export_shipping(self):
+        if not self.manager or self.task or getattr(self, "demo_mode", False) or not self.allow_discard():
+            return
         try:
-            rows = self.selected_shipping()
+            numbers = [r["metadata"]["orderNumber"] for r in export_orders(self.selected_shipping())]
             require(not self.data["pending"], "전송 대기를 먼저 동기화해주세요.")
-            data = shipping_csv(rows)
-            if any(tracking_number(r["private"]["order"]) for r in rows) and QMessageBox.question(self, "재출고 확인", "송장번호가 이미 있는 주문이 포함되어 있습니다. 출고자료를 다시 내보낼까요?", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
+            self.run_job("출고 전 최신 입금·배송 상태 확인 중…", self.manager.sync,
+                         lambda view: self.prepare_shipping_export(view, numbers))
+        except UserError as error:
+            QMessageBox.warning(self, "출고자료 확인", str(error))
+
+    def prepare_shipping_export(self, view, numbers):
+        self.apply_view(view)
+        self.timer.stop()
+        try:
+            current = {r["metadata"]["orderNumber"]: r for r in self.data["sales"]}
+            require(all(n in current for n in numbers), "일부 주문이 삭제·만료되었습니다. 다시 선택해주세요.")
+            rows = export_orders([current[n] for n in numbers])
+            preferences = self.manager.shipping_export_preferences()
+            repeated = any(tracking_number(r["private"]["order"]) or r["metadata"]["orderNumber"] in preferences.get("history", {}) for r in rows)
+            if repeated and QMessageBox.question(self, "중복 출고 확인", "송장이 등록되었거나 이 PC에서 최근 내보낸 주문이 포함되어 있습니다. 로젠 접수 내역을 확인한 뒤 다시 내보낼까요?", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
                 return
-            path, _ = QFileDialog.getSaveFileName(self, "로젠 전달용 출고자료", "나무팜_출고자료.csv", "CSV (*.csv)")
-            if path:
-                Path(path).write_text(data, encoding="utf-8-sig", newline="")
-                self.message.setText(f"출고 {len(rows)}건을 내보냈습니다. 엑셀에서 전화번호·우편번호를 텍스트로 가져온 후 로젠 열 매핑과 운임을 확인하세요.")
+            dialog = ShippingExportDialog(rows, preferences.get("sender"), self)
+            if dialog.exec() != QDialog.DialogCode.Accepted:
+                return
+            name = datetime.now(SEOUL).strftime("나무팜_로젠출고_%Y%m%d_%H%M%S.xls")
+            path, _ = QFileDialog.getSaveFileName(self, "로젠 양식 XLS 저장", name, "Excel 97-2003 (*.xls)")
+            if not path:
+                return
+            if not Path(path).suffix:
+                path += ".xls"
+            require(Path(path).suffix.lower() == ".xls", "확장자는 .xls로 저장해주세요.")
+            target = QSaveFile(path)
+            require(target.open(QIODevice.OpenModeFlag.WriteOnly), "파일을 열지 못했습니다. 저장 위치와 Excel 사용 여부를 확인해주세요.")
+            if target.write(dialog.xls_data) != len(dialog.xls_data):
+                target.cancelWriting()
+                raise UserError("파일을 모두 저장하지 못했습니다. 저장 공간을 확인해주세요.")
+            require(target.commit(), "파일 저장을 완료하지 못했습니다. Excel에서 파일을 닫고 다시 저장해주세요.")
+            self.message.setText(f"{len(rows)}건 XLS 저장 완료 · 로젠에서 '{UPLOAD_SHEET}'의 2행부터 불러오세요. 송장 출력은 로젠에서 진행합니다.")
+            try:
+                self.manager.remember_shipping_export(dialog.sender, dialog.parcels)
+            except Exception:
+                QMessageBox.warning(self, "파일 저장 완료", "XLS 파일은 저장됐지만 이 PC의 내보내기 이력을 기록하지 못했습니다. 같은 주문을 다시 내보내지 않도록 로젠 접수 내역을 확인해주세요.")
         except (UserError, OSError) as error:
             QMessageBox.warning(self, "출고자료 확인", str(error))
+        finally:
+            self.timer.start()
 
     def import_shipping(self):
         if not self.manager or not self.allow_discard():
             return
-        path, _ = QFileDialog.getOpenFileName(self, "송장번호 CSV 가져오기", "", "CSV (*.csv)")
+        path, _ = QFileDialog.getOpenFileName(self, "송장번호 가져오기", "", "송장 파일 (*.xls *.csv)")
         if not path:
             return
         try:
             with Path(path).open("rb") as source:
-                assignments = parse_tracking_csv(source.read(2 * 1024 * 1024 + 1), self.data["sales"])
+                parser = parse_tracking_xls if Path(path).suffix.lower() == ".xls" else parse_tracking_csv
+                assignments = parser(source.read(2 * 1024 * 1024 + 1), self.data["sales"])
             dialog = QDialog(self)
             dialog.setWindowTitle("송장번호 가져오기 확인")
             dialog.resize(760, 480)
