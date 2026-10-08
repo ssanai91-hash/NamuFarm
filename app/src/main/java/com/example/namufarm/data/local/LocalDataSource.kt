@@ -61,11 +61,13 @@ class LocalDataSource(
             if(contact.quoteNumber !in bought) getQuoteDocument(contact.quoteNumber)?.let { deleteQuoteDocument(it.documentId) }
         }
         deleteWebRequest(id)
+        dao.deleteDeferredWebRequest(id)
     }
     suspend fun cleanupPrivacy(now: Long = System.currentTimeMillis()) = transaction {
         // Cursor lives separately, so disposal can never cause old requests to be downloaded again.
         advanceWebCursor(webRequestCursor())
         getWebRequests().filter { com.example.namufarm.privacy.PrivacyRetention.quoteTime(it.createdAt)+com.example.namufarm.privacy.PrivacyRetention.QUOTE_MS<=now }.forEach { purgeRequestCopies(it.requestId) }
+        getDeferredWebRequests().filter { com.example.namufarm.privacy.PrivacyRetention.quoteTime(it.createdAt)+com.example.namufarm.privacy.PrivacyRetention.QUOTE_MS<=now }.forEach { purgeRequestCopies(it.requestId) }
         val bought=getAllOrders().map { it.sourceQuoteNumber }.toSet()
         getAllQuotes().filter { it.quoteNumber !in bought && com.example.namufarm.privacy.PrivacyRetention.quoteTime(it.saveDate)+com.example.namufarm.privacy.PrivacyRetention.QUOTE_MS<=now }.forEach { q ->
             deleteQuote(q);getQuoteDocument(q.quoteNumber)?.let { deleteQuoteDocument(it.documentId) }
@@ -112,16 +114,36 @@ class LocalDataSource(
     }
 
     fun getWebRequests() = dao.getWebRequests().map { webRow(it, false) }
+    fun deferredWebRequestCount() = dao.deferredWebRequestCount()
+    fun getDeferredWebRequests() = dao.getDeferredWebRequests().map { it.copy(envelopeJson = reveal(it.envelopeJson)) }
+    fun insertDeferredWebRequests(requests: List<com.example.namufarm.data.DeferredWebRequestEntity>) {
+        requests.forEach { incoming ->
+            val normal = dao.getWebRequest(incoming.requestId)
+            if (normal != null) {
+                check(normal.sequence == incoming.sequence && normal.createdAt == incoming.createdAt)
+            } else {
+                check(dao.getWebRequestAtSequence(incoming.sequence) == null) { "요청 순번이 다른 자료와 겹칩니다." }
+                val existing = dao.getDeferredWebRequest(incoming.requestId)
+                if (existing == null) dao.insertDeferredWebRequest(incoming.copy(envelopeJson = protect(incoming.envelopeJson)))
+                else check(existing.copy(envelopeJson = reveal(existing.envelopeJson)) == incoming) { "이전 요청의 내용이 변경되었습니다." }
+            }
+        }
+    }
     fun webRequestCursor() = maxOf(dao.webRequestCursor(), dao.privacyCursor("web") ?: 0)
     fun markWebRequestRead(id: String, time: Long) = dao.markWebRequestRead(id, time)
-    fun insertWebRequests(requests: List<WebQuoteRequestEntity>) {
+    fun insertWebRequests(requests: List<WebQuoteRequestEntity>): Int {
+        var inserted = 0
         requests.forEach { incoming ->
+            dao.getDeferredWebRequestAtSequence(incoming.sequence)?.let { check(it.requestId == incoming.requestId) { "요청 순번이 다른 자료와 겹칩니다." } }
+            dao.getDeferredWebRequest(incoming.requestId)?.let { check(it.sequence == incoming.sequence && it.createdAt == incoming.createdAt) { "이전 요청의 번호나 접수시각이 변경되었습니다." } }
             val existing = dao.getWebRequest(incoming.requestId)?.let { webRow(it, false) }
-            if (existing == null) dao.insertWebRequest(webRow(incoming, true))
+            if (existing == null) { dao.insertWebRequest(webRow(incoming, true)); inserted++ }
             else check(existing.copy(readAt = null) == incoming.copy(readAt = null)) {
                 "이미 받은 요청의 내용이 변경되었습니다. 관리자 확인이 필요합니다."
             }
+            dao.deleteDeferredWebRequest(incoming.requestId)
         }
+        return inserted
     }
 
     fun getAllFarms(): List<FarmEntity> = dao.getAllFarms()
@@ -230,3 +252,4 @@ class LocalDataSource(
     fun markPendingSyncFailed(syncId: Int, error: String) =
         dao.markPendingSyncFailed(syncId, error)
 }
+

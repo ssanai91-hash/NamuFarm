@@ -61,6 +61,7 @@ class CommerceMigrationTest {
 
     /** Recreate the actual old order schema instead of merely changing the version number on a new DB. */
     private fun stripV16(db: SQLiteDatabase) {
+        db.execSQL("DROP TABLE IF EXISTS deferred_web_request")
         db.execSQL("ALTER TABLE quote_list RENAME TO quote_list_v16")
         db.execSQL("CREATE TABLE quote_list (quote_id INTEGER PRIMARY KEY AUTOINCREMENT, is_prepaid INTEGER NOT NULL, shipping_fee INTEGER NOT NULL, quote_number TEXT NOT NULL, save_date TEXT NOT NULL, customer_phone TEXT NOT NULL, total_qty INTEGER NOT NULL, total_price INTEGER NOT NULL, item_summary TEXT NOT NULL)")
         val fields = "quote_id,is_prepaid,shipping_fee,quote_number,save_date,customer_phone,total_qty,total_price,item_summary"
@@ -98,6 +99,26 @@ class CommerceMigrationTest {
         val migrated = Room.databaseBuilder(context, AppDatabase::class.java, name).addMigrations(*AppDatabase.ALL_MIGRATIONS).allowMainThreadQueries().build()
         try { val q = migrated.managementDao().getAllQuotes().single(); assertEquals("DRAFT", q.quoteNumber); assertEquals(0L, q.sentAt) }
         finally { migrated.close(); context.deleteDatabase(name) }
+    }
+
+    @Test fun v16ToV17PreservesInboxCursorAndOfflineOutbox() {
+        val context = RuntimeEnvironment.getApplication(); val name = "migration-16.db"; context.deleteDatabase(name)
+        val original = Room.databaseBuilder(context, AppDatabase::class.java, name).allowMainThreadQueries().build()
+        original.managementDao().insertWebRequest(WebQuoteRequestEntity("11111111-1111-4111-8111-111111111111", 7, "2026-10-04T01:23:45.000Z", "김나무", "01012345678", "옥천", "[]", "문의", readAt = 42))
+        original.managementDao().savePrivacyCursor(PrivacySyncEntity("web", 9))
+        original.managementDao().insertPendingSync(PendingSyncEntity(syncType = "inventory", payloadJson = "{}"))
+        original.close()
+        SQLiteDatabase.openDatabase(context.getDatabasePath(name).path, null, SQLiteDatabase.OPEN_READWRITE).use { raw ->
+            raw.execSQL("DROP TABLE deferred_web_request"); raw.execSQL("DROP TABLE room_master_table"); raw.version = 16
+        }
+        val migrated = Room.databaseBuilder(context, AppDatabase::class.java, name).addMigrations(*AppDatabase.ALL_MIGRATIONS).allowMainThreadQueries().build()
+        try {
+            val dao = migrated.managementDao()
+            assertEquals(42L, dao.getWebRequests().single().readAt)
+            assertEquals(9L, dao.privacyCursor("web"))
+            assertEquals(1, dao.getAllPendingSync().size)
+            assertTrue(dao.getDeferredWebRequests().isEmpty())
+        } finally { migrated.close(); context.deleteDatabase(name) }
     }
 
     private fun migrate(version: Int) {

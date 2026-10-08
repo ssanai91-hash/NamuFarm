@@ -40,6 +40,21 @@ interface ManagementDao {
     @Query("SELECT * FROM web_quote_request WHERE requestId = :id")
     fun getWebRequest(id: String): WebQuoteRequestEntity?
 
+    @Query("SELECT * FROM web_quote_request WHERE sequence = :sequence")
+    fun getWebRequestAtSequence(sequence: Long): WebQuoteRequestEntity?
+    @Query("SELECT * FROM deferred_web_request ORDER BY sequence")
+    fun getDeferredWebRequests(): List<DeferredWebRequestEntity>
+    @Query("SELECT COUNT(*) FROM deferred_web_request")
+    fun deferredWebRequestCount(): Int
+    @Query("SELECT * FROM deferred_web_request WHERE requestId = :id")
+    fun getDeferredWebRequest(id: String): DeferredWebRequestEntity?
+    @Query("SELECT * FROM deferred_web_request WHERE sequence = :sequence")
+    fun getDeferredWebRequestAtSequence(sequence: Long): DeferredWebRequestEntity?
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    fun insertDeferredWebRequest(request: DeferredWebRequestEntity)
+    @Query("DELETE FROM deferred_web_request WHERE requestId = :id")
+    fun deleteDeferredWebRequest(id: String)
+
     @Query("SELECT COALESCE(MAX(sequence), 0) FROM web_quote_request")
     fun webRequestCursor(): Long
 

@@ -39,6 +39,9 @@ data class WebQuoteRemote(
 )
 data class WebQuoteItemRemote(val species: String? = null, val specification: String? = null, val quantity: Int? = null)
 
+/** Only a missing legacy key is recoverable; malformed or tampered data still fails validation. */
+class LegacyRequestKeyUnavailable : IllegalStateException("이전 요청을 여는 백업이 이 기기에 없습니다.")
+
 object WebQuoteTransport {
     val configured: Boolean get() = Regex("https://script\\.google\\.com/macros/s/[A-Za-z0-9_-]+/exec").matches(BuildConfig.WEB_REQUEST_SCRIPT_URL)
     internal fun clientBuilder(): OkHttpClient.Builder = OkHttpClient.Builder()
@@ -69,7 +72,8 @@ object WebQuoteValidator {
             else -> "서버 응답을 확인하지 못했어요. 저장된 기록을 유지하며 다시 시도할 수 있습니다."
         } }
     }
-    data class Page(val rows: List<WebQuoteRequestEntity>, val cursor: Long, val expiredIds: List<String>)
+    data class Page(val rows: List<WebQuoteRequestEntity>, val cursor: Long, val expiredIds: List<String>,
+        val deferred: List<com.example.namufarm.data.DeferredWebRequestEntity> = emptyList())
     fun page(response: WebQuoteEnvelope, after: Long): List<WebQuoteRequestEntity> = checkedPage(response, after).rows
     fun checkedPage(response: WebQuoteEnvelope, after: Long, decrypt: ((WebQuoteRemote) -> WebQuoteRemote)? = null): Page {
         checkResponse(response)
@@ -79,6 +83,7 @@ object WebQuoteValidator {
         var previous = after
         val seen = mutableSetOf<String>()
         val expiredIds = mutableListOf<String>()
+        val deferred = mutableListOf<com.example.namufarm.data.DeferredWebRequestEntity>()
         val checked = rows.mapNotNull { nullable ->
             val outer = checkNotNull(nullable)
             var row = outer
@@ -92,7 +97,18 @@ object WebQuoteValidator {
             SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC"); isLenient = false }.parse(created)
             if (outer.expired == true) { expiredIds += id; return@mapNotNull null }
             if (decrypt != null) {
-                row = decrypt(outer)
+                try {
+                    row = decrypt(outer)
+                } catch (_: LegacyRequestKeyUnavailable) {
+                    val envelope = checkNotNull(outer.encryptedRequest)
+                    check(envelope.version == 1 && envelope.algorithm == "RSA-OAEP-256+A256GCM")
+                    check(Regex("[a-f0-9]{64}").matches(envelope.keyId))
+                    check(com.example.namufarm.privacy.HybridCrypto.decode(envelope.wrappedKey).size == 384)
+                    check(com.example.namufarm.privacy.HybridCrypto.decode(envelope.iv).size == 12)
+                    check(com.example.namufarm.privacy.HybridCrypto.decode(envelope.ciphertext).size in 17..30016)
+                    deferred += com.example.namufarm.data.DeferredWebRequestEntity(id, sequence, created, Gson().toJson(outer))
+                    return@mapNotNull null
+                }
                 check(row.requestId == id) { "복호화한 고객 요청번호가 다릅니다." }
             }
             val phone = text(row.customerPhone, 11, 9)
@@ -114,7 +130,8 @@ object WebQuoteValidator {
             WebQuoteRequestEntity(id, sequence, created, text(row.customerName, 50, 2), phone,
                 text(row.region, 100, 2), Gson().toJson(checkedItems), text(row.message, 1000, 0), customerEmail = email, formalQuoteRequested = row.formalQuoteRequested ?: false, recipientName = recipient, replyChannel = channel)
         }
-        return Page(checked, previous, expiredIds)
+        return Page(checked, previous, expiredIds, deferred)
     }
     private fun text(value: String?, max: Int, min: Int): String = checkNotNull(value).also { check(it.length in min..max && it == it.trim()) }
 }
+

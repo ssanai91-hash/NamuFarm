@@ -15,6 +15,7 @@ class WebRequestConnection(context: Context, private val repository: NamuFarmRep
     val paired get() = settings.paired
     val pushConfigured get() = WebRequestPush.configured
     fun localRequests() = repository.getWebRequests()
+    val deferredCount get() = repository.deferredWebRequestCount()
     suspend fun read(id: String) = repository.markWebRequestRead(id)
     suspend fun pair(invite: String) {
         check(configured) { "홈페이지 요청함 주소 설정이 필요합니다." }
@@ -31,14 +32,11 @@ class WebRequestConnection(context: Context, private val repository: NamuFarmRep
     suspend fun refresh(): Int {
         check(configured && paired) { "홈페이지 요청함을 먼저 연결해주세요." }
         PushRegistrationWorker.enqueue(app)
-        return repository.syncWebRequests(WebQuoteTransport.api, BuildConfig.WEB_REQUEST_SCRIPT_URL, settings.deviceToken) { outer ->
-            val envelope = outer.encryptedRequest
-            if (envelope == null) outer else {
-                check(keys.initialized && keys.keyId() == envelope.keyId) { "이전 버전의 고객 자료가 있습니다. ‘이전 자료 복원’에서 기존 백업을 한 번 불러와주세요." }
-                com.google.gson.Gson().fromJson(keys.open(envelope,"quote",checkNotNull(outer.requestId)),com.example.namufarm.data.remote.WebQuoteRemote::class.java)
-            }
-        }
+        return repository.syncWebRequests(WebQuoteTransport.api, BuildConfig.WEB_REQUEST_SCRIPT_URL, settings.deviceToken, ::readRequest)
     }
+    private fun readRequest(outer: com.example.namufarm.data.remote.WebQuoteRemote): com.example.namufarm.data.remote.WebQuoteRemote =
+        readLegacyWebRequest(outer, keys)
+    suspend fun restoreLegacy(): Int = repository.restoreDeferredWebRequests(::readRequest)
     fun restoreBackup(uri: android.net.Uri, password: CharArray) {
         try {
             val bytes=checkNotNull(app.contentResolver.openInputStream(uri)).use { stream ->
@@ -56,3 +54,10 @@ class WebRequestConnection(context: Context, private val repository: NamuFarmRep
         repository.closeLocalRequest(id)
     }
 }
+
+internal fun readLegacyWebRequest(outer: com.example.namufarm.data.remote.WebQuoteRemote, keys: com.example.namufarm.privacy.SellerKeys): com.example.namufarm.data.remote.WebQuoteRemote {
+    val envelope = outer.encryptedRequest ?: return outer
+    if (!keys.initialized || keys.keyId() != envelope.keyId) throw com.example.namufarm.data.remote.LegacyRequestKeyUnavailable()
+    return com.google.gson.Gson().fromJson(keys.open(envelope, "quote", checkNotNull(outer.requestId)), com.example.namufarm.data.remote.WebQuoteRemote::class.java)
+}
+

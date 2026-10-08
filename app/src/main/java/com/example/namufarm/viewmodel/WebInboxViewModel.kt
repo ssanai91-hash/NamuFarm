@@ -16,7 +16,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 data class WebInboxState(
     val requests: List<WebQuoteRequestEntity> = emptyList(), val busy: Boolean = false,
     val configured: Boolean = false, val paired: Boolean = false,
-    val pushConfigured: Boolean = false, val message: String? = null
+    val pushConfigured: Boolean = false, val message: String? = null,
+    val deferredCount: Int = 0
 ) { val unread: Int get() = requests.count { it.readAt == null } }
 
 class WebInboxViewModel(private val connection: WebRequestConnection) : ViewModel() {
@@ -24,12 +25,12 @@ class WebInboxViewModel(private val connection: WebRequestConnection) : ViewMode
     val state = mutableState.asStateFlow()
     private val working = AtomicBoolean(false)
     init { viewModelScope.launch(Dispatchers.IO) { reloadLocal() } }
-    private fun reloadLocal() { mutableState.update { it.copy(requests = connection.localRequests(), paired = connection.paired) } }
+    private fun reloadLocal() { mutableState.update { it.copy(requests = connection.localRequests(), paired = connection.paired, deferredCount = connection.deferredCount) } }
     fun refresh() = operate {
         reloadLocal()
         val count = connection.refresh()
         reloadLocal()
-        mutableState.update { it.copy(message = if (count > 0) "새 요청 ${count}건을 가져왔어요." else "요청함이 최신 상태입니다.") }
+        mutableState.update { it.copy(message = inboxRefreshMessage(count, it.deferredCount)) }
     }
     fun pair(invite: String) = operate {
         connection.pair(invite)
@@ -40,10 +41,10 @@ class WebInboxViewModel(private val connection: WebRequestConnection) : ViewMode
     }
     fun restore(uri: android.net.Uri, password: CharArray) = operate {
         connection.restoreBackup(uri,password)
-        reloadLocal()
+        val restored = connection.restoreLegacy()
         connection.refresh()
         reloadLocal()
-        showMessage("이전 자료를 불러왔어요.")
+        showMessage(if (restored > 0) "이전 요청 ${restored}건을 불러왔어요." else "이 백업으로 새로 열 수 있는 이전 요청이 없습니다. 새 견적은 계속 사용할 수 있어요.")
     }
     fun close(id: String) = operate { connection.close(id);reloadLocal();showMessage("상담을 종료하고 고객 문의와 연결된 견적 사본을 삭제했어요.") }
     fun read(id: String) { viewModelScope.launch(Dispatchers.IO) { connection.read(id); reloadLocal() } }
@@ -60,6 +61,12 @@ class WebInboxViewModel(private val connection: WebRequestConnection) : ViewMode
         }
     }
 }
+
+internal fun inboxRefreshMessage(imported: Int, deferred: Int): String {
+    val result = if (imported > 0) "새 요청 ${imported}건을 가져왔어요." else "새 요청을 모두 확인했어요."
+    return if (deferred > 0) "$result 이전 자료 ${deferred}건은 별도 보관 중이며, 새 견적은 바로 사용할 수 있어요." else result
+}
 class WebInboxViewModelFactory(private val connection: WebRequestConnection) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST") override fun <T : ViewModel> create(modelClass: Class<T>): T = WebInboxViewModel(connection) as T
 }
+
