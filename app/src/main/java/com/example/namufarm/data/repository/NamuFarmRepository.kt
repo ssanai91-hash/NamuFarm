@@ -151,9 +151,14 @@ class NamuFarmRepository(
         }
         local.insertQuote(quote)
     }
-    suspend fun insertQuoteWithContact(quote: QuoteEntity, recipient: com.example.namufarm.quotation.QuoteRecipient) = local.transaction {
+    suspend fun insertQuoteWithContact(quote: QuoteEntity, recipient: com.example.namufarm.quotation.QuoteRecipient, options: com.example.namufarm.quotation.QuoteIssueOptions? = null) = local.transaction {
         this@NamuFarmRepository.insertQuote(quote)
         insertQuoteContact(com.example.namufarm.data.QuoteContactEntity(quote.quoteNumber, Gson().toJson(recipient.checked())))
+        if (options != null) {
+            val document = com.example.namufarm.quotation.QuoteDocument.create(quote, recipient, options.issuer,
+                options.taxAmount(), options.validUntil, options.notes, options.account)
+            insertQuoteDocument(com.example.namufarm.data.QuoteDocumentEntity(document.id, quote.quoteNumber, document.number, document.issuedAt, document.json()))
+        }
     }
     fun getSavedQuote(number: String) = local.getQuoteByNumber(number)
     fun getQuoteRecipient(number: String): com.example.namufarm.quotation.QuoteRecipient = local.getQuoteContact(number)?.let {

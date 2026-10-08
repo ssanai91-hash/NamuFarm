@@ -43,6 +43,22 @@ class QuoteDocumentStorageTest {
         assertEquals(60000L, QuoteDocument.read(first.snapshotJson).lines.first().unitPrice)
         assertTrue(db.managementDao().getAllPendingSync().isEmpty()); assertTrue(db.managementDao().getAllInventoryEntities().isEmpty())
     }
+    @Test fun sellerSaveIncludesOfficialSnapshotAndNeverMarksItSent() = runBlocking {
+        val quote = QuoteTestData.quote()
+        repo.insertQuoteWithContact(quote, QuoteTestData.recipient, QuoteIssueOptions(issuer = QuoteTestData.issuer, tax = "500"))
+        val doc = QuoteDocument.read(repo.getQuoteDocument(quote.quoteNumber)!!.snapshotJson)
+        assertEquals(quote.totalPrice.toLong() + 500, doc.totalAmount)
+        assertEquals(0L, repo.getSavedQuote(quote.quoteNumber)!!.sentAt)
+        assertEquals(doc, QuoteDocument.read(repo.issueQuoteDocument(quote.quoteNumber, QuoteTestData.issuer, 0, "changed", "", "").snapshotJson))
+        assertTrue(db.managementDao().getAllPendingSync().isEmpty())
+    }
+    @Test fun invalidOfficialDetailsRollBackQuoteAndContactTogether() = runBlocking {
+        val quote = QuoteTestData.quote()
+        assertTrue(runCatching { repo.insertQuoteWithContact(quote, QuoteTestData.recipient, QuoteIssueOptions(tax = "-1")) }.isFailure)
+        assertNull(repo.getSavedQuote(quote.quoteNumber))
+        assertNull(repo.getQuoteDocument(quote.quoteNumber))
+        assertEquals(QuoteRecipient(), repo.getQuoteRecipient(quote.quoteNumber))
+    }
     @Test fun missingOrInvalidQuoteNeverCreatesIssuedRecord() = runBlocking {
         assertTrue(runCatching { repo.issueQuoteDocument("missing", QuoteTestData.issuer, 0, "7일", "", "") }.isFailure)
         repo.insertQuoteWithContact(QuoteTestData.quote(), QuoteTestData.recipient)

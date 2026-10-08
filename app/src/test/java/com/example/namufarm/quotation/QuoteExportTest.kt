@@ -40,6 +40,16 @@ class QuoteExportTest {
         files.pdf.copyTo(File(output, "quote-multipage.pdf"), overwrite = true)
         files.images.last().copyTo(File(output, "quote-multipage-last.jpg"), overwrite = true)
     }
+    @Test fun plainEmailEncodesCustomerAddressAndBodyWithoutAttachment() {
+        val body = "감나무 & 소나무\n합계: 30,000원"
+        val intent = QuoteReply.textEmailIntent("buyer+quote@example.com", body)
+        assertEquals(Intent.ACTION_SENDTO, intent.action)
+        assertEquals("mailto", intent.data!!.scheme)
+        assertTrue(intent.data.toString().contains("buyer%2Bquote%40example.com"))
+        assertEquals(body, intent.getStringExtra(Intent.EXTRA_TEXT))
+        assertFalse(intent.hasExtra(Intent.EXTRA_STREAM))
+        assertTrue(runCatching { QuoteReply.textEmailIntent("", body) }.isFailure)
+    }
     @Test fun attachmentIntentsKeepRecipientMimeAndTemporaryReadPermissions() {
         val doc = QuoteTestData.document(); val first = Uri.parse("content://test/quote.pdf")
         val email = QuoteReply.emailIntent(doc, first)

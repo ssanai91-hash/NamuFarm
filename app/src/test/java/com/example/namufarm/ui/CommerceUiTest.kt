@@ -6,6 +6,7 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import com.example.namufarm.data.WebQuoteRequestEntity
+import com.example.namufarm.quotation.QuoteDelivery
 import com.example.namufarm.data.OrderEntity
 import com.example.namufarm.data.SellingDisplayRow
 import com.example.namufarm.domain.order.OrderLineSource
@@ -49,27 +50,29 @@ class CommerceUiTest {
                 webRequests = listOf(webRequest), onRequest = { selected = true })
         } }
         compose.onNodeWithText("온라인 견적 요청함").assertIsDisplayed()
-        compose.onNodeWithText("접수번호 ${webRequest.requestId}").assertIsDisplayed()
-        compose.onNodeWithText("김나무 · 01012345678").performClick()
+        compose.onNodeWithText("요청 동기화").assertIsDisplayed()
+        capture("selling-home", compose.onRoot())
+        compose.onNodeWithText("김나무").performScrollTo().performClick()
         assertTrue(selected)
         compose.onNodeWithText("판매 재고").assertDoesNotExist()
-        capture("selling-home", compose.onRoot())
+        capture("seller-requests", compose.onRoot())
     }
 
     @Test fun manualEditorPrefillsRequestAndSavesWithoutInventory() {
         var saved: List<com.example.namufarm.domain.order.OrderLine>? = null
         val request = webRequest.copy(itemsJson = """[{"species":"감나무","specification":"2년생","quantity":30}]""")
         compose.setContent { NamuFarmTheme {
-            ManualQuoteEditor(request, false, null, {}, { lines, phone, recipient, _, _ ->
-                saved = lines
-                assertEquals(request.customerPhone, phone)
-                assertEquals(request.requestId, recipient.sourceRequestId)
+            ManualQuoteEditor(request, false, null, {}, { draft, action ->
+                saved = draft.validate(action)
+                assertEquals(QuoteDelivery.SMS, action)
+                assertEquals(request.customerPhone, draft.phone)
+                assertEquals(request.requestId, draft.recipient.sourceRequestId)
             })
         } }
         compose.onNodeWithText("받는 사람 · 연락처").assertIsDisplayed()
+        compose.onNodeWithTag("unit_price_0").performScrollTo().performTextInput("1500")
         capture("manual-quote", compose.onNodeWithTag("namu_dialog"))
-        compose.onNodeWithText("판매 단가 (원) *").performScrollTo().performTextInput("1500")
-        compose.onNodeWithText("견적 저장 · 보내기").performClick()
+        compose.onNodeWithText("문자 보내기").performClick()
         assertEquals(OrderLineSource.MANUAL, saved!!.single().source)
         assertEquals("감나무", saved!!.single().speciesName)
         assertEquals(30, saved!!.single().orderQty)
@@ -221,6 +224,61 @@ class CommerceUiTest {
         compose.onNodeWithText("공식 견적서 요청").assertIsDisplayed()
         compose.onNodeWithText("받는 방법 · 이메일 PDF와 문자 이미지").assertIsDisplayed()
         compose.onNodeWithText("견적서 수신인 · 테스트건설").assertIsDisplayed()
+    }
+
+
+    @Test fun priceButtonsAndDraftSurviveRotationAndBothChannelsStayVisible() {
+        var selected: QuoteDelivery? = null
+        val restoration = StateRestorationTester(compose)
+        restoration.setContent { NamuFarmTheme {
+            ManualQuoteEditor(webRequest.copy(itemsJson = """[{"species":"감나무","specification":"2년생","quantity":30}]""", customerEmail = "buyer@example.com", formalQuoteRequested = true), false, null, {}, { draft, action ->
+                assertEquals(2000, draft.validate(action).single().retailPrice)
+                assertTrue(draft.recipient.formalQuoteRequested)
+                selected = action
+            })
+        } }
+        compose.onNodeWithContentDescription("1번 단가 올리기").performScrollTo().performClick().performClick()
+        restoration.emulateSavedInstanceStateRestore()
+        compose.onNodeWithTag("unit_price_0").performScrollTo().assertTextContains("2000")
+        compose.onNodeWithText("문자 보내기").assertIsDisplayed()
+        compose.onNodeWithText("메일 보내기").assertIsDisplayed()
+        capture("seller-official-quote", compose.onNodeWithTag("namu_dialog"))
+        compose.onNodeWithText("메일 보내기").performClick()
+        assertEquals(QuoteDelivery.EMAIL, selected)
+    }
+
+    @Test fun missingEmailStopsMailButDoesNotDiscardPrices() {
+        var submitted = false
+        compose.setContent { NamuFarmTheme {
+            ManualQuoteEditor(webRequest.copy(itemsJson = """[{"species":"감나무","specification":"2년생","quantity":30}]"""), false, null, {}, { _, _ -> submitted = true })
+        } }
+        compose.onNodeWithTag("unit_price_0").performScrollTo().performTextInput("1200")
+        compose.onNodeWithText("메일 보내기").performClick()
+        compose.onNodeWithText("메일을 보낼 이메일 주소를 입력해주세요.").assertIsDisplayed()
+        assertFalse(submitted)
+        compose.onNodeWithText("문자 보내기").performClick()
+        assertTrue(submitted)
+    }
+
+    @Test fun sellerHomeKeepsAllThreeShortcutsAndBusySyncCannotRunAgain() {
+        val calls = mutableListOf<String>()
+        compose.setContent { NamuFarmTheme {
+            SellingHome(ManagementUiState(), SnackbarHostState(), { calls += "sync" }, {}, { calls += "quick" }, { calls += "quotes" }, { calls += "orders" }, {}, {}, { _, _ -> }, webBusy = true)
+        } }
+        compose.onNodeWithText("빠른 견적").performClick()
+        compose.onNodeWithText("오늘 견적").performClick()
+        compose.onNodeWithText("오늘 주문").performClick()
+        compose.onNodeWithText("구글시트에서 가져오는 중…").assertIsNotEnabled()
+        assertEquals(listOf("quick", "quotes", "orders"), calls)
+    }
+
+    @Test fun searchAndStatusKeepNewestMatchingRequestsFirst() {
+        val first = webRequest.copy(sequence = 1)
+        val latest = webRequest.copy(requestId = "new", sequence = 2)
+        assertEquals(listOf(latest, first), filterQuoteRequests(listOf(first, latest), ManagementUiState(), " 감나무 ", "답변 대기"))
+        assertEquals(listOf(latest, first), filterQuoteRequests(listOf(first, latest), ManagementUiState(), "010-1234", "전체"))
+        assertTrue(filterQuoteRequests(listOf(first), ManagementUiState(), "", "발송 완료").isEmpty())
+        assertEquals("10.04 10:23", requestDateLabel(first.createdAt))
     }
 
     private fun capture(name: String, node: SemanticsNodeInteraction) {

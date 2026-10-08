@@ -190,7 +190,7 @@ private fun HistoryCard(phone: String, date: String, summary: String, amount: In
 }
 
 @Composable
-internal fun QuoteDetailsDialog(quote: QuoteEntity, confirming: Boolean, snackbar: SnackbarHostState, onSms: () -> Unit, onConfirm: () -> Unit, onDelete: () -> Unit, onDismiss: () -> Unit, onDocument: () -> Unit = {}, sentAction: @Composable () -> Unit = {}, ordered: Boolean = false, onOrder: () -> Unit = {}) {
+internal fun QuoteDetailsDialog(quote: QuoteEntity, confirming: Boolean, snackbar: SnackbarHostState, onSms: () -> Unit, onConfirm: () -> Unit, onDelete: () -> Unit, onDismiss: () -> Unit, onDocument: () -> Unit = {}, sentAction: @Composable () -> Unit = {}, ordered: Boolean = false, onOrder: () -> Unit = {}, onEmail: () -> Unit = {}) {
     var confirm by remember { mutableStateOf(false) }
     if (confirm) AlertDialog(
         onDismissRequest = { confirm = false },
@@ -206,7 +206,8 @@ internal fun QuoteDetailsDialog(quote: QuoteEntity, confirming: Boolean, snackba
 
         OutlinedButton(onClick = onDocument, enabled = !confirming, modifier = Modifier.fillMaxWidth()) { Text("공식 견적서 · PDF / 이미지") }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            TextButton(onClick = onSms, enabled = !confirming) { Text("견적 문자 보내기") }
+            TextButton(onClick = onSms, enabled = !confirming) { Text("문자 보내기") }
+            TextButton(onClick = onEmail, enabled = !confirming) { Text("메일 보내기") }
             TextButton(onClick = onDelete, enabled = !confirming && !ordered && quote.sentAt == 0L, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) { Text("견적 삭제") }
         }
     }) {

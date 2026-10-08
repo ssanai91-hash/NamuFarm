@@ -1,6 +1,8 @@
 package com.example.namufarm.ui
 
 import android.widget.Toast
+import com.example.namufarm.quotation.QuoteDelivery
+import com.example.namufarm.quotation.QuoteIssuerSettings
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -152,7 +154,9 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
     var financeOrder by remember { mutableStateOf<OrderEntity?>(null) }
     var showTodayOrdersDialog by remember { mutableStateOf(false) }
     var showQuoteDetailDialog by remember { mutableStateOf(false) }
-    var showQuickQuoteDialog by remember { mutableStateOf(false) }
+    var showQuickQuoteDialog by rememberSaveable { mutableStateOf(false) }
+    var deliveryNumber by rememberSaveable { mutableStateOf<String?>(null) }
+    var deliveryAction by rememberSaveable { mutableStateOf(QuoteDelivery.SAVE.name) }
 
     var showOrderDetailDialog by remember { mutableStateOf(false) }
     var showMoveToManagementConfirm by remember { mutableStateOf(false) }
@@ -348,7 +352,8 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
         val quote = uiState.allQuotes.firstOrNull { it.quoteNumber == selected.quoteNumber } ?: selected
         QuoteDetailsDialog(
             quote, uiState.confirmingQuoteNumber == quote.quoteNumber, snackbarHostState,
-            onSms = { sendQuoteSms(quote.customerPhone, viewModel.generateQuoteTextFromEntity(quote)) },
+            onSms = { deliveryAction = QuoteDelivery.SMS.name; deliveryNumber = quote.quoteNumber; showQuoteDetailDialog = false },
+            onEmail = { deliveryAction = QuoteDelivery.EMAIL.name; deliveryNumber = quote.quoteNumber; showQuoteDetailDialog = false },
             onConfirm = {
                 viewModel.convertQuoteToOrder(quote) { order ->
                     selectedOrder = order
@@ -364,6 +369,12 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
             ordered = uiState.allOrders.any { it.sourceQuoteNumber == quote.quoteNumber },
             onOrder = { selectedOrder = uiState.allOrders.first { it.sourceQuoteNumber == quote.quoteNumber }; showQuoteDetailDialog = false; showOrderDetailDialog = true }
         )
+    }
+    deliveryNumber?.let { number ->
+        QuoteDeliveryDialog(viewModel, number, QuoteDelivery.valueOf(deliveryAction),
+            onDocument = { documentQuoteNumber = number; deliveryNumber = null },
+            onDetails = { selectedQuote = uiState.allQuotes.firstOrNull { it.quoteNumber == number }; deliveryNumber = null; showQuoteDetailDialog = selectedQuote != null },
+            onDismiss = { deliveryNumber = null })
     }
     documentQuoteNumber?.let { number -> FormalQuoteDialog(viewModel, number) { documentQuoteNumber = null } }
     if (showDocumentHistory) QuoteDocumentHistoryDialog(uiState.quoteDocuments, onSelect = { documentQuoteNumber = it.quoteNumber }, onDismiss = { showDocumentHistory = false })
@@ -625,10 +636,13 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
     if (showQuickQuoteDialog || uiState.editingRequest != null) {
         ManualQuoteEditor(uiState.editingRequest, uiState.isSavingQuote, uiState.message,
             onDismiss = { showQuickQuoteDialog = false; viewModel.dismissManualQuote() },
-            onSave = { lines, phone, recipient, prepaid, fee ->
-                viewModel.saveManualQuote(lines, phone, recipient, prepaid, fee) { saved ->
+            onSave = { draft, action ->
+                viewModel.saveManualQuote(draft.validate(action), draft.phone, draft.recipient, draft.prepaid, draft.shipping(),
+                    issueOptions = draft.options.takeIf { draft.recipient.formalQuoteRequested }) { saved ->
                     showQuickQuoteDialog = false; viewModel.dismissManualQuote()
-                    selectedQuote = saved; showQuoteDetailDialog = true
+                    if (draft.recipient.formalQuoteRequested) runCatching { QuoteIssuerSettings(context).save(draft.options.issuer) }
+                    selectedQuote = saved
+                    deliveryAction = action.name; deliveryNumber = saved.quoteNumber
                 }
             })
     }

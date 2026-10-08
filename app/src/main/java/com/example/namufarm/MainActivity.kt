@@ -100,7 +100,7 @@ class MainActivity : ComponentActivity() {
                             onWebInbox = { if (webState.paired && webState.securityReady) webInbox.refresh() else showWebInbox = true },
                             onWebSettings = { showWebInbox = true },
                             webRequests = webState.requests, webBusy = webState.busy,
-                            onRequest = { request -> webRequestId = request.requestId; webInbox.read(request.requestId) },
+                            onRequest = { request -> if (!uiState.isSavingQuote) { viewModel.useWebRequestForQuote(request); webInbox.read(request.requestId) } },
                             webUnread = webState.unread
                         )
                     }

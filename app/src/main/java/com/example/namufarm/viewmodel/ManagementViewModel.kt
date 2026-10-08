@@ -394,7 +394,7 @@ class ManagementViewModel(
         quote
     }
     fun saveManualQuote(lines: List<OrderLine>, phone: String, recipient: com.example.namufarm.quotation.QuoteRecipient,
-                        prepaid: Boolean, fee: Int, onSaved: (QuoteEntity) -> Unit) {
+                        prepaid: Boolean, fee: Int, issueOptions: com.example.namufarm.quotation.QuoteIssueOptions? = null, onSaved: (QuoteEntity) -> Unit) {
         if (!quoteSaveInProgress.compareAndSet(false, true)) return
         _uiState.update { it.copy(isSavingQuote = true) }
         launchOperation {
@@ -407,7 +407,7 @@ class ManagementViewModel(
                 val number = "QUOTE_${UUID.randomUUID()}"
                 val quote = QuoteEntity(quoteNumber = number, saveDate = date, customerPhone = phone.replace(Regex("[\\s()-]"), ""),
                     totalQty = amounts.quantity, totalPrice = amounts.price, itemSummary = summary, isPrepaid = prepaid, shippingFee = fee)
-                repository.insertQuoteWithContact(quote, recipient.checked())
+                repository.insertQuoteWithContact(quote, recipient.checked(), issueOptions)
                 refreshLocalState()
                 val saved = repository.getSavedQuote(number) ?: error("저장한 견적을 확인해주세요.")
                 withContext(Dispatchers.Main) { onSaved(saved) }
@@ -900,7 +900,7 @@ class ManagementViewModel(
 
         sb.append("================\n")
 
-        if (isPrepaid && shippingFee > 0) {
+        if (isPrepaid) {
             sb.append("상품 합계: ${String.format("%,d", totalRetail)}원\n")
             sb.append("배송비(선불): ${String.format("%,d", shippingFee)}원\n")
             sb.append(
@@ -949,7 +949,7 @@ class ManagementViewModel(
 
         sb.append("================\n")
 
-        if (quote.isPrepaid && quote.shippingFee > 0) {
+        if (quote.isPrepaid) {
             val itemTotal = quote.totalPrice - quote.shippingFee
             sb.append("상품 합계: ${String.format("%,d", itemTotal)}원\n")
             sb.append("배송비(선불): ${String.format("%,d", quote.shippingFee)}원\n")

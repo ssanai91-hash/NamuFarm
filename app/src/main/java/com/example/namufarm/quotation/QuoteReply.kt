@@ -19,6 +19,20 @@ class QuoteIssuerSettings(context: Context) {
 }
 
 object QuoteReply {
+    fun textEmailIntent(email: String, body: String): Intent {
+        require(email.isNotBlank() && validQuoteEmail(email)) { "이메일 주소를 확인해주세요." }
+        require(body.isNotBlank()) { "견적 내용을 확인해주세요." }
+        val subject = "[나무팜] 요청하신 견적 안내"
+        // URI fields are supported by mail apps that ignore SENDTO extras.
+        return Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:${Uri.encode(email)}?subject=${Uri.encode(subject)}&body=${Uri.encode(body)}")).apply {
+            putExtra(Intent.EXTRA_EMAIL, arrayOf(email)); putExtra(Intent.EXTRA_SUBJECT, subject); putExtra(Intent.EXTRA_TEXT, body)
+        }
+    }
+    fun openTextEmail(context: Context, email: String, body: String) {
+        try { context.startActivity(textEmailIntent(email, body)) }
+        catch (_: ActivityNotFoundException) { error("이메일 앱을 설치하거나 계정을 설정해주세요. 저장한 견적에서 다시 보낼 수 있습니다.") }
+    }
+
     private fun body(doc: QuoteDocument) = "[${doc.issuer.businessName}] ${doc.recipient.recipientName.ifBlank { doc.recipient.customerName }}님, ${doc.number} 견적서를 보내드립니다."
     fun emailIntent(doc: QuoteDocument, uri: Uri): Intent {
         require(doc.recipient.customerEmail.isNotBlank() && validQuoteEmail(doc.recipient.customerEmail))
