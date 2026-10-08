@@ -1,5 +1,5 @@
 import { env } from "cloudflare:workers";
-import { configuredSellerKey, validatedQuoteService } from "./quote-service";
+import { validatedQuoteService } from "./quote-service";
 export function quoteSettings() {
   const values = env as unknown as Record<string, string | undefined>;
   const url = values.QUOTE_SCRIPT_URL ?? "";
@@ -7,13 +7,7 @@ export function quoteSettings() {
   const privacy = values.QUOTE_PRIVACY_NOTICE ?? "";
   const testMode = values.QUOTE_TEST_MODE === "true";
   const validUrl = /^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/exec$/.test(url);
-  return { url, secret, privacy, testMode, sellerKey: values.QUOTE_SELLER_KEY, ready: validUrl && secret.length >= 32 && privacy.length >= 30 };
-}
-export async function quoteEncryptionKey(settings: ReturnType<typeof quoteSettings>) {
-  if (!settings.ready) return null;
-  // If a configured key is damaged, stop instead of silently choosing another key.
-  if (settings.sellerKey) return configuredSellerKey(settings.sellerKey);
-  return (await quoteServiceInfo(settings))?.sellerKey ?? null;
+  return { url, secret, privacy, testMode, ready: validUrl && secret.length >= 32 && privacy.length >= 30 };
 }
 export async function quoteServiceInfo(settings: ReturnType<typeof quoteSettings>) {
   if (!settings.ready) return null;

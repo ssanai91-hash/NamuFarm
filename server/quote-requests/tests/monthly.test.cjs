@@ -56,7 +56,7 @@ test('formal quote fields and encryption survive monthly storage without PII or 
  for(const value of ['김나무','01012345678','봄에 심어요','나무 학교','buyer@example.com'])assert.ok(!text.includes(value));
  assert.ok(!JSON.stringify(index(f)).includes('encryptedRequest'));assert.ok(!JSON.stringify(index(f)).includes('ciphertext'));
  assert.equal(f.readRequests(0).requests[0].replyChannel,'both');
- assert.equal(f.context.doGet().version,4);assert.equal(f.context.doGet().encryptionReady,true);
+ assert.equal(f.context.doGet().version,5);assert.equal(f.context.doGet().encryptionReady,true);
 });
 
 test('interleaved submissions cannot enter the lock or allocate duplicate files, tabs, UUIDs or receipts',()=>{

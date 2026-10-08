@@ -84,7 +84,7 @@ class UnlockDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("나무팜 PC 보관함 잠금 해제")
         layout = QVBoxLayout(self)
-        layout.addWidget(QLabel("PC 보관함 비밀번호를 입력하세요. 고객정보는 잠금 해제 후 표시됩니다."))
+        layout.addWidget(QLabel("기존 PC 비밀번호를 한 번 입력해주세요. 다음 실행부터 자동으로 열립니다."))
         self.password = QLineEdit()
         self.password.setEchoMode(QLineEdit.EchoMode.Password)
         self.password.setPlaceholderText("PC 보관함 비밀번호 · 12자 이상")
@@ -95,55 +95,29 @@ class UnlockDialog(QDialog):
         layout.addWidget(buttons)
 
 
-class SetupDialog(QDialog):
+class LegacyImportDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("나무팜 PC 처음 연결")
-        self.resize(580, 360)
+        self.setWindowTitle("이전 자료 복원")
         layout = QVBoxLayout(self)
-        intro = QLabel("휴대폰 나무팜 앱에서 저장한 보안 백업을 선택하세요.\n기존 고객정보를 열기 위해 휴대폰과 같은 보안키를 사용합니다.")
-        layout.addWidget(intro)
-        form = QFormLayout()
-        self.backup = QLineEdit()
-        browse = QPushButton("파일 선택")
+        layout.addWidget(QLabel("이전 버전 자료가 있다는 안내를 받은 경우에만 사용합니다."))
+        self.backup, self.password = QLineEdit(), QLineEdit()
+        self.password.setEchoMode(QLineEdit.EchoMode.Password)
+        self.password.setPlaceholderText("이전 백업 비밀번호")
+        browse = QPushButton("이전 백업 선택")
         browse.clicked.connect(self.choose_backup)
-        backup_row = QHBoxLayout()
-        backup_row.addWidget(self.backup)
-        backup_row.addWidget(browse)
-        form.addRow("앱 보안 백업", backup_row)
-        self.backup_password, self.password, self.confirm = QLineEdit(), QLineEdit(), QLineEdit()
-        for field in (self.backup_password, self.password, self.confirm):
-            field.setEchoMode(QLineEdit.EchoMode.Password)
-        form.addRow("앱 백업 비밀번호", self.backup_password)
-        form.addRow("새 PC 보관함 비밀번호", self.password)
-        form.addRow("PC 비밀번호 확인", self.confirm)
-        self.url = QLineEdit(DEFAULT_URL)
-        form.addRow("Apps Script 웹 앱 주소", self.url)
-        layout.addLayout(form)
-        layout.addWidget(QLabel("PC 비밀번호는 12자 이상입니다. 연결 코드는 보관함 생성 후 입력합니다."))
+        layout.addWidget(self.backup)
+        layout.addWidget(browse)
+        layout.addWidget(self.password)
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
-        buttons.accepted.connect(self.accept_checked)
+        buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
 
     def choose_backup(self):
-        path, _ = QFileDialog.getOpenFileName(self, "앱 보안 백업 선택", "", "보안 백업 (*.json);;모든 파일 (*)")
+        path, _ = QFileDialog.getOpenFileName(self, "이전 백업 선택", "", "이전 백업 (*.json)")
         if path:
             self.backup.setText(path)
-
-    def accept_checked(self):
-        try:
-            require(Path(self.backup.text()).is_file(), "앱 보안 백업 파일을 선택해주세요.")
-            require(len(self.password.text()) >= 12 and self.password.text() == self.confirm.text(), "PC 비밀번호를 12자 이상으로 입력하고 확인해주세요.")
-            require(len(self.backup_password.text()) >= 12, "앱 백업 비밀번호를 확인해주세요.")
-            validate_url(self.url.text().strip())
-            self.accept()
-        except UserError as error:
-            QMessageBox.warning(self, "입력 확인", str(error))
-
-    def clear_sensitive(self):
-        for field in (self.backup_password, self.password, self.confirm):
-            field.clear()
 
 
 class MainWindow(QMainWindow):
@@ -226,33 +200,42 @@ class MainWindow(QMainWindow):
     def open_vault(self):
         if self.manager or self.task:
             return
-        if self.vault_path.exists():
-            dialog = UnlockDialog(self.vault_path, self)
-            if dialog.exec() != QDialog.DialogCode.Accepted:
-                return
-            password = dialog.password.text()
-            dialog.password.clear()
-            self.run_job("보관함 잠금 해제 중…", lambda: self.unlocked(Vault.unlock(self.vault_path, password)), self.accept_manager, False)
-        else:
-            dialog = SetupDialog(self)
-            if dialog.exec() != QDialog.DialogCode.Accepted:
-                return
-            path, backup_password, password, url = dialog.backup.text(), dialog.backup_password.text(), dialog.password.text(), dialog.url.text().strip()
-            dialog.clear_sensitive()
-            def create():
-                try:
-                    with Path(path).open("rb") as source:
-                        raw = source.read(20001)
-                    require(len(raw) < 20000, "앱 보안 백업 파일이 너무 큽니다.")
-                    seller = SellerKey.from_backup(raw.decode("utf-8"), backup_password)
-                except (OSError, UnicodeError):
-                    raise UserError("앱 보안 백업 파일을 읽을 수 없습니다.") from None
-                vault = Vault.create(self.vault_path, password, seller)
-                credentials = vault.credentials()
-                credentials["url"] = url
-                vault.save_credentials(credentials)
-                return self.unlocked(vault)
-            self.run_job("앱 보안 백업으로 PC 보관함 생성 중…", create, self.accept_manager, False)
+        try:
+            if not self.vault_path.exists():
+                self.run_job("PC 연결 준비 중…", lambda: self.unlocked(Vault.create_device(self.vault_path)), self.accept_manager, False)
+            elif Vault.device_managed(self.vault_path):
+                self.run_job("PC 자료 여는 중…", lambda: self.unlocked(Vault.open_device(self.vault_path)), self.accept_manager, False)
+            else:
+                dialog = UnlockDialog(self.vault_path, self)
+                if dialog.exec() != QDialog.DialogCode.Accepted:
+                    return
+                password = dialog.password.text()
+                dialog.password.clear()
+                def migrate():
+                    vault = Vault.unlock(self.vault_path, password)
+                    vault.use_device_protection()
+                    return self.unlocked(vault)
+                self.run_job("기존 자료를 자동 연결 방식으로 전환 중…", migrate, self.accept_manager, False)
+        except Exception:
+            QMessageBox.warning(self, "PC 자료 확인", "기존 보관함을 열지 못했습니다. 파일과 Windows 계정을 확인해주세요.")
+
+    def restore_legacy(self):
+        if not self.manager or self.task:
+            return
+        dialog = LegacyImportDialog(self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        path, password = dialog.backup.text(), dialog.password.text()
+        dialog.password.clear()
+        def restore():
+            try:
+                with Path(path).open("rb") as source:
+                    raw = source.read(20001)
+                require(len(raw) < 20000, "이전 백업 파일이 너무 큽니다.")
+                return self.manager.restore_legacy(raw.decode("utf-8"), password)
+            except (OSError, UnicodeError):
+                raise UserError("이전 백업 파일을 읽을 수 없습니다.") from None
+        self.run_job("이전 자료 확인 중…", restore, self.apply_view)
 
     @staticmethod
     def unlocked(vault):
@@ -273,6 +256,7 @@ class MainWindow(QMainWindow):
         self.inbox_sync_button.setEnabled(paired)
         self.lock_button.setEnabled(ready)
         self.open_button.setEnabled(self.manager is None and self.task is None)
+        self.legacy_button.setEnabled(ready and self.data["paired"])
         self.pair_button.setEnabled(ready and not self.data["paired"])
         self.url.setEnabled(ready and not self.data["paired"])
         self.invite.setEnabled(ready and not self.data["paired"])
@@ -600,7 +584,7 @@ class MainWindow(QMainWindow):
     def build_connection(self):
         page = QWidget()
         layout = QVBoxLayout(page)
-        self.open_button = QPushButton("보관함 열기 / 처음 설정")
+        self.open_button = QPushButton("PC 시작하기")
         self.open_button.clicked.connect(self.open_vault)
         layout.addWidget(self.open_button)
         form = QFormLayout()
@@ -611,7 +595,7 @@ class MainWindow(QMainWindow):
         self.invite = QLineEdit()
         self.invite.setEchoMode(QLineEdit.EchoMode.Password)
         self.invite.setMaxLength(64)
-        self.invite.setPlaceholderText("Apps Script createDeviceInvite()로 발급한 PC용 일회용 코드")
+        self.invite.setPlaceholderText("관리자에게 받은 PC 연결 코드를 입력하세요")
         form.addRow("PC 연결 코드", self.invite)
         layout.addLayout(form)
         self.pair_button = QPushButton("PC 연결하고 처음 동기화")
@@ -625,7 +609,10 @@ class MainWindow(QMainWindow):
         self.resolve_button = QPushButton("수정 충돌 확인")
         self.resolve_button.clicked.connect(self.resolve_conflict)
         layout.addWidget(self.resolve_button)
-        note = QLabel("휴대폰과 PC는 구글시트를 통해 동기화합니다.\n저장 실패 시 전송 대기를 유지하며, 서버 저장 확인 뒤에만 지웁니다.\n같은 판매 기록을 동시에 수정하면 충돌 내용을 확인할 수 있습니다.\n보관함을 백업하려면 프로그램을 닫고 namufarm-vault.db를 복사하세요.\n보관함 위치: " + str(self.vault_path))
+        self.legacy_button = QPushButton("이전 자료 복원 (필요한 경우)")
+        self.legacy_button.clicked.connect(self.restore_legacy)
+        layout.addWidget(self.legacy_button)
+        note = QLabel("휴대폰과 PC는 구글시트를 통해 동기화합니다.\n저장 실패 시 전송 대기를 유지하며, 서버 저장 확인 뒤에만 지웁니다.\n같은 판매 기록을 동시에 수정하면 충돌 내용을 확인할 수 있습니다.\n이 PC의 자료는 Windows 계정으로 자동 보호합니다.\n새 PC에서는 다시 연결해 서버에 동기화된 자료를 가져옵니다.\nPC를 바꾸기 전 전송 대기를 동기화해주세요. 미확정 초안은 이 PC에만 저장됩니다.\n보관함 위치: " + str(self.vault_path))
         note.setWordWrap(True)
         note.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         layout.addWidget(note)

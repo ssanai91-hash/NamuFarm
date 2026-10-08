@@ -1,6 +1,6 @@
-/** v4: customer plaintext never enters new Sheet rows. Only the seller app owns the private key. */
+/** API v5: authenticated customer records; v4 envelopes remain readable for migration. */
 const SALE_SHEET = '판매기록';
-const SALE_HEADERS = ['주문번호','변경순번','상태','구매시각(UTC)','판매완료(UTC)','수량','매출(세액제외)','세액','원가','비용','원가확인','수익방식','수수료비율(bp)','매출이익','보관기한(UTC)','공개판매JSON','암호화고객JSON','내용해시','최종변경번호','revision'];
+const SALE_HEADERS = ['주문번호','변경순번','상태','구매시각(UTC)','판매완료(UTC)','수량','매출(세액제외)','세액','원가','비용','원가확인','수익방식','수수료비율(bp)','매출이익','보관기한(UTC)','공개판매JSON','고객정보JSON','내용해시','최종변경번호','revision'];
 const SALE_EVENT_SHEET = '판매변경이력';
 const SALE_EVENT_HEADERS = ['변경번호','주문번호','revision','내용해시','처리시각(UTC)'];
 const UUID_PATTERN = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
@@ -12,11 +12,13 @@ function sellerKey_() {
 function secureServiceInfo_() {
   const key = sellerKey_();
   let ready = false;
-  try { ready = !!key && PropertiesService.getScriptProperties().getProperty('PRIVACY_SETUP') === '1'
-    && quoteStorageReady_() && rows_(sheet_()).every(row => { const raw = JSON.parse(row[15]); return raw.expired === true || !!raw.encryptedRequest; }); } catch (_) {}
-  return {ok:true,service:'namufarm-quote-requests',version:4,processingBases:['quote_request'],
-    requestFields:['customerEmail','formalQuoteRequested','recipientName','replyChannel'],encryptionReady:ready,
-    sellerKey:key,retentionDays:30,requestDeletionSync:true,receiptFormat:'NFQ-YYYYMMDD-NNNN',receiptTimeZone:'Asia/Seoul',
+  try { ready = PropertiesService.getScriptProperties().getProperty('PRIVACY_SETUP') === '1' && quoteStorageReady_();
+    sheet_(); namedSheet_(SALE_SHEET,SALE_HEADERS,false);
+    ready=ready && rows_(sheet_()).every(row=>{const raw=JSON.parse(row[15]);return raw.expired===true || !!raw.request || !!raw.encryptedRequest;}); } catch (_) {}
+  return {ok:true,service:'namufarm-quote-requests',version:5,connectionMode:'device-auth',customerDataReady:ready,
+    processingBases:['quote_request'],requestFields:['customerEmail','formalQuoteRequested','recipientName','replyChannel'],
+    encryptionReady:ready && !!key,sellerKey:key,retentionDays:30,requestDeletionSync:true,
+    receiptFormat:'NFQ-YYYYMMDD-NNNN',receiptTimeZone:'Asia/Seoul',
     commerceStates:['구매확정','입금확인','배송확인','판매완료','주문취소']};
 }
 function byteString_(value, minimum, maximum) {
@@ -36,7 +38,11 @@ function namedSheet_(name, headers, create) {
   if (!sheet && create) sheet = book.insertSheet(name);
   assert_(sheet,'NOT_READY');
   if (create && sheet.getLastRow() === 0) { sheet.getRange(1,1,1,headers.length).setValues([headers]); sheet.setFrozenRows(1); }
-  assert_(JSON.stringify(sheet.getRange(1,1,1,headers.length).getValues()[0]) === JSON.stringify(headers),'NOT_READY');
+  const actual=sheet.getRange(1,1,1,headers.length).getValues()[0];
+  // Old deployed sheets keep their identity and data; only the known header is renamed on owner setup.
+  const legacy=headers===SALE_HEADERS && actual[16]==='암호화고객JSON' && JSON.stringify(actual.map((v,i)=>i===16?'고객정보JSON':v))===JSON.stringify(headers);
+  assert_(legacy || JSON.stringify(actual)===JSON.stringify(headers),'NOT_READY');
+  if(create && legacy)sheet.getRange(1,17,1,1).setValues([['고객정보JSON']]);
   return sheet;
 }
 function namedRows_(sheet, count) { return sheet.getLastRow() > 1 ? sheet.getRange(2,1,sheet.getLastRow()-1,count).getValues() : []; }
@@ -64,7 +70,7 @@ function configurePrivacy_(body) {
 }
 function migrateLegacyQuoteRequests() {
   assert_(sellerKey_(),'NOT_READY');
-  const pending = rows_(sheet_()).filter(row => { const raw = JSON.parse(row[15]); return !raw.expired && !raw.encryptedRequest; }).slice(0,20);
+  const pending = rows_(sheet_()).filter(row => { const raw = JSON.parse(row[15]); return !raw.expired && !raw.encryptedRequest && !raw.request; }).slice(0,20);
   pending.forEach(row => {
     const request = validateRequest_(Object.assign({},JSON.parse(row[15]),{website:''}));
     const props = PropertiesService.getScriptProperties();
@@ -85,13 +91,38 @@ function migrateLegacyQuoteRequests() {
   });
   return pending.length;
 }
+function submitCustomerRequest_(body) {
+  assert_(secureServiceInfo_().customerDataReady,'NOT_READY');
+  assert_(body.protocolVersion===5,'UPGRADE_REQUIRED');
+  assert_(UUID_PATTERN.test(body.requestId) && /^[a-f0-9]{64}$/.test(body.fingerprint) && /^[a-f0-9]{64}$/.test(body.rateKey));
+  assert_(body.encryptedRequest===undefined);
+  const request=validateRequest_(body.request);
+  assert_(request.requestId===body.requestId);
+  return commitQuoteRequest_(body,{request:request});
+}
+function quoteCustomerCells_(stored) {
+  const r=stored.request;
+  return r ? [r.customerName,r.customerPhone,r.region,r.items.map(i=>i.species+' '+i.quantity+'주').join(' · '),JSON.stringify(r.items),r.message].map(cell_) : ['','','','','',''];
+}
+function quoteStoredData_(raw) {
+  assert_(raw && !raw.expired && (!!raw.request !== !!raw.encryptedRequest),'NOT_READY');
+  if(raw.request){
+    const request=validateRequest_(Object.assign({},raw.request,{website:''}));
+    assert_(canonical_(request)===canonical_(raw.request),'NOT_READY');
+    return {request:request};
+  }
+  return {encryptedRequest:envelope_(raw.encryptedRequest,sellerKey_())};
+}
 function submitEncryptedRequest_(body) {
   assert_(secureServiceInfo_().encryptionReady,'NOT_READY');
   assert_(UUID_PATTERN.test(body.requestId) && /^[a-f0-9]{64}$/.test(body.fingerprint) && /^[a-f0-9]{64}$/.test(body.rateKey));
   assert_(!body.request && !body.customerName && !body.customerPhone,'INVALID');
   const encrypted = envelope_(body.encryptedRequest,sellerKey_());
+  return commitQuoteRequest_(body,{encryptedRequest:encrypted});
+}
+function commitQuoteRequest_(body,stored) {
   return lock_(() => {
-    if(quoteStorageConfigured_()) return submitIndexedQuote_(body,encrypted);
+    if(quoteStorageConfigured_()) return submitIndexedQuote_(body,stored);
     const sheet = sheet_(); const rows = receiptRows_(sheet); const existingIndex = rows.findIndex(row=>row[0]===body.requestId);
     assert_(receiptColumnsReady_(sheet),'NOT_READY');
     if (existingIndex>=0) { const existing=rows[existingIndex]; assert_(existing[11]===body.fingerprint,'CONFLICT');
@@ -104,7 +135,7 @@ function submitEncryptedRequest_(body) {
     const createdAt=new Date(now).toISOString(),day=receiptDay_(createdAt);
     const floor=rows.reduce((max,r)=>r[16] && receiptDay_(r[2])===day ? Math.max(max,receiptCounter_(r)) : max,0);
     const receipt=reserveReceipt_(props,day,floor);
-    const row=[body.requestId,seq,createdAt,'','','','','','','신규','PENDING',body.fingerprint,0,createdAt,'',JSON.stringify({encryptedRequest:encrypted}),receipt.number,receiptTime_(createdAt)];
+    const row=[body.requestId,seq,createdAt,...quoteCustomerCells_(stored),'신규','PENDING',body.fingerprint,0,createdAt,'',JSON.stringify(stored),receipt.number,receiptTime_(createdAt)];
     sheet.getRange(sheet.getLastRow()+1,1,1,18).setNumberFormat('@').setValues([row]); SpreadsheetApp.flush();
     cache.put(cacheKey,JSON.stringify({count:bucket.count+1,until:bucket.until}),Math.max(1,Math.ceil((bucket.until-now)/1000)));
     return Object.assign(receiptDetails_(row),{duplicate:false});
@@ -115,8 +146,9 @@ function quoteResponseRow_(row) {
   const result={requestId:String(row[0]),sequence:Number(row[1]),createdAt:String(row[2]),expiresAt:expires};
   if(row[16])Object.assign(result,receiptDetails_(row));
   if(raw.expired===true || expires<=Date.now())return Object.assign(result,{expired:true});
-  assert_(raw.encryptedRequest,'NOT_READY');
-  return Object.assign(result,{encryptedRequest:envelope_(raw.encryptedRequest,sellerKey_())});
+  const stored=quoteStoredData_(raw);
+  if(stored.request)assert_(stored.request.requestId===result.requestId,'NOT_READY');
+  return Object.assign(result,stored.request || stored);
 }
 function listEncryptedRequests_(body) {
   assert_(Number.isSafeInteger(body.afterSequence) && body.afterSequence>=0);
@@ -183,10 +215,42 @@ function canonical_(value) {
   const sorted = v => Array.isArray(v) ? v.map(sorted) : v && typeof v==='object' ? Object.keys(v).sort().reduce((out,k)=>{out[k]=sorted(v[k]);return out;},{}) : v;
   return JSON.stringify(sorted(value)).replace(/\u2028/g,'\\u2028').replace(/\u2029/g,'\\u2029');
 }
-function saleDigest_(meta,envelope) { return hash_(canonical_({metadata:meta,encryptedPersonal:envelope})); }
+function normalizedPersonal_(value) {
+  const copy=JSON.parse(JSON.stringify(value));
+  if(copy.order)delete copy.order.orderId;
+  if(copy.quoteDocumentJson===null)delete copy.quoteDocumentJson;
+  return copy;
+}
+function saleDigest_(meta,personal,plain) { return hash_(canonical_(plain?{metadata:meta,personalData:normalizedPersonal_(personal)}:{metadata:meta,encryptedPersonal:personal})); }
+function salePersonal_(value,meta) {
+  assert_(value && typeof value==='object' && Object.keys(value).every(k=>['order','quoteDocumentJson'].includes(k)));
+  const order=value.order;assert_(order && typeof order==='object' && !Array.isArray(order));
+  Object.keys(meta).filter(k=>k!=='items').forEach(k=>assert_(canonical_(order[k])===canonical_(meta[k])));
+  const limits={customerName:100,customerPhone:30,customerEmail:254,receiverName:100,zipNo:10,roadAddress:300,detailAddress:300,note:3000,itemSummary:20000,sourceQuoteNumber:120,sourceRequestId:36};
+  Object.keys(limits).forEach(k=>assert_(typeof order[k]==='string' && order[k].length<=limits[k] && !/[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(order[k])));
+  assert_(/^0[0-9]{8,10}$/.test(order.customerPhone.replace(/[\s()-]/g,'')));
+  assert_(!order.customerEmail || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(order.customerEmail));
+  assert_(!order.sourceRequestId || UUID_PATTERN.test(order.sourceRequestId));
+  assert_(order.itemSummary.length>0 && (!value.quoteDocumentJson || typeof value.quoteDocumentJson==='string' && value.quoteDocumentJson.length<=30000));
+  const items=order.itemSummary.split(/\r?\n/).filter(line=>line.trim()).map(line=>{
+    const fields=line.split('|').map(s=>s.trim());assert_([7,9,10].includes(fields.length));
+    const q=fields.length===7?3:5,p=fields.length===7?4:6;
+    assert_(/^[0-9]+$/.test(fields[q]) && /^[0-9]+$/.test(fields[p]));
+    return {species:fields[0],quantity:Number(fields[q]),unitPrice:Number(fields[p])};
+  });
+  assert_(canonical_(items)===canonical_(meta.items));
+  assert_(JSON.stringify(value).length<=40000);
+  if(value.quoteDocumentJson){const doc=JSON.parse(value.quoteDocumentJson);assert_(doc.sourceQuoteNumber===order.sourceQuoteNumber && doc.customerPhone===order.customerPhone && doc.supplyAmount===meta.totalPrice && doc.taxAmount===meta.taxAmount);}
+  return normalizedPersonal_(value);
+}
 function saveSale_(body) {
-  assert_(UUID_PATTERN.test(body.eventId)); const meta=saleMetadata_(body.metadata); const encrypted=envelope_(body.encryptedPersonal,sellerKey_());
-  const digest=saleDigest_(meta,encrypted); assert_(body.fingerprint===digest);
+  assert_(UUID_PATTERN.test(body.eventId)); const meta=saleMetadata_(body.metadata);
+  const plain=body.personalData!==undefined;
+  assert_(plain ? body.encryptedPersonal===undefined && body.protocolVersion===5 : body.encryptedPersonal!==undefined);
+  const personal=plain?salePersonal_(body.personalData,meta):envelope_(body.encryptedPersonal,sellerKey_());
+  const stored=plain?{personalData:personal}:personal;
+  if(plain)assert_(personal.order.sourceRequestId===body.sourceRequestId);
+  const digest=saleDigest_(meta,personal,plain); assert_(body.fingerprint===digest);
   assert_(body.sourceRequestId==='' || UUID_PATTERN.test(body.sourceRequestId));
   return lock_(()=>{
     const sheet=namedSheet_(SALE_SHEET,SALE_HEADERS,false), events=namedSheet_(SALE_EVENT_SHEET,SALE_EVENT_HEADERS,false);
@@ -213,7 +277,7 @@ function saveSale_(body) {
       }else assert_(meta.revision===1 && ['구매확정','입금확인','주문취소'].includes(meta.status),'CONFLICT');
       const props=PropertiesService.getScriptProperties(); const seq=rows.reduce((m,r)=>Math.max(m,Number(r[1])||0),Number(props.getProperty('SALE_SEQUENCE'))||0)+1;
       assert_(Number.isSafeInteger(seq),'NOT_READY'); props.setProperty('SALE_SEQUENCE',String(seq));
-      const row=[meta.orderNumber,seq,meta.status,new Date(meta.purchasedAt).toISOString(),meta.completedAt?new Date(meta.completedAt).toISOString():'',meta.totalQty,meta.totalPrice,meta.taxAmount,meta.costTotal,meta.expenseTotal,meta.costConfirmed,meta.profitMode,meta.commissionBps,profit_(meta),retentionUntil_(meta),JSON.stringify(meta),JSON.stringify(encrypted),digest,body.eventId,meta.revision];
+      const row=[meta.orderNumber,seq,meta.status,new Date(meta.purchasedAt).toISOString(),meta.completedAt?new Date(meta.completedAt).toISOString():'',meta.totalQty,meta.totalPrice,meta.taxAmount,meta.costTotal,meta.expenseTotal,meta.costConfirmed,meta.profitMode,meta.commissionBps,profit_(meta),retentionUntil_(meta),JSON.stringify(meta),JSON.stringify(stored),digest,body.eventId,meta.revision];
       sheet.getRange(i<0?sheet.getLastRow()+1:i+2,1,1,20).setNumberFormat('@').setValues([row]); SpreadsheetApp.flush();
     }
     if(!namedRows_(events,5).some(r=>r[0]===body.eventId)) {
@@ -229,8 +293,10 @@ function listSales_(body) {
   const rows=namedRows_(namedSheet_(SALE_SHEET,SALE_HEADERS,false),20).filter(r=>Number(r[1])>body.afterSequence).sort((a,b)=>Number(a[1])-Number(b[1]));
   const page=rows.slice(0,100).map(r=>{
     const meta=JSON.parse(r[15]); if(meta.archived)return {sequence:Number(r[1]),expired:true};
-    const encrypted=envelope_(JSON.parse(r[16]),sellerKey_()); assert_(saleDigest_(meta,encrypted)===r[17],'NOT_READY');
-    return {sequence:Number(r[1]),eventId:r[18],metadata:saleMetadata_(meta),encryptedPersonal:encrypted,fingerprint:r[17],expired:false};
+    const stored=JSON.parse(r[16]),plain=stored.personalData!==undefined;
+    const personal=plain?salePersonal_(stored.personalData,meta):envelope_(stored,sellerKey_());
+    assert_(saleDigest_(meta,personal,plain)===r[17],'NOT_READY');
+    return Object.assign({sequence:Number(r[1]),eventId:r[18],metadata:saleMetadata_(meta),fingerprint:r[17],expired:false},plain?{personalData:personal}:{encryptedPersonal:personal});
   }); return {sales:page,hasMore:rows.length>page.length};
 }
 function seoulDay_(time) { return new Date(time+9*3600000).toISOString().slice(0,10); }

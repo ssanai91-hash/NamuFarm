@@ -48,35 +48,85 @@ class Vault:
 
     @classmethod
     def create(cls, path, password, seller):
+        """Legacy vault import; existing files are never replaced."""
+        salt = os.urandom(16)
+        return cls._create(path, password_key(password, salt), {"version": b"1", "salt": salt}, seller.material())
+
+    @classmethod
+    def create_device(cls, path, protector=None):
+        from . import device_protection
+        protector = protector or device_protection
+        secret = os.urandom(32)
+        wrapped = protector.protect(secret)
+        require(protector.unprotect(wrapped) == secret, "Windows 연결 정보를 확인하지 못했습니다.")
+        return cls._create(path, secret, {"version": b"2", "device_key": wrapped}, {})
+
+    @classmethod
+    def _create(cls, path, secret, settings, material):
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
-        salt = os.urandom(16)
-        vault = cls(path, password_key(password, salt))
+        vault = cls(path, secret)
         try:
             descriptor = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
             os.close(descriptor)
         except FileExistsError:
-            raise UserError("기존 PC 보관함이 있습니다. 먼저 잠금을 해제해주세요.") from None
+            raise UserError("기존 PC 보관함이 있습니다. 기존 파일을 열어주세요.") from None
         try:
             with vault._db() as db:
                 db.executescript("CREATE TABLE config (name TEXT PRIMARY KEY, value BLOB NOT NULL);"
                                  "CREATE TABLE cache (kind TEXT, id TEXT, body BLOB NOT NULL, PRIMARY KEY(kind,id));"
                                  "CREATE TABLE outbox (seq INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT UNIQUE, body BLOB NOT NULL);")
-                db.execute("INSERT INTO config VALUES ('version',?)", (b"1",))
-                db.execute("INSERT INTO config VALUES ('salt',?)", (salt,))
+                db.executemany("INSERT INTO config VALUES (?,?)", settings.items())
                 db.execute("INSERT INTO config VALUES ('credentials',?)",
-                           (vault._seal({**seller.material(), "deviceToken": os.urandom(32).hex(), "paired": False}, "credentials"),))
+                           (vault._seal({**material, "deviceToken": os.urandom(32).hex(), "paired": False}, "credentials"),))
         except Exception:
             path.unlink(missing_ok=True)
             raise
         return vault
+
+    @staticmethod
+    def _settings(path):
+        require(Path(path).is_file(), "기존 PC 보관함을 찾을 수 없습니다.")
+        with closing(sqlite3.connect(Path(path).resolve().as_uri() + "?mode=ro", uri=True)) as db:
+            return dict(db.execute("SELECT name,value FROM config"))
+
+    @classmethod
+    def device_managed(cls, path):
+        return cls._settings(path).get("version") == b"2"
+
+    @classmethod
+    def open_device(cls, path, protector=None):
+        from . import device_protection
+        protector = protector or device_protection
+        try:
+            settings = cls._settings(path)
+            require(settings.get("version") == b"2")
+            secret = protector.unprotect(settings["device_key"])
+            require(len(secret) == 32)
+            vault = cls(path, secret)
+            vault.credentials()  # Verify before exposing any cache or outbox.
+            vault.purge()
+            return vault
+        except Exception:
+            raise UserError("이 Windows 계정에서 PC 보관함을 열 수 없습니다. 기존 파일은 보존했습니다.") from None
+
+    def use_device_protection(self, protector=None):
+        from . import device_protection
+        protector = protector or device_protection
+        wrapped = protector.protect(self.secret)
+        require(protector.unprotect(wrapped) == self.secret)
+        # Only rewrap the cache key. All customer rows, outbox IDs and tokens stay intact.
+        with self.mutex, self._db() as db:
+            db.execute("INSERT OR REPLACE INTO config VALUES ('device_key',?)", (wrapped,))
+            db.execute("UPDATE config SET value=? WHERE name='version'", (b"2",))
+            db.execute("DELETE FROM config WHERE name='salt'")
 
     @classmethod
     def unlock(cls, path, password):
         try:
             if not Path(path).is_file():
                 raise ValueError()
-            with closing(sqlite3.connect(f"file:{Path(path).resolve().as_posix()}?mode=ro", uri=True)) as db:
+            with closing(sqlite3.connect(Path(path).resolve().as_uri() + "?mode=ro", uri=True)) as db:
                 settings = dict(db.execute("SELECT name,value FROM config"))
             if settings.get("version") != b"1" or len(settings["salt"]) != 16:
                 raise ValueError()

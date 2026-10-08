@@ -19,7 +19,20 @@ fun localProperty(name: String, defaultValue: String = ""): String {
         .replace("\"", "\\\"")
 }
 
+// Release signing belongs to the build environment, never the repository or APK.
+val signingNames = listOf("NAMUFARM_KEYSTORE", "NAMUFARM_STORE_PASSWORD", "NAMUFARM_KEY_ALIAS", "NAMUFARM_KEY_PASSWORD")
+val releaseSigning = signingNames.associateWith { providers.environmentVariable(it).orNull.orEmpty() }
+val hasReleaseSigning = releaseSigning.values.all { it.isNotBlank() }
+
 android {
+    signingConfigs {
+        if (hasReleaseSigning) create("sellerRelease") {
+            storeFile = file(releaseSigning.getValue("NAMUFARM_KEYSTORE"))
+            storePassword = releaseSigning.getValue("NAMUFARM_STORE_PASSWORD")
+            keyAlias = releaseSigning.getValue("NAMUFARM_KEY_ALIAS")
+            keyPassword = releaseSigning.getValue("NAMUFARM_KEY_PASSWORD")
+        }
+    }
     namespace = "com.example.namufarm"
 
     compileSdk {
@@ -36,8 +49,8 @@ android {
         applicationId = "com.example.namufarm"
         minSdk = 24
         targetSdk = 36
-        versionCode = 2
-        versionName = "1.0.1"
+        versionCode = 3
+        versionName = "1.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -62,6 +75,7 @@ android {
 
     buildTypes {
         release {
+            if (hasReleaseSigning) signingConfig = signingConfigs.getByName("sellerRelease")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -124,3 +138,12 @@ dependencies {
 base {
     archivesName.set("NamuFarm")
 }
+
+// Fail closed: release tasks must never silently produce unsigned or debug-signed APKs.
+val validateSellerSigning by tasks.registering {
+    doLast {
+        check(hasReleaseSigning) { "Configure the persistent NamuFarm release keystore before building a release." }
+        check(file(releaseSigning.getValue("NAMUFARM_KEYSTORE")).isFile) { "The release keystore is missing." }
+    }
+}
+tasks.matching { it.name == "preReleaseBuild" }.configureEach { dependsOn(validateSellerSigning) }

@@ -43,12 +43,13 @@ class ManagerTest(unittest.TestCase):
         self.assertEqual(sale, self.manager.vault.rows('sales'))
         self.assertEqual(['list_requests'], self.manager.api.calls)
 
-    def test_node_backup_restore_and_python_encryption_match_real_server(self):
+    def test_legacy_sale_edit_transitions_to_keyless_server_data(self):
         self.manager.save_sale('ORDER_TEST', 1, {'receiverName': '변경 수령인', 'note': '첫 줄\n두 번째 줄'})
         stored = self.bridge.send(control='stored')
         self.assertEqual('변경 수령인', stored['order']['receiverName'])
         self.assertEqual('첫 줄\n두 번째 줄', stored['order']['note'])
-        self.assertNotIn('변경 수령인', json.dumps(stored['cells'], ensure_ascii=False))
+        self.assertIn('변경 수령인', json.dumps(stored['cells'], ensure_ascii=False))
+        self.assertNotIn('변경 수령인'.encode(), self.path.read_bytes())
         self.assertFalse(self.manager.vault.pending())
 
     def test_website_crypto_fixture_decrypts_in_python(self):
@@ -308,7 +309,7 @@ class ManagerTest(unittest.TestCase):
         self.assertEqual(original, self.manager.vault.rows('sales'))
         self.assertTrue(self.manager.vault.pending())
 
-    def test_old_server_and_wrong_pinned_key_rejected_before_pending_send(self):
+    def test_old_server_and_missing_capabilities_rejected_before_pending_send(self):
         request = self.bridge.send(control='submit')
         self.manager.sync()
         self.manager.api.offline = True
@@ -316,7 +317,7 @@ class ManagerTest(unittest.TestCase):
             self.manager.close_request(request['requestId'])
         self.manager.api.offline = False
         self.manager.api.calls.clear()
-        for field, value in (('requestDeletionSync', False), ('sellerKey', {'keyId': 'wrong', 'publicKey': 'wrong'})):
+        for field, value in (('requestDeletionSync', False), ('version', 4), ('customerDataReady', False)):
             self.manager.api.info_filter = lambda info, field=field, value=value: {**info, field: value}
             with self.assertRaises(UserError):
                 self.manager.sync()

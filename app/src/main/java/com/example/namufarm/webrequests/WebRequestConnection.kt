@@ -11,8 +11,6 @@ class WebRequestConnection(context: Context, private val repository: NamuFarmRep
     private val app = context.applicationContext
     private val settings = WebRequestSettings(app)
     private val keys = com.example.namufarm.privacy.SellerKeys(app)
-    val securityReady get() = keys.backedUp && keys.registered
-    val backedUp get() = keys.backedUp
     val configured get() = WebQuoteTransport.configured
     val paired get() = settings.paired
     val pushConfigured get() = WebRequestPush.configured
@@ -32,27 +30,14 @@ class WebRequestConnection(context: Context, private val repository: NamuFarmRep
     }
     suspend fun refresh(): Int {
         check(configured && paired) { "홈페이지 요청함을 먼저 연결해주세요." }
-        check(securityReady) { "고객정보 보안 백업과 연결을 먼저 완료해주세요." }
         PushRegistrationWorker.enqueue(app)
         return repository.syncWebRequests(WebQuoteTransport.api, BuildConfig.WEB_REQUEST_SCRIPT_URL, settings.deviceToken) { outer ->
-            val envelope=checkNotNull(outer.encryptedRequest) { "암호화되지 않은 고객 요청은 가져오지 않습니다." }
-            com.google.gson.Gson().fromJson(keys.open(envelope,"quote",checkNotNull(outer.requestId)),com.example.namufarm.data.remote.WebQuoteRemote::class.java)
+            val envelope = outer.encryptedRequest
+            if (envelope == null) outer else {
+                check(keys.initialized && keys.keyId() == envelope.keyId) { "이전 버전의 고객 자료가 있습니다. ‘이전 자료 복원’에서 기존 백업을 한 번 불러와주세요." }
+                com.google.gson.Gson().fromJson(keys.open(envelope,"quote",checkNotNull(outer.requestId)),com.example.namufarm.data.remote.WebQuoteRemote::class.java)
+            }
         }
-    }
-    suspend fun configureSecurity() {
-        check(paired && keys.backedUp) { "기기 연결 후 보안 백업을 먼저 저장해주세요." }
-        val response=WebQuoteTransport.api.request(BuildConfig.WEB_REQUEST_SCRIPT_URL,mapOf("action" to "configure_encryption","deviceToken" to settings.deviceToken,"publicKey" to keys.publicKey()))
-        WebQuoteValidator.checkResponse(response)
-        check(response.keyRegistered==true && response.keyId==keys.keyId()) { "서버의 보안키를 확인하지 못했습니다." }
-        keys.markRegistered()
-        check(response.encryptionReady==true) { "이전 고객 요청을 변환 중입니다. 보안 연결을 다시 눌러주세요." }
-    }
-    fun saveBackup(uri: android.net.Uri, password: CharArray) {
-        try {
-            val json=keys.exportBackup(password)
-            checkNotNull(app.contentResolver.openOutputStream(uri,"wt")).use { it.write(json.toByteArray(Charsets.UTF_8)); it.flush() }
-            keys.markBackupSaved()
-        } finally { password.fill('\u0000') }
     }
     fun restoreBackup(uri: android.net.Uri, password: CharArray) {
         try {
@@ -65,7 +50,7 @@ class WebRequestConnection(context: Context, private val repository: NamuFarmRep
         } finally { password.fill('\u0000') }
     }
     suspend fun close(id: String) {
-        check(securityReady && paired)
+        check(paired)
         val response=WebQuoteTransport.api.request(BuildConfig.WEB_REQUEST_SCRIPT_URL,mapOf("action" to "close_request","deviceToken" to settings.deviceToken,"requestId" to id))
         WebQuoteValidator.checkResponse(response);check(response.closed==true)
         repository.closeLocalRequest(id)

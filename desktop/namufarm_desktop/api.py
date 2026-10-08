@@ -49,7 +49,7 @@ class ScriptApi:
             if data is not None and len(data) > 65000:
                 raise UserError("전송할 기록이 너무 큽니다.")
             request = urllib.request.Request(self.url, data=data,
-                       headers={"Content-Type": "application/json", "User-Agent": "NamuFarmDesktop/0.3"})
+                       headers={"Content-Type": "application/json", "User-Agent": "NamuFarmDesktop/0.4"})
             with self.opener.open(request, timeout=REQUEST_TIMEOUT) as response:
                 raw = response.read(MAX_RESPONSE + 1)
                 if len(raw) > MAX_RESPONSE:
@@ -60,8 +60,9 @@ class ScriptApi:
                 if code == "CONFLICT":
                     raise ConflictError("앱이나 다른 PC에서 먼저 수정했습니다. 전송 대기를 확인해주세요.")
                 messages = {"UNAUTHORIZED": "기기 연결 코드를 다시 확인해주세요.",
-                            "NOT_READY": "앱 보안 연결과 서버 설정을 먼저 완료해주세요.",
-                            "INVALID": "입력값을 확인해주세요.", "BUSY": "서버가 처리 중입니다. 잠시 후 동기화해주세요."}
+                            "NOT_READY": "구글시트 서버 설정과 배포 버전을 확인해주세요.",
+                            "UPGRADE_REQUIRED": "앱과 구글시트 서버를 최신 버전으로 업데이트해주세요.",
+                            "INVALID": "입력값과 앱·서버 버전을 확인해주세요.", "BUSY": "서버가 처리 중입니다. 잠시 후 동기화해주세요."}
                 raise UserError(messages.get(code, "서버가 저장을 확인하지 못했습니다. 전송 대기는 유지됩니다."))
             return result
         except (UserError, ConflictError):
@@ -80,8 +81,8 @@ class ScriptApi:
 
     def info(self):
         result = self._send()
-        if result.get("service") != "namufarm-quote-requests" or result.get("version") != 4:
-            raise UserError("나무팜 API v4 서버를 연결해주세요.")
+        if result.get("service") != "namufarm-quote-requests" or result.get("version") != 5:
+            raise UserError("구글시트 서버를 나무팜 API v5로 업데이트해주세요.")
         return result
 
     def call(self, action, **fields):

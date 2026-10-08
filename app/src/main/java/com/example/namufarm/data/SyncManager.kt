@@ -375,7 +375,7 @@ class SyncManager(
 
     /** Sales sync must not depend on the retired inventory endpoint. */
     suspend fun syncSecureOrders(): Int {
-        val gateway = checkNotNull(salesGateway) { "보안 판매 연결을 먼저 설정해주세요." }
+        val gateway = checkNotNull(salesGateway) { "홈페이지 요청함을 먼저 연결해주세요." }
         val orders = gateway.orders()
         local.transaction {
             check(getAllPendingSync().none { it.syncType in listOf(PendingSyncType.SALE, PendingSyncType.ORDER, PendingSyncType.CANCEL_ORDER, PendingSyncType.DELIVERY) }) {

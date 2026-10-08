@@ -1,4 +1,5 @@
 import base64
+import copy
 import hashlib
 import json
 import os
@@ -16,6 +17,14 @@ ALGORITHM = "RSA-OAEP-256+A256GCM"
 def canonical(value):
     return json.dumps(value, sort_keys=True, ensure_ascii=False, separators=(",", ":"),
                       allow_nan=False).replace("\u2028", "\\u2028").replace("\u2029", "\\u2029")
+
+
+def customer_digest(metadata, personal):
+    personal = copy.deepcopy(personal)
+    personal['order'].pop('orderId', None)
+    if personal.get('quoteDocumentJson') is None:
+        personal.pop('quoteDocumentJson', None)
+    return hashlib.sha256(canonical({"metadata": metadata, "personalData": personal}).encode()).hexdigest()
 
 
 def digest(metadata, envelope):

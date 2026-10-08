@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime, timezone
 
 from .api import DEFAULT_URL, ScriptApi
-from .crypto import canonical, digest, SellerKey
+from .crypto import canonical, digest, customer_digest, SellerKey
 from .domain import (changed, integer, metadata, now_ms, require, valid_id, validate_metadata, validate_request, sale_expired)
 from .errors import UserError, ConflictError
 from .commerce import (validate_draft, order_from_draft, quote_document, tracking_fields,
@@ -15,16 +15,14 @@ class Manager:
     def __init__(self, vault, api=None):
         self.vault = vault
         self.credentials = vault.credentials()
-        self.seller = SellerKey(self.credentials["privateKey"], self.credentials["publicKey"])
+        self.seller = SellerKey(self.credentials["privateKey"], self.credentials["publicKey"]) if self.credentials.get("privateKey") else None
         self.api = api or ScriptApi(self.credentials.get("url", DEFAULT_URL), self.credentials["deviceToken"])
 
     def verify_server(self):
         info = self.api.info()
-        key = info.get("sellerKey")
-        require(isinstance(key, dict) and key.get("keyId") == self.seller.key_id
-                and key.get("publicKey") == self.seller.public_encoded,
-                "앱에서 등록한 보안키와 다른 서버입니다. 기존 백업과 서버 연결을 확인해주세요.")
-        require(info.get("encryptionReady") is True, "앱의 서버 보안 연결을 먼저 완료해주세요.")
+        require(info.get("version") == 5 and info.get("connectionMode") == "device-auth"
+                and info.get("customerDataReady") is True,
+                "구글시트 서버를 API v5로 업데이트해주세요. 기존 자료는 보존됩니다.")
         require(info.get("requestDeletionSync") is True,
                 "PC 삭제 동기화를 지원하는 서버 코드로 Apps Script 배포를 업데이트해주세요.")
         return info
@@ -45,7 +43,7 @@ class Manager:
         self.vault.purge()
         requests = self.vault.rows("requests")
         sales = self.vault.rows("sales")
-        decoded_requests = [{**r, "personal": validate_request(r, self.seller.open(r["encryptedRequest"], "quote", r["requestId"]))} for r in requests]
+        decoded_requests = [{**r, "personal": self.decode_request(r)} for r in requests]
         decoded_sales = []
         for row in sales:
             private = self.decode_sale(row)
@@ -104,9 +102,8 @@ class Manager:
         order = order_from_draft(draft)
         private = {"order": order, "quoteDocumentJson": canonical(quote_document(draft))}
         meta, event_id = metadata(order), str(uuid.uuid4())
-        envelope = self.seller.seal(private, "order", event_id)
-        payload = {"eventId": event_id, "metadata": meta, "encryptedPersonal": envelope,
-                   "fingerprint": digest(meta, envelope), "sourceRequestId": source}
+        payload = {"eventId": event_id, "metadata": meta, "personalData": private,
+                   "fingerprint": customer_digest(meta, private), "protocolVersion": 5, "sourceRequestId": source}
         require(len(canonical(payload).encode("utf-8")) <= 63000, "견적 품목이나 메모를 줄여주세요.")
         self.vault.queue({"id": event_id, "action": "save_sale", "payload": payload},
                          {**payload, "sequence": 0, "expired": False})
@@ -149,10 +146,39 @@ class Manager:
             done += 1
         return view
 
+    def restore_legacy(self, raw, password):
+        seller = SellerKey.from_backup(raw, password)
+        info = self.verify_server()
+        require((info.get("sellerKey") or {}).get("keyId") == seller.key_id, "서버의 이전 자료와 다른 백업입니다.")
+        credentials = self.vault.credentials()
+        credentials.update(seller.material())
+        self.vault.save_credentials(credentials)
+        self.credentials, self.seller = credentials, seller
+        return self.view()
+
+    def open_legacy(self, envelope, kind, reference):
+        require(self.seller is not None and envelope.get("keyId") == self.seller.key_id,
+                "이전 버전 자료가 있습니다. 연결 · 설정의 ‘이전 자료 복원’에서 기존 백업을 선택해주세요.")
+        return self.seller.open(envelope, kind, reference)
+
+    def decode_request(self, row):
+        if "encryptedRequest" in row:
+            require("customerName" not in row, "고객 요청 형식이 중복되어 확인이 필요합니다.")
+            plain = self.open_legacy(row["encryptedRequest"], "quote", row["requestId"])
+        else:
+            plain = row
+        return validate_request(row, plain)
+
     def decode_sale(self, row):
         meta = validate_metadata(row["metadata"])
-        require(valid_id(row["eventId"]) and digest(meta, row["encryptedPersonal"]) == row["fingerprint"])
-        private = self.seller.open(row["encryptedPersonal"], "order", row["eventId"])
+        require(valid_id(row["eventId"]))
+        require(("personalData" in row) != ("encryptedPersonal" in row))
+        if "personalData" in row:
+            private = row["personalData"]
+            require(customer_digest(meta, private) == row["fingerprint"])
+        else:
+            require(digest(meta, row["encryptedPersonal"]) == row["fingerprint"])
+            private = self.open_legacy(row["encryptedPersonal"], "order", row["eventId"])
         require(isinstance(private, dict) and isinstance(private.get("order"), dict))
         require(canonical(metadata(private["order"])) == canonical(meta), "판매 기록과 고객정보가 일치하지 않습니다.")
         document = private.get("quoteDocumentJson")
@@ -195,7 +221,7 @@ class Manager:
                     if row.get("expired") or row["expiresAt"] <= now_ms():
                         deleted.add(reference)
                         continue
-                    validate_request(row, self.seller.open(row["encryptedRequest"], "quote", reference))
+                    self.decode_request(row)
                 else:
                     if row.get("expired"):
                         continue
@@ -275,12 +301,12 @@ class Manager:
         private = changed(self.decode_sale(row), fields, target)
         meta = metadata(private["order"])
         event_id = str(uuid.uuid4())
-        envelope = self.seller.seal(private, "order", event_id)
-        payload = {"eventId": event_id, "metadata": meta, "encryptedPersonal": envelope,
-                   "fingerprint": digest(meta, envelope), "sourceRequestId": private["order"].get("sourceRequestId", "")}
+        payload = {"eventId": event_id, "metadata": meta, "personalData": private,
+                   "fingerprint": customer_digest(meta, private), "protocolVersion": 5, "sourceRequestId": private["order"].get("sourceRequestId", "")}
         require(len(canonical(payload).encode("utf-8")) <= 63000, "전송할 기록이 너무 큽니다.")
-        optimistic = {**row, "eventId": event_id, "metadata": meta, "encryptedPersonal": envelope,
+        optimistic = {**row, "eventId": event_id, "metadata": meta, "personalData": private,
                       "fingerprint": payload["fingerprint"]}
+        optimistic.pop("encryptedPersonal", None)
         self.vault.queue({"id": event_id, "action": "save_sale", "payload": payload}, optimistic)
         return self.sync()
 

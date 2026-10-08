@@ -28,28 +28,33 @@ object PrivacyWire {
         else -> element
     }
     fun canonical(value: Any): String = gson.toJson(sort(gson.toJsonTree(value)))
+    fun customerFingerprint(metadata: SaleMetadata, personal: SalePrivateData): String =
+        HybridCrypto.digest(canonical(mapOf("metadata" to metadata, "personalData" to personal)))
     fun fingerprint(metadata: SaleMetadata, envelope: com.example.namufarm.privacy.PrivacyEnvelope): String =
         HybridCrypto.digest(canonical(mapOf("metadata" to metadata, "encryptedPersonal" to envelope)))
 }
 
-class EncryptedSalesGateway(private val settings: WebRequestSettings, private val keys: SellerKeys,
+class DeviceSalesGateway(private val settings: WebRequestSettings, private val keys: SellerKeys,
     private val api: WebQuoteApi = WebQuoteTransport.api, private val url: String = BuildConfig.WEB_REQUEST_SCRIPT_URL) : SalesGateway {
     private fun token(): String {
-        check(WebQuoteTransport.configured && settings.paired && keys.backedUp && keys.registered) { "홈페이지 요청함 연결과 고객정보 보안 설정을 먼저 완료해주세요." }
+        check(WebQuoteTransport.configured && settings.paired) { "홈페이지 요청함을 먼저 연결해주세요." }
         return settings.deviceToken
     }
     override fun prepare(order: OrderEntity, eventId: String, quoteDocumentJson: String?): PendingSaleSyncPayload {
         token()
         val meta = SalePolicy.metadata(order)
-        val envelope = keys.seal(PrivacyWire.gson.toJson(SalePrivateData(order.copy(orderId = null), quoteDocumentJson)), "order", eventId)
-        val payload=PendingSaleSyncPayload(eventId, meta, envelope, PrivacyWire.fingerprint(meta, envelope), order.sourceRequestId)
-        require(PrivacyWire.gson.toJson(payload).length<=63000) { "품목이 많아 보안 기록이 너무 큽니다. 견적을 나누어 작성해주세요." }
+        val personal = SalePrivateData(order.copy(orderId = null), quoteDocumentJson)
+        val payload=PendingSaleSyncPayload(eventId, meta, null, PrivacyWire.customerFingerprint(meta, personal), order.sourceRequestId, personal)
+        require(PrivacyWire.gson.toJson(payload).length<=63000) { "품목이 많아 전송할 기록이 너무 큽니다. 견적을 나누어 작성해주세요." }
         return payload
     }
     override suspend fun save(payload: PendingSaleSyncPayload): Boolean {
-        val response = api.request(url, mapOf("action" to "save_sale", "deviceToken" to token(), "eventId" to payload.eventId,
-            "metadata" to payload.metadata, "encryptedPersonal" to payload.encryptedPersonal, "fingerprint" to payload.fingerprint,
-            "sourceRequestId" to payload.sourceRequestId))
+        check((payload.personalData != null) != (payload.encryptedPersonal != null)) { "전송 대기 기록 형식을 확인해주세요." }
+        val body = mutableMapOf<String, Any>("action" to "save_sale", "protocolVersion" to 5, "deviceToken" to token(), "eventId" to payload.eventId,
+            "metadata" to payload.metadata, "fingerprint" to payload.fingerprint, "sourceRequestId" to payload.sourceRequestId)
+        payload.personalData?.let { body["personalData"] = it }
+        payload.encryptedPersonal?.let { body["encryptedPersonal"] = it } // Retry frozen v4 events unchanged.
+        val response = api.request(url, body)
         WebQuoteValidator.checkResponse(response)
         check(response.saved == true && response.orderNumber == payload.metadata.orderNumber && response.revision == payload.metadata.revision
             && response.fingerprint == payload.fingerprint) { "판매 기록 저장을 확인하지 못했습니다. 전송 대기 기록을 유지합니다." }
@@ -68,9 +73,9 @@ class EncryptedSalesGateway(private val settings: WebRequestSettings, private va
             rows.forEach { row ->
                 check(row.sequence > cursor && row.sequence <= SalePolicy.MAX_SAFE); cursor = row.sequence
                 if (!row.expired) {
-                    val meta = checkNotNull(row.metadata); val encrypted = checkNotNull(row.encryptedPersonal)
-                    check(PrivacyWire.fingerprint(meta, encrypted) == row.fingerprint && numbers.add(meta.orderNumber))
-                    val plain = PrivacyWire.gson.fromJson(keys.open(encrypted, "order", row.eventId), SalePrivateData::class.java)
+                    val meta = checkNotNull(row.metadata)
+                    val plain = SaleWire.decode(row, keys)
+                    check(numbers.add(meta.orderNumber))
                     check(PrivacyWire.canonical(SalePolicy.metadata(plain.order)) == PrivacyWire.canonical(meta)) { "판매 기록과 고객정보가 일치하지 않습니다." }
                     plain.quoteDocumentJson?.let { json ->
                         val document=PrivacyWire.gson.fromJson(json,com.example.namufarm.quotation.QuoteDocument::class.java).validate()
@@ -97,5 +102,21 @@ class EncryptedSalesGateway(private val settings: WebRequestSettings, private va
                 && b.unknownProfitOrders in 0..b.orders)
         }
         return report
+    }
+}
+
+/** One decoder for live records and old encrypted records; never silently skips a customer. */
+object SaleWire {
+    fun decode(row: SaleRemote, keys: SellerKeys): SalePrivateData {
+        val meta = checkNotNull(row.metadata)
+        check((row.personalData != null) != (row.encryptedPersonal != null)) { "고객정보 형식을 확인해주세요." }
+        row.personalData?.let {
+            check(PrivacyWire.customerFingerprint(meta, it) == row.fingerprint) { "판매 기록이 일치하지 않습니다." }
+            return it
+        }
+        val encrypted = checkNotNull(row.encryptedPersonal)
+        check(PrivacyWire.fingerprint(meta, encrypted) == row.fingerprint)
+        check(keys.initialized && keys.keyId() == encrypted.keyId) { "이전 버전의 판매 자료가 있습니다. 요청함의 ‘이전 자료 복원’에서 기존 백업을 불러와주세요." }
+        return PrivacyWire.gson.fromJson(keys.open(encrypted, "order", row.eventId), SalePrivateData::class.java)
     }
 }

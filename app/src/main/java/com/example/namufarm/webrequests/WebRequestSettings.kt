@@ -13,9 +13,10 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
 /** Per-device credentials, encrypted with a non-exportable Android Keystore key. */
-class WebRequestSettings(context: Context) {
+class WebRequestSettings(context: Context, private val deviceKeyProvider: (() -> SecretKey)? = null) {
     private val prefs = context.applicationContext.getSharedPreferences("web_request_connection", Context.MODE_PRIVATE)
     private fun key(): SecretKey {
+        deviceKeyProvider?.let { return it() }
         val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
         return (store.getKey(KEY_ALIAS, null) as? SecretKey) ?: KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore").apply {
             init(KeyGenParameterSpec.Builder(KEY_ALIAS, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)

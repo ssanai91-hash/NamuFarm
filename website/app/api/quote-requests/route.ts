@@ -1,6 +1,6 @@
 import { quoteSchema } from "@/lib/quote-schema";
-import { jsonResult, quoteSettings, quoteEncryptionKey } from "@/lib/quote-server";
-import { privateFingerprint, sealCustomer } from "@/lib/privacy-crypto";
+import { jsonResult, quoteSettings } from "@/lib/quote-server";
+import { privateFingerprint } from "@/lib/privacy-crypto";
 import { validatedQuoteReceipt } from "@/lib/quote-receipt";
 export async function POST(request: Request) {
   const settings = quoteSettings();
@@ -24,22 +24,20 @@ export async function POST(request: Request) {
   } catch { return jsonResult({ error: "입력 내용을 확인해주세요." }, 400); }
   const parsed = quoteSchema.safeParse(input);
   if (!parsed.success) return jsonResult({ error: "품목, 수량과 연락처를 다시 확인해주세요." }, 400);
-  const sellerKey = await quoteEncryptionKey(settings);
-  if (!sellerKey) return jsonResult({ error: "접수 서버의 보안 연결을 확인하지 못했어요. 입력 내용은 유지됩니다. 잠시 후 다시 보내주세요." }, 503);
   const ip = request.headers.get("cf-connecting-ip") ?? "preview";
   const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(settings.secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
   const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(ip));
   const rateKey = Array.from(new Uint8Array(signature), b => b.toString(16).padStart(2, "0")).join("");
   try {
-    const encryptedRequest = await sealCustomer(parsed.data, sellerKey, "quote", parsed.data.requestId);
     const fingerprint = await privateFingerprint(settings.secret, JSON.stringify(parsed.data));
     const url = new URL(settings.url);
     // ContentService redirect URLs are short-lived; never reuse a cached redirect.
     url.searchParams.set("_nf", crypto.randomUUID());
-    const response = await fetch(url, { method: "POST", redirect: "follow", cache: "no-store", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "submit_request", webSecret: settings.secret, rateKey, requestId: parsed.data.requestId, fingerprint, encryptedRequest }), signal: AbortSignal.timeout(60000) });
+    const response = await fetch(url, { method: "POST", redirect: "follow", cache: "no-store", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "submit_request", webSecret: settings.secret, rateKey, requestId: parsed.data.requestId, fingerprint, protocolVersion: 5, request: parsed.data }), signal: AbortSignal.timeout(60000) });
     const result = await response.json() as { ok?: boolean; requestId?: string; code?: string };
     const receipt = validatedQuoteReceipt(result, parsed.data.requestId);
     if (response.ok && result.ok && receipt) return jsonResult({ ...receipt, testMode: settings.testMode }, 201);
+    if (["NOT_READY", "UPGRADE_REQUIRED", "INVALID"].includes(result.code ?? "")) return jsonResult({ error: "접수 서버를 준비 중입니다. 입력한 내용은 유지됩니다. 잠시 후 다시 보내주세요." }, 503);
     if (result.code === "RATE_LIMITED") return jsonResult({ error: "잠시 후 다시 요청해주세요. 입력한 내용은 그대로 유지됩니다." }, 429);
     if (result.code === "CONFLICT") return jsonResult({ error: "같은 요청번호의 내용이 달라 확인이 필요합니다. 새 요청으로 작성해주세요." }, 409);
     return jsonResult({ error: "접수 결과를 확인하지 못했어요. 같은 내용으로 다시 보내면 중복 없이 확인합니다." }, 502);

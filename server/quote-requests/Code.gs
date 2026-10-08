@@ -36,7 +36,7 @@ function doPost(e) {
     return json_(Object.assign({ ok: true }, value));
   } catch (error) {
     // Do not leak customer data, sheet identifiers, or credentials in responses/logs.
-    const code = ['INVALID','UNAUTHORIZED','CONFLICT','RATE_LIMITED','NOT_READY','BUSY','INVALID_ACTION'].indexOf(error.code) >= 0 ? error.code : 'UNAVAILABLE';
+    const code = ['INVALID','UNAUTHORIZED','CONFLICT','RATE_LIMITED','NOT_READY','BUSY','INVALID_ACTION','UPGRADE_REQUIRED'].indexOf(error.code) >= 0 ? error.code : 'UNAVAILABLE';
     return json_({ ok: false, code: code });
   }
 }
@@ -151,7 +151,7 @@ function setupReceiptNumbers_(sheet,book) {
   });
   book.setSpreadsheetTimeZone('Asia/Seoul'); sheet.setColumnWidth(17,220); sheet.setColumnWidth(18,210); SpreadsheetApp.flush();
 }
-function submitRequest_(body) { return submitEncryptedRequest_(body); }
+function submitRequest_(body) { return body.request !== undefined ? submitCustomerRequest_(body) : submitEncryptedRequest_(body); }
 
 /** Run once as the owner. Never replaces or clears an existing Sheet. */
 function setupQuoteRequests() {

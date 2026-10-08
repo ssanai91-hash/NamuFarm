@@ -28,7 +28,8 @@ function quoteWriteVerified_(sheet, rowNumber, values) {
   const stored=values.map(value=>typeof value==='boolean'?String(value):value);
   sheet.getRange(rowNumber,1,1,stored.length).setNumberFormat('@').setValues([stored]);
   SpreadsheetApp.flush();
-  assert_(JSON.stringify(sheet.getRange(rowNumber,1,1,stored.length).getValues()[0]) === JSON.stringify(stored),'NOT_READY');
+  const actual=sheet.getRange(rowNumber,1,1,stored.length).getValues()[0];
+  assert_(actual.every((value,i)=>stored.length===18 && i>=3 && i<=8 ? quoteCellEqual_(value,stored[i]) : value===stored[i]),'NOT_READY');
 }
 function quoteIndexEntries_() {
   const sheet=quoteTables_().index, seen=new Set(), sequences=new Set(), receipts=new Set();
@@ -90,9 +91,10 @@ function quoteRecord_(entry,cache,allowMissing) {
 function quoteCheckIdentity_(entry,row) {
   const v=entry.values;
   assert_(row[0]===v[QI.id] && row[2]===v[QI.created] && row[11]===v[QI.hash] && row[16]===v[QI.receipt] && row[17]===v[QI.seoul],'CONFLICT');
-  assert_(row.slice(3,9).every(value=>value===''),'NOT_READY');
-  const raw=JSON.parse(row[15]); assert_(raw.expired===true || !!raw.encryptedRequest,'NOT_READY');
-  if(raw.encryptedRequest)envelope_(raw.encryptedRequest,sellerKey_());
+  const raw=JSON.parse(row[15]);
+  const stored=raw.expired===true?{}:quoteStoredData_(raw);
+  if(stored.request)assert_(stored.request.requestId===row[0],'NOT_READY');
+  assert_(quoteCustomerCells_(stored).every((value,i)=>quoteCellEqual_(row[i+3],value)),'NOT_READY');
   receiptDetails_(row);
 }
 function quoteNextSequence_(entries) {
@@ -226,7 +228,7 @@ function quoteVacantSlot_(entry,sheet,entries) {
   }
   return Number(entry.values[QI.slot]);
 }
-function submitIndexedQuote_(body,encrypted) {
+function submitIndexedQuote_(body,stored) {
   const entries=quoteIndexEntries_(),cache={};quoteRepairTransitions_(entries,cache);
   let entry=entries.find(e=>e.values[QI.id]===body.requestId);
   if(entry){
@@ -250,7 +252,7 @@ function submitIndexedQuote_(body,encrypted) {
   if(!record){
     const slot=quoteVacantSlot_(entry,sheet,entries);
     const expired=Date.parse(v[QI.created])+QUOTE_RETENTION_MS<=now;
-    const row=[v[QI.id],0,v[QI.created],'','','','','','',expired?'보관종료':'신규',expired?'STOPPED':'PENDING',v[QI.hash],0,v[QI.created],'',JSON.stringify(expired?{expired:true}:{encryptedRequest:encrypted}),v[QI.receipt],v[QI.seoul]];
+    const row=[v[QI.id],0,v[QI.created],...quoteCustomerCells_(expired?{}:stored),expired?'보관종료':'신규',expired?'STOPPED':'PENDING',v[QI.hash],0,v[QI.created],'',JSON.stringify(expired?{expired:true}:stored),v[QI.receipt],v[QI.seoul]];
     quoteWriteVerified_(sheet,slot,row);record=quoteRecord_(entry,cache,false);
   }
   quotePublish_(entry,entries,record);quoteRefreshSummaryBestEffort_(entry,entries);
@@ -283,7 +285,7 @@ function purgeIndexedQuotes_() {
 /** Owner setup: adds metadata tables, indexes existing encrypted rows in place. */
 function setupMonthlyQuoteStorage() {
   return lock_(()=>{
-    assert_(secureServiceInfo_().encryptionReady,'NOT_READY');
+    assert_(secureServiceInfo_().customerDataReady,'NOT_READY');
     namedSheet_(QUOTE_MONTHS,QUOTE_MONTH_HEADERS,true);namedSheet_(QUOTE_INDEX,QUOTE_INDEX_HEADERS,true);
     const entries=quoteIndexEntries_(),seen=new Set(),legacy=sheet_();
     quoteRows_(legacy).forEach(r=>{
@@ -362,3 +364,6 @@ function copyLegacyQuotesToMonthly(limit) {
     return {copied:selected.length,sourceRowsRetained:true};
   });
 }
+
+// Sheets may consume a literal escape apostrophe while preserving text content.
+function quoteCellEqual_(actual,expected) { return actual===expected || typeof expected==='string' && expected.startsWith("'") && actual===expected.slice(1); }

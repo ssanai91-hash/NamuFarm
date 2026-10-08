@@ -62,7 +62,7 @@ class MainActivity : ComponentActivity() {
         val api = RetrofitClient.api
         val keys = com.example.namufarm.privacy.SellerKeys(this)
         val localDataSource = LocalDataSource(database, dao, keys)
-        val syncManager = SyncManager(localDataSource, api, com.example.namufarm.sales.EncryptedSalesGateway(com.example.namufarm.webrequests.WebRequestSettings(this),keys))
+        val syncManager = SyncManager(localDataSource, api, com.example.namufarm.sales.DeviceSalesGateway(com.example.namufarm.webrequests.WebRequestSettings(this),keys))
         com.example.namufarm.privacy.PrivacyCleanupWorker.schedule(this)
         val repository = NamuFarmRepository(localDataSource, syncManager, RetrofitClient.jusoApi)
 
@@ -97,7 +97,7 @@ class MainActivity : ComponentActivity() {
                             viewModel = viewModel,
                             onNavigateToManagement = { navController.navigate("management") },
                             onCallAssist = { showCallAssist = true },
-                            onWebInbox = { if (webState.paired && webState.securityReady) webInbox.refresh() else showWebInbox = true },
+                            onWebInbox = { if (webState.paired) webInbox.refresh() else showWebInbox = true },
                             onWebSettings = { showWebInbox = true },
                             webRequests = webState.requests, webBusy = webState.busy,
                             onRequest = { request -> if (!uiState.isSavingQuote) { viewModel.useWebRequestForQuote(request); webInbox.read(request.requestId) } },
@@ -120,7 +120,7 @@ class MainActivity : ComponentActivity() {
                 if (showWebInbox || webRequestId != null) {
                     WebQuoteInboxDialog(webState, webRequestId, uiState.customerPhone, uiState.estimateCart.size,
                         onRefresh = webInbox::refresh, onPair = webInbox::pair, onRead = webInbox::read,
-                        onBackup=webInbox::backup,onRestore=webInbox::restore,onSecure=webInbox::configureSecurity,onClose=webInbox::close,
+                        onRestore=webInbox::restore,onClose=webInbox::close,
                         onUseRequest = { request ->
                             if (uiState.isSavingQuote) webInbox.showMessage("견적 저장이 끝난 뒤 고객 번호를 적용해주세요.")
                             else {

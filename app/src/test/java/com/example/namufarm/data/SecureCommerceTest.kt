@@ -38,7 +38,7 @@ class SecureCommerceTest {
         }
         override suspend fun save(payload:PendingSaleSyncPayload):Boolean {
             receipts[payload.eventId]?.let {check(it==payload);return true}
-            val order=Gson().fromJson(HybridCrypto.open(payload.encryptedPersonal,pair.private,pair.public,"order",payload.eventId),SalePrivateData::class.java).order
+            val order=Gson().fromJson(HybridCrypto.open(checkNotNull(payload.encryptedPersonal),pair.private,pair.public,"order",payload.eventId),SalePrivateData::class.java).order
             receipts[payload.eventId]=payload;stored[order.orderNumber]=order
             if(loseResponse){loseResponse=false;return false};return true
         }
