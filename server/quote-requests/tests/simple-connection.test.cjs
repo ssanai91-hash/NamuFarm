@@ -8,6 +8,22 @@ function body(f,patch={}) {
 }
 function device(f){const token='d'.repeat(64);assert.equal(f.post({action:'pair_device',invite:f.context.createDeviceInvite(),deviceToken:token}).paired,true);return token;}
 for(const monthly of [false,true]) {
+ test(`ten plain requests from one IP need no seller key (${monthly?'monthly':'single'})`,()=>{
+  const f=fixture({configure:false,monthly}),receipts=[];
+  f.failCache();
+  for(let i=1;i<=10;i++) {
+   const data=body(f,{requestId:crypto.randomUUID(),customerName:'홈페이지검증'+i,
+    items:[{species:'소나무',specification:'2년생',quantity:i}]});
+   const receipt=f.post(data);assert.equal(receipt.ok,true);
+   assert.equal(f.post(data).receiptNumber,receipt.receiptNumber);
+   receipts.push(receipt.receiptNumber);
+  }
+  assert.equal(new Set(receipts).size,10);assert.equal(f.requestRows().length,10);
+  const token=device(f),page=f.post({action:'list_requests',deviceToken:token,afterSequence:0});
+  assert.equal(page.requests.length,10);assert.equal(page.hasMore,false);
+  assert.deepEqual(Array.from(page.requests,r=>r.items[0].quantity),Array.from({length:10},(_,i)=>i+1));
+  assert.ok(page.requests.every(r=>!r.encryptedRequest));
+ });
  test(`no seller key: intake, authenticated sync, receipt retry and disposal (${monthly?'monthly':'single'})`,()=>{
   const f=fixture({configure:false,monthly});const data=body(f);
   assert.equal(f.context.doGet().customerDataReady,true);
@@ -29,7 +45,7 @@ for(const monthly of [false,true]) {
   assert.equal(f.requestRows()[0].row.slice(3,9).join(''),'');
  });
 }
-test('v5 authentication, limits and validation still run before storing personal data',()=>{
+test('v5 authentication and input validation run before storing personal data',()=>{
  const f=fixture({configure:false}),data=body(f);
  for(const patch of [{webSecret:'wrong'},{protocolVersion:4},{requestId:crypto.randomUUID()},
    {encryptedRequest:{}},{request:{...data.request,customerPhone:'invalid'}},
@@ -50,3 +66,4 @@ test('formula-like names are stored as literal projections and returned unchange
  assert.equal(f.post(data).ok,true);assert.equal(f.requestRows()[0].row[3],"'=1+1");
  assert.equal(f.context.listRequests_({afterSequence:0}).requests[0].customerName,'=1+1');
 });
+

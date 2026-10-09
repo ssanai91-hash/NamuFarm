@@ -271,8 +271,8 @@ test('owner recovery verifies file creation token, rejecting another monthly fil
  const fileId=[...f.files.keys()].find(id=>id!==oldId);assert.equal(f.context.recoverQuoteMonthFile('2026-11',fileId).fileId,fileId);assert.equal(f.files.size,2);
 });
 
-test('monthly receipt cache failure recovers without a duplicate row or new number',()=>{
- const f=create();f.failCache();assert.equal(f.submit().ok,false);const receipt=entry(f)[5];
+test('monthly receipt does not depend on cache availability',()=>{
+ const f=create();f.failCache();assert.equal(f.submit().ok,true);const receipt=entry(f)[5];
  assert.equal(successful(f).receiptNumber,receipt);assert.equal(index(f).length,1);assert.equal(f.requestRows().length,1);
 });
 
