@@ -47,6 +47,11 @@ class LocalDataSource(
     fun advanceWebCursor(cursor: Long) { check(cursor >= webRequestCursor()); dao.savePrivacyCursor(com.example.namufarm.data.PrivacySyncEntity("web", cursor)) }
     fun deleteOrder(number: String) = dao.deleteOrder(number)
     fun deleteWebRequest(id: String) = dao.deleteWebRequest(id)
+    /** Cloud deletions replace the inbox cache, leaving local drafts and sales intact. */
+    fun retainWebRequests(ids: Set<String>) {
+        getWebRequests().filter { it.requestId !in ids }.forEach { dao.deleteWebRequest(it.requestId) }
+        getDeferredWebRequests().filter { it.requestId !in ids }.forEach { dao.deleteDeferredWebRequest(it.requestId) }
+    }
     fun deleteQuoteDocument(id: String) = dao.deleteQuoteDocument(id)
     fun replacePending(item: PendingSyncEntity) = dao.replacePending(item.copy(payloadJson=protect(item.payloadJson)))
 
@@ -252,4 +257,5 @@ class LocalDataSource(
     fun markPendingSyncFailed(syncId: Int, error: String) =
         dao.markPendingSyncFailed(syncId, error)
 }
+
 

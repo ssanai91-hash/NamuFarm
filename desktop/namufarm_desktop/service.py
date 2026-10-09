@@ -21,6 +21,44 @@ class Manager:
             vault.save_credentials(self.credentials)
         self.seller = SellerKey(self.credentials["privateKey"], self.credentials["publicKey"]) if self.credentials.get("privateKey") else None
         self.api = api or ScriptApi(self.credentials.get("url", DEFAULT_URL), self.credentials["deviceToken"])
+        self.request_snapshot = False
+        self.copy_error = ""
+
+    @property
+    def request_copy_path(self):
+        return self.vault.path.with_name("나무팜-견적요청.xlsx")
+
+    def connect_file(self, raw, api_factory=ScriptApi):
+        from .connection import read_connection
+        url, key = read_connection(raw)
+        require(url == self.api.url or not (self.credentials.get("paired") or self.vault.rows("requests")
+                or self.vault.rows("sales") or self.vault.pending() or self.vault.preference("drafts", [])),
+                "기존 자료가 있는 보관함은 다른 서버로 바꿀 수 없습니다.")
+        previous = self.api
+        self.api = api_factory(url, self.credentials["deviceToken"])
+        try:
+            info = self.verify_server()
+            require(info.get("connectionFile") is True, "연결파일을 지원하는 서버로 Apps Script 배포를 업데이트해주세요.")
+            result = self.api.call("connect_app", connectionKey=key, label="나무팜 PC")
+            require(result.get("paired") is True, "연결파일을 확인해주세요.")
+            credentials = {**self.credentials, "paired":True, "url":url}
+            self.vault.save_credentials(credentials)
+            self.credentials = credentials
+        except Exception:
+            self.api = previous
+            raise
+        return self.sync()
+
+    def local_copy_view(self):
+        from .request_excel import write_request_copy
+        value = self.view()
+        try:
+            write_request_copy(self.request_copy_path, value["requests"])
+            self.copy_error = ""
+        except OSError:
+            self.copy_error = "앱 동기화 완료. 엑셀 사본 갱신은 실패했습니다. 열린 파일을 닫고 다시 동기화해주세요."
+        value["copyError"] = self.copy_error
+        return value
 
     def verify_server(self):
         info = self.api.info()
@@ -29,6 +67,7 @@ class Manager:
                 "구글시트 서버를 API v5로 업데이트해주세요. 기존 자료는 보존됩니다.")
         require(info.get("requestDeletionSync") is True,
                 "PC 삭제 동기화를 지원하는 서버 코드로 Apps Script 배포를 업데이트해주세요.")
+        self.request_snapshot = info.get("requestSnapshot") is True
         return info
 
     def pair(self, invite):
@@ -198,11 +237,25 @@ class Manager:
 
     def _pages(self, action, field):
         rows, cursor, references, deleted = [], 0, set(), set()
+        snapshot_id, total, watermark, received = None, None, None, 0
+        snapshot = field == "requests" and self.request_snapshot
         for _ in range(100):
-            response = self.api.call(action, afterSequence=cursor)
+            extra = {"snapshot":True, **({"snapshotId":snapshot_id} if snapshot_id else {})} if snapshot else {}
+            response = self.api.call(action, afterSequence=cursor, **extra)
             page = response.get(field)
             require(isinstance(page, list) and len(page) <= 100 and type(response.get("hasMore")) is bool
                     and (page or response["hasMore"] is False))
+            if snapshot:
+                token = response.get("snapshotId")
+                require(isinstance(token, str) and len(token) == 64 and all(c in "0123456789abcdef" for c in token))
+                integer(response.get("total"), 0)
+                integer(response.get("watermark"), 0)
+                if snapshot_id is None:
+                    snapshot_id, total, watermark = token, response["total"], response["watermark"]
+                require((token, response["total"], response["watermark"]) == (snapshot_id,total,watermark),
+                        "동기화 도중 시트가 변경되었습니다. 다시 동기화해주세요.")
+                received += len(page)
+                require(received <= total)
             for row in page:
                 require(isinstance(row, dict))
                 integer(row.get("sequence"), 1)
@@ -235,6 +288,9 @@ class Manager:
                     references.add(reference)
                 rows.append(copy.deepcopy(row))
             if not response["hasMore"]:
+                if snapshot:
+                    require(received == total and cursor <= watermark, "시트 자료를 전부 받지 못해 기존 기록을 유지합니다.")
+                    cursor = watermark
                 return rows, cursor, deleted
         raise UserError("서버 기록이 너무 많아 나누어 조회해야 합니다. 기존 기록을 유지합니다.")
 
@@ -246,10 +302,14 @@ class Manager:
         requests, request_cursor, deleted = self._pages("list_requests", "requests")
         sales, sale_cursor, _ = self._pages("list_sales", "sales")
         old = self.vault.snapshot_marker()
+        if self.request_snapshot:
+            require(not (set(old["deletedRequests"]) & {r["requestId"] for r in requests}), "삭제된 요청이 다시 나타났습니다.")
+            request_cursor = max(request_cursor, old["requests"])
+            deleted |= set(old["deletedRequests"])
         require(request_cursor >= old["requests"] and sale_cursor >= old["sales"], "서버 순번이 이전보다 작아 기존 기록을 유지합니다.")
         require(set(old["deletedRequests"]) <= deleted, "삭제된 문의가 서버에 다시 나타나 기존 기록을 유지합니다.")
         request_ids = {r["requestId"] for r in requests} | deleted
-        require(all(r["requestId"] in request_ids for r in self.vault.rows("requests")), "서버 문의 목록 일부가 누락되어 기존 기록을 유지합니다.")
+        require(self.request_snapshot or all(r["requestId"] in request_ids for r in self.vault.rows("requests")), "서버 문의 목록 일부가 누락되어 기존 기록을 유지합니다.")
         sale_ids = {r["metadata"]["orderNumber"] for r in sales}
         require(all(r["metadata"]["orderNumber"] in sale_ids or sale_expired(r["metadata"], now_ms())
                     for r in self.vault.rows("sales")), "서버 판매 목록 일부가 누락되어 기존 기록을 유지합니다.")
@@ -275,10 +335,15 @@ class Manager:
         self.verify_server()
         requests, cursor, deleted = self._pages("list_requests", "requests")
         ids = {r["requestId"] for r in requests} | deleted
-        require(all(r["requestId"] in ids for r in self.vault.rows("requests")),
+        require(self.request_snapshot or all(r["requestId"] in ids for r in self.vault.rows("requests")),
                 "서버 문의 목록 일부가 누락되어 기존 기록을 유지합니다.")
+        if self.request_snapshot:
+            old = self.vault.snapshot_marker()
+            require(not (set(old["deletedRequests"]) & {r["requestId"] for r in requests}), "삭제된 요청이 다시 나타났습니다.")
+            cursor = max(cursor, old["requests"])
+            deleted |= set(old["deletedRequests"])
         self.vault.replace_requests(requests, cursor, deleted)
-        return self.view()
+        return self.local_copy_view()
 
     def sync(self):
         require(self.credentials.get("paired") is True, "PC를 먼저 연결해주세요.")
@@ -295,7 +360,7 @@ class Manager:
                 for key in ("items", "orderNumber", "orderDate", "purchasedAt", "totalQty", "totalPrice", "taxAmount", "shippingFee", "isPrepaid"):
                     require(canonical(row["metadata"][key]) == canonical(old["metadata"][key]), "판매 원본 금액이나 품목이 변경되었습니다.")
         self.vault.replace_snapshot(requests, sales, marker)
-        return self.view()
+        return self.local_copy_view()
 
     def save_sale(self, number, expected_revision, fields, target=None):
         require(not self.vault.pending(), "기존 전송 대기를 먼저 처리해주세요.")
@@ -370,4 +435,5 @@ class Manager:
             integer(bucket.get("knownProfit"), -9007199254740991)
             require(bucket["unknownProfitOrders"] <= bucket["orders"])
         return report
+
 

@@ -680,6 +680,47 @@ class NamuFarmRepository(
     fun deferredWebRequestCount() = local.deferredWebRequestCount()
     suspend fun markWebRequestRead(id: String) = local.transaction { markWebRequestRead(id, System.currentTimeMillis()) }
 
+    /** Stage every page before replacing the local inbox, including a cleared Sheet. */
+    suspend fun syncWebSnapshot(api: WebQuoteApi, url: String, deviceToken: String,
+        decrypt: ((com.example.namufarm.data.remote.WebQuoteRemote) -> com.example.namufarm.data.remote.WebQuoteRemote)? = null): Int {
+        val imported = local.serializedSync {
+            val rows = mutableListOf<com.example.namufarm.data.WebQuoteRequestEntity>()
+            val deferred = mutableListOf<com.example.namufarm.data.DeferredWebRequestEntity>()
+            val expired = mutableListOf<String>(); val ids = mutableSetOf<String>()
+            var cursor = 0L; var snapshot: String? = null; var total = -1; var watermark = 0L
+            repeat(100) {
+                val body = mutableMapOf<String, Any>("action" to "snapshot_requests", "deviceToken" to deviceToken, "afterSequence" to cursor)
+                snapshot?.let { body["snapshotId"] = it }
+                val response = api.request(url, body)
+                // Compatibility with the previous server; do not nest the sync mutex.
+                if (it == 0 && response.ok == false && response.code == "INVALID_ACTION") return@serializedSync null
+                val page = WebQuoteValidator.checkedPage(response, cursor, decrypt)
+                val token = checkNotNull(response.snapshotId)
+                check(Regex("[a-f0-9]{64}").matches(token))
+                check(response.total != null && response.total in 0..10000 && response.watermark != null && response.watermark in 0..9_007_199_254_740_991L)
+                if (snapshot == null) { snapshot = token; total = response.total; watermark = response.watermark }
+                check(token == snapshot && total == response.total && watermark == response.watermark) { "시트가 변경되었습니다. 다시 동기화해주세요." }
+                response.requests.orEmpty().forEach { check(ids.add(checkNotNull(it?.requestId))) { "요청이 중복되어 기존 자료를 유지합니다." } }
+                check(ids.size <= total)
+                rows += page.rows; deferred += page.deferred; expired += page.expiredIds; cursor = page.cursor
+                if (response.hasMore == false) {
+                    check(ids.size == total && cursor <= watermark) { "시트 자료를 전부 받지 못해 기존 기록을 유지합니다." }
+                    return@serializedSync local.transaction {
+                        val floor = maxOf(webRequestCursor(), watermark)
+                        expired.forEach { purgeRequestCopies(it) }
+                        retainWebRequests((rows.map { it.requestId } + deferred.map { it.requestId }).toSet())
+                        val added = insertWebRequests(rows)
+                        insertDeferredWebRequests(deferred)
+                        advanceWebCursor(floor)
+                        added
+                    }
+                }
+            }
+            error("자료가 많아 동기화를 마치지 못했습니다. 기존 자료를 유지합니다.")
+        }
+        return imported ?: syncWebRequests(api, url, deviceToken, decrypt)
+    }
+
     /** Immutable enquiries are independent of the legacy inventory outbox. Commit rows and cursor together. */
     suspend fun syncWebRequests(api: WebQuoteApi, url: String, deviceToken: String, decrypt: ((com.example.namufarm.data.remote.WebQuoteRemote) -> com.example.namufarm.data.remote.WebQuoteRemote)? = null): Int = local.serializedSync {
         var imported = 0
@@ -804,4 +845,5 @@ class NamuFarmRepository(
 
 
 }
+
 

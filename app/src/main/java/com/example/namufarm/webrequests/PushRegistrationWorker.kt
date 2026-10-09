@@ -17,11 +17,11 @@ import kotlinx.coroutines.CancellationException
 class PushRegistrationWorker(context: Context, parameters: WorkerParameters) : CoroutineWorker(context, parameters) {
     override suspend fun doWork(): Result {
         val settings = WebRequestSettings(applicationContext)
-        if (!settings.paired || !WebQuoteTransport.configured || !WebRequestPush.configured) return Result.success()
+        if (!settings.paired || !settings.configured || !WebRequestPush.configured) return Result.success()
         return try {
             val token = WebRequestPush.token(applicationContext) ?: return Result.retry()
             settings.saveFcmToken(token)
-            val response = WebQuoteTransport.api.request(BuildConfig.WEB_REQUEST_SCRIPT_URL, mapOf(
+            val response = WebQuoteTransport.api.request(settings.url, mapOf(
                 "action" to "register_push", "deviceToken" to settings.deviceToken, "fcmToken" to token
             ))
             if (response.code == "UNAUTHORIZED") return Result.failure()
@@ -32,9 +32,10 @@ class PushRegistrationWorker(context: Context, parameters: WorkerParameters) : C
     }
     companion object {
         fun enqueue(context: Context) {
-            if (!WebQuoteTransport.configured || !WebRequestPush.configured || !WebRequestSettings(context).paired) return
+            if (!WebRequestSettings(context).configured || !WebRequestPush.configured || !WebRequestSettings(context).paired) return
             WorkManager.getInstance(context).enqueueUniqueWork("namufarm-register-push", ExistingWorkPolicy.KEEP,
                 OneTimeWorkRequestBuilder<PushRegistrationWorker>().setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()).build())
         }
     }
 }
+

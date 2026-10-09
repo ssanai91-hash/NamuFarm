@@ -120,6 +120,59 @@ class WebQuoteRequestTest {
         }
         assertEquals(0L, local.webRequestCursor())
     }
+    private fun snapshot(vararg rows: WebQuoteRemote, total: Int = rows.size, more: Boolean = false, token: String = "a".repeat(64)) =
+        page(*rows).copy(snapshotId = token, total = total, watermark = 100L, hasMore = more)
+    private fun apiReturning(response: WebQuoteEnvelope) = object : WebQuoteApi {
+        override suspend fun request(url: String, body: Map<String, Any>) = response
+    }
+    @Test fun completeSnapshotKeepsReadStateAndClearedSheetRemovesInboxOnly() = runBlocking {
+        val api = apiReturning(snapshot(remote()))
+        assertEquals(1, repository.syncWebSnapshot(api, "test", "test"))
+        repository.markWebRequestRead(id)
+        assertEquals(0, repository.syncWebSnapshot(api, "test", "test"))
+        assertNotNull(local.getWebRequests().single().readAt)
+        db.managementDao().insertPendingSync(PendingSyncEntity(syncType = "unknown", payloadJson = "{}"))
+        assertEquals(0, repository.syncWebSnapshot(apiReturning(snapshot()), "test", "test"))
+        assertTrue(local.getWebRequests().isEmpty())
+        assertEquals(100L, local.webRequestCursor())
+        assertEquals(1, local.getAllPendingSync().size)
+    }
+    @Test fun failedSecondPageCannotReplaceExistingLocalSnapshot() = runBlocking {
+        repository.syncWebSnapshot(apiReturning(snapshot(remote())), "test", "test")
+        val before = local.getWebRequests()
+        var calls = 0
+        val api = object : WebQuoteApi {
+            override suspend fun request(url: String, body: Map<String, Any>): WebQuoteEnvelope {
+                if (++calls == 1) return snapshot(remote(2, secondId), total = 2, more = true)
+                error("offline")
+            }
+        }
+        assertTrue(runCatching { repository.syncWebSnapshot(api, "test", "test") }.isFailure)
+        assertEquals(before, local.getWebRequests())
+        assertEquals(100L, local.webRequestCursor())
+    }
+    @Test fun truncatedSnapshotCannotClearSavedRequests() = runBlocking {
+        repository.syncWebSnapshot(apiReturning(snapshot(remote())), "test", "test")
+        assertTrue(runCatching { repository.syncWebSnapshot(apiReturning(snapshot(total = 1)), "test", "test") }.isFailure)
+        assertEquals(1, local.getWebRequests().size)
+    }
+    @Test fun changedSnapshotTokenCannotCommitStagedRows() = runBlocking {
+        var calls = 0
+        val api = object : WebQuoteApi {
+            override suspend fun request(url: String, body: Map<String, Any>) =
+                if (++calls == 1) snapshot(remote(), total = 2, more = true)
+                else snapshot(remote(2, secondId), total = 2, token = "b".repeat(64))
+        }
+        assertTrue(runCatching { repository.syncWebSnapshot(api, "test", "test") }.isFailure)
+        assertTrue(local.getWebRequests().isEmpty())
+    }
+    @Test fun previousServerFallsBackWithoutHoldingSyncMutex() = runBlocking {
+        val api = object : WebQuoteApi {
+            override suspend fun request(url: String, body: Map<String, Any>) =
+                if (body["action"] == "snapshot_requests") WebQuoteEnvelope(ok = false, code = "INVALID_ACTION") else page(remote())
+        }
+        assertEquals(1, repository.syncWebSnapshot(api, "test", "test"))
+    }
     @Test fun notificationDeepLinkOnlyAcceptsOneValidRequestId() {
         val context = RuntimeEnvironment.getApplication()
         assertEquals(id, WebRequestPush.fromIntent(WebRequestPush.intent(context, id)))
@@ -127,3 +180,4 @@ class WebQuoteRequestTest {
         assertNull(WebRequestPush.fromIntent(Intent(WebRequestPush.ACTION, Uri.parse("https://web-request/$id"))))
     }
 }
+

@@ -23,9 +23,11 @@ function doPost(e) {
       // The durable PENDING outbox is delivered by the existing minute trigger.
       // Return the committed receipt without waiting for FCM or another lock.
     } else if (body.action === 'pair_device') value = pairDevice_(body);
+    else if (body.action === 'connect_app') value = connectApp_(body);
     else {
       const device = authenticateDevice_(body.deviceToken);
       if (body.action === 'list_requests') value = listRequests_(body);
+      else if (body.action === 'snapshot_requests') value = snapshotRequests_(body);
       else if (body.action === 'register_push') value = registerPush_(body, device);
       else if (body.action === 'save_sale') value = saveSale_(body);
       else if (body.action === 'list_sales') value = listSales_(body);
@@ -212,6 +214,37 @@ function authenticateDevice_(token) {
   const hash = hash_(token); const devices = JSON.parse(PropertiesService.getScriptProperties().getProperty('DEVICES') || '{}');
   assert_(devices[hash], 'UNAUTHORIZED'); return hash;
 }
+/** Run once in the owner-only editor. Both apps import the same private file. */
+function createAppConnectionFile() {
+  const profile = lock_(() => {
+    const props = PropertiesService.getScriptProperties();
+    let key = props.getProperty('APP_CONNECTION_KEY');
+    if (!key) { key = token_(); props.setProperty('APP_CONNECTION_KEY', key); }
+    const url = ScriptApp.getService().getUrl();
+    assert_(/^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/exec$/.test(url), 'NOT_READY');
+    return {format:'namufarm-connection', version:1, url:url, connectionKey:key};
+  });
+  const file = Drive.Files.create({name:'나무팜-연결.json', mimeType:'application/json'},
+    Utilities.newBlob(JSON.stringify(profile), 'application/json', '나무팜-연결.json'), {fields:'id'});
+  // Log only the private Drive file URL, never the connection credential.
+  const url = 'https://drive.google.com/file/d/' + file.id + '/view';
+  console.log(url);
+  return url;
+}
+function connectApp_(body) {
+  assert_(typeof body.deviceToken === 'string' && /^[a-f0-9]{64}$/.test(body.deviceToken));
+  return lock_(() => {
+    const props = PropertiesService.getScriptProperties(), key = props.getProperty('APP_CONNECTION_KEY');
+    assert_(key && equal_(body.connectionKey, key), 'UNAUTHORIZED');
+    const devices = JSON.parse(props.getProperty('DEVICES') || '{}'), hash = hash_(body.deviceToken);
+    if (!devices[hash]) {
+      assert_(Object.keys(devices).length < 10, 'NOT_READY');
+      devices[hash] = {label:text_(body.label || '나무팜 앱', 40, 1), fcmToken:'', createdAt:new Date().toISOString()};
+      props.setProperty('DEVICES', JSON.stringify(devices));
+    }
+    return {paired:true};
+  });
+}
 function registerPush_(body, hash) {
   assert_(typeof body.fcmToken === 'string' && body.fcmToken.length <= 3000 && body.fcmToken.length > 20);
   return lock_(() => {
@@ -220,7 +253,7 @@ function registerPush_(body, hash) {
     props.setProperty('DEVICES', JSON.stringify(devices)); return { registered: true };
   });
 }
-function listRequests_(body) { return listEncryptedRequests_(body); }
+function listRequests_(body) { return body.snapshot === true ? snapshotRequests_(body) : listEncryptedRequests_(body); }
 
 /** Durable outbox; FCM network I/O never holds the request-submission lock. */
 function dispatchQuoteNotifications() { dispatchNotifications_(null); }
@@ -285,3 +318,4 @@ function revokeDevice(deviceHash) {
     delete devices[deviceHash]; props.setProperty('DEVICES', JSON.stringify(devices));
   });
 }
+

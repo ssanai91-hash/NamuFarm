@@ -22,6 +22,19 @@ class WebRequestSettingsTest {
     @Before fun reset() { app.getSharedPreferences("web_request_connection", 0).edit().clear().commit() }
     private fun settings(url: String) = WebRequestSettings(app, url) { key }
 
+    @Test fun importedConnectionFilePersistsEndpointWithoutSavingSharedKey() {
+        val value = JSONObject().put("format", "namufarm-connection").put("version", 1)
+            .put("url", newUrl).put("connectionKey", "a".repeat(64))
+        val profile = AppConnectionFile.parse(value.toString().toByteArray())
+        val original = settings(oldUrl); val token = original.prepareToken()
+        original.markConnected(profile.url)
+        val reopened = settings(oldUrl)
+        assertTrue(reopened.paired); assertEquals(newUrl, reopened.url); assertEquals(token, reopened.deviceToken)
+        value.put("url", "https://example.com/exec")
+        assertTrue(runCatching { AppConnectionFile.parse(value.toString().toByteArray()) }.isFailure)
+        assertTrue(runCatching { AppConnectionFile.parse(ByteArray(8193)) }.isFailure)
+    }
+
     @Test fun ordinaryUpdateRetainsPairingAndTokens() {
         val original = settings(newUrl)
         val token = original.prepareToken()
@@ -54,3 +67,4 @@ class WebRequestSettingsTest {
         assertEquals(token, settings(newUrl).deviceToken)
     }
 }
+

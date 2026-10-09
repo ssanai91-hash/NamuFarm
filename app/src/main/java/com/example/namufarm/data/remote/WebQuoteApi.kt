@@ -26,7 +26,8 @@ data class WebQuoteEnvelope(
     val saved: Boolean? = null, val orderNumber: String? = null, val revision: Long? = null, val fingerprint: String? = null,
     val sales: List<com.example.namufarm.sales.SaleRemote>? = null, val report: com.example.namufarm.sales.SalesReport? = null,
     val keyRegistered: Boolean? = null, val keyId: String? = null, val encryptionReady: Boolean? = null,
-    val closed: Boolean? = null
+    val closed: Boolean? = null,
+    val snapshotId: String? = null, val total: Int? = null, val watermark: Long? = null
 )
 data class WebQuoteRemote(
     val requestId: String? = null, val sequence: Long? = null, val createdAt: String? = null,
@@ -63,7 +64,7 @@ object WebQuoteValidator {
     fun validId(value: String) = uuid.matches(value)
     fun checkResponse(response: WebQuoteEnvelope) {
         check(response.ok == true) { when (response.code) {
-            "UNAUTHORIZED" -> "연결이 만료되었어요. 새 연결 코드를 등록해주세요."
+            "UNAUTHORIZED" -> "연결을 확인할 수 없어요. 연결파일을 다시 불러와주세요."
             "CONFLICT" -> "다른 기기에서 변경한 기록이 있습니다. 동기화 후 다시 확인해주세요."
             "UPGRADE_REQUIRED", "INVALID_ACTION" -> "앱과 구글시트 서버를 최신 버전으로 업데이트해주세요."
             "NOT_READY" -> "구글시트 서버 준비가 필요합니다. 서버 배포와 시트 설정을 확인해주세요."
@@ -134,4 +135,5 @@ object WebQuoteValidator {
     }
     private fun text(value: String?, max: Int, min: Int): String = checkNotNull(value).also { check(it.length in min..max && it == it.trim()) }
 }
+
 

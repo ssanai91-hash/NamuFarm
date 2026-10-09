@@ -35,12 +35,15 @@ internal fun WebQuoteInboxDialog(
     state: WebInboxState, initialRequestId: String?, customerPhone: String, cartItemCount: Int,
     onRefresh: () -> Unit, onPair: (String) -> Unit, onRead: (String) -> Unit,
     onUseRequest: (WebQuoteRequestEntity) -> Unit, onMessageConsumed: () -> Unit, onDismiss: () -> Unit,
-    onRestore: (android.net.Uri, CharArray) -> Unit = {_,_->}, onClose: (String) -> Unit = {}
+    onRestore: (android.net.Uri, CharArray) -> Unit = {_,_->}, onClose: (String) -> Unit = {},
+    onConnectFile: (android.net.Uri) -> Unit = {}
 ) {
     // Keep the selected customer stable if another notification arrives while composing.
     var selectedId by rememberSaveable { mutableStateOf(initialRequestId) }
     var invite by remember { mutableStateOf("") } // Credentials never enter saved-state backups.
     var connecting by rememberSaveable { mutableStateOf(false) }
+    var showLegacyConnection by remember { mutableStateOf(false) }
+    val connectionFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let(onConnectFile) }
     var showSecurity by remember { mutableStateOf(false) }
     var closeConfirm by remember { mutableStateOf(false) }
     val snackbar = remember { SnackbarHostState() }
@@ -66,7 +69,7 @@ internal fun WebQuoteInboxDialog(
                 }
             } else {
                 Button(onClick = onRefresh, enabled = state.paired && !state.busy, modifier = Modifier.fillMaxWidth()) {
-                    Icon(Icons.Outlined.Refresh, null); Spacer(Modifier.width(8.dp)); Text(if (state.busy) "요청 확인 중…" else "새 요청 가져오기")
+                    Icon(Icons.Outlined.Refresh, null); Spacer(Modifier.width(8.dp)); Text(if (state.busy) "요청 확인 중…" else "지금 동기화")
                 }
             }
         }
@@ -76,20 +79,22 @@ internal fun WebQuoteInboxDialog(
         } else {
             LazyColumn(Modifier.fillMaxSize().testTag("web_inbox"), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 item {
-                    NamuSectionTitle("고객이 찾는 나무", "전체 ${state.requests.size}건 · 안 읽음 ${state.unread}건")
+                    NamuSectionTitle("고객이 찾는 나무", "기기에 저장된 요청 ${state.requests.size}건 · 안 읽음 ${state.unread}건")
                     if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 12.dp))
                 }
                 if (selectedId != null) item {
                     Text("선택한 요청을 아직 가져오지 못했어요. 연결 상태를 확인하고 다시 가져와주세요.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                if (!state.configured) item {
-                    NamuEmptyState("홈페이지 연결 준비 중", "요청함 주소가 설정된 앱을 설치하면 홈페이지 문의를 받을 수 있어요.", Icons.Outlined.Language)
-                } else if (!state.paired || connecting) item {
+                if (!state.paired || connecting) item {
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text("관리자에게 받은 연결 코드를 입력해주세요.", style = MaterialTheme.typography.bodyMedium)
-                        OutlinedTextField(invite, { invite = it.trim() }, label = { Text("기기 연결 코드") }, modifier = Modifier.fillMaxWidth(), singleLine = true, visualTransformation = PasswordVisualTransformation())
-                        Button(onClick = { onPair(invite) }, enabled = invite.length == 64 && !state.busy, modifier = Modifier.fillMaxWidth()) { Text("요청함 연결") }
-                        Text("나무팜 ${com.example.namufarm.BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("PC와 같은 연결파일을 한 번 불러오세요. 이후 ‘지금 동기화’로 시트 자료를 내려받습니다.")
+                        Button(onClick = { connectionFile.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) }, enabled = !state.busy, modifier = Modifier.fillMaxWidth()) { Text("연결파일 불러오기") }
+                        TextButton(onClick = { showLegacyConnection = !showLegacyConnection }) { Text("이전 연결코드 방식") }
+                        if (showLegacyConnection && state.configured) {
+                            OutlinedTextField(invite, { invite = it.trim() }, label = { Text("기기 연결 코드") }, modifier = Modifier.fillMaxWidth(), singleLine = true, visualTransformation = PasswordVisualTransformation())
+                            Button(onClick = { onPair(invite) }, enabled = invite.length == 64 && !state.busy) { Text("코드로 연결") }
+                        }
+                        Text("나무팜 ${com.example.namufarm.BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.bodySmall)
                     }
                 }
                 if(state.paired && state.deferredCount > 0) item {
@@ -105,8 +110,8 @@ internal fun WebQuoteInboxDialog(
                             if (Build.VERSION.SDK_INT >= 33) permission.launch(Manifest.permission.POST_NOTIFICATIONS)
                             else context.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName))
                         }) { Icon(Icons.Outlined.Notifications, null); Spacer(Modifier.width(8.dp)); Text("새 요청 알림 허용") }
-                        else Text("푸시 설정 전에는 ‘새 요청 가져오기’로 확인해주세요.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        TextButton(onClick = { connecting = !connecting }) { Text("연결 코드 다시 등록") }
+                        else Text("푸시 설정 전에는 ‘지금 동기화’로 확인해주세요.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        TextButton(onClick = { connecting = !connecting }) { Text("연결파일 다시 불러오기") }
                     }
                 }
                 if (state.requests.isEmpty() && state.paired && !state.busy) item {
@@ -181,4 +186,5 @@ internal fun WebRequestCustomerActions(request: WebQuoteRequestEntity, customerP
         confirmButton = { TextButton(onClick = { confirm = false; onUsePhone(request.customerPhone) }) { Text("번호 변경") } },
         dismissButton = { TextButton(onClick = { confirm = false }) { Text("돌아가기") } })
 }
+
 
