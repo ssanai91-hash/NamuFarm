@@ -17,7 +17,7 @@ test('daily numbers increase and reset at Seoul midnight',()=>{
   assert.equal(f.submit({...f.request,requestId:crypto.randomUUID()}).receiptNumber,'NFQ-20261007-0001');
 });
 test('lost acknowledgement retry on a later day preserves the original receipt and date',()=>{
-  const f=fixture({now});f.failCache();assert.equal(f.submit().ok,false);
+  const f=fixture({now});f.failNextWrite(op=>op.sheetName==='웹견적요청' && op.row>1,{after:true});assert.equal(f.submit().ok,false);
   const number=f.cells[1][16],created=f.cells[1][2];f.setTime('2026-10-07T15:00:00.000Z');
   const retry=f.submit();assert.equal(retry.duplicate,true);assert.equal(retry.receiptNumber,number);assert.equal(retry.createdAt,created);assert.equal(f.cells.length,2);
 });
@@ -51,3 +51,4 @@ test('setup refuses to overwrite unrelated columns or corrupt counters',()=>{
   const h=fixture({now});h.submit();h.cells[0][16]='';h.cells[0][17]='';h.cells[1][16]='';h.cells[1][17]='다른 기존 자료';
   assert.throws(()=>h.context.setupQuoteRequests());assert.equal(h.cells[1][17],'다른 기존 자료');
 });
+
