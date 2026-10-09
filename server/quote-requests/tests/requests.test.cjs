@@ -6,7 +6,7 @@ const crypto = require('node:crypto');
 const {fixture}=require('./fixture.cjs');
 test('lost receipt and retries create one Sheet row',()=>{const f=fixture();assert.equal(f.submit().ok,true);assert.equal(f.submit().duplicate,true);assert.equal(f.cells.length,2);});
 test('same ID with changed quantities conflicts',()=>{const f=fixture();f.submit();assert.equal(f.submit({...f.request,items:[{...f.request.items[0],quantity:13}]}).code,'CONFLICT');assert.equal(f.cells.length,2);});
-test('cache failure after Sheet commit is safely recovered',()=>{const f=fixture();f.failCache();assert.equal(f.submit().ok,false);assert.equal(f.submit().duplicate,true);assert.equal(f.cells.length,2);});
+test('cache failure cannot turn a saved request into an intake error',()=>{const f=fixture();f.failCache();assert.equal(f.submit().ok,true);assert.equal(f.submit().duplicate,true);assert.equal(f.cells.length,2);});
 test('Sheet write failure never reports receipt success',()=>{const f=fixture();f.failWrite();assert.equal(f.submit().ok,false);assert.equal(f.cells.length,1);assert.equal(f.submit().ok,true);assert.equal(f.cells[1][1],2);});
 test('formula-like strings and leading zero phone round trip from raw JSON',()=>{const f=fixture();f.request.customerName='=김나무';f.request.message="'원본";f.submit();const page=f.readRequests(0);assert.equal(page.requests[0].customerName,'=김나무');assert.equal(page.requests[0].message,"'원본");assert.equal(page.requests[0].customerPhone,'01012345678');});
 test('manual Sheet sort does not break the cursor',()=>{const f=fixture();f.submit();f.submit({...f.request,requestId:crypto.randomUUID()});[f.cells[1],f.cells[2]]=[f.cells[2],f.cells[1]];assert.equal(f.readRequests(1).requests[0].sequence,2);});
@@ -42,7 +42,7 @@ test('legacy stored JSON and receipt hash retain their original consent represen
   assert.equal(f.submit(f.request).duplicate,true);
   assert.equal(f.readRequests(0).requests[0].consent,true);
 });
-test('rate limit does not block receipt retry',()=>{const f=fixture();for(let i=0;i<5;i++)assert.equal(f.submit({...f.request,requestId:crypto.randomUUID()}).ok,true);assert.equal(f.submit().code,'RATE_LIMITED');const saved=f.saved();assert.equal(f.submit({...saved,website:''}).duplicate,true);});
+test('ten requests from one client each get a receipt and retries stay unique',()=>{const f=fixture();const numbers=new Set();for(let i=0;i<10;i++){const result=f.submit({...f.request,requestId:crypto.randomUUID()});assert.equal(result.ok,true);numbers.add(result.receiptNumber);}assert.equal(numbers.size,10);assert.equal(f.cells.length,11);const saved=f.saved();assert.equal(f.submit({...saved,website:''}).duplicate,true);assert.equal(f.cells.length,11);});
 
 test('formal quote email and reply preference round trip with immutable receipt',()=>{
   const f=fixture();const {consent,...old}=f.request;
