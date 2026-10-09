@@ -56,7 +56,7 @@ test('v5 authentication and input validation run before storing personal data',(
 });
 test('v4 pending encrypted requests and v5 requests coexist without rotating or deleting the key',()=>{
  const f=fixture(),key=f.properties.SELLER_PUBLIC_KEY;
- f.submit();const data=body(f,{requestId:crypto.randomUUID()});assert.equal(f.post(data).ok,true);
+ f.seedEncrypted();const data=body(f,{requestId:crypto.randomUUID()});assert.equal(f.post(data).ok,true);
  const rows=f.context.listRequests_({afterSequence:0}).requests;
  assert.ok(rows[0].encryptedRequest);assert.equal(rows[1].customerName,data.request.customerName);
  assert.equal(f.properties.SELLER_PUBLIC_KEY,key);

@@ -7,7 +7,8 @@ const RFQ_HEADERS = ['요청번호','접수순번','접수시각(UTC)','성함',
 const RFQ_COL = { id:0, sequence:1, created:2, name:3, phone:4, region:5, summary:6, items:7, memo:8, status:9, notification:10, hash:11, attempts:12, next:13, error:14, raw:15 };
 // Preserve A:P and UUID identities used by existing Android/PC clients.
 const RFQ_RECEIPT_HEADERS = ['견적접수번호','접수시각(한국)'];
-const RFQ_RECEIPT_PATTERN = /^NFQ-(\d{8})-(\d{4,16})$/;
+// Existing receipts keep their identity; only new receipts use NAMU.
+const RFQ_RECEIPT_PATTERN = /^(?:NAMU|NFQ)-(\d{8})-(\d{4,16})$/;
 
 function doPost(e) {
   try {
@@ -26,7 +27,6 @@ function doPost(e) {
       const device = authenticateDevice_(body.deviceToken);
       if (body.action === 'list_requests') value = listRequests_(body);
       else if (body.action === 'register_push') value = registerPush_(body, device);
-      else if (body.action === 'configure_encryption') value = configurePrivacy_(body);
       else if (body.action === 'save_sale') value = saveSale_(body);
       else if (body.action === 'list_sales') value = listSales_(body);
       else if (body.action === 'sales_report') value = salesReport_(body);
@@ -114,7 +114,7 @@ function reserveReceipt_(props,day,floor) {
   const next=Math.max(stored,floor)+1; assert_(Number.isSafeInteger(next),'NOT_READY');
   // Reserve before the row write. Failed writes may leave gaps, never reused numbers.
   props.setProperty(key,String(next));
-  return {number:'NFQ-'+day+'-'+String(next).padStart(4,'0'),counter:next};
+  return {number:'NAMU-'+day+'-'+String(next).padStart(4,'0'),counter:next};
 }
 function receiptDetails_(row) {
   receiptCounter_(row);
@@ -151,7 +151,10 @@ function setupReceiptNumbers_(sheet,book) {
   });
   book.setSpreadsheetTimeZone('Asia/Seoul'); sheet.setColumnWidth(17,220); sheet.setColumnWidth(18,210); SpreadsheetApp.flush();
 }
-function submitRequest_(body) { return body.request !== undefined ? submitCustomerRequest_(body) : submitEncryptedRequest_(body); }
+function submitRequest_(body) {
+  assert_(body.request !== undefined,'UPGRADE_REQUIRED');
+  return submitCustomerRequest_(body);
+}
 
 /** Run once as the owner. Never replaces or clears an existing Sheet. */
 function setupQuoteRequests() {

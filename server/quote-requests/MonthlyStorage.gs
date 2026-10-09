@@ -328,7 +328,7 @@ function maintainMonthlyQuoteStorage() {
   if(!quoteStorageConfigured_())return;
   return lock_(()=>{const entries=quoteIndexEntries_();quoteRepairTransitions_(entries,{});quoteMonthRows_().forEach(m=>{quoteEnsureMonth_(m.values[0]);quoteSummary_(m.values[0],entries);});return {checked:entries.length};});
 }
-function quoteAudit_(allowUncreatedMonths) {
+function quoteAudit_(allowUncreatedMonths,allowSimpleCopies) {
   const entries=quoteIndexEntries_(),cache={},byId=new Map(entries.map(e=>[e.values[QI.id],e]));
   // An audit is read-only. Resolve interrupted transitions with maintenance first.
   assert_(entries.every(e=>['PREPARED','COMMITTED'].includes(e.values[QI.phase])),'NOT_READY');
@@ -341,7 +341,7 @@ function quoteAudit_(allowUncreatedMonths) {
     const seen=new Set();quoteRows_(s).forEach(r=>{
       const e=byId.get(r.row[0]);assert_(e && !seen.has(r.row[0]),'NOT_READY');seen.add(r.row[0]);
       const primary=e.values[QI.book]===s.getParent().getId() && Number(e.values[QI.sheet])===s.getSheetId();
-      assert_(primary || e.values[QI.copy] && s.getParent().getId()===PropertiesService.getScriptProperties().getProperty('SPREADSHEET_ID') && s.getName()===RFQ_SHEET,'NOT_READY');
+      assert_(primary || (e.values[QI.copy] || allowSimpleCopies) && s.getParent().getId()===PropertiesService.getScriptProperties().getProperty('SPREADSHEET_ID') && s.getName()===RFQ_SHEET,'NOT_READY');
       quoteCheckIdentity_(e,r.row);
     });
   });
