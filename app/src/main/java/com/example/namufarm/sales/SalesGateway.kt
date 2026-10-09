@@ -35,9 +35,9 @@ object PrivacyWire {
 }
 
 class DeviceSalesGateway(private val settings: WebRequestSettings, private val keys: SellerKeys,
-    private val api: WebQuoteApi = WebQuoteTransport.api, private val url: String = BuildConfig.WEB_REQUEST_SCRIPT_URL) : SalesGateway {
+    private val api: WebQuoteApi = WebQuoteTransport.api, private val url: String? = null) : SalesGateway {
     private fun token(): String {
-        check(WebQuoteTransport.configured && settings.paired) { "홈페이지 요청함을 먼저 연결해주세요." }
+        check(settings.configured && settings.paired) { "홈페이지 요청함을 먼저 연결해주세요." }
         return settings.deviceToken
     }
     override fun prepare(order: OrderEntity, eventId: String, quoteDocumentJson: String?): PendingSaleSyncPayload {
@@ -54,7 +54,7 @@ class DeviceSalesGateway(private val settings: WebRequestSettings, private val k
             "metadata" to payload.metadata, "fingerprint" to payload.fingerprint, "sourceRequestId" to payload.sourceRequestId)
         payload.personalData?.let { body["personalData"] = it }
         payload.encryptedPersonal?.let { body["encryptedPersonal"] = it } // Retry frozen v4 events unchanged.
-        val response = api.request(url, body)
+        val response = api.request(url ?: settings.url, body)
         WebQuoteValidator.checkResponse(response)
         check(response.saved == true && response.orderNumber == payload.metadata.orderNumber && response.revision == payload.metadata.revision
             && response.fingerprint == payload.fingerprint) { "판매 기록 저장을 확인하지 못했습니다. 전송 대기 기록을 유지합니다." }
@@ -66,7 +66,7 @@ class DeviceSalesGateway(private val settings: WebRequestSettings, private val k
         val docs=linkedMapOf<String,com.example.namufarm.data.QuoteDocumentEntity>()
         val result = mutableListOf<OrderEntity>(); val numbers = mutableSetOf<String>(); var cursor = 0L
         repeat(100) {
-            val response = api.request(url, mapOf("action" to "list_sales", "deviceToken" to token(), "afterSequence" to cursor))
+            val response = api.request(url ?: settings.url, mapOf("action" to "list_sales", "deviceToken" to token(), "afterSequence" to cursor))
             WebQuoteValidator.checkResponse(response)
             val rows = checkNotNull(response.sales); check(rows.size <= 100 && response.hasMore != null)
             check(rows.isNotEmpty() || response.hasMore == false)
@@ -92,7 +92,7 @@ class DeviceSalesGateway(private val settings: WebRequestSettings, private val k
     }
     override suspend fun report(granularity: String, from: String, to: String): SalesReport {
         require(granularity in listOf("day", "month", "year"))
-        val response = api.request(url, mapOf("action" to "sales_report", "deviceToken" to token(), "granularity" to granularity, "from" to from, "to" to to))
+        val response = api.request(url ?: settings.url, mapOf("action" to "sales_report", "deviceToken" to token(), "granularity" to granularity, "from" to from, "to" to to))
         WebQuoteValidator.checkResponse(response)
         val report = checkNotNull(response.report)
         check(report.granularity == granularity && report.from == from && report.to == to)
@@ -120,3 +120,4 @@ object SaleWire {
         return PrivacyWire.gson.fromJson(keys.open(encrypted, "order", row.eventId), SalePrivateData::class.java)
     }
 }
+

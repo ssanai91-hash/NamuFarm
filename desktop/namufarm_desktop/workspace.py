@@ -676,7 +676,8 @@ class SellerWindow(MainWindow):
         if getattr(self, "demo_mode", False):
             for widget in (self.sync_button, self.inbox_sync_button, self.new_quote_button, self.request_quote_button,
                            self.draft_open, self.draft_delete, self.export_button, self.import_button, self.print_button,
-                           self.tracking_save, self.open_button, self.pair_button, self.report_button, self.lock_button):
+                           self.tracking_save, self.open_button, self.pair_button, self.report_button, self.lock_button,
+                           self.connection_file_button, self.copy_button):
                 widget.setEnabled(False)
 
     def apply_view(self, value):
@@ -934,4 +935,5 @@ class SellerWindow(MainWindow):
     def manual_sync(self):
         if not getattr(self, "demo_mode", False):
             super().manual_sync()
+
 

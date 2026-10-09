@@ -214,6 +214,8 @@ class SellerUiTest(QtTestCase):
         self.app.processEvents()
         self.assertEqual(7, window.stack.count())
         self.assertFalse(window.sync_button.isEnabled())
+        self.assertFalse(window.connection_file_button.isEnabled())
+        self.assertFalse(window.copy_button.isEnabled())
         self.assertEqual(3, len(window.shipping_rows))
         for index in range(7):
             window.navigate(index)
@@ -253,3 +255,4 @@ class SellerUiTest(QtTestCase):
 
 if __name__ == '__main__':
     unittest.main()
+

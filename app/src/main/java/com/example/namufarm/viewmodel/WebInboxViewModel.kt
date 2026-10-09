@@ -25,12 +25,19 @@ class WebInboxViewModel(private val connection: WebRequestConnection) : ViewMode
     val state = mutableState.asStateFlow()
     private val working = AtomicBoolean(false)
     init { viewModelScope.launch(Dispatchers.IO) { reloadLocal() } }
-    private fun reloadLocal() { mutableState.update { it.copy(requests = connection.localRequests(), paired = connection.paired, deferredCount = connection.deferredCount) } }
+    private fun reloadLocal() { mutableState.update { it.copy(configured = connection.configured, requests = connection.localRequests(), paired = connection.paired, deferredCount = connection.deferredCount) } }
     fun refresh() = operate {
         reloadLocal()
         val count = connection.refresh()
         reloadLocal()
         mutableState.update { it.copy(message = inboxRefreshMessage(count, it.deferredCount)) }
+    }
+    fun connectFile(uri: android.net.Uri) = operate {
+        connection.connectFile(uri)
+        reloadLocal()
+        connection.refresh()
+        reloadLocal()
+        showMessage("연결과 내려받기를 마쳤어요. 저장된 자료는 오프라인에서도 볼 수 있어요.")
     }
     fun pair(invite: String) = operate {
         connection.pair(invite)
@@ -69,4 +76,5 @@ internal fun inboxRefreshMessage(imported: Int, deferred: Int): String {
 class WebInboxViewModelFactory(private val connection: WebRequestConnection) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST") override fun <T : ViewModel> create(modelClass: Class<T>): T = WebInboxViewModel(connection) as T
 }
+
 

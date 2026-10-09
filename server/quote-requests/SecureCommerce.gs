@@ -18,7 +18,7 @@ function secureServiceInfo_() {
   return {ok:true,service:'namufarm-quote-requests',version:5,connectionMode:'device-auth',customerDataReady:ready,
     processingBases:['quote_request'],requestFields:['customerEmail','formalQuoteRequested','recipientName','replyChannel'],
     encryptionReady:false,customerDataStorage:'plain',sellerKey:key,retentionDays:30,requestDeletionSync:true,
-    receiptFormat:'NAMU-YYYYMMDD-NNNN',receiptTimeZone:'Asia/Seoul',
+    receiptFormat:'NAMU-YYYYMMDD-NNNN',receiptTimeZone:'Asia/Seoul',connectionFile:true,requestSnapshot:true,
     commerceStates:['구매확정','입금확인','배송확인','판매완료','주문취소']};
 }
 function byteString_(value, minimum, maximum) {
@@ -112,6 +112,28 @@ function listEncryptedRequests_(body) {
   });
   const rows=receiptRows_(sheet_()).filter(r=>Number(r[1])>body.afterSequence).sort((a,b)=>Number(a[1])-Number(b[1]));
   return {requests:rows.slice(0,100).map(quoteResponseRow_),hasMore:rows.length>100};
+}
+/** A complete, versioned view: partial downloads must never remove local records. */
+function snapshotRequests_(body) {
+  assert_(Number.isSafeInteger(body.afterSequence) && body.afterSequence >= 0);
+  assert_(body.afterSequence === 0 || /^[a-f0-9]{64}$/.test(body.snapshotId || ''));
+  return lock_(() => {
+    const rows = quoteStorageConfigured_()
+      ? indexedQuoteRecords_(-1,true).map(({entry,cache}) => quoteRecord_(entry,cache,false).row)
+      : receiptRows_(sheet_());
+    const all = rows.map(quoteResponseRow_).sort((a,b) => a.sequence-b.sequence);
+    const ids = new Set(); let previous = 0;
+    all.forEach(row => {
+      assert_(Number.isSafeInteger(row.sequence) && row.sequence > previous && !ids.has(row.requestId), 'NOT_READY');
+      previous = row.sequence; ids.add(row.requestId);
+    });
+    const watermark = Math.max(previous, Number(PropertiesService.getScriptProperties().getProperty('LAST_SEQUENCE')) || 0);
+    const snapshotId = hash_(JSON.stringify([watermark,all]));
+    assert_(!body.snapshotId || equal_(body.snapshotId,snapshotId), 'BUSY');
+    const remaining = all.filter(row => row.sequence > body.afterSequence);
+    return {requests:remaining.slice(0,100), hasMore:remaining.length>100,
+      snapshotId:snapshotId, total:all.length, watermark:watermark};
+  });
 }
 function closeRequest_(body) {
   assert_(UUID_PATTERN.test(body.requestId));
@@ -283,3 +305,4 @@ function purgeExpiredCustomerData() {
     });SpreadsheetApp.flush();
   });
 }
+

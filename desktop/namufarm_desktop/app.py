@@ -3,8 +3,8 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from PySide6.QtCore import QDate, QStandardPaths, Qt, QThread, QTimer, Signal
-from PySide6.QtGui import QCloseEvent, QRegularExpressionValidator
+from PySide6.QtCore import QDate, QStandardPaths, Qt, QThread, QTimer, Signal, QUrl
+from PySide6.QtGui import QCloseEvent, QRegularExpressionValidator, QDesktopServices
 from PySide6.QtCore import QRegularExpression
 from PySide6.QtWidgets import (
     QApplication, QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFileDialog,
@@ -195,6 +195,8 @@ class MainWindow(QMainWindow):
                 self.apply_view(value)
                 self.conflict = False
                 self.message.setText("서버 동기화 완료 · " + timestamp(datetime.now(SEOUL).timestamp() * 1000))
+        if isinstance(value, dict) and value.get("copyError"):
+            self.message.setText(value["copyError"])
         self.update_controls()
 
     def open_vault(self):
@@ -246,7 +248,7 @@ class MainWindow(QMainWindow):
         self.manager, data = result
         self.url.setText(self.manager.api.url)
         self.apply_view(data)
-        self.message.setText("보관함을 열었습니다. " + ("지금 동기화해 최신 기록을 가져오세요." if data["paired"] else "PC용 일회용 연결 코드를 입력하세요."))
+        self.message.setText("보관함을 열었습니다. " + ("지금 동기화해 최신 기록을 가져오세요." if data["paired"] else "연결파일을 한 번 불러와주세요."))
 
     def update_controls(self):
         ready = self.manager is not None and self.task is None
@@ -257,6 +259,8 @@ class MainWindow(QMainWindow):
         self.lock_button.setEnabled(ready)
         self.open_button.setEnabled(self.manager is None and self.task is None)
         self.legacy_button.setEnabled(ready and self.data["paired"])
+        self.connection_file_button.setEnabled(ready)
+        self.copy_button.setEnabled(ready)
         self.pair_button.setEnabled(ready and not self.data["paired"])
         self.url.setEnabled(ready and not self.data["paired"])
         self.invite.setEnabled(ready and not self.data["paired"])
@@ -587,9 +591,20 @@ class MainWindow(QMainWindow):
         self.open_button = QPushButton("PC 시작하기")
         self.open_button.clicked.connect(self.open_vault)
         layout.addWidget(self.open_button)
-        form = QFormLayout()
         self.connection_status = QLabel("PC 연결 전")
-        form.addRow("연결 상태", self.connection_status)
+        layout.addWidget(self.connection_status)
+        self.connection_file_button = QPushButton("연결파일 불러오기 (처음 한 번)")
+        self.connection_file_button.clicked.connect(self.connect_file)
+        layout.addWidget(self.connection_file_button)
+        self.copy_button = QPushButton("로컬 엑셀 사본 열기")
+        self.copy_button.clicked.connect(self.open_request_copy)
+        layout.addWidget(self.copy_button)
+        self.advanced_connection = QWidget()
+        advanced_layout = QVBoxLayout(self.advanced_connection)
+        toggle = QPushButton("이전 연결코드 방식 표시")
+        toggle.clicked.connect(lambda: self.advanced_connection.setVisible(not self.advanced_connection.isVisible()))
+        layout.addWidget(toggle)
+        form = QFormLayout()
         self.url = QLineEdit(DEFAULT_URL)
         form.addRow("Apps Script 웹 앱 주소", self.url)
         self.invite = QLineEdit()
@@ -597,12 +612,14 @@ class MainWindow(QMainWindow):
         self.invite.setMaxLength(64)
         self.invite.setPlaceholderText("관리자에게 받은 PC 연결 코드를 입력하세요")
         form.addRow("PC 연결 코드", self.invite)
-        layout.addLayout(form)
+        advanced_layout.addLayout(form)
         self.pair_button = QPushButton("PC 연결하고 처음 동기화")
         self.pair_button.clicked.connect(self.pair)
-        layout.addWidget(self.pair_button)
+        advanced_layout.addWidget(self.pair_button)
+        layout.addWidget(self.advanced_connection)
+        self.advanced_connection.hide()
         self.auto_check = QCheckBox("60초마다 자동 동기화 · 수정 중에는 입력내용을 유지합니다")
-        self.auto_check.setChecked(True)
+        self.auto_check.setChecked(False)
         layout.addWidget(self.auto_check)
         self.pending_status = QLabel("전송 대기 없음")
         layout.addWidget(self.pending_status)
@@ -612,12 +629,37 @@ class MainWindow(QMainWindow):
         self.legacy_button = QPushButton("이전 자료 복원 (필요한 경우)")
         self.legacy_button.clicked.connect(self.restore_legacy)
         layout.addWidget(self.legacy_button)
-        note = QLabel("휴대폰과 PC는 구글시트를 통해 동기화합니다.\n저장 실패 시 전송 대기를 유지하며, 서버 저장 확인 뒤에만 지웁니다.\n같은 판매 기록을 동시에 수정하면 충돌 내용을 확인할 수 있습니다.\n이 PC의 자료는 Windows 계정으로 자동 보호합니다.\n새 PC에서는 다시 연결해 서버에 동기화된 자료를 가져옵니다.\nPC를 바꾸기 전 전송 대기를 동기화해주세요. 미확정 초안은 이 PC에만 저장됩니다.\n보관함 위치: " + str(self.vault_path))
+        note = QLabel("PC와 휴대폰에 같은 연결파일을 한 번 불러오세요.\n이후 ‘지금 동기화’로 시트를 내려받고, 저장된 자료는 오프라인으로 조회합니다.\n로컬 엑셀 사본은 조회용이며, 수정해도 시트에 반영되지 않습니다.\n엑셀 사본 위치: " + str(self.vault_path.with_name("나무팜-견적요청.xlsx")) + "\n휴대폰과 PC는 구글시트를 통해 동기화합니다.\n저장 실패 시 전송 대기를 유지하며, 서버 저장 확인 뒤에만 지웁니다.\n같은 판매 기록을 동시에 수정하면 충돌 내용을 확인할 수 있습니다.\n이 PC의 자료는 Windows 계정으로 자동 보호합니다.\n새 PC에서는 다시 연결해 서버에 동기화된 자료를 가져옵니다.\nPC를 바꾸기 전 전송 대기를 동기화해주세요. 미확정 초안은 이 PC에만 저장됩니다.\n보관함 위치: " + str(self.vault_path))
         note.setWordWrap(True)
         note.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         layout.addWidget(note)
         layout.addStretch()
         self.tabs.addTab(page, "연결·설정")
+
+    def connect_file(self):
+        path, _ = QFileDialog.getOpenFileName(self, "나무팜 연결파일", "", "연결파일 (*.json);;모든 파일 (*)")
+        if not path:
+            return
+        def work():
+            try:
+                with Path(path).open("rb") as source:
+                    raw = source.read(8193)
+            except OSError:
+                raise UserError("연결파일을 읽을 수 없습니다.") from None
+            return self.manager.connect_file(raw)
+        def connected(value):
+            self.url.setText(self.manager.api.url)
+            self.apply_view(value)
+            self.message.setText("연결과 동기화를 마쳤습니다. 저장된 자료는 오프라인에서도 볼 수 있습니다.")
+        self.run_job("연결파일로 연결하고 자료 가져오는 중…", work, connected)
+
+    def open_request_copy(self):
+        def opened(value):
+            self.apply_view(value)
+            if not value.get("copyError"):
+                QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.manager.request_copy_path)))
+                self.message.setText("로컬 엑셀 사본을 열었습니다. 수정한 내용은 시트에 반영되지 않습니다.")
+        self.run_job("로컬 엑셀 사본 준비 중…", self.manager.local_copy_view, opened)
 
     def pair(self):
         try:
@@ -700,3 +742,4 @@ def main():
         return app.exec()
     QTimer.singleShot(0, window.open_vault)
     return app.exec()
+

@@ -45,8 +45,10 @@ class WebRequestSettings(context: Context, private val deviceKeyProvider: (() ->
     }
     val paired: Boolean get() = synchronized(LOCK) {
         val value = read()
-        value.optBoolean("paired", false) && value.optString("endpoint", RETIRED_ENDPOINT) == endpoint
+        value.optBoolean("paired", false) && value.optString("endpoint", RETIRED_ENDPOINT) == url
     }
+    val url: String get() = synchronized(LOCK) { read().optString("profileEndpoint", endpoint) }
+    val configured: Boolean get() = AppConnectionFile.validUrl(url)
     val deviceToken: String get() = synchronized(LOCK) { read().optString("token", "") }
     val fcmToken: String get() = synchronized(LOCK) { read().optString("fcm", "") }
     fun prepareToken(): String = synchronized(LOCK) {
@@ -56,7 +58,11 @@ class WebRequestSettings(context: Context, private val deviceKeyProvider: (() ->
             update { it.put("token", value) }; value
         }
     }
-    fun markPaired() = update { it.put("paired", true); it.put("endpoint", endpoint) }
+    fun markPaired() = update { it.put("paired", true); it.put("endpoint", url) }
+    fun markConnected(url: String) {
+        require(AppConnectionFile.validUrl(url))
+        update { it.put("profileEndpoint", url); it.put("endpoint", url); it.put("paired", true) }
+    }
     fun saveFcmToken(value: String) = update { it.put("fcm", value) }
     companion object {
         private val LOCK = Any()
@@ -64,4 +70,5 @@ class WebRequestSettings(context: Context, private val deviceKeyProvider: (() ->
         private const val RETIRED_ENDPOINT = "https://script.google.com/macros/s/AKfycbw8uqBWveIhqmXielALjSLnY1yDenKAwl070FT6Lsxsj7Xiod1C5JSBDZGfQtlrl6A-CQ/exec"
     }
 }
+
 
