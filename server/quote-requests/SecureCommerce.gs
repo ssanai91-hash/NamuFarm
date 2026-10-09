@@ -127,9 +127,7 @@ function commitQuoteRequest_(body,stored) {
     assert_(receiptColumnsReady_(sheet),'NOT_READY');
     if (existingIndex>=0) { const existing=rows[existingIndex]; assert_(existing[11]===body.fingerprint,'CONFLICT');
       return Object.assign(assignReceipt_(sheet,existing,existingIndex,rows),{duplicate:true}); }
-    const cache = CacheService.getScriptCache(); const cacheKey = 'rfq-rate:'+body.rateKey; const now = Date.now();
-    const prior = JSON.parse(cache.get(cacheKey) || '{"count":0,"until":0}'); const bucket = prior.until>now ? prior : {count:0,until:now+600000};
-    assert_(bucket.count<5,'RATE_LIMITED');
+    const now = Date.now();
     const props=PropertiesService.getScriptProperties(); const seq=rows.reduce((m,r)=>Math.max(m,Number(r[1])||0),Number(props.getProperty('LAST_SEQUENCE'))||0)+1;
     assert_(Number.isSafeInteger(seq),'NOT_READY'); props.setProperty('LAST_SEQUENCE',String(seq));
     const createdAt=new Date(now).toISOString(),day=receiptDay_(createdAt);
@@ -137,7 +135,6 @@ function commitQuoteRequest_(body,stored) {
     const receipt=reserveReceipt_(props,day,floor);
     const row=[body.requestId,seq,createdAt,...quoteCustomerCells_(stored),'신규','PENDING',body.fingerprint,0,createdAt,'',JSON.stringify(stored),receipt.number,receiptTime_(createdAt)];
     sheet.getRange(sheet.getLastRow()+1,1,1,18).setNumberFormat('@').setValues([row]); SpreadsheetApp.flush();
-    cache.put(cacheKey,JSON.stringify({count:bucket.count+1,until:bucket.until}),Math.max(1,Math.ceil((bucket.until-now)/1000)));
     return Object.assign(receiptDetails_(row),{duplicate:false});
   });
 }
