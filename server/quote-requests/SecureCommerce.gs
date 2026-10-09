@@ -17,8 +17,8 @@ function secureServiceInfo_() {
     ready=ready && rows_(sheet_()).every(row=>{const raw=JSON.parse(row[15]);return raw.expired===true || !!raw.request || !!raw.encryptedRequest;}); } catch (_) {}
   return {ok:true,service:'namufarm-quote-requests',version:5,connectionMode:'device-auth',customerDataReady:ready,
     processingBases:['quote_request'],requestFields:['customerEmail','formalQuoteRequested','recipientName','replyChannel'],
-    encryptionReady:ready && !!key,sellerKey:key,retentionDays:30,requestDeletionSync:true,
-    receiptFormat:'NFQ-YYYYMMDD-NNNN',receiptTimeZone:'Asia/Seoul',
+    encryptionReady:false,customerDataStorage:'plain',sellerKey:key,retentionDays:30,requestDeletionSync:true,
+    receiptFormat:'NAMU-YYYYMMDD-NNNN',receiptTimeZone:'Asia/Seoul',
     commerceStates:['구매확정','입금확인','배송확인','판매완료','주문취소']};
 }
 function byteString_(value, minimum, maximum) {
@@ -53,46 +53,9 @@ function setupPrivacyStorage_() {
     }
     PropertiesService.getScriptProperties().setProperty('PRIVACY_SETUP','1');
 }
-function configurePrivacy_(body) {
-  byteString_(body.publicKey,422,422);
-  const bytes=Utilities.base64Decode(body.publicKey).map(b=>(b+256)%256);
-  const hex=bytes.map(b=>b.toString(16).padStart(2,'0')).join('');
-  assert_(hex.startsWith('308201a2300d06092a864886f70d01010105000382018f003082018a0282018100') && bytes[33]>=128 && hex.endsWith('0203010001')); 
-  const id = hash_(body.publicKey);
-  lock_(() => {
-    const existing = sellerKey_(); assert_(!existing || existing.publicKey === body.publicKey,'CONFLICT');
-    PropertiesService.getScriptProperties().setProperty('SELLER_PUBLIC_KEY',JSON.stringify({keyId:id,publicKey:body.publicKey}));
-    setupPrivacyStorage_();
-  });
-  // Convert legacy cells only after a successful encryption response and rechecking the original under lock.
-  migrateLegacyQuoteRequests();
-  return {keyRegistered:true,keyId:id,encryptionReady:secureServiceInfo_().encryptionReady};
-}
-function migrateLegacyQuoteRequests() {
-  assert_(sellerKey_(),'NOT_READY');
-  const pending = rows_(sheet_()).filter(row => { const raw = JSON.parse(row[15]); return !raw.expired && !raw.encryptedRequest && !raw.request; }).slice(0,20);
-  pending.forEach(row => {
-    const request = validateRequest_(Object.assign({},JSON.parse(row[15]),{website:''}));
-    const props = PropertiesService.getScriptProperties();
-    const url = props.getProperty('ENCRYPTION_BRIDGE_URL') || 'https://namufarm.co.kr/api/internal/encrypt';
-    assert_(/^https:\/\/namufarm\.co\.kr\/api\/internal\/encrypt$/.test(url),'NOT_READY');
-    const response = UrlFetchApp.fetch(url,{method:'post',contentType:'application/json',muteHttpExceptions:true,
-      headers:{Authorization:'Bearer '+props.getProperty('WEB_SECRET')},payload:JSON.stringify({request:request})});
-    assert_(response.getResponseCode() === 200,'NOT_READY');
-    const result = JSON.parse(response.getContentText()); assert_(result.ok === true && /^[a-f0-9]{64}$/.test(result.fingerprint),'NOT_READY');
-    const envelope = envelope_(result.encryptedRequest,sellerKey_());
-    lock_(() => {
-      const sheet = sheet_(); const all = rows_(sheet); const index = all.findIndex(r=>r[0]===row[0]);
-      assert_(index >= 0 && all[index][15] === row[15],'CONFLICT');
-      const updated = all[index].slice(); for (let c=3;c<=8;c++) updated[c]='';
-      updated[11]=result.fingerprint; updated[15]=JSON.stringify({encryptedRequest:envelope});
-      sheet.getRange(index+2,1,1,16).setValues([updated]); SpreadsheetApp.flush();
-    });
-  });
-  return pending.length;
-}
 function submitCustomerRequest_(body) {
-  assert_(secureServiceInfo_().customerDataReady,'NOT_READY');
+  // Intake checks the quote store, without scanning sales or historical records.
+  assert_(PropertiesService.getScriptProperties().getProperty('PRIVACY_SETUP')==='1' && quoteStorageReady_(),'NOT_READY');
   assert_(body.protocolVersion===5,'UPGRADE_REQUIRED');
   assert_(UUID_PATTERN.test(body.requestId) && /^[a-f0-9]{64}$/.test(body.fingerprint) && /^[a-f0-9]{64}$/.test(body.rateKey));
   assert_(body.encryptedRequest===undefined);
@@ -113,13 +76,6 @@ function quoteStoredData_(raw) {
   }
   return {encryptedRequest:envelope_(raw.encryptedRequest,sellerKey_())};
 }
-function submitEncryptedRequest_(body) {
-  assert_(secureServiceInfo_().encryptionReady,'NOT_READY');
-  assert_(UUID_PATTERN.test(body.requestId) && /^[a-f0-9]{64}$/.test(body.fingerprint) && /^[a-f0-9]{64}$/.test(body.rateKey));
-  assert_(!body.request && !body.customerName && !body.customerPhone,'INVALID');
-  const encrypted = envelope_(body.encryptedRequest,sellerKey_());
-  return commitQuoteRequest_(body,{encryptedRequest:encrypted});
-}
 function commitQuoteRequest_(body,stored) {
   return lock_(() => {
     if(quoteStorageConfigured_()) return submitIndexedQuote_(body,stored);
@@ -134,7 +90,7 @@ function commitQuoteRequest_(body,stored) {
     const floor=rows.reduce((max,r)=>r[16] && receiptDay_(r[2])===day ? Math.max(max,receiptCounter_(r)) : max,0);
     const receipt=reserveReceipt_(props,day,floor);
     const row=[body.requestId,seq,createdAt,...quoteCustomerCells_(stored),'신규','PENDING',body.fingerprint,0,createdAt,'',JSON.stringify(stored),receipt.number,receiptTime_(createdAt)];
-    sheet.getRange(sheet.getLastRow()+1,1,1,18).setNumberFormat('@').setValues([row]); SpreadsheetApp.flush();
+    quoteWriteVerified_(sheet,sheet.getLastRow()+1,row);
     return Object.assign(receiptDetails_(row),{duplicate:false});
   });
 }
@@ -316,6 +272,7 @@ function purgeExpiredCustomerData() {
   lock_(()=>{
     if(quoteStorageConfigured_())purgeIndexedQuotes_();
     else {const sheet=sheet_();rows_(sheet).forEach((r,i)=>{if(Date.parse(String(r[2]))+QUOTE_RETENTION_MS<=Date.now() && JSON.parse(r[15]).expired!==true)expireQuoteRow_(sheet,r,i);});}
+    purgeArchivedQuoteCopies_();
     const sales=namedSheet_(SALE_SHEET,SALE_HEADERS,false);const rows=namedRows_(sales,20);const events=namedSheet_(SALE_EVENT_SHEET,SALE_EVENT_HEADERS,false);
     rows.forEach((r,i)=>{
       const meta=JSON.parse(r[15]); if(meta.archived || !['판매완료','주문취소'].includes(meta.status) || Date.parse(String(r[14]))>Date.now())return;

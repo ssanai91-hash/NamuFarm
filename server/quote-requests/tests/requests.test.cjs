@@ -37,7 +37,7 @@ test('legacy stored JSON and receipt hash retain their original consent represen
   const f=fixture();f.submit();
   const original={requestId:f.request.requestId,customerName:f.request.customerName,customerPhone:'01012345678',region:f.request.region,items:f.request.items,message:f.request.message,consent:true};
   assert.deepEqual(f.saved(),JSON.parse(JSON.stringify(original)));
-  assert.equal(f.cells[1].slice(3,9).join(''),'');
+  assert.equal(f.cells[1][3],f.request.customerName);
   assert.equal(f.cells[1][11],crypto.createHmac('sha256',f.properties.WEB_SECRET).update(JSON.stringify(original)).digest('hex'));
   assert.equal(f.submit(f.request).duplicate,true);
   assert.equal(f.readRequests(0).requests[0].consent,true);
@@ -64,7 +64,7 @@ test('v2 receipt hash and canonical JSON stay unchanged after v3 upgrade',()=>{
   const original=f.context.validateRequest_(request); f.submit(request);
   assert.equal(Object.hasOwn(original,'customerEmail'),false);
   assert.deepEqual(f.saved(),JSON.parse(JSON.stringify(original)));
-  assert.equal(f.cells[1].slice(3,9).join(''),'');
+  assert.equal(f.cells[1][3],f.request.customerName);
   assert.equal(f.submit({...original,website:''}).duplicate,true);
 });
 

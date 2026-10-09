@@ -33,9 +33,9 @@ test('creates one registered monthly file and only days with receipts; registry 
 
 test('Seoul midnight, month end and year end route by server time with global sequences',()=>{
  const f=create({now:Date.parse('2026-10-31T14:59:59Z')});const first=successful(f);
- assert.equal(first.receiptNumber,'NFQ-20261031-0001');f.setTime('2026-10-31T15:00:00Z');
- const second=f.submit(another(f));assert.equal(second.receiptNumber,'NFQ-20261101-0001');
- f.setTime('2026-12-31T15:00:00Z');assert.equal(f.submit(another(f)).receiptNumber,'NFQ-20270101-0001');
+ assert.equal(first.receiptNumber,'NAMU-20261031-0001');f.setTime('2026-10-31T15:00:00Z');
+ const second=f.submit(another(f));assert.equal(second.receiptNumber,'NAMU-20261101-0001');
+ f.setTime('2026-12-31T15:00:00Z');assert.equal(f.submit(another(f)).receiptNumber,'NAMU-20270101-0001');
  assert.deepEqual(index(f).map(r=>r[3]),['2026-10-31','2026-11-01','2027-01-01']);
  assert.deepEqual(index(f).map(r=>r[8]),[1,2,3]);assert.equal(months(f).length,3);
  assert.equal(successful(f).receiptNumber,first.receiptNumber);assert.equal(index(f).length,3);
@@ -51,12 +51,13 @@ test('formal quote fields and encryption survive monthly storage without PII or 
  const f=create();const request={...f.request,consent:undefined,processingBasis:'quote_request',formalQuoteRequested:true,recipientName:'나무 학교',replyChannel:'both',customerEmail:'buyer@example.com'};delete request.consent;
  assert.equal(f.submit(request).ok,true);const saved=f.saved();
  for(const key of ['processingBasis','formalQuoteRequested','recipientName','replyChannel','customerEmail'])assert.equal(saved[key],request[key]);
- assert.equal(row(f).slice(3,9).join(''),'');
+ assert.equal(row(f)[3],f.request.customerName);
  const text=JSON.stringify([...f.books.values()].map(b=>[...b.sheets.values()].map(s=>s.cells)));
- for(const value of ['김나무','01012345678','봄에 심어요','나무 학교','buyer@example.com'])assert.ok(!text.includes(value));
+ for(const value of ['김나무','01012345678','봄에 심어요','나무 학교','buyer@example.com'])assert.ok(text.includes(value));
+ assert.ok(!JSON.stringify(index(f)).includes('김나무'));
  assert.ok(!JSON.stringify(index(f)).includes('encryptedRequest'));assert.ok(!JSON.stringify(index(f)).includes('ciphertext'));
  assert.equal(f.readRequests(0).requests[0].replyChannel,'both');
- assert.equal(f.context.doGet().version,5);assert.equal(f.context.doGet().encryptionReady,true);
+ assert.equal(f.context.doGet().version,5);assert.equal(f.context.doGet().encryptionReady,false);
 });
 
 test('interleaved submissions cannot enter the lock or allocate duplicate files, tabs, UUIDs or receipts',()=>{
@@ -149,7 +150,7 @@ test('UUID lookup tolerates row sorting for duplicate detection, reading and dis
  const f=create();successful(f);const other=another(f);f.submit(other);const cells=f.requestRows()[0].sheet.cells;
  [cells[1],cells[2]]=[cells[2],cells[1]];assert.equal(successful(f).duplicate,true);
  f.context.closeRequest_({requestId:f.request.requestId});assert.equal(JSON.parse(row(f)[15]).expired,true);
- assert.ok(JSON.parse(row(f,other.requestId)[15]).encryptedRequest);assert.equal(f.context.auditMonthlyQuoteStorage().requests,2);
+ assert.ok(JSON.parse(row(f,other.requestId)[15]).request);assert.equal(f.context.auditMonthlyQuoteStorage().requests,2);
 });
 
 test('previous-month expiry publishes a new tombstone and retains customer-free daily totals',()=>{
@@ -158,7 +159,7 @@ test('previous-month expiry publishes a new tombstone and retains customer-free 
  f.context.purgeExpiredCustomerData();const changes=f.readRequests(cursor);
  assert.equal(changes.requests.length,1);assert.equal(changes.requests[0].requestId,f.request.requestId);assert.equal(changes.requests[0].expired,true);
  assert.ok(changes.requests[0].sequence>cursor);assert.equal(changes.requests[0].receiptNumber,original.receiptNumber);
- assert.equal(row(f)[15],'{"expired":true}');assert.ok(JSON.parse(row(f,other.requestId)[15]).encryptedRequest);
+ assert.equal(row(f)[15],'{"expired":true}');assert.ok(JSON.parse(row(f,other.requestId)[15]).request);
  const tombstone=entry(f)[8];f.context.purgeExpiredCustomerData();assert.equal(entry(f)[8],tombstone);
  f.context.maintainMonthlyQuoteStorage();assert.deepEqual(plain(f.books.get(months(f)[0][1]).getSheetByName('월간현황').cells[1].slice(0,4)),['2026-10-07',1,0,1]);
 });
@@ -203,7 +204,7 @@ test('interrupted legacy indexing resumes without altering originals or duplicat
 
 test('legacy duplicate UUIDs and index corruption fail closed instead of enabling ambiguous storage',()=>{
  const f=fixture({now});successful(f);f.cells.push(f.cells[1].slice());assert.throws(()=>f.context.setupMonthlyQuoteStorage());assert.equal(f.properties.QUOTE_STORAGE_READY,undefined);
- for(const corrupt of [r=>r[9]='UNKNOWN',r=>r[5]='NFQ-20261101-0001',r=>r[8]=99]){
+ for(const corrupt of [r=>r[9]='UNKNOWN',r=>r[5]='NAMU-20261101-0001',r=>r[8]=99]){
   const g=create();successful(g);corrupt(entry(g));assert.throws(()=>g.context.auditMonthlyQuoteStorage());assert.throws(()=>g.readRequests(0));
  }
 });
@@ -229,7 +230,7 @@ test('migrated request disposal clears both copies before publishing; source era
  const f=fixture({now});successful(f);f.context.setupMonthlyQuoteStorage();f.context.copyLegacyQuotesToMonthly(1);const cursor=entry(f)[8];
  const failSource=op=>op.sheetName==='웹견적요청'&&op.row>1&&op.values[0][15]==='{"expired":true}';
  f.failNextWrite(failSource);assert.throws(()=>f.context.closeRequest_({requestId:f.request.requestId}));
- assert.ok(JSON.parse(f.cells[1][15]).encryptedRequest);f.failNextWrite(failSource);assert.throws(()=>f.readRequests(cursor));
+ assert.ok(JSON.parse(f.cells[1][15]).request);f.failNextWrite(failSource);assert.throws(()=>f.readRequests(cursor));
  const change=f.readRequests(cursor);assert.equal(change.requests[0].expired,true);
  for(const r of f.requestRows())assert.equal(r.row[15],'{"expired":true}');assert.equal(f.context.auditMonthlyQuoteStorage().committed,1);
 });
