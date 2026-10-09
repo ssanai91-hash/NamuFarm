@@ -290,8 +290,6 @@ class MainWindow(QMainWindow):
             self.run_job("자동 동기화 중…", self.manager.sync)
 
     def apply_view(self, value):
-        if self.manager:
-            self.url.setText(self.manager.api.url)
         self.data = value
         self.dirty = False
         self.refresh_requests()
@@ -649,7 +647,11 @@ class MainWindow(QMainWindow):
             except OSError:
                 raise UserError("연결파일을 읽을 수 없습니다.") from None
             return self.manager.connect_file(raw)
-        self.run_job("연결파일로 연결하고 자료 가져오는 중…", work)
+        def connected(value):
+            self.url.setText(self.manager.api.url)
+            self.apply_view(value)
+            self.message.setText("연결과 동기화를 마쳤습니다. 저장된 자료는 오프라인에서도 볼 수 있습니다.")
+        self.run_job("연결파일로 연결하고 자료 가져오는 중…", work, connected)
 
     def open_request_copy(self):
         def opened(value):
