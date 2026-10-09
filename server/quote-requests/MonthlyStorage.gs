@@ -236,9 +236,7 @@ function submitIndexedQuote_(body,stored) {
     if(entry.values[QI.phase]==='COMMITTED')return Object.assign(receiptDetails_(quoteRecord_(entry,cache,false).row),{duplicate:true});
     assert_(entry.values[QI.phase]==='PREPARED','NOT_READY');
   }
-  const rateCache=CacheService.getScriptCache(),cacheKey='rfq-rate:'+body.rateKey,now=Date.now();
-  const prior=JSON.parse(rateCache.get(cacheKey)||'{"count":0,"until":0}'),bucket=prior.until>now?prior:{count:0,until:now+600000};
-  assert_(bucket.count<5,'RATE_LIMITED');
+  const now=Date.now();
   if(!entry){
     const created=new Date(now).toISOString(),day=receiptTime_(created).slice(0,10);
     const sheet=PropertiesService.getScriptProperties().getProperty('QUOTE_STORAGE_MODE')==='monthly-v1'?quoteDaySheet_(day):sheet_();
@@ -258,7 +256,6 @@ function submitIndexedQuote_(body,stored) {
   // Derived monthly totals are rebuilt by maintainMonthlyQuoteStorage.
   // A customer only waits for the verified, recoverable receipt commit.
   quotePublish_(entry,entries,record);
-  rateCache.put(cacheKey,JSON.stringify({count:bucket.count+1,until:bucket.until}),Math.max(1,Math.ceil((bucket.until-now)/1000)));
   return Object.assign(receiptDetails_(record.row),{duplicate:false});
 }
 function indexedQuoteRecords_(afterSequence,snapshotReads) {
