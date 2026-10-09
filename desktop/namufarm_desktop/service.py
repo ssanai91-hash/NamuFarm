@@ -304,7 +304,7 @@ class Manager:
         old = self.vault.snapshot_marker()
         if self.request_snapshot:
             require(not (set(old["deletedRequests"]) & {r["requestId"] for r in requests}), "삭제된 요청이 다시 나타났습니다.")
-            request_cursor = max(request_cursor, old["requests"])
+            require(request_cursor >= old["requests"], "서버 순번이 이전보다 작아 기존 기록을 유지합니다.")
             deleted |= set(old["deletedRequests"])
         require(request_cursor >= old["requests"] and sale_cursor >= old["sales"], "서버 순번이 이전보다 작아 기존 기록을 유지합니다.")
         require(set(old["deletedRequests"]) <= deleted, "삭제된 문의가 서버에 다시 나타나 기존 기록을 유지합니다.")
@@ -340,7 +340,7 @@ class Manager:
         if self.request_snapshot:
             old = self.vault.snapshot_marker()
             require(not (set(old["deletedRequests"]) & {r["requestId"] for r in requests}), "삭제된 요청이 다시 나타났습니다.")
-            cursor = max(cursor, old["requests"])
+            require(cursor >= old["requests"], "서버 순번이 이전보다 작아 기존 기록을 유지합니다.")
             deleted |= set(old["deletedRequests"])
         self.vault.replace_requests(requests, cursor, deleted)
         return self.local_copy_view()
@@ -388,7 +388,7 @@ class Manager:
         self.flush()
         # A verified deletion acknowledgement is sufficient. A later list pull
         # must not turn a completed deletion into an apparent save failure.
-        return self.view()
+        return self.local_copy_view()
 
     def conflict_preview(self):
         pending = self.vault.pending()
@@ -409,7 +409,7 @@ class Manager:
         fresh = self.conflict_preview()
         require(fresh["remote"]["fingerprint"] == preview["remote"]["fingerprint"], "서버 기록이 다시 변경되었습니다. 충돌 내용을 새로 확인해주세요.")
         self.vault.discard_conflict(pending[0]["id"], fresh["requests"], fresh["sales"], fresh["marker"])
-        return self.view()
+        return self.local_copy_view()
 
     def report(self, unit, start, end):
         require(unit in ("day", "month", "year"))

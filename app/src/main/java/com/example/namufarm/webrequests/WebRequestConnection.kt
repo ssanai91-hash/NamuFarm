@@ -29,7 +29,8 @@ class WebRequestConnection(context: Context, private val repository: NamuFarmRep
             out.toByteArray()
         }
         val profile = try { AppConnectionFile.parse(bytes) } finally { bytes.fill(0) }
-        check(profile.url == settings.url || (!settings.paired && localRequests().isEmpty() && deferredCount == 0)) {
+        check(profile.url == settings.url || (!settings.paired && localRequests().isEmpty() && deferredCount == 0
+                && repository.getAllOrders().isEmpty() && repository.getAllQuotes().isEmpty())) {
             "기존 자료가 있는 앱은 다른 서버로 바꿀 수 없습니다."
         }
         val response = WebQuoteTransport.api.request(profile.url, mapOf("action" to "connect_app",

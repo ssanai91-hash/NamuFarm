@@ -706,7 +706,8 @@ class NamuFarmRepository(
                 if (response.hasMore == false) {
                     check(ids.size == total && cursor <= watermark) { "시트 자료를 전부 받지 못해 기존 기록을 유지합니다." }
                     return@serializedSync local.transaction {
-                        val floor = maxOf(webRequestCursor(), watermark)
+                        check(watermark >= webRequestCursor()) { "서버 순번이 이전보다 작아 기존 기록을 유지합니다." }
+                        val floor = watermark
                         expired.forEach { purgeRequestCopies(it) }
                         retainWebRequests((rows.map { it.requestId } + deferred.map { it.requestId }).toSet())
                         val added = insertWebRequests(rows)

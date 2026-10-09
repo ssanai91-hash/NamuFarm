@@ -60,7 +60,7 @@ class ScriptApi:
                 code = result.get("code") if isinstance(result, dict) else None
                 if code == "CONFLICT":
                     raise ConflictError("앱이나 다른 PC에서 먼저 수정했습니다. 전송 대기를 확인해주세요.")
-                messages = {"UNAUTHORIZED": "기기 연결 코드를 다시 확인해주세요.",
+                messages = {"UNAUTHORIZED": "연결파일을 다시 불러와주세요. 이전 방식에서는 연결 코드를 확인해주세요.",
                             "NOT_READY": "구글시트 서버 설정과 배포 버전을 확인해주세요.",
                             "UPGRADE_REQUIRED": "앱과 구글시트 서버를 최신 버전으로 업데이트해주세요.",
                             "INVALID": "입력값과 앱·서버 버전을 확인해주세요.", "BUSY": "서버가 처리 중입니다. 잠시 후 동기화해주세요."}
@@ -90,4 +90,5 @@ class ScriptApi:
         if not re.fullmatch(r"[a-f0-9]{64}", self.token):
             raise UserError("PC 기기 연결을 먼저 완료해주세요.")
         return self._send({"action": action, "deviceToken": self.token, **fields})
+
 

@@ -290,6 +290,8 @@ class MainWindow(QMainWindow):
             self.run_job("자동 동기화 중…", self.manager.sync)
 
     def apply_view(self, value):
+        if self.manager:
+            self.url.setText(self.manager.api.url)
         self.data = value
         self.dirty = False
         self.refresh_requests()
