@@ -50,7 +50,7 @@ QLineEdit:disabled,QComboBox:disabled,QPlainTextEdit:disabled{background:#f2f4f0
 QTableWidget{background:#fff;alternate-background-color:#fafbf8;border:1px solid #dfe7df;border-radius:8px;gridline-color:#edf1eb;selection-background-color:#e3efdf;selection-color:#183d2c;}
 QTableWidget::item{padding:9px;border:0;border-bottom:1px solid #edf1eb;}
 QTableWidget::item:selected{background:#e2efdf;color:#16492e;}
-QHeaderView::section{background:#edf2e9;color:#647661;border:0;border-bottom:1px solid #dce5d8;padding:11px 9px;font-weight:600;}
+QHeaderView::section{background:#dfeadd;color:#315b46;border:0;border-bottom:1px solid #c9d9c8;padding:11px 9px;font-weight:700;}
 QGroupBox{background:#fff;border:1px solid #dfe7df;border-radius:9px;margin-top:18px;padding:15px;font-weight:700;}
 QGroupBox::title{subcontrol-origin:margin;left:15px;padding:0 5px;}
 QScrollArea{border:0;background:transparent;} QScrollArea>QWidget>QWidget{background:transparent;}
@@ -94,6 +94,15 @@ def polish_table(widget):
     widget.verticalHeader().setDefaultSectionSize(51)
     widget.setShowGrid(False)
     widget.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+    widget.horizontalHeader().setDefaultAlignment(Qt.AlignmentFlag.AlignCenter)
+
+def center_table_columns(widget, columns=None):
+    columns = range(widget.columnCount()) if columns is None else columns
+    for row in range(widget.rowCount()):
+        for column in columns:
+            item = widget.item(row, column)
+            if item is not None:
+                item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
 
 
 def print_document(parent, html, filename):
@@ -259,13 +268,18 @@ class QuoteDialog(QDialog):
             values = (item["species"], item["quantity"], item["unitPrice"], item["quantity"] * item["unitPrice"])
             for column, value in enumerate(values):
                 cell = QTableWidgetItem(str(value))
+                cell.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
                 if column != 2:
                     cell.setFlags(cell.flags() & ~Qt.ItemFlag.ItemIsEditable)
                 self.items.setItem(index, column, cell)
         else:
             for column, key in enumerate(("species", "specification", "quantity", "unitPrice", "unitCost")):
-                self.items.setItem(index, column, QTableWidgetItem(str(item[key])))
+                cell = QTableWidgetItem(str(item[key]))
+                if column >= 2:
+                    cell.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                self.items.setItem(index, column, cell)
             amount = QTableWidgetItem("")
+            amount.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             amount.setFlags(amount.flags() & ~Qt.ItemFlag.ItemIsEditable)
             self.items.setItem(index, 5, amount)
         self.items.blockSignals(False)
@@ -424,6 +438,8 @@ class ShippingExportDialog(QDialog):
         self.parcel_table = table(["주문번호", "수령인", "묘목 수량", "고객 배송비", "박스 수", "계약 운임", "선착불 코드", "제주 코드"])
         fill_table(self.parcel_table, [(r["metadata"]["orderNumber"], r["private"]["order"]["receiverName"],
             f"{r['metadata']['totalQty']}주", "선불" if r["private"]["order"]["isPrepaid"] else "착불", "", "", "", "") for r in rows])
+        polish_table(self.parcel_table)
+        center_table_columns(self.parcel_table, range(8))
         self.parcel_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
         for index, width in enumerate((270, 110, 90, 100, 85, 125, 120, 120)):
             self.parcel_table.setColumnWidth(index, width)
@@ -440,6 +456,10 @@ class ShippingExportDialog(QDialog):
             fare.setMaxLength(3)
             jeju.setMaxLength(3)
             fare.setPlaceholderText("입력 필요")
+            boxes.lineEdit().setAlignment(Qt.AlignmentFlag.AlignCenter)
+            freight.lineEdit().setAlignment(Qt.AlignmentFlag.AlignCenter)
+            fare.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            jeju.setAlignment(Qt.AlignmentFlag.AlignCenter)
             for x, widget in enumerate((boxes, freight, fare, jeju), 4):
                 self.parcel_table.setCellWidget(y, x, widget)
             self.parcel_inputs.append((boxes, freight, fare, jeju))
@@ -989,6 +1009,8 @@ class SellerWindow(MainWindow):
             layout.addWidget(label(f"검증한 {len(assignments)}건을 등록합니다. 기존 번호가 다른 주문은 개별 수정이 필요합니다.", "muted", True))
             preview = table(["주문번호", "로젠 송장번호"])
             fill_table(preview, assignments.items())
+            polish_table(preview)
+            center_table_columns(preview)
             layout.addWidget(preview)
             actions = QHBoxLayout()
             actions.addWidget(button("취소", dialog.reject))
