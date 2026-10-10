@@ -598,6 +598,9 @@ class MainWindow(QMainWindow):
         self.open_button = QPushButton("PC 시작하기")
         self.open_button.clicked.connect(self.open_vault)
         layout.addWidget(self.open_button)
+        self.reset_connection_button = QPushButton("기존 PC 자료 삭제 후 운영 서버로 재연결")
+        self.reset_connection_button.clicked.connect(self.reset_connection)
+        layout.addWidget(self.reset_connection_button)
         self.connection_status = QLabel("PC 연결 전")
         layout.addWidget(self.connection_status)
         self.connection_file_button = QPushButton("연결파일 불러오기 (처음 한 번)")
@@ -645,6 +648,43 @@ class MainWindow(QMainWindow):
         layout.addWidget(note)
         layout.addStretch()
         self.tabs.addTab(page, "연결·설정")
+
+    def reset_connection(self):
+        if self.task:
+            return
+        answer = QMessageBox.warning(
+            self,
+            "PC 보관함 초기화",
+            "이 PC의 견적 요청 캐시, 판매 기록, 미전송 작업, 초안과 연결 인증을 모두 삭제합니다. "
+            "Google Sheet 데이터는 삭제하지 않습니다. 계속할까요?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        if self.manager is None:
+            QMessageBox.warning(self, "보관함 확인", "먼저 PC 보관함을 열어주세요.")
+            return
+        from .api import DEFAULT_URL
+        from .store import Vault
+        try:
+            old_vault = self.vault_path
+            self.manager = None
+            self.data = {"requests": [], "sales": [], "pending": [], "paired": False}
+            self.selected_sale = None
+            self.dirty = False
+            # Delete only this app's vault, never any Sheet or remote data.
+            old_vault.unlink()
+            self.run_job(
+                "새 PC 보관함 준비 중…",
+                lambda: self.unlocked(Vault.create_device(old_vault)),
+                self.accept_manager,
+                False
+            )
+            self.url.setText(DEFAULT_URL)
+            self.message.setText("PC 보관함을 초기화했습니다. 운영 서버 연결파일을 불러오세요.")
+        except Exception as error:
+            QMessageBox.critical(self, "초기화 실패", str(error))
 
     def connect_file(self):
         path, _ = QFileDialog.getOpenFileName(self, "나무팜 연결파일", "", "연결파일 (*.json);;모든 파일 (*)")
