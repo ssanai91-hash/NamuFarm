@@ -133,11 +133,11 @@ class UiTest(QtTestCase):
         old = self.window.manager.api.url
         self.window.manager.api.url = 'https://script.google.com/macros/s/AKabcdefghijklmnopqrstuvwxyz1234567890/exec'
         self.window.update_controls()
-        self.assertTrue(self.window.reset_server_button.isVisible())
+        self.assertFalse(self.window.reset_server_button.isHidden())
         self.assertTrue(self.window.reset_server_button.isEnabled())
         self.window.manager.api.url = old
         self.window.update_controls()
-        self.assertFalse(self.window.reset_server_button.isVisible())
+        self.assertTrue(self.window.reset_server_button.isHidden())
 
     def test_statistics_job_and_lock_clear_customer_data(self):
         self.window.fetch_report()

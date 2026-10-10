@@ -268,7 +268,7 @@ class MainWindow(QMainWindow):
         self.pair_button.setEnabled(ready and not self.data["paired"])
         self.url.setEnabled(ready and not self.data["paired"])
         self.invite.setEnabled(ready and not self.data["paired"])
-        stale_server = ready and not self.manager.using_default_server
+        stale_server = ready and not getattr(self.manager, "using_default_server", True)
         self.reset_server_button.setVisible(stale_server)
         self.reset_server_button.setEnabled(stale_server)
         pending = bool(self.data["pending"])
