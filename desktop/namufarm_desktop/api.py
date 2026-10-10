@@ -26,9 +26,15 @@ def validate_url(url):
 
 
 class GoogleRedirect(urllib.request.HTTPRedirectHandler):
+    @staticmethod
+    def _allowed_host(host):
+        return (host == "script.google.com"
+                or host == "script.googleusercontent.com"
+                or host.endswith("-script.googleusercontent.com"))
+
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         parts = urllib.parse.urlsplit(newurl)
-        if parts.scheme != "https" or parts.netloc not in ("script.google.com", "script.googleusercontent.com"):
+        if parts.scheme != "https" or not self._allowed_host(parts.hostname or ""):
             raise NetworkError("허용되지 않은 서버 이동을 차단했습니다.")
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
