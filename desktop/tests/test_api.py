@@ -66,6 +66,16 @@ class ApiTest(unittest.TestCase):
         self.assertFalse(redirect._allowed_host("googleusercontent.com"))
         self.assertFalse(redirect._allowed_host("evil-script.googleusercontent.com.attacker.example"))
 
+    def test_redirect_error_reports_only_blocked_host(self):
+        redirect = GoogleRedirect()
+        request = urllib.request.Request(DEFAULT_URL)
+        with self.assertRaises(NetworkError) as caught:
+            redirect.redirect_request(request, None, 302, "Found", {}, "https://accounts.google.com/login?secret=hidden")
+        message = str(caught.exception)
+        self.assertIn("accounts.google.com", message)
+        self.assertNotIn("secret", message)
+        self.assertNotIn("/login", message)
+
     def test_valid_ack_is_returned_with_one_bounded_post(self):
         opener = FakeOpener(b'{"ok":true,"closed":true,"requestId":"test-request"}')
         api = ScriptApi(token='a' * 64, opener=opener)
