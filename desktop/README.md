@@ -28,7 +28,7 @@ Windows 계정이나 PC를 바꾸면 새로 기기 인증하고 서버에 동기
 운영 API는 기본 입력되어 있습니다:
 
 ```
-https://script.google.com/macros/s/AKfycbzY7JKzXYmS9APLNFDt15k8dv09zb4EXKFHOOv_T1vpFmkr6TLwbqGznGLgpd2cIVgD/exec
+https://script.google.com/macros/s/AKfycbw4GnfIlXyjMo9TPZmCmRnmIIzd016piTDma-xrh7w/exec
 ```
 
 현재 서버는 복구된 비공개 관리 시트에 연결한 API v5입니다. `Code.gs + SecureCommerce.gs + MonthlyStorage.gs + RecoverySetup.gs` 소스를 사용합니다. 삭제된 서버를 사용하던 PC는 최초 한 번 연결파일을 불러와야 하며 초안과 미전송 내역은 유지합니다. 월별·일별 요청 시트는 서버가 관리하고 PC는 통합 조회합니다. 자세한 운영 정보는 `docs/GOOGLE_SERVER_RECOVERY_20261009.md`를 확인합니다.

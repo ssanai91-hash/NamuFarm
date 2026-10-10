@@ -3,7 +3,7 @@ import json
 import uuid
 from datetime import datetime, timezone
 
-from .api import DEFAULT_URL, RETIRED_URL, ScriptApi
+from .api import DEFAULT_URL, PREVIOUS_URL, RETIRED_URL, ScriptApi
 from .crypto import canonical, digest, customer_digest, SellerKey
 from .domain import (changed, integer, metadata, now_ms, require, valid_id, validate_metadata, validate_request, sale_expired)
 from .errors import UserError, ConflictError
@@ -15,8 +15,9 @@ class Manager:
     def __init__(self, vault, api=None):
         self.vault = vault
         self.credentials = vault.credentials()
-        if api is None and self.credentials.get("url") == RETIRED_URL:
-            # The deleted backend cannot retain device authorization. Preserve local work.
+        if api is None and self.credentials.get("url") in (RETIRED_URL, PREVIOUS_URL):
+            # A replaced deployment cannot retain device authorization. Preserve local work,
+            # move to the current endpoint, and require the connection file once.
             self.credentials.update(url=DEFAULT_URL, paired=False)
             vault.save_credentials(self.credentials)
         self.seller = SellerKey(self.credentials["privateKey"], self.credentials["publicKey"]) if self.credentials.get("privateKey") else None
