@@ -169,6 +169,26 @@ class QuoteDialog(QDialog):
                 field = QLineEdit(str(value))
                 field.setReadOnly(True)
                 form.addRow(title, field)
+
+            formal = bool(draft.get("formalQuoteRequested", False))
+            formal_value = QLineEdit("요청" if formal else "미요청")
+            formal_value.setReadOnly(True)
+            form.addRow("공식 견적서", formal_value)
+            if formal:
+                recipient = QLineEdit(draft.get("quoteRecipientName", "") or draft.get("customerName", ""))
+                recipient.setReadOnly(True)
+                form.addRow("견적서 수신인", recipient)
+                channel = {"sms": "문자", "email": "이메일", "both": "문자 + 이메일"}.get(
+                    draft.get("quoteReplyChannel", "sms"), "문자"
+                )
+                reply = QLineEdit(channel)
+                reply.setReadOnly(True)
+                form.addRow("수신 방법", reply)
+                if draft.get("customerEmail", ""):
+                    email = QLineEdit(draft.get("customerEmail", ""))
+                    email.setReadOnly(True)
+                    form.addRow("이메일", email)
+
             self.note = QPlainTextEdit(draft.get("note", ""))
             self.note.setReadOnly(True)
             self.note.setMaximumHeight(140)
