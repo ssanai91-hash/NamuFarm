@@ -273,10 +273,11 @@ class MainWindow(QMainWindow):
         self.reset_server_button.setEnabled(stale_server)
         pending = bool(self.data["pending"])
         self.delete_button.setEnabled(paired and not pending and self.request_table.currentRow() >= 0)
-        editable = paired and not pending and self.selected_sale is not None and self.selected_sale["metadata"]["status"] not in ("판매완료", "주문취소")
+        editable = paired and not pending and self.selected_sale is not None and self.selected_sale["metadata"]["status"] not in ("배송완료", "구매취소", "판매완료", "주문취소")
         self.sale_editor.setEnabled(editable)
         self.save_button.setEnabled(editable and self.dirty)
         self.next_button.setEnabled(editable and self.selected_sale["metadata"]["status"] in NEXT)
+        self.cancel_sale_button.setEnabled(editable and self.selected_sale["metadata"]["status"] in ("입금확인", "구매확정"))
         self.report_button.setEnabled(paired)
         self.resolve_button.setEnabled(paired and pending and self.conflict)
         self.summary.setText(f"문의 {len(self.data['requests'])}건 · 판매 {len(self.data['sales'])}건 · 전송 대기 {len(self.data['pending'])}건" if self.manager else "보관함 잠금 상태")
@@ -317,7 +318,7 @@ class MainWindow(QMainWindow):
         self.request_search.textChanged.connect(self.refresh_requests)
         layout.addWidget(self.request_search)
         split = QSplitter(Qt.Orientation.Vertical)
-        self.request_table = table(["접수번호", "접수일", "고객명", "전화번호", "희망 묘목", "지역", "견적서"])
+        self.request_table = table(["접수번호", "접수일", "상태", "고객명", "전화번호", "희망 묘목", "지역", "견적서"])
         self.request_table.itemSelectionChanged.connect(self.select_request)
         split.addWidget(self.request_table)
         self.request_detail = QPlainTextEdit()
@@ -341,7 +342,7 @@ class MainWindow(QMainWindow):
         query = self.request_search.text().casefold()
         self.request_rows = [r for r in self.data["requests"] if query in (r["requestId"] + r.get("receiptNumber", "") + str(r["personal"])).casefold()]
         self.request_table.blockSignals(True)
-        fill_table(self.request_table, [(r.get("receiptNumber") or r["requestId"], timestamp(r["createdAt"]), r["personal"]["customerName"], r["personal"]["customerPhone"],
+        fill_table(self.request_table, [(r.get("receiptNumber") or r["requestId"], timestamp(r["createdAt"]), r.get("status", "신규"), r["personal"]["customerName"], r["personal"]["customerPhone"],
                    ", ".join(f"{i['species']} {i['quantity']}주" for i in r["personal"]["items"]), r["personal"]["region"],
                    "요청" if r["personal"].get("formalQuoteRequested") else "—") for r in self.request_rows])
         self.request_table.clearSelection()
@@ -354,7 +355,7 @@ class MainWindow(QMainWindow):
         index = self.request_table.currentRow()
         if 0 <= index < len(self.request_rows):
             row, person = self.request_rows[index], self.request_rows[index]["personal"]
-            text = [f"접수번호: {row.get('receiptNumber') or row['requestId']}", f"고객: {person['customerName']} / {person['customerPhone']}", f"이메일: {person.get('customerEmail') or '없음'}",
+            text = [f"접수번호: {row.get('receiptNumber') or row['requestId']}", f"상태: {row.get('status', '신규')}", f"고객: {person['customerName']} / {person['customerPhone']}", f"이메일: {person.get('customerEmail') or '없음'}",
                     f"배송지역: {person['region']}", "희망 묘목:"]
             text.extend(f"  · {i['species']} {i.get('specification', '')} / {i['quantity']:,}주" for i in person["items"])
             text.extend([f"요청사항: {person.get('message', '')}", f"공식 견적 수신인: {person.get('recipientName', '')}",
@@ -437,10 +438,13 @@ class MainWindow(QMainWindow):
         buttons = QHBoxLayout()
         self.save_button = QPushButton("수정 저장")
         self.save_button.clicked.connect(lambda: self.save_sale())
-        self.next_button = QPushButton("다음 단계 확인")
+        self.next_button = QPushButton("배송 완료")
         self.next_button.clicked.connect(self.advance_sale)
+        self.cancel_sale_button = QPushButton("구매 취소")
+        self.cancel_sale_button.clicked.connect(self.cancel_sale)
         buttons.addWidget(self.save_button)
         buttons.addWidget(self.next_button)
+        buttons.addWidget(self.cancel_sale_button)
         editor_layout.addLayout(buttons)
         self.sale_items = QPlainTextEdit()
         self.sale_items.setReadOnly(True)
@@ -508,7 +512,7 @@ class MainWindow(QMainWindow):
             meta = row["metadata"]
             self.sale_info.setText(f"{meta['orderNumber']} · {meta['status']}\n매출 {money(meta['totalPrice'])} / 세액 {money(meta['taxAmount'])}\n입금 {timestamp(meta['paidAt'])} · 배송 {timestamp(meta['deliveredAt'])}")
             self.sale_items.setPlainText("\n".join(f"{i['species']} · {i['quantity']:,}주 × {money(i['unitPrice'])}" for i in meta["items"]))
-            self.next_button.setText({"구매확정": "입금 확인", "입금확인": "배송 확인", "배송확인": "판매 완료"}.get(meta["status"], "처리 종료"))
+            self.next_button.setText({"구매확정": "배송 완료", "입금확인": "배송 완료", "배송확인": "배송 완료"}.get(meta["status"], "처리 종료"))
             self.fields["customerPhone"].setReadOnly(bool(row["private"].get("quoteDocumentJson")))
         else:
             self.sale_info.setText("판매 기록을 선택하세요.")
@@ -545,11 +549,18 @@ class MainWindow(QMainWindow):
         if not self.selected_sale:
             return
         target = NEXT.get(self.selected_sale["metadata"]["status"])
-        if not target:
+        if target != "배송완료":
             return
-        prompts = {"입금확인": "실제 입금을 확인했나요?", "배송확인": "실제 배송을 확인했나요?", "판매완료": "배송과 원가·비용 확인을 마치고 판매를 완료할까요?"}
-        if QMessageBox.question(self, target, prompts[target], QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No) == QMessageBox.StandardButton.Yes:
+        if QMessageBox.question(self, "배송완료", "실제 배송과 원가·비용 확인을 마쳤나요?", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No) == QMessageBox.StandardButton.Yes:
             self.save_sale(target)
+
+    def cancel_sale(self):
+        if not self.selected_sale:
+            return
+        if self.selected_sale["metadata"]["status"] not in ("입금확인", "구매확정"):
+            return
+        if QMessageBox.question(self, "구매취소", "이 판매를 구매취소로 처리할까요?", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No) == QMessageBox.StandardButton.Yes:
+            self.save_sale("구매취소")
 
     def build_reports(self):
         page = QWidget()
@@ -569,7 +580,7 @@ class MainWindow(QMainWindow):
             bar.addWidget(field)
         bar.addStretch()
         layout.addLayout(bar)
-        layout.addWidget(QLabel("판매완료일의 한국 시간 기준 · 매출은 세액 제외 · 확인한 원가를 기준으로 매출이익 계산"))
+        layout.addWidget(QLabel("배송완료일의 한국 시간 기준 · 매출은 세액 제외 · 확인한 원가를 기준으로 매출이익 계산"))
         self.report_table = table(["기간", "판매 건수", "수량", "매출", "세액", "원가", "비용", "확인 매출이익", "원가 미확인"])
         layout.addWidget(self.report_table)
         self.report_summary = QLabel("기간을 선택하고 통계를 조회하세요.")

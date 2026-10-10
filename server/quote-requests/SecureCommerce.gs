@@ -19,7 +19,7 @@ function secureServiceInfo_() {
     processingBases:['quote_request'],requestFields:['customerEmail','formalQuoteRequested','recipientName','replyChannel'],
     encryptionReady:false,customerDataStorage:'plain',sellerKey:key,retentionDays:30,requestDeletionSync:true,
     receiptFormat:'NAMU-YYYYMMDD-NNNN',receiptTimeZone:'Asia/Seoul',connectionFile:true,requestSnapshot:true,
-    commerceStates:['구매확정','입금확인','배송확인','판매완료','주문취소']};
+    commerceStates:['입금확인','배송완료','구매취소']};
 }
 function byteString_(value, minimum, maximum) {
   assert_(typeof value === 'string' && /^[A-Za-z0-9+/]+={0,2}$/.test(value) && value.length <= maximum*2);
@@ -96,7 +96,7 @@ function commitQuoteRequest_(body,stored) {
 }
 function quoteResponseRow_(row) {
   const expires=Date.parse(String(row[2]))+QUOTE_RETENTION_MS,raw=JSON.parse(row[15]);
-  const result={requestId:String(row[0]),sequence:Number(row[1]),createdAt:String(row[2]),expiresAt:expires};
+  const result={requestId:String(row[0]),sequence:Number(row[1]),createdAt:String(row[2]),expiresAt:expires,status:String(row[9]||'신규')};
   if(row[16])Object.assign(result,receiptDetails_(row));
   if(raw.expired===true || expires<=Date.now())return Object.assign(result,{expired:true});
   const stored=quoteStoredData_(raw);
@@ -158,7 +158,7 @@ function saleMetadata_(raw) {
   assert_(raw && Object.keys(raw).sort().join(',')===fields.sort().join(','));
   assert_(typeof raw.orderNumber==='string' && /^[A-Za-z0-9_-]{1,120}$/.test(raw.orderNumber));
   assert_(typeof raw.orderDate==='string' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(raw.orderDate));
-  assert_(['구매확정','입금확인','배송확인','판매완료','주문취소'].includes(raw.status));
+  assert_(['입금확인','배송완료','구매취소','구매확정','배송확인','판매완료','주문취소'].includes(raw.status));
   ['revision','totalQty','totalPrice','shippingFee','purchasedAt','paidAt','deliveredAt','completedAt','updatedAt','costTotal','expenseTotal','commissionBps','taxAmount'].forEach(k=>assert_(Number.isSafeInteger(raw[k]) && raw[k]>=0));
   assert_(raw.revision>0 && raw.totalQty>0 && raw.totalPrice<=2147483647 && raw.shippingFee<=2147483647 && Number.isSafeInteger(raw.totalPrice+raw.taxAmount));
   assert_(Number.isSafeInteger(raw.costTotal+raw.expenseTotal));
@@ -170,10 +170,15 @@ function saleMetadata_(raw) {
     text_(i.species,200,1); assert_(Number.isSafeInteger(i.quantity) && i.quantity>0 && Number.isSafeInteger(i.unitPrice) && i.unitPrice>=0);
     qty+=i.quantity; amount+=i.quantity*i.unitPrice; assert_(Number.isSafeInteger(qty) && Number.isSafeInteger(amount));});
   assert_(raw.totalQty===qty && raw.totalPrice===amount);
-  const rank=['구매확정','입금확인','배송확인','판매완료'].indexOf(raw.status);
-  if(rank>=1)assert_(raw.paidAt>=raw.purchasedAt && raw.paidAt<=raw.updatedAt);
-  if(rank>=2)assert_(raw.deliveredAt>=raw.paidAt && raw.deliveredAt<=raw.updatedAt);
-  if(rank>=3)assert_(raw.completedAt>=raw.deliveredAt && raw.completedAt<=raw.updatedAt && raw.costConfirmed);
+  if(['입금확인','배송완료','구매취소'].includes(raw.status)){
+    assert_(raw.paidAt>=raw.purchasedAt && raw.paidAt<=raw.updatedAt);
+    if(raw.status==='배송완료')assert_(raw.deliveredAt>=raw.paidAt && raw.deliveredAt<=raw.updatedAt && raw.completedAt>=raw.deliveredAt && raw.completedAt<=raw.updatedAt && raw.costConfirmed);
+  }else{
+    const rank=['구매확정','입금확인','배송확인','판매완료'].indexOf(raw.status);
+    if(rank>=1)assert_(raw.paidAt>=raw.purchasedAt && raw.paidAt<=raw.updatedAt);
+    if(rank>=2)assert_(raw.deliveredAt>=raw.paidAt && raw.deliveredAt<=raw.updatedAt);
+    if(rank>=3)assert_(raw.completedAt>=raw.deliveredAt && raw.completedAt<=raw.updatedAt && raw.costConfirmed);
+  }
   return raw;
 }
 function profit_(meta) {
@@ -184,7 +189,8 @@ function profit_(meta) {
   assert_(Number.isSafeInteger(value)); return value;
 }
 function retentionUntil_(meta) {
-  const date=new Date(meta.status==='주문취소'?meta.updatedAt:(meta.completedAt||meta.purchasedAt)); date.setUTCFullYear(date.getUTCFullYear()+5); return date.toISOString();
+  const canceled=['구매취소','주문취소'].includes(meta.status);
+  const date=new Date(canceled?meta.updatedAt:(meta.completedAt||meta.purchasedAt)); date.setUTCFullYear(date.getUTCFullYear()+5); return date.toISOString();
 }
 function canonical_(value) {
   const sorted = v => Array.isArray(v) ? v.map(sorted) : v && typeof v==='object' ? Object.keys(v).sort().reduce((out,k)=>{out[k]=sorted(v[k]);return out;},{}) : v;
@@ -230,7 +236,7 @@ function saveSale_(body) {
   return lock_(()=>{
     const sheet=namedSheet_(SALE_SHEET,SALE_HEADERS,false), events=namedSheet_(SALE_EVENT_SHEET,SALE_EVENT_HEADERS,false);
     const receipts=namedRows_(events,5); const receipt=receipts.find(r=>r[0]===body.eventId);
-    if(receipt){assert_(receipt[1]===meta.orderNumber && Number(receipt[2])===meta.revision && receipt[3]===digest,'CONFLICT'); closeLinkedRequest_(body.sourceRequestId); return {saved:true,orderNumber:meta.orderNumber,revision:meta.revision,fingerprint:digest};}
+    if(receipt){assert_(receipt[1]===meta.orderNumber && Number(receipt[2])===meta.revision && receipt[3]===digest,'CONFLICT'); updateLinkedRequestStatus_(body.sourceRequestId,meta.status); return {saved:true,orderNumber:meta.orderNumber,revision:meta.revision,fingerprint:digest};}
     const rows=namedRows_(sheet,20); const i=rows.findIndex(r=>r[0]===meta.orderNumber || r[0]===hash_(PropertiesService.getScriptProperties().getProperty('WEB_SECRET')+'expired-sale:'+meta.orderNumber));
     const previous=i<0?null:JSON.parse(rows[i][15]);
     // Before accepting a newer revision, repair the previous write's missing receipt.
@@ -243,13 +249,13 @@ function saveSale_(body) {
     if(!same){
       if(previous){
         assert_(!previous.archived && meta.revision===previous.revision+1,'CONFLICT');
-        assert_(previous.status!=='판매완료' && previous.status!=='주문취소','CONFLICT');
-        const next={'구매확정':'입금확인','입금확인':'배송확인','배송확인':'판매완료'};
-        assert_(meta.status===previous.status || meta.status===next[previous.status] || (meta.status==='주문취소' && ['구매확정','입금확인'].includes(previous.status)),'CONFLICT');
+        assert_(!['배송완료','구매취소','판매완료','주문취소'].includes(previous.status),'CONFLICT');
+        const next={'입금확인':'배송완료','구매확정':'배송완료','배송확인':'배송완료'};
+        assert_(meta.status===previous.status || meta.status===next[previous.status] || (meta.status==='구매취소' && ['입금확인','구매확정'].includes(previous.status)),'CONFLICT');
         ['orderNumber','orderDate','totalQty','totalPrice','isPrepaid','shippingFee','purchasedAt','taxAmount','items'].forEach(k=>assert_(canonical_(meta[k])===canonical_(previous[k]),'CONFLICT'));
         assert_(meta.updatedAt>=previous.updatedAt,'CONFLICT');
         ['paidAt','deliveredAt','completedAt'].forEach(k=>{if(previous[k]>0)assert_(previous[k]===meta[k],'CONFLICT');});
-      }else assert_(meta.revision===1 && ['구매확정','입금확인','주문취소'].includes(meta.status),'CONFLICT');
+      }else assert_(meta.revision===1 && ['입금확인','구매확정','주문취소'].includes(meta.status),'CONFLICT');
       const props=PropertiesService.getScriptProperties(); const seq=rows.reduce((m,r)=>Math.max(m,Number(r[1])||0),Number(props.getProperty('SALE_SEQUENCE'))||0)+1;
       assert_(Number.isSafeInteger(seq),'NOT_READY'); props.setProperty('SALE_SEQUENCE',String(seq));
       const row=[meta.orderNumber,seq,meta.status,new Date(meta.purchasedAt).toISOString(),meta.completedAt?new Date(meta.completedAt).toISOString():'',meta.totalQty,meta.totalPrice,meta.taxAmount,meta.costTotal,meta.expenseTotal,meta.costConfirmed,meta.profitMode,meta.commissionBps,profit_(meta),retentionUntil_(meta),JSON.stringify(meta),JSON.stringify(stored),digest,body.eventId,meta.revision];
@@ -258,11 +264,35 @@ function saveSale_(body) {
     if(!namedRows_(events,5).some(r=>r[0]===body.eventId)) {
       events.getRange(events.getLastRow()+1,1,1,5).setNumberFormat('@').setValues([[body.eventId,meta.orderNumber,meta.revision,digest,new Date().toISOString()]]); SpreadsheetApp.flush();
     }
-    closeLinkedRequest_(body.sourceRequestId);
+    updateLinkedRequestStatus_(body.sourceRequestId,meta.status);
     return {saved:true,orderNumber:meta.orderNumber,revision:meta.revision,fingerprint:digest};
   });
 }
-function closeLinkedRequest_(id) {if(!id)return;if(quoteStorageConfigured_()){closeIndexedQuote_(id);return;}const sheet=sheet_(),rows=rows_(sheet);const q=rows.findIndex(r=>r[0]===id);if(q>=0 && JSON.parse(rows[q][15]).expired!==true)expireQuoteRow_(sheet,rows[q],q);}
+function updateLinkedRequestStatus_(id,status) {
+  if(!id)return;
+  assert_(['입금확인','배송완료','구매취소'].includes(status),'INVALID');
+  if(quoteStorageConfigured_()){
+    const entries=quoteIndexEntries_(),cache={};quoteRepairTransitions_(entries,cache);
+    const entry=entries.find(e=>e.values[QI.id]===id);
+    if(!entry || entry.values[QI.phase]!=='COMMITTED')return;
+    const record=quoteRecord_(entry,cache,false);
+    if(JSON.parse(record.row[15]).expired===true || record.row[9]===status)return;
+    const sequence=quoteNextSequence_(entries),next=record.row.slice();
+    next[1]=sequence;next[9]=status;quoteWriteVerified_(record.sheet,record.index+2,next);
+    entry.values[QI.seq]=sequence;entry.values[QI.status]=status;quoteSaveEntry_(entry);
+    if(entry.values[QI.copy]){
+      const legacy=quoteFindRow_(sheet_(),id);
+      if(legacy){const copy=legacy.row.slice();copy[1]=sequence;copy[9]=status;quoteWriteVerified_(legacy.sheet,legacy.index+2,copy);}
+    }
+    return;
+  }
+  const sheet=sheet_(),rows=receiptRows_(sheet),i=rows.findIndex(r=>r[0]===id);
+  if(i<0 || JSON.parse(rows[i][15]).expired===true || rows[i][9]===status)return;
+  const props=PropertiesService.getScriptProperties();
+  const sequence=rows.reduce((m,r)=>Math.max(m,Number(r[1])||0),Number(props.getProperty('LAST_SEQUENCE'))||0)+1;
+  assert_(Number.isSafeInteger(sequence),'NOT_READY');props.setProperty('LAST_SEQUENCE',String(sequence));
+  const next=rows[i].slice();next[1]=sequence;next[9]=status;quoteWriteVerified_(sheet,i+2,next);
+}
 function listSales_(body) {
   assert_(Number.isSafeInteger(body.afterSequence) && body.afterSequence>=0);
   const rows=namedRows_(namedSheet_(SALE_SHEET,SALE_HEADERS,false),20).filter(r=>Number(r[1])>body.afterSequence).sort((a,b)=>Number(a[1])-Number(b[1]));
@@ -279,7 +309,7 @@ function salesReport_(body) {
   assert_(['day','month','year'].includes(body.granularity));
   assert_([body.from,body.to].every(v=>typeof v==='string' && /^\d{4}-\d{2}-\d{2}$/.test(v) && Number.isFinite(Date.parse(v+'T00:00:00.000Z')) && new Date(v+'T00:00:00.000Z').toISOString().slice(0,10)===v) && body.from<=body.to);
   const sums={}; namedRows_(namedSheet_(SALE_SHEET,SALE_HEADERS,false),20).forEach(row=>{
-    const meta=JSON.parse(row[15]); if(meta.status!=='판매완료')return;
+    const meta=JSON.parse(row[15]); if(!['배송완료','판매완료'].includes(meta.status))return;
     const day=seoulDay_(meta.completedAt); if(day<body.from||day>body.to)return;
     const period=day.slice(0,body.granularity==='day'?10:body.granularity==='month'?7:4);
     const b=sums[period]||(sums[period]={period:period,orders:0,quantity:0,sales:0,tax:0,cost:0,expenses:0,knownProfit:0,unknownProfitOrders:0});
@@ -297,7 +327,7 @@ function purgeExpiredCustomerData() {
     purgeArchivedQuoteCopies_();
     const sales=namedSheet_(SALE_SHEET,SALE_HEADERS,false);const rows=namedRows_(sales,20);const events=namedSheet_(SALE_EVENT_SHEET,SALE_EVENT_HEADERS,false);
     rows.forEach((r,i)=>{
-      const meta=JSON.parse(r[15]); if(meta.archived || !['판매완료','주문취소'].includes(meta.status) || Date.parse(String(r[14]))>Date.now())return;
+      const meta=JSON.parse(r[15]); if(meta.archived || !['배송완료','구매취소','판매완료','주문취소'].includes(meta.status) || Date.parse(String(r[14]))>Date.now())return;
       const archive={archived:true,status:meta.status,completedAt:meta.completedAt,totalQty:meta.totalQty,totalPrice:meta.totalPrice,taxAmount:meta.taxAmount,costTotal:meta.costTotal,expenseTotal:meta.expenseTotal,costConfirmed:meta.costConfirmed,profitMode:meta.profitMode,commissionBps:meta.commissionBps};
       const row=r.slice();row[0]=hash_(PropertiesService.getScriptProperties().getProperty('WEB_SECRET')+'expired-sale:'+r[0]);row[3]='';row[15]=JSON.stringify(archive);row[16]='';row[17]='';row[18]='';row[19]=0;
       sales.getRange(i+2,1,1,20).setValues([row]);

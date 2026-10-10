@@ -6,8 +6,11 @@ from datetime import datetime, timezone, timedelta
 from .errors import UserError
 
 MAX_SAFE = 9007199254740991
-STATES = ("구매확정", "입금확인", "배송확인", "판매완료", "주문취소")
-NEXT = dict(zip(STATES[:3], STATES[1:4]))
+STATES = ("입금확인", "배송완료", "구매취소")
+LEGACY_STATES = ("구매확정", "배송확인", "판매완료", "주문취소")
+ALL_STATES = STATES + LEGACY_STATES
+NEXT = {"입금확인": "배송완료", "구매확정": "배송완료", "배송확인": "배송완료"}
+TERMINAL_STATES = ("배송완료", "구매취소", "판매완료", "주문취소")
 SEOUL = timezone(timedelta(hours=9))
 UUID_RE = re.compile(r"[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}")
 META_FIELDS = ("orderNumber", "orderDate", "status", "revision", "totalQty", "totalPrice", "isPrepaid",
@@ -63,7 +66,7 @@ def validate_metadata(meta, clock=None):
         datetime.strptime(meta["orderDate"], "%Y-%m-%d %H:%M")
     except ValueError:
         raise UserError("주문 날짜를 확인해주세요.") from None
-    require(meta["status"] in STATES)
+    require(meta["status"] in ALL_STATES)
     for name in ("revision", "totalQty", "totalPrice", "shippingFee", "purchasedAt", "paidAt",
                  "deliveredAt", "completedAt", "updatedAt", "costTotal", "expenseTotal", "commissionBps", "taxAmount"):
         integer(meta[name])
@@ -84,13 +87,21 @@ def validate_metadata(meta, clock=None):
         quantity += integer(item["quantity"], 1, 2147483647)
         amount += integer(item["unitPrice"], 0, 2147483647) * item["quantity"]
     require(quantity == meta["totalQty"] and amount == meta["totalPrice"])
-    rank = STATES.index(meta["status"])
-    if rank in (1, 2, 3):
+    status = meta["status"]
+    if status in STATES:
         require(meta["paidAt"] >= meta["purchasedAt"])
-    if rank in (2, 3):
-        require(meta["deliveredAt"] >= meta["paidAt"])
-    if rank == 3:
-        require(meta["completedAt"] >= meta["deliveredAt"] and meta["costConfirmed"])
+        if status == "배송완료":
+            require(meta["deliveredAt"] >= meta["paidAt"]
+                    and meta["completedAt"] >= meta["deliveredAt"]
+                    and meta["costConfirmed"])
+    else:
+        legacy_rank = ("구매확정", "입금확인", "배송확인", "판매완료").index(status) if status != "주문취소" else -1
+        if legacy_rank >= 1:
+            require(meta["paidAt"] >= meta["purchasedAt"])
+        if legacy_rank >= 2:
+            require(meta["deliveredAt"] >= meta["paidAt"])
+        if legacy_rank == 3:
+            require(meta["completedAt"] >= meta["deliveredAt"] and meta["costConfirmed"])
     return meta
 
 
@@ -103,7 +114,7 @@ def metadata(order):
 
 def changed(private, fields, target=None, clock=None):
     order = copy.deepcopy(private["order"])
-    require(order["status"] not in ("판매완료", "주문취소"), "종료된 판매 기록은 수정할 수 없습니다.")
+    require(order["status"] not in TERMINAL_STATES, "종료된 판매 기록은 수정할 수 없습니다.")
     require(set(fields) <= set(EDITABLE) | {"costTotal", "expenseTotal", "costConfirmed", "profitMode", "commissionBps"})
     for name, value in fields.items():
         if name in EDITABLE:
@@ -121,11 +132,18 @@ def changed(private, fields, target=None, clock=None):
     stamp = clock if clock is not None else now_ms()
     require(stamp >= order["updatedAt"], "PC 시간을 확인해주세요.")
     if target is not None:
-        require(NEXT.get(order["status"]) == target, "입금·배송·판매완료 순서로 확인해주세요.")
-        if target == "판매완료":
-            require(order["costConfirmed"], "원가와 비용을 먼저 확인해주세요.")
+        if target == "구매취소":
+            require(order["status"] in ("입금확인", "구매확정"), "배송 완료 전 입금확인 건만 구매취소할 수 있습니다.")
+            if not order["paidAt"]:
+                order["paidAt"] = stamp
+        else:
+            require(target == "배송완료" and NEXT.get(order["status"]) == target, "입금확인 다음에는 배송완료만 처리할 수 있습니다.")
+            require(order["costConfirmed"], "배송완료 전에 원가와 비용을 확인해주세요.")
+            if not order["paidAt"]:
+                order["paidAt"] = stamp
+            order["deliveredAt"] = stamp
+            order["completedAt"] = stamp
         order["status"] = target
-        order[{"입금확인": "paidAt", "배송확인": "deliveredAt", "판매완료": "completedAt"}[target]] = stamp
     order["revision"] += 1
     order["updatedAt"] = stamp
     order["orderId"] = None
@@ -144,9 +162,9 @@ def profit(meta):
 
 
 def sale_expired(meta, clock):
-    if meta["status"] not in ("판매완료", "주문취소"):
+    if meta["status"] not in TERMINAL_STATES:
         return False
-    stamp = meta["completedAt"] if meta["status"] == "판매완료" else meta["updatedAt"]
+    stamp = meta["completedAt"] if meta["status"] in ("배송완료", "판매완료") else meta["updatedAt"]
     date = datetime.fromtimestamp(stamp / 1000, timezone.utc)
     try:
         deadline = date.replace(year=date.year + 5)

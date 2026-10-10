@@ -101,8 +101,8 @@ def order_from_draft(draft):
     amount, stamp = draft_amounts(draft), now_ms()
     order = {k: draft.get(k, "").strip() for k in EDITABLE}
     order.update(orderId=None, orderNumber="PC_" + draft["id"], orderDate=datetime.fromtimestamp(stamp / 1000, SEOUL).strftime("%Y-%m-%d %H:%M"),
-                 status="구매확정", revision=1, totalQty=amount["quantity"], totalPrice=amount["supply"], isPrepaid=draft["isPrepaid"], shippingFee=draft["shippingFee"],
-                 purchasedAt=stamp, paidAt=0, deliveredAt=0, completedAt=0, updatedAt=stamp, costTotal=amount["cost"], expenseTotal=0,
+                 status="입금확인", revision=1, totalQty=amount["quantity"], totalPrice=amount["supply"], isPrepaid=draft["isPrepaid"], shippingFee=draft["shippingFee"],
+                 purchasedAt=stamp, paidAt=stamp, deliveredAt=0, completedAt=0, updatedAt=stamp, costTotal=amount["cost"], expenseTotal=0,
                  costConfirmed=draft["costConfirmed"], profitMode="resale", commissionBps=3000, taxAmount=amount["tax"],
                  sourceRequestId=draft["sourceRequestId"], sourceQuoteNumber="PCQ_" + draft["id"])
     # Existing Android codec explicitly treats this farm label as non-stock-backed.
@@ -132,7 +132,7 @@ def customer_note(order):
 
 def tracking_fields(order, number):
     number = normalize_tracking(number)
-    require(order["status"] in ("입금확인", "배송확인"), "입금 확인 후, 판매 완료 전에 송장번호를 등록해주세요.")
+    require(order["status"] in ("입금확인", "배송확인"), "입금확인 상태에서 송장번호를 등록해주세요.")
     note = customer_note(order)
     note = (note + "\n" if note else "") + TRACKING_PREFIX + number
     require(len(note) <= 1000, "배송 메모를 줄인 후 송장번호를 등록해주세요.")
@@ -140,7 +140,9 @@ def tracking_fields(order, number):
 
 
 def shipping_problem(order):
-    if order["status"] not in ("입금확인", "배송확인", "판매완료"):
+    if order["status"] in ("구매취소", "주문취소"):
+        return "구매 취소"
+    if order["status"] not in ("입금확인", "배송완료", "배송확인", "판매완료"):
         return "입금 확인 필요"
     if not order.get("receiverName", "").strip():
         return "수령인 입력"
