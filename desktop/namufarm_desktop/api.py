@@ -35,7 +35,8 @@ class GoogleRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         parts = urllib.parse.urlsplit(newurl)
         if parts.scheme != "https" or not self._allowed_host(parts.hostname or ""):
-            raise NetworkError("허용되지 않은 서버 이동을 차단했습니다.")
+            host = parts.hostname or "(호스트 없음)"
+            raise NetworkError(f"허용되지 않은 서버 이동을 차단했습니다. 이동 대상: {host}")
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
