@@ -334,6 +334,37 @@ class ManagerTest(unittest.TestCase):
             self.manager.sync()
         self.assertEqual(old, self.manager.vault.rows('sales'))
 
+    def test_reset_to_default_server_discards_local_workspace_and_old_binding(self):
+        self.bridge.send(control='submit')
+        self.manager.sync()
+        self.manager.vault.save_preference('drafts', [{'id': 'local-only'}])
+        self.manager.vault.save_preference('shipping_export', {'sender': {'name': 'old'}, 'history': {'x': 1}})
+        self.manager.vault.queue({'id': 'reset-pending', 'action': 'close_request', 'payload': {}})
+
+        stale = 'https://script.google.com/macros/s/AKabcdefghijklmnopqrstuvwxyz1234567890/exec'
+        old_token = self.manager.credentials['deviceToken']
+        self.manager.credentials = {**self.manager.credentials, 'url': stale, 'paired': True}
+        self.manager.vault.save_credentials(self.manager.credentials)
+        self.manager.api.url = stale
+
+        view = self.manager.reset_to_default_server()
+        credentials = self.manager.vault.credentials()
+
+        self.assertEqual(DEFAULT_URL, self.manager.api.url)
+        self.assertEqual(DEFAULT_URL, credentials['url'])
+        self.assertFalse(credentials['paired'])
+        self.assertNotEqual(old_token, credentials['deviceToken'])
+        self.assertFalse(view['requests'])
+        self.assertFalse(view['sales'])
+        self.assertFalse(view['drafts'])
+        self.assertFalse(view['pending'])
+        self.assertFalse(self.manager.vault.rows('requests'))
+        self.assertFalse(self.manager.vault.rows('sales'))
+        self.assertFalse(self.manager.vault.pending())
+        self.assertEqual([], self.manager.vault.preference('drafts', []))
+        self.assertEqual({'sender': {}, 'history': {}}, self.manager.shipping_export_preferences())
+        self.assertEqual({'requests': 0, 'sales': 0, 'deletedRequests': []}, self.manager.vault.snapshot_marker())
+
     def test_urls_and_quantity_match_server_contract(self):
         for url in ('http://script.google.com/macros/s/abc/exec', DEFAULT_URL + '?token=secret', DEFAULT_URL.replace('script.google.com', 'evil.example')):
             with self.assertRaises(UserError):
