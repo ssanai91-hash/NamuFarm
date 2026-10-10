@@ -121,6 +121,7 @@ class MainActivity : ComponentActivity() {
                     WebQuoteInboxDialog(webState, webRequestId, uiState.customerPhone, uiState.estimateCart.size,
                         onRefresh = webInbox::refresh, onPair = webInbox::pair, onRead = webInbox::read,
                         onRestore=webInbox::restore,onClose=webInbox::close,onConnectFile=webInbox::connectFile,
+                        onComplete = webInbox::complete,
                         onUseRequest = { request ->
                             if (uiState.isSavingQuote) webInbox.showMessage("견적 저장이 끝난 뒤 고객 번호를 적용해주세요.")
                             else {

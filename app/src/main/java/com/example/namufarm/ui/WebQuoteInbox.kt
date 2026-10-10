@@ -34,7 +34,8 @@ import com.google.gson.Gson
 internal fun WebQuoteInboxDialog(
     state: WebInboxState, initialRequestId: String?, customerPhone: String, cartItemCount: Int,
     onRefresh: () -> Unit, onPair: (String) -> Unit, onRead: (String) -> Unit,
-    onUseRequest: (WebQuoteRequestEntity) -> Unit, onMessageConsumed: () -> Unit, onDismiss: () -> Unit,
+    onUseRequest: (WebQuoteRequestEntity) -> Unit, onComplete: (String) -> Unit,
+    onMessageConsumed: () -> Unit, onDismiss: () -> Unit,
     onRestore: (android.net.Uri, CharArray) -> Unit = {_,_->}, onClose: (String) -> Unit = {},
     onConnectFile: (android.net.Uri) -> Unit = {}
 ) {
@@ -62,7 +63,7 @@ internal fun WebQuoteInboxDialog(
         onDismiss = onDismiss, snackbarHostState = snackbar,
         actions = {
             if (selected != null) {
-                WebRequestCustomerActions(selected, customerPhone, cartItemCount) { onUseRequest(selected) }
+                WebRequestCustomerActions(selected, customerPhone, cartItemCount, onComplete) { onUseRequest(selected) }
                 TextButton(onClick={closeConfirm=true},enabled=!state.busy) { Text("상담 종료 · 고객 문의 삭제") }
                 OutlinedButton(onClick = { selectedId = null }, modifier = Modifier.fillMaxWidth()) {
                     Icon(Icons.AutoMirrored.Outlined.ArrowBack, null); Spacer(Modifier.width(8.dp)); Text("요청 목록")
@@ -122,7 +123,7 @@ internal fun WebQuoteInboxDialog(
                         Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                 Text(request.customerName, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-                                NamuBadge(if (request.readAt == null) "새 요청" else "확인함")
+                                NamuBadge(if (request.status != "신규") request.status else if (request.readAt == null) "새 요청" else "확인함")
                             }
                             Text(request.customerPhone, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                             Text(requestItems(request).joinToString(" · ") { "${it.species} ${it.quantity}주" }, style = MaterialTheme.typography.bodyMedium)
@@ -142,7 +143,7 @@ internal fun requestItems(request: WebQuoteRequestEntity): List<WebQuoteItem> =
 @Composable
 internal fun WebRequestDetail(request: WebQuoteRequestEntity) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp).testTag("web_request_detail"), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        NamuBadge("홈페이지 견적 문의")
+        NamuBadge(request.status)
         Text(request.customerName, style = MaterialTheme.typography.headlineSmall)
         Text(request.customerPhone, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
         Text("배송 희망 지역 · ${request.region}", style = MaterialTheme.typography.bodyMedium)
@@ -169,7 +170,7 @@ internal fun WebRequestDetail(request: WebQuoteRequestEntity) {
 }
 
 @Composable
-internal fun WebRequestCustomerActions(request: WebQuoteRequestEntity, customerPhone: String, cartItemCount: Int, onUsePhone: (String) -> Unit) {
+internal fun WebRequestCustomerActions(request: WebQuoteRequestEntity, customerPhone: String, cartItemCount: Int, onComplete: (String) -> Unit, onUsePhone: (String) -> Unit) {
     var confirm by rememberSaveable(request.requestId) { mutableStateOf(false) }
     var smsError by remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current
@@ -177,6 +178,11 @@ internal fun WebRequestCustomerActions(request: WebQuoteRequestEntity, customerP
         if (customerPhone != request.customerPhone && (customerPhone.isNotBlank() || cartItemCount > 0)) confirm = true
         else onUsePhone(request.customerPhone)
     }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Outlined.Description, null); Spacer(Modifier.width(8.dp)); Text("수동 견적 작성") }
+    if (request.status == "신규") {
+        OutlinedButton(onClick = { onComplete(request.requestId) }, modifier = Modifier.fillMaxWidth()) {
+            Icon(Icons.Outlined.CheckCircle, null); Spacer(Modifier.width(8.dp)); Text("견적완료로 표시")
+        }
+    }
     OutlinedButton(onClick = {
         smsError = openSmsComposer(context, request.customerPhone, "[나무팜] ${request.customerName}님, 묘목 견적 문의를 확인했습니다. 요청하신 품목과 규격을 확인한 후 안내드리겠습니다.")
     }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Outlined.Sms, null); Spacer(Modifier.width(8.dp)); Text("접수 안내 문자 작성") }

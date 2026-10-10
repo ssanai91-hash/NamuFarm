@@ -71,6 +71,17 @@ class WebRequestConnection(context: Context, private val repository: NamuFarmRep
             bytes.fill(0)
         } finally { password.fill('\u0000') }
     }
+    suspend fun complete(id: String) {
+        check(paired)
+        val response = WebQuoteTransport.api.request(settings.url, mapOf(
+            "action" to "update_request_status", "deviceToken" to settings.deviceToken,
+            "requestId" to id, "status" to "견적완료"
+        ))
+        WebQuoteValidator.checkResponse(response)
+        check(response.updated == true && response.requestId == id && response.status == "견적완료") {
+            "견적완료 상태를 확인하지 못했습니다."
+        }
+    }
     suspend fun close(id: String) {
         check(paired)
         val response=WebQuoteTransport.api.request(settings.url,mapOf("action" to "close_request","deviceToken" to settings.deviceToken,"requestId" to id))

@@ -26,7 +26,8 @@ data class WebQuoteEnvelope(
     val saved: Boolean? = null, val orderNumber: String? = null, val revision: Long? = null, val fingerprint: String? = null,
     val sales: List<com.example.namufarm.sales.SaleRemote>? = null, val report: com.example.namufarm.sales.SalesReport? = null,
     val keyRegistered: Boolean? = null, val keyId: String? = null, val encryptionReady: Boolean? = null,
-    val closed: Boolean? = null,
+    val closed: Boolean? = null, val updated: Boolean? = null,
+    val requestId: String? = null, val status: String? = null,
     val snapshotId: String? = null, val total: Int? = null, val watermark: Long? = null
 )
 data class WebQuoteRemote(
@@ -36,7 +37,7 @@ data class WebQuoteRemote(
     val customerEmail: String? = null, val formalQuoteRequested: Boolean? = null,
     val recipientName: String? = null, val replyChannel: String? = null,
     val encryptedRequest: com.example.namufarm.privacy.PrivacyEnvelope? = null,
-    val expired: Boolean? = null, val expiresAt: Long? = null
+    val expired: Boolean? = null, val expiresAt: Long? = null, val status: String? = null
 )
 data class WebQuoteItemRemote(val species: String? = null, val specification: String? = null, val quantity: Int? = null)
 
@@ -87,6 +88,8 @@ object WebQuoteValidator {
         val deferred = mutableListOf<com.example.namufarm.data.DeferredWebRequestEntity>()
         val checked = rows.mapNotNull { nullable ->
             val outer = checkNotNull(nullable)
+            val requestStatus = outer.status ?: "신규"
+            check(requestStatus in setOf("신규", "견적완료", "입금확인", "배송완료", "구매취소"))
             var row = outer
             val id = checkNotNull(row.requestId)
             check(validId(id) && seen.add(id)) { "요청번호를 확인해주세요." }
@@ -129,7 +132,8 @@ object WebQuoteValidator {
             val recipient = text(row.recipientName ?: "", 100, 0)
             check(recipient.none { it.code < 32 })
             WebQuoteRequestEntity(id, sequence, created, text(row.customerName, 50, 2), phone,
-                text(row.region, 100, 2), Gson().toJson(checkedItems), text(row.message, 1000, 0), customerEmail = email, formalQuoteRequested = row.formalQuoteRequested ?: false, recipientName = recipient, replyChannel = channel)
+                text(row.region, 100, 2), Gson().toJson(checkedItems), text(row.message, 1000, 0), customerEmail = email,
+                formalQuoteRequested = row.formalQuoteRequested ?: false, recipientName = recipient, replyChannel = channel, status = requestStatus)
         }
         return Page(checked, previous, expiredIds, deferred)
     }
