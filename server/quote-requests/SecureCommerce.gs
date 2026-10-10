@@ -270,15 +270,15 @@ function saveSale_(body) {
 }
 function requestStatusTransitionAllowed_(from,status) {
   if(from===status)return true;
-  if(status==='견적발송완료')return from==='신규';
-  if(status==='입금확인')return ['신규','견적발송완료'].includes(from);
+  if(status==='견적완료')return from==='신규';
+  if(status==='입금확인')return ['신규','견적완료'].includes(from);
   if(status==='배송완료')return from==='입금확인';
-  if(status==='구매취소')return ['신규','견적발송완료','입금확인'].includes(from);
+  if(status==='구매취소')return ['신규','견적완료','입금확인'].includes(from);
   return false;
 }
 function updateLinkedRequestStatus_(id,status) {
   if(!id)return;
-  assert_(['견적발송완료','입금확인','배송완료','구매취소'].includes(status),'INVALID');
+  assert_(['견적완료','입금확인','배송완료','구매취소'].includes(status),'INVALID');
   if(quoteStorageConfigured_()){
     const entries=quoteIndexEntries_(),cache={};quoteRepairTransitions_(entries,cache);
     const entry=entries.find(e=>e.values[QI.id]===id);
@@ -304,7 +304,7 @@ function updateLinkedRequestStatus_(id,status) {
   const next=rows[i].slice();next[1]=sequence;next[9]=status;quoteWriteVerified_(sheet,i+2,next);
 }
 function updateRequestStatus_(body) {
-  assert_(UUID_PATTERN.test(body.requestId) && body.status==='견적발송완료');
+  assert_(UUID_PATTERN.test(body.requestId) && body.status==='견적완료');
   return lock_(()=>{
     updateLinkedRequestStatus_(body.requestId,body.status);
     return {updated:true,requestId:body.requestId,status:body.status};

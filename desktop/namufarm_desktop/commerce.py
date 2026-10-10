@@ -21,7 +21,7 @@ def new_draft(request=None):
     return {"id": identifier, "sourceRequestId": request["requestId"] if request else "", "createdAt": now_ms(),
             "customerName": person.get("customerName", ""), "customerPhone": person.get("customerPhone", ""),
             "customerEmail": person.get("customerEmail", ""), "receiverName": person.get("customerName", ""),
-            "zipNo": "", "roadAddress": "", "detailAddress": "", "note": person.get("message", ""),
+            "zipNo": "", "roadAddress": "", "detailAddress": "", "requestRegion": person.get("region", ""), "note": person.get("message", ""),
             "items": [{"species": i["species"], "specification": i.get("specification", ""), "quantity": i["quantity"],
                        "unitPrice": 0, "unitCost": 0} for i in person.get("items", [])],
             "shippingFee": 0, "isPrepaid": False, "taxAmount": 0, "costConfirmed": False,
