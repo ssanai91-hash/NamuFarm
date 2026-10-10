@@ -3,7 +3,7 @@ import json
 import unittest
 import urllib.error
 
-from namufarm_desktop.api import DEFAULT_URL, REQUEST_TIMEOUT, ScriptApi
+from namufarm_desktop.api import DEFAULT_URL, REQUEST_TIMEOUT, GoogleRedirect, ScriptApi
 from namufarm_desktop.errors import NetworkError
 
 
@@ -58,6 +58,13 @@ class ApiTest(unittest.TestCase):
     def test_server_info_failure_identifies_security_check(self):
         message = self.assert_failure(TimeoutError(), '대기 시간이 초과', action=None)
         self.assertIn('서버 보안 확인 중', message)
+
+    def test_redirect_allows_apps_script_one_time_content_hosts(self):
+        redirect = GoogleRedirect()
+        self.assertTrue(redirect._allowed_host("script.googleusercontent.com"))
+        self.assertTrue(redirect._allowed_host("n-abc123-script.googleusercontent.com"))
+        self.assertFalse(redirect._allowed_host("googleusercontent.com"))
+        self.assertFalse(redirect._allowed_host("evil-script.googleusercontent.com.attacker.example"))
 
     def test_valid_ack_is_returned_with_one_bounded_post(self):
         opener = FakeOpener(b'{"ok":true,"closed":true,"requestId":"test-request"}')
