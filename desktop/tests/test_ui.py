@@ -129,6 +129,16 @@ class UiTest(QtTestCase):
         self.assertIs(task, self.window.task)
         self.wait_job()
 
+    def test_wrong_server_shows_destructive_reset_action(self):
+        old = self.window.manager.api.url
+        self.window.manager.api.url = 'https://script.google.com/macros/s/AKabcdefghijklmnopqrstuvwxyz1234567890/exec'
+        self.window.update_controls()
+        self.assertTrue(self.window.reset_server_button.isVisible())
+        self.assertTrue(self.window.reset_server_button.isEnabled())
+        self.window.manager.api.url = old
+        self.window.update_controls()
+        self.assertFalse(self.window.reset_server_button.isVisible())
+
     def test_statistics_job_and_lock_clear_customer_data(self):
         self.window.fetch_report()
         self.wait_job()

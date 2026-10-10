@@ -25,6 +25,19 @@ class Manager:
         self.copy_error = ""
 
     @property
+    def using_default_server(self):
+        return self.api.url == DEFAULT_URL
+
+    def reset_to_default_server(self):
+        """User-approved destructive reset for PCs pinned to an obsolete Apps Script deployment."""
+        self.credentials = self.vault.reset_workspace(DEFAULT_URL)
+        self.seller = SellerKey(self.credentials["privateKey"], self.credentials["publicKey"]) if self.credentials.get("privateKey") else None
+        self.api = ScriptApi(DEFAULT_URL, self.credentials["deviceToken"])
+        self.request_snapshot = False
+        self.copy_error = ""
+        return self.view()
+
+    @property
     def request_copy_path(self):
         return self.vault.path.with_name("나무팜-견적요청.xlsx")
 

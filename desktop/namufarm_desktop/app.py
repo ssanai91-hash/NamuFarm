@@ -248,7 +248,11 @@ class MainWindow(QMainWindow):
         self.manager, data = result
         self.url.setText(self.manager.api.url)
         self.apply_view(data)
-        self.message.setText("보관함을 열었습니다. " + ("지금 동기화해 최신 기록을 가져오세요." if data["paired"] else "연결파일을 한 번 불러와주세요."))
+        if not self.manager.using_default_server:
+            self.message.setText("이 PC가 이전 Apps Script 서버를 사용 중입니다. 연결 · 설정에서 ‘운영 서버로 초기화’를 눌러주세요.")
+            self.message.setStyleSheet("color:#a33827;font-weight:600")
+        else:
+            self.message.setText("보관함을 열었습니다. " + ("지금 동기화해 최신 기록을 가져오세요." if data["paired"] else "연결파일을 한 번 불러와주세요."))
 
     def update_controls(self):
         ready = self.manager is not None and self.task is None
@@ -264,6 +268,9 @@ class MainWindow(QMainWindow):
         self.pair_button.setEnabled(ready and not self.data["paired"])
         self.url.setEnabled(ready and not self.data["paired"])
         self.invite.setEnabled(ready and not self.data["paired"])
+        stale_server = ready and not self.manager.using_default_server
+        self.reset_server_button.setVisible(stale_server)
+        self.reset_server_button.setEnabled(stale_server)
         pending = bool(self.data["pending"])
         self.delete_button.setEnabled(paired and not pending and self.request_table.currentRow() >= 0)
         editable = paired and not pending and self.selected_sale is not None and self.selected_sale["metadata"]["status"] not in ("판매완료", "주문취소")
@@ -618,6 +625,9 @@ class MainWindow(QMainWindow):
         advanced_layout.addWidget(self.pair_button)
         layout.addWidget(self.advanced_connection)
         self.advanced_connection.hide()
+        self.reset_server_button = QPushButton("운영 서버로 초기화 · 이 PC 자료 삭제")
+        self.reset_server_button.clicked.connect(self.reset_server)
+        layout.addWidget(self.reset_server_button)
         self.auto_check = QCheckBox("60초마다 자동 동기화 · 수정 중에는 입력내용을 유지합니다")
         self.auto_check.setChecked(False)
         layout.addWidget(self.auto_check)
@@ -629,7 +639,7 @@ class MainWindow(QMainWindow):
         self.legacy_button = QPushButton("이전 자료 복원 (필요한 경우)")
         self.legacy_button.clicked.connect(self.restore_legacy)
         layout.addWidget(self.legacy_button)
-        note = QLabel("PC와 휴대폰에 같은 연결파일을 한 번 불러오세요.\n이후 ‘지금 동기화’로 시트를 내려받고, 저장된 자료는 오프라인으로 조회합니다.\n로컬 엑셀 사본은 조회용이며, 수정해도 시트에 반영되지 않습니다.\n엑셀 사본 위치: " + str(self.vault_path.with_name("나무팜-견적요청.xlsx")) + "\n휴대폰과 PC는 구글시트를 통해 동기화합니다.\n저장 실패 시 전송 대기를 유지하며, 서버 저장 확인 뒤에만 지웁니다.\n같은 판매 기록을 동시에 수정하면 충돌 내용을 확인할 수 있습니다.\n이 PC의 자료는 Windows 계정으로 자동 보호합니다.\n새 PC에서는 다시 연결해 서버에 동기화된 자료를 가져옵니다.\nPC를 바꾸기 전 전송 대기를 동기화해주세요. 미확정 초안은 이 PC에만 저장됩니다.\n보관함 위치: " + str(self.vault_path))
+        note = QLabel("PC와 휴대폰에 같은 연결파일을 한 번 불러오세요.\n주소가 운영 서버와 다르면 ‘운영 서버로 초기화’로 이 PC의 로컬 자료를 비운 뒤 연결파일을 다시 불러오세요.\n이후 ‘지금 동기화’로 시트를 내려받고, 저장된 자료는 오프라인으로 조회합니다.\n로컬 엑셀 사본은 조회용이며, 수정해도 시트에 반영되지 않습니다.\n엑셀 사본 위치: " + str(self.vault_path.with_name("나무팜-견적요청.xlsx")) + "\n휴대폰과 PC는 구글시트를 통해 동기화합니다.\n저장 실패 시 전송 대기를 유지하며, 서버 저장 확인 뒤에만 지웁니다.\n같은 판매 기록을 동시에 수정하면 충돌 내용을 확인할 수 있습니다.\n이 PC의 자료는 Windows 계정으로 자동 보호합니다.\n새 PC에서는 다시 연결해 서버에 동기화된 자료를 가져옵니다.\nPC를 바꾸기 전 전송 대기를 동기화해주세요. 미확정 초안은 이 PC에만 저장됩니다.\n보관함 위치: " + str(self.vault_path))
         note.setWordWrap(True)
         note.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         layout.addWidget(note)
@@ -673,6 +683,29 @@ class MainWindow(QMainWindow):
             self.manager.api = ScriptApi(url, self.manager.credentials["deviceToken"])
             return self.manager.pair(invite)
         self.run_job("PC 연결 중…", work)
+
+    def reset_server(self):
+        if not self.manager:
+            return
+        answer = QMessageBox.question(
+            self,
+            "운영 서버로 초기화",
+            "이 PC에 저장된 견적 요청, 판매 기록, 초안, 전송 대기와 로컬 설정을 모두 삭제합니다.\n"
+            "Google Sheet의 운영 데이터는 삭제하지 않습니다.\n\n"
+            "현재 운영 Apps Script 주소로 초기화할까요?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+
+        def completed(value):
+            self.url.setText(self.manager.api.url)
+            self.apply_view(value)
+            self.message.setText("PC 로컬 자료를 초기화했습니다. ‘연결파일 불러오기’로 운영 서버에 다시 연결해주세요.")
+
+        self.run_job("PC 로컬 자료를 삭제하고 운영 서버로 초기화 중…",
+                     self.manager.reset_to_default_server, completed, False)
 
     def resolve_conflict(self):
         self.run_job("서버 최신 판매 기록 확인 중…", self.manager.conflict_preview, self.confirm_conflict)
