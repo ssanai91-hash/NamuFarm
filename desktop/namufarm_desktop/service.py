@@ -125,6 +125,20 @@ class Manager:
         self.vault.save_preference("drafts", [copy.deepcopy(draft), *drafts])
         return self.view()
 
+    def mark_quote_sent(self, draft):
+        validate_draft(draft)
+        source = draft.get("sourceRequestId", "")
+        require(valid_id(source), "홈페이지 견적 요청에서 작성한 견적만 발송 완료로 처리할 수 있습니다.")
+        request = next((r for r in self.vault.rows("requests") if r["requestId"] == source), None)
+        require(request is not None, "견적 요청을 다시 동기화해주세요.")
+        require(request.get("status", "신규") in ("신규", "견적발송완료"), "이미 판매 단계로 진행된 견적 요청입니다.")
+        self.save_draft(draft)
+        self.verify_server()
+        response = self.api.call("update_request_status", requestId=source, status="견적발송완료")
+        require(response.get("updated") is True and response.get("requestId") == source
+                and response.get("status") == "견적발송완료", "견적 발송 상태 저장을 확인하지 못했습니다.")
+        return self.sync_requests()
+
     def shipping_export_preferences(self):
         return self.vault.preference("shipping_export", {"sender": {}, "history": {}})
 
@@ -152,7 +166,9 @@ class Manager:
         require(not any(r["metadata"]["orderNumber"] == number for r in snapshot["sales"]), "이미 구매 확정된 견적입니다. 판매 관리에서 확인해주세요.")
         source = draft["sourceRequestId"]
         if source:
-            require(any(r["requestId"] == source for r in snapshot["requests"]), "접수된 문의가 삭제·만료되었거나 이미 구매 확정되었습니다.")
+            request = next((r for r in snapshot["requests"] if r["requestId"] == source), None)
+            require(request is not None, "접수된 문의가 삭제·만료되었습니다.")
+            require(request.get("status", "신규") == "견적발송완료", "먼저 견적 발송 완료로 처리해주세요.")
             require(not any(r["private"]["order"].get("sourceRequestId") == source for r in snapshot["sales"]), "이미 판매로 등록된 문의입니다.")
         self.save_draft(draft)
         order = order_from_draft(draft)

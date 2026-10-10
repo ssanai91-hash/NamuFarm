@@ -268,15 +268,24 @@ function saveSale_(body) {
     return {saved:true,orderNumber:meta.orderNumber,revision:meta.revision,fingerprint:digest};
   });
 }
+function requestStatusTransitionAllowed_(from,status) {
+  if(from===status)return true;
+  if(status==='견적발송완료')return from==='신규';
+  if(status==='입금확인')return ['신규','견적발송완료'].includes(from);
+  if(status==='배송완료')return from==='입금확인';
+  if(status==='구매취소')return ['신규','견적발송완료','입금확인'].includes(from);
+  return false;
+}
 function updateLinkedRequestStatus_(id,status) {
   if(!id)return;
-  assert_(['입금확인','배송완료','구매취소'].includes(status),'INVALID');
+  assert_(['견적발송완료','입금확인','배송완료','구매취소'].includes(status),'INVALID');
   if(quoteStorageConfigured_()){
     const entries=quoteIndexEntries_(),cache={};quoteRepairTransitions_(entries,cache);
     const entry=entries.find(e=>e.values[QI.id]===id);
     if(!entry || entry.values[QI.phase]!=='COMMITTED')return;
     const record=quoteRecord_(entry,cache,false);
     if(JSON.parse(record.row[15]).expired===true || record.row[9]===status)return;
+    assert_(requestStatusTransitionAllowed_(String(record.row[9]||'신규'),status),'CONFLICT');
     const sequence=quoteNextSequence_(entries),next=record.row.slice();
     next[1]=sequence;next[9]=status;quoteWriteVerified_(record.sheet,record.index+2,next);
     entry.values[QI.seq]=sequence;entry.values[QI.status]=status;quoteSaveEntry_(entry);
@@ -288,10 +297,18 @@ function updateLinkedRequestStatus_(id,status) {
   }
   const sheet=sheet_(),rows=receiptRows_(sheet),i=rows.findIndex(r=>r[0]===id);
   if(i<0 || JSON.parse(rows[i][15]).expired===true || rows[i][9]===status)return;
+  assert_(requestStatusTransitionAllowed_(String(rows[i][9]||'신규'),status),'CONFLICT');
   const props=PropertiesService.getScriptProperties();
   const sequence=rows.reduce((m,r)=>Math.max(m,Number(r[1])||0),Number(props.getProperty('LAST_SEQUENCE'))||0)+1;
   assert_(Number.isSafeInteger(sequence),'NOT_READY');props.setProperty('LAST_SEQUENCE',String(sequence));
   const next=rows[i].slice();next[1]=sequence;next[9]=status;quoteWriteVerified_(sheet,i+2,next);
+}
+function updateRequestStatus_(body) {
+  assert_(UUID_PATTERN.test(body.requestId) && body.status==='견적발송완료');
+  return lock_(()=>{
+    updateLinkedRequestStatus_(body.requestId,body.status);
+    return {updated:true,requestId:body.requestId,status:body.status};
+  });
 }
 function listSales_(body) {
   assert_(Number.isSafeInteger(body.afterSequence) && body.afterSequence>=0);

@@ -28,6 +28,7 @@ function doPost(e) {
       const device = authenticateDevice_(body.deviceToken);
       if (body.action === 'list_requests') value = listRequests_(body);
       else if (body.action === 'snapshot_requests') value = snapshotRequests_(body);
+      else if (body.action === 'update_request_status') value = updateRequestStatus_(body);
       else if (body.action === 'register_push') value = registerPush_(body, device);
       else if (body.action === 'save_sale') value = saveSale_(body);
       else if (body.action === 'list_sales') value = listSales_(body);
