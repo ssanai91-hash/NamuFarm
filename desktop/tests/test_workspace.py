@@ -134,6 +134,17 @@ class WorkspaceServiceTest(unittest.TestCase):
         self.assertEqual([], self.manager.view()['drafts'])
         self.assertEqual([], self.manager.vault.preference('drafts'))
 
+    def test_quote_confirmation_updates_server_state_and_keeps_local_quote(self):
+        self.bridge.send(control='submit')
+        view = self.manager.sync()
+        request = view['requests'][0]
+        draft = draft_for_test()
+        draft['sourceRequestId'] = request['requestId']
+        confirmed = self.manager.confirm_quote(draft)
+        self.assertEqual('견적확정', confirmed['requests'][0]['status'])
+        self.assertEqual(draft['id'], confirmed['drafts'][0]['id'])
+        self.assertNotIn('테스트 고객'.encode(), self.manager.vault.path.read_bytes())
+
     def test_shipping_export_preferences_are_encrypted_and_do_not_advance_sale(self):
         row = self.manager.confirm_draft(draft_for_test())['sales'][0]
         before = self.manager.view()['sales']
@@ -152,6 +163,8 @@ class WorkspaceServiceTest(unittest.TestCase):
         draft = draft_for_test()
         draft['sourceRequestId'] = view['requests'][0]['requestId']
         self.manager.save_draft(draft)
+        confirmed = self.manager.confirm_quote(draft)
+        self.assertEqual('견적확정', confirmed['requests'][0]['status'])
         view = self.manager.confirm_draft(draft)
         self.assertEqual([], view['requests'])
         self.assertEqual([], view['drafts'])
@@ -239,6 +252,7 @@ class SellerUiTest(QtTestCase):
 
         headers = [dialog.items.horizontalHeaderItem(i).text() for i in range(dialog.items.columnCount())]
         self.assertEqual(['묘목명', '수량', '판매 금액', '판매 단가'], headers)
+        self.assertEqual('견적 확정', dialog.confirm_button.text())
         self.assertEqual('20,000', dialog.items.item(0, 2).text())
 
         price = dialog.unit_price_editor(0)

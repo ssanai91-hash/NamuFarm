@@ -368,7 +368,8 @@ class MainWindow(QMainWindow):
 
     def refresh_requests(self):
         query = self.request_search.text().casefold()
-        self.request_rows = [r for r in self.data["requests"] if query in (r["requestId"] + r.get("receiptNumber", "") + str(r["personal"])).casefold()]
+        self.request_rows = [r for r in self.data["requests"] if r.get("status", "신규") == "신규"
+                             and query in (r["requestId"] + r.get("receiptNumber", "") + str(r["personal"])).casefold()]
         self.request_table.blockSignals(True)
         fill_table(self.request_table, [(r.get("receiptNumber") or r["requestId"], timestamp(r["createdAt"]), r.get("status", "신규"), r["personal"]["customerName"], r["personal"]["customerPhone"],
                    r["personal"].get("customerEmail") or "—", r["personal"]["region"],

@@ -34,7 +34,7 @@ import com.google.gson.Gson
 internal fun WebQuoteInboxDialog(
     state: WebInboxState, initialRequestId: String?, customerPhone: String, cartItemCount: Int,
     onRefresh: () -> Unit, onPair: (String) -> Unit, onRead: (String) -> Unit,
-    onUseRequest: (WebQuoteRequestEntity) -> Unit, onComplete: (String) -> Unit,
+    onUseRequest: (WebQuoteRequestEntity) -> Unit, onConfirm: (String) -> Unit,
     onMessageConsumed: () -> Unit, onDismiss: () -> Unit,
     onRestore: (android.net.Uri, CharArray) -> Unit = {_,_->}, onClose: (String) -> Unit = {},
     onConnectFile: (android.net.Uri) -> Unit = {}
@@ -63,7 +63,7 @@ internal fun WebQuoteInboxDialog(
         onDismiss = onDismiss, snackbarHostState = snackbar,
         actions = {
             if (selected != null) {
-                WebRequestCustomerActions(selected, customerPhone, cartItemCount, onComplete) { onUseRequest(selected) }
+                WebRequestCustomerActions(selected, customerPhone, cartItemCount, onConfirm) { onUseRequest(selected) }
                 TextButton(onClick={closeConfirm=true},enabled=!state.busy) { Text("상담 종료 · 고객 문의 삭제") }
                 OutlinedButton(onClick = { selectedId = null }, modifier = Modifier.fillMaxWidth()) {
                     Icon(Icons.AutoMirrored.Outlined.ArrowBack, null); Spacer(Modifier.width(8.dp)); Text("요청 목록")
@@ -170,7 +170,7 @@ internal fun WebRequestDetail(request: WebQuoteRequestEntity) {
 }
 
 @Composable
-internal fun WebRequestCustomerActions(request: WebQuoteRequestEntity, customerPhone: String, cartItemCount: Int, onComplete: (String) -> Unit, onUsePhone: (String) -> Unit) {
+internal fun WebRequestCustomerActions(request: WebQuoteRequestEntity, customerPhone: String, cartItemCount: Int, onConfirm: (String) -> Unit, onUsePhone: (String) -> Unit) {
     var confirm by rememberSaveable(request.requestId) { mutableStateOf(false) }
     var smsError by remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current
@@ -179,8 +179,8 @@ internal fun WebRequestCustomerActions(request: WebQuoteRequestEntity, customerP
         else onUsePhone(request.customerPhone)
     }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Outlined.Description, null); Spacer(Modifier.width(8.dp)); Text("수동 견적 작성") }
     if (request.status == "신규") {
-        OutlinedButton(onClick = { onComplete(request.requestId) }, modifier = Modifier.fillMaxWidth()) {
-            Icon(Icons.Outlined.CheckCircle, null); Spacer(Modifier.width(8.dp)); Text("견적완료로 표시")
+        OutlinedButton(onClick = { onConfirm(request.requestId) }, modifier = Modifier.fillMaxWidth()) {
+            Icon(Icons.Outlined.CheckCircle, null); Spacer(Modifier.width(8.dp)); Text("견적확정로 표시")
         }
     }
     OutlinedButton(onClick = {

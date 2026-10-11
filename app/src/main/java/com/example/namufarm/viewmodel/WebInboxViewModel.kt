@@ -25,7 +25,7 @@ class WebInboxViewModel(private val connection: WebRequestConnection) : ViewMode
     val state = mutableState.asStateFlow()
     private val working = AtomicBoolean(false)
     init { viewModelScope.launch(Dispatchers.IO) { reloadLocal() } }
-    private fun reloadLocal() { mutableState.update { it.copy(configured = connection.configured, requests = connection.localRequests(), paired = connection.paired, deferredCount = connection.deferredCount) } }
+    private fun reloadLocal() { mutableState.update { it.copy(configured = connection.configured, requests = connection.localRequests().filter { request -> request.status == "신규" }, paired = connection.paired, deferredCount = connection.deferredCount) } }
     fun refresh() = operate {
         reloadLocal()
         val count = connection.refresh()
@@ -53,11 +53,11 @@ class WebInboxViewModel(private val connection: WebRequestConnection) : ViewMode
         reloadLocal()
         showMessage(if (restored > 0) "이전 요청 ${restored}건을 불러왔어요." else "이 백업으로 새로 열 수 있는 이전 요청이 없습니다. 새 견적은 계속 사용할 수 있어요.")
     }
-    fun complete(id: String) = operate {
-        connection.complete(id)
+    fun confirm(id: String) = operate {
+        connection.confirmQuote(id)
         connection.refresh()
         reloadLocal()
-        showMessage("견적완료로 표시했어요.")
+        showMessage("견적확정으로 표시했어요.")
     }
     fun close(id: String) = operate { connection.close(id);reloadLocal();showMessage("상담을 종료하고 고객 문의와 연결된 견적 사본을 삭제했어요.") }
     fun read(id: String) { viewModelScope.launch(Dispatchers.IO) { connection.read(id); reloadLocal() } }

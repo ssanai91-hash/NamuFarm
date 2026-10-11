@@ -68,3 +68,13 @@ test('v2 receipt hash and canonical JSON stay unchanged after v3 upgrade',()=>{
   assert.equal(f.submit({...original,website:''}).duplicate,true);
 });
 
+
+test('request status uses 견적확정 stage and removed 견적완료 is rejected',()=>{
+  const f=fixture();f.submit();
+  assert.equal(f.context.requestStatusTransitionAllowed_('신규','견적확정'),true);
+  assert.equal(f.context.requestStatusTransitionAllowed_('신규','입금확인'),false);
+  assert.throws(()=>f.context.updateRequestStatus_({requestId:f.request.requestId,status:'견적완료'}));
+  const result=f.context.updateRequestStatus_({requestId:f.request.requestId,status:'견적확정'});
+  assert.equal(result.updated,true);assert.equal(result.status,'견적확정');
+  assert.equal(f.readRequests(0).requests[0].status,'견적확정');
+});

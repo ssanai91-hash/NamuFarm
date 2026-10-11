@@ -88,6 +88,12 @@ class UiTest(QtTestCase):
         self.assertFalse(hasattr(self.window, 'apply_inbox'))
         self.assertEqual('견적요청 삭제', self.window.delete_button.text())
 
+    def test_confirmed_requests_leave_online_inbox(self):
+        self.assertEqual(1, self.window.request_table.rowCount())
+        self.window.data['requests'][0]['status'] = '견적확정'
+        self.window.refresh_requests()
+        self.assertEqual(0, self.window.request_table.rowCount())
+
     def test_save_button_sends_edited_fields_and_refreshes_revision(self):
         self.window.sale_table.selectRow(0)
         self.window.fields['receiverName'].setText('Qt 화면에서 저장')

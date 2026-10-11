@@ -310,11 +310,11 @@ class QuoteDialog(QDialog):
             footer.addWidget(button("견적안 미리보기 / PDF", self.preview))
         footer.addStretch()
         footer.addWidget(button("닫기", self.reject))
-        footer.addWidget(button("초안 저장", lambda: self.finish("save")))
+        footer.addWidget(button("임시저장", lambda: self.finish("save")))
         if self.simple_request:
-            self.complete_button = button("견적완료", lambda: self.finish("complete"), True)
-            self.complete_button.setEnabled(request_status in ("", "신규"))
-            footer.addWidget(self.complete_button)
+            self.confirm_button = button("견적 확정", lambda: self.finish("finalize"), True)
+            self.confirm_button.setEnabled(request_status in ("", "신규"))
+            footer.addWidget(self.confirm_button)
         else:
             footer.addWidget(button("입금확인 · 판매 등록", lambda: self.finish("confirm"), True))
         layout.addLayout(footer)
@@ -462,7 +462,7 @@ class QuoteDialog(QDialog):
     def finish(self, mode):
         try:
             draft = self.collect()
-            if mode == "complete" and QMessageBox.question(self, "견적완료", "판매 단가와 합계를 확인했나요?\n완료하면 온라인 요청 상태가 '견적완료'로 바뀝니다.", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
+            if mode == "finalize" and QMessageBox.question(self, "견적 확정", "판매 단가와 합계를 확인했나요?\n확정하면 온라인 요청 상태가 '견적확정'으로 바뀌고 견적 작업대로 이동합니다.", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
                 return
             if mode == "confirm" and QMessageBox.question(self, "입금확인", "고객의 구매와 입금을 확인했나요?\n품목·수량·금액은 판매 등록 후 변경할 수 없습니다.", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
                 return
@@ -664,7 +664,7 @@ class SellerWindow(MainWindow):
         self.request_actions.addWidget(self.request_quote_button)
         for item in old_pages[0].findChildren(QLabel):
             if "수동 견적" in item.text():
-                item.setText("요청을 더블클릭해 견적을 작성하세요. 견적완료 후 입금확인으로 판매 등록합니다.")
+                item.setText("요청을 더블클릭해 견적을 작성하세요. 견적확정 후 견적 작업대에서 고객 전달을 진행합니다.")
         for widget in self.findChildren(type(self.request_table)):
             polish_table(widget)
         self.save_button.setObjectName("primary")
@@ -707,7 +707,7 @@ class SellerWindow(MainWindow):
         metrics = QHBoxLayout()
         metrics.setSpacing(16)
         self.metrics = []
-        for title, subtitle, target in (("새 견적 요청", "온라인 접수함", 1), ("견적완료", "고객 회신 대기", 1), ("출고 대기", "입금확인 · 배송완료 전", 4), ("이번 달 배송완료 매출", "공급가 기준 · 한국 시간", 5)):
+        for title, subtitle, target in (("새 견적 요청", "온라인 접수함", 1), ("견적확정", "견적 작업대", 2), ("출고 대기", "입금확인 · 배송완료 전", 4), ("이번 달 배송완료 매출", "공급가 기준 · 한국 시간", 5)):
             frame, box = card(title)
             value = label("—", "metricValue")
             self.metrics.append(value)
@@ -728,7 +728,7 @@ class SellerWindow(MainWindow):
         bottom.addWidget(frame, 3)
         frame, box = card("판매 업무 흐름")
         for n, title, description in (("01", "견적 작성", "접수 요청을 더블클릭해 수량·단가를 확정하세요."),
-                                       ("02", "견적완료", "실제 전달한 견적을 완료 처리하고 고객 회신을 기다리세요."),
+                                       ("02", "견적확정", "확정된 견적의 문자·메일·PDF 전달과 고객 회신을 관리하세요."),
                                        ("03", "입금확인 · 출고", "입금을 확인한 주문의 로젠 송장과 배송을 준비하세요."),
                                        ("04", "배송완료 / 구매취소", "최종 상태를 확정해 매출과 업무를 정리하세요.")):
             box.addWidget(label(n + "   " + title, "sectionTitle"))
@@ -743,14 +743,14 @@ class SellerWindow(MainWindow):
     def build_drafts(self):
         page = QWidget()
         layout = QVBoxLayout(page)
-        layout.addWidget(label("고객과 이야기하며 견적을 완성하세요.", "sectionTitle"))
-        layout.addWidget(label("초안은 이 PC에 암호화해 30일 보관합니다. 구매 확정 후 운영 시트와 휴대폰에서 판매 기록을 조회할 수 있습니다.", "muted", True))
+        layout.addWidget(label("견적확정된 건을 고객에게 전달하고 후속 작업을 관리하세요.", "sectionTitle"))
+        layout.addWidget(label("온라인 요청의 임시저장은 요청함에 남고, 견적확정하면 이 작업대로 이동합니다. 견적 내용은 이 PC에 암호화해 30일 보관합니다.", "muted", True))
         self.draft_table = table(["작성일", "고객명", "연락처", "품목", "합계", "견적 번호"])
         self.draft_table.itemDoubleClicked.connect(self.open_draft)
         layout.addWidget(self.draft_table)
         bar = QHBoxLayout()
-        self.draft_delete = button("선택 초안 삭제", self.remove_draft)
-        self.draft_open = button("선택 초안 이어서 작성", self.open_draft, True)
+        self.draft_delete = button("선택 견적 삭제", self.remove_draft)
+        self.draft_open = button("선택 견적 열기", self.open_draft, True)
         bar.addWidget(self.draft_delete)
         bar.addStretch()
         bar.addWidget(self.draft_open)
@@ -857,7 +857,7 @@ class SellerWindow(MainWindow):
     def refresh_workspace(self):
         sales = self.data["sales"]
         self.metrics[0].setText(f"{sum(r.get('status','신규') == '신규' for r in self.data['requests']):,}건")
-        self.metrics[1].setText(f"{sum(r.get('status') == '견적완료' for r in self.data['requests']):,}건")
+        self.metrics[1].setText(f"{sum(r.get('status') == '견적확정' for r in self.data['requests']):,}건")
         self.metrics[2].setText(f"{sum(r['metadata']['status'] in ('입금확인','구매확정') for r in sales):,}건")
         month = datetime.now(SEOUL).strftime("%Y-%m")
         completed = [r for r in sales if r["metadata"]["status"] in ("배송완료","판매완료") and timestamp(r["metadata"]["completedAt"]).startswith(month)]
@@ -869,7 +869,9 @@ class SellerWindow(MainWindow):
             step = shipping_problem(order) or ("로젠 송장 등록" if not tracking_number(order) else "출고 · 배송 확인")
             rows.append((order.get("customerName") or order["orderNumber"], ", ".join(i["species"] for i in r["metadata"]["items"]), money(order["totalPrice"] + order["taxAmount"]), step))
         fill_table(self.work_table, rows)
-        self.draft_rows = self.data.get("drafts", [])
+        request_status = {r["requestId"]: r.get("status", "신규") for r in self.data["requests"]}
+        self.draft_rows = [d for d in self.data.get("drafts", [])
+                           if not d.get("sourceRequestId") or request_status.get(d["sourceRequestId"]) == "견적확정"]
         fill_table(self.draft_table, [(timestamp(d["createdAt"]), d["customerName"], d["customerPhone"], ", ".join(i["species"] for i in d["items"]), money(draft_amounts(d)["total"]), "PCQ_" + d["id"][:8]) for d in self.draft_rows])
         pending = len(self.data["pending"])
         self.health.setText(f"전송 대기 {pending}건\n동기화하여 저장 여부를 확인하세요." if pending else "운영 시트 연결됨\n수정 중에는 자동 새로고침을 멈춥니다." if self.data["paired"] else "연결 · 설정에서 보관함을 열고\nPC를 연결해주세요.")
@@ -926,24 +928,31 @@ class SellerWindow(MainWindow):
         draft, mode = dialog.draft, dialog.mode
         if mode == "confirm":
             self.run_job("입금확인 내역을 운영 시트에 저장 중…", lambda: self.manager.confirm_draft(draft), self.quote_confirmed)
-        elif mode == "complete":
-            self.run_job("견적완료 상태를 운영 시트에 저장 중…", lambda: self.manager.mark_quote_complete(draft), self.quote_complete)
+        elif mode == "finalize":
+            self.run_job("견적확정 상태를 운영 시트에 저장 중…", lambda: self.manager.confirm_quote(draft), self.quote_finalized)
         else:
-            self.run_job("견적 초안을 암호화해 저장 중…", lambda: self.manager.save_draft(draft), self.draft_saved)
+            online_request = bool(draft.get("sourceRequestId"))
+            self.run_job("견적을 임시저장 중…", lambda: self.manager.save_draft(draft),
+                         lambda value: self.draft_saved(value, online_request))
 
     def quote_confirmed(self, value):
         self.apply_view(value)
         self.message.setText("입금확인으로 판매 등록했습니다. 배송을 준비하세요.")
         self.navigate(3)
 
-    def quote_complete(self, value):
+    def quote_finalized(self, value):
         self.apply_view(value)
-        self.message.setText("견적완료로 저장했습니다.")
-        self.navigate(1)
+        self.message.setText("견적을 확정했습니다. 견적 작업대에서 문자·메일 등 후속 작업을 진행하세요.")
+        self.navigate(2)
 
-    def draft_saved(self, value):
+    def draft_saved(self, value, online_request=False):
         self.apply_view(value)
-        self.message.setText("견적 초안을 이 PC에 저장했습니다. 단가를 확인한 뒤 견적완료로 처리하세요.")
+        self.message.setText("견적을 이 PC에 임시저장했습니다. 단가를 확인한 뒤 견적을 확정하세요.")
+        self.navigate(1 if online_request else 2)
+
+    def draft_deleted(self, value):
+        self.apply_view(value)
+        self.message.setText("선택한 견적을 삭제했습니다.")
         self.navigate(2)
 
     def quote_request(self, *args):
@@ -980,9 +989,9 @@ class SellerWindow(MainWindow):
         index = self.draft_table.currentRow()
         if not self.manager or not 0 <= index < len(self.draft_rows):
             return
-        if QMessageBox.question(self, "견적 초안 삭제", "선택한 PC 견적 초안을 삭제할까요?", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No) == QMessageBox.StandardButton.Yes:
+        if QMessageBox.question(self, "견적 삭제", "선택한 PC 견적을 삭제할까요?", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No) == QMessageBox.StandardButton.Yes:
             identifier = self.draft_rows[index]["id"]
-            self.run_job("초안 삭제 중…", lambda: self.manager.delete_draft(identifier), self.draft_saved)
+            self.run_job("견적 삭제 중…", lambda: self.manager.delete_draft(identifier), self.draft_deleted)
 
     def open_work_order(self, item):
         self.show_order(self.work_rows[item.row()]["metadata"]["orderNumber"])
