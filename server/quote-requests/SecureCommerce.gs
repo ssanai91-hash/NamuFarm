@@ -24,6 +24,8 @@ function secureServiceInfo_() {
     receiptFormat:'NAMU-YYYYMMDD-NNNN',receiptTimeZone:'Asia/Seoul',connectionFile:true,requestSnapshot:true,
     quoteEmail:true,quoteEmailSender:QUOTE_SENDER_EMAIL,
     quoteSms:true,quoteSmsProvider:'SOLAPI',
+    ledgerStorage:yearlyLedgersEnabled_()?'yearly-v1':'legacy',
+    quoteLedgerStatus:'견적발송완료',orderLedgerDate:'paidAt',ledgerTimeZone:'Asia/Seoul',
     commerceStates:['입금확인','배송완료','구매취소']};
 }
 function byteString_(value, minimum, maximum) {
@@ -239,7 +241,7 @@ function saveSale_(body) {
   const digest=saleDigest_(meta,personal,plain); assert_(body.fingerprint===digest);
   assert_(body.sourceRequestId==='' || UUID_PATTERN.test(body.sourceRequestId));
   return lock_(()=>{
-    const sheet=namedSheet_(SALE_SHEET,SALE_HEADERS,false), events=namedSheet_(SALE_EVENT_SHEET,SALE_EVENT_HEADERS,false);
+    const sheet=saleWriteSheet_(meta,body.sourceRequestId), events=namedSheet_(SALE_EVENT_SHEET,SALE_EVENT_HEADERS,false);
     const receipts=namedRows_(events,5); const receipt=receipts.find(r=>r[0]===body.eventId);
     if(receipt){assert_(receipt[1]===meta.orderNumber && Number(receipt[2])===meta.revision && receipt[3]===digest,'CONFLICT'); updateLinkedRequestStatus_(body.sourceRequestId,meta.status); return {saved:true,orderNumber:meta.orderNumber,revision:meta.revision,fingerprint:digest};}
     const rows=namedRows_(sheet,20); const i=rows.findIndex(r=>r[0]===meta.orderNumber || r[0]===hash_(PropertiesService.getScriptProperties().getProperty('WEB_SECRET')+'expired-sale:'+meta.orderNumber));
@@ -283,7 +285,7 @@ function requestStatusTransitionAllowed_(from,status) {
   return false;
 }
 function updateLinkedRequestStatus_(id,status) {
-  if(!id)return;
+  if(!id || yearlyLedgersEnabled_() && !['견적확정','견적발송완료'].includes(status))return;
   assert_(['견적확정','견적발송완료','입금확인','배송완료','구매취소'].includes(status),'INVALID');
   if(quoteStorageConfigured_()){
     const entries=quoteIndexEntries_(),cache={};quoteRepairTransitions_(entries,cache);
@@ -474,7 +476,7 @@ function quoteSmsStatus_(body) {
 
 function listSales_(body) {
   assert_(Number.isSafeInteger(body.afterSequence) && body.afterSequence>=0);
-  const rows=namedRows_(namedSheet_(SALE_SHEET,SALE_HEADERS,false),20).filter(r=>Number(r[1])>body.afterSequence).sort((a,b)=>Number(a[1])-Number(b[1]));
+  const rows=saleStorageRows_().filter(r=>Number(r[1])>body.afterSequence).sort((a,b)=>Number(a[1])-Number(b[1]));
   const page=rows.slice(0,100).map(r=>{
     const meta=JSON.parse(r[15]); if(meta.archived)return {sequence:Number(r[1]),expired:true};
     const stored=JSON.parse(r[16]),plain=stored.personalData!==undefined;
@@ -487,7 +489,7 @@ function seoulDay_(time) { return new Date(time+9*3600000).toISOString().slice(0
 function salesReport_(body) {
   assert_(['day','month','year'].includes(body.granularity));
   assert_([body.from,body.to].every(v=>typeof v==='string' && /^\d{4}-\d{2}-\d{2}$/.test(v) && Number.isFinite(Date.parse(v+'T00:00:00.000Z')) && new Date(v+'T00:00:00.000Z').toISOString().slice(0,10)===v) && body.from<=body.to);
-  const sums={}; namedRows_(namedSheet_(SALE_SHEET,SALE_HEADERS,false),20).forEach(row=>{
+  const sums={}; saleStorageRows_().forEach(row=>{
     const meta=JSON.parse(row[15]); if(!['배송완료','판매완료'].includes(meta.status))return;
     const day=seoulDay_(meta.completedAt); if(day<body.from||day>body.to)return;
     const period=day.slice(0,body.granularity==='day'?10:body.granularity==='month'?7:4);
@@ -504,14 +506,16 @@ function purgeExpiredCustomerData() {
     if(quoteStorageConfigured_())purgeIndexedQuotes_();
     else {const sheet=sheet_();rows_(sheet).forEach((r,i)=>{if(Date.parse(String(r[2]))+QUOTE_RETENTION_MS<=Date.now() && JSON.parse(r[15]).expired!==true)expireQuoteRow_(sheet,r,i);});}
     purgeArchivedQuoteCopies_();
-    const sales=namedSheet_(SALE_SHEET,SALE_HEADERS,false);const rows=namedRows_(sales,20);const events=namedSheet_(SALE_EVENT_SHEET,SALE_EVENT_HEADERS,false);
-    rows.forEach((r,i)=>{
+    const events=namedSheet_(SALE_EVENT_SHEET,SALE_EVENT_HEADERS,false);
+    saleStorageSheets_().forEach(sales=>namedRows_(sales,20).forEach((r,i)=>{
+      if(r[0]==='')return;
       const meta=JSON.parse(r[15]); if(meta.archived || !['배송완료','구매취소','판매완료','주문취소'].includes(meta.status) || Date.parse(String(r[14]))>Date.now())return;
       const archive={archived:true,status:meta.status,completedAt:meta.completedAt,totalQty:meta.totalQty,totalPrice:meta.totalPrice,taxAmount:meta.taxAmount,costTotal:meta.costTotal,expenseTotal:meta.expenseTotal,costConfirmed:meta.costConfirmed,profitMode:meta.profitMode,commissionBps:meta.commissionBps};
       const row=r.slice();row[0]=hash_(PropertiesService.getScriptProperties().getProperty('WEB_SECRET')+'expired-sale:'+r[0]);row[3]='';row[15]=JSON.stringify(archive);row[16]='';row[17]='';row[18]='';row[19]=0;
+      archiveOrderLocation_(r[0],row[0]);
       sales.getRange(i+2,1,1,20).setValues([row]);
       namedRows_(events,5).forEach((e,j)=>{if(e[1]===r[0])events.getRange(j+2,1,1,5).setValues([['','','','','']]);});
-    });SpreadsheetApp.flush();
+    }));SpreadsheetApp.flush();
   });
 }
 

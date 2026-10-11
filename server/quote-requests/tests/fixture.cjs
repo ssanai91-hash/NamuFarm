@@ -60,7 +60,7 @@ function fixture({configure=true,now=Date.now(),monthly=false}={}) {
  if(url.endsWith('/api/internal/encrypt')) {const request=context.validateRequest_({...payload.request,website:''});return{getResponseCode:()=>200,getContentText:()=>JSON.stringify({ok:true,encryptedRequest:seal(request,'quote',request.requestId),fingerprint:crypto.createHmac('sha256',properties.WEB_SECRET).update(JSON.stringify(request)).digest('hex')})}}
  return{getResponseCode:()=>200,getContentText:()=> '{}'}}}
  });
- for(const file of ['Code.gs','SecureCommerce.gs','MonthlyStorage.gs','RecoverySetup.gs'])vm.runInContext(fs.readFileSync(require('node:path').join(__dirname,'..',file),'utf8'),context);
+ for(const file of ['Code.gs','SecureCommerce.gs','MonthlyStorage.gs','RecoverySetup.gs','YearlyLedgers.gs'])vm.runInContext(fs.readFileSync(require('node:path').join(__dirname,'..',file),'utf8'),context);
  vm.runInContext('setupQuoteRequests()',context);
  if(configure)properties.SELLER_PUBLIC_KEY=JSON.stringify({keyId,publicKey});
  if(monthly){context.setupMonthlyQuoteStorage();context.enableMonthlyQuoteStorage()}
@@ -68,7 +68,7 @@ function fixture({configure=true,now=Date.now(),monthly=false}={}) {
  const post=body=>context.doPost({postData:{contents:JSON.stringify(body)}});
  const submit=(req=request)=> {try{const checked=context.validateRequest_(req);return post({action:'submit_request',webSecret:properties.WEB_SECRET,rateKey:'b'.repeat(64),requestId:checked.requestId,fingerprint:crypto.createHmac('sha256',properties.WEB_SECRET).update(JSON.stringify(checked)).digest('hex'),protocolVersion:5,request:{...checked,website:''}})}catch(e){return{ok:false,code:e.code||'INVALID'}}};
  const cells=book.get('웹견적요청').cells;
- const requestRows=()=>[...books.values()].flatMap(b=>[...b.sheets.values()].filter(s=>s.getName()==='웹견적요청'||/^\d{4}-\d{2}-\d{2}$/.test(s.getName())).flatMap(s=>s.cells.slice(1).filter(r=>r&&r[0]).map(row=>({row,sheet:s,book:b}))));
+ const requestRows=()=>[...books.values()].flatMap(b=>[...b.sheets.values()].filter(s=>s.getName()==='웹견적요청'||/^\d{4}-\d{2}-\d{2}$/.test(s.getName())||b.getName().startsWith('나무팜_견적_')&&/^\d{2}월$/.test(s.getName())).flatMap(s=>s.cells.slice(1).filter(r=>r&&r[0]).map(row=>({row,sheet:s,book:b}))));
  const saved=()=>{const r=requestRows()[0].row;const raw=JSON.parse(r[15]);return raw.request||open(raw.encryptedRequest,'quote',r[0])};
  const readRequests=after=>{const page=context.listRequests_({afterSequence:after});return{...page,requests:page.requests.map(r=>r.expired||!r.encryptedRequest?r:{...r,...open(r.encryptedRequest,'quote',r.requestId)})}};
  const seedEncrypted=(req=request)=>{const checked=context.validateRequest_(req);return context.commitQuoteRequest_({requestId:checked.requestId,fingerprint:crypto.createHmac('sha256',properties.WEB_SECRET).update(JSON.stringify(checked)).digest('hex')},{encryptedRequest:seal(checked,'quote',checked.requestId)})};

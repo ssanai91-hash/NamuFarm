@@ -104,6 +104,16 @@ class Manager:
         for row in sales:
             private = self.decode_sale(row)
             decoded_sales.append({**row, "private": private})
+        # The quote ledger ends at quote-sent. Project linked order progress
+        # locally so paid requests open the order instead of another payment.
+        linked = {r["private"]["order"].get("sourceRequestId"): r for r in decoded_sales
+                  if r["private"]["order"].get("sourceRequestId")}
+        for request in decoded_requests:
+            sale = linked.get(request["requestId"])
+            if sale:
+                request["quoteStatus"] = request.get("status", "신규")
+                request["status"] = sale["metadata"]["status"]
+                request["linkedOrderNumber"] = sale["metadata"]["orderNumber"]
         drafts = self.vault.preference("drafts", [])
         # Drafts contain personal data and follow the 30-day unpurchased retention rule.
         deleted = set(self.vault.snapshot_marker()["deletedRequests"])

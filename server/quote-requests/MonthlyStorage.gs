@@ -14,7 +14,7 @@ const QUOTE_SUMMARY_HEADERS = ['접수일','접수건수','신규','보관종료
 const QI = {id:0,book:1,sheet:2,day:3,created:4,receipt:5,seoul:6,hash:7,seq:8,phase:9,copy:10,targetBook:11,targetSheet:12,slot:13,status:14};
 function quoteStorageConfigured_() { return PropertiesService.getScriptProperties().getProperty('QUOTE_STORAGE_READY') === '1'; }
 function quoteStorageReady_() {
-  if (!quoteStorageConfigured_()) return PropertiesService.getScriptProperties().getProperty('QUOTE_STORAGE_MODE') !== 'monthly-v1';
+  if (!quoteStorageConfigured_()) return !['monthly-v1','yearly-v1'].includes(PropertiesService.getScriptProperties().getProperty('QUOTE_STORAGE_MODE'));
   quoteTables_(); return true;
 }
 function quoteTables_() {
@@ -239,7 +239,8 @@ function submitIndexedQuote_(body,stored) {
   const now=Date.now();
   if(!entry){
     const created=new Date(now).toISOString(),day=receiptTime_(created).slice(0,10);
-    const sheet=PropertiesService.getScriptProperties().getProperty('QUOTE_STORAGE_MODE')==='monthly-v1'?quoteDaySheet_(day):sheet_();
+    const mode=PropertiesService.getScriptProperties().getProperty('QUOTE_STORAGE_MODE');
+    const sheet=mode==='yearly-v1'?ledgerMonthSheet_('quote',day.slice(0,7)):mode==='monthly-v1'?quoteDaySheet_(day):sheet_();
     const floor=entries.filter(e=>e.values[QI.day]===day).reduce((n,e)=>Math.max(n,Number(e.values[QI.receipt].split('-')[2])),0);
     const receipt=reserveReceipt_(PropertiesService.getScriptProperties(),day.replace(/-/g,''),floor);
     const slot=quoteAllocateSlot_(sheet,entries);
@@ -332,7 +333,7 @@ function quoteAudit_(allowUncreatedMonths,allowSimpleCopies) {
   const entries=quoteIndexEntries_(),cache={},byId=new Map(entries.map(e=>[e.values[QI.id],e]));
   // An audit is read-only. Resolve interrupted transitions with maintenance first.
   assert_(entries.every(e=>['PREPARED','COMMITTED'].includes(e.values[QI.phase])),'NOT_READY');
-  const locations=[sheet_()];quoteMonthRows_().forEach(m=>{
+  const locations=[sheet_()].concat(ledgerSheets_('quote'));quoteMonthRows_().forEach(m=>{
     assert_(allowUncreatedMonths || m.values[1] && m.values[3]==='READY','NOT_READY');
     if(!m.values[1])return;
     SpreadsheetApp.openById(m.values[1]).getSheets().filter(s=>/^\d{4}-\d{2}-\d{2}$/.test(s.getName())).forEach(s=>locations.push(s));

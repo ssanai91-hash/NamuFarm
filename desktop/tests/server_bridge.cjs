@@ -27,6 +27,8 @@ readline.createInterface({input:process.stdin}).on('line',line=>{
   else if(request.control==='invite')result={invite:f.context.createDeviceInvite()};
   else if(request.control==='info')result=f.context.doGet();
   else if(request.control==='seed')result=seed();
+  else if(request.control==='setup_yearly')result=f.context.setupYearlyLedgers();
+  else if(request.control==='ledger_summary')result={quotes:f.requestRows().map(r=>({id:r.row[0],status:r.row[9],book:r.book.getName(),month:r.sheet.getName()})),orders:f.context.saleStorageRows_().map(r=>({number:r[0],status:r[2],revision:Number(r[19])}))};
   else if(request.control==='connection_file'){f.properties.APP_CONNECTION_KEY='c'.repeat(64);result={format:'namufarm-connection',version:1,url:'https://script.google.com/macros/s/AKfycbzY7JKzXYmS9APLNFDt15k8dv09zb4EXKFHOOv_T1vpFmkr6TLwbqGznGLgpd2cIVgD/exec',connectionKey:f.properties.APP_CONNECTION_KEY};}
   else if(request.control==='clear_requests'){f.cells.splice(1);result={ok:true};}
   else if(request.control==='clear_key'){delete f.properties.SELLER_PUBLIC_KEY;result={ok:true};}
