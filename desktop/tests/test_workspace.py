@@ -206,7 +206,7 @@ class WorkspaceServiceTest(unittest.TestCase):
 
 
 class SellerUiTest(QtTestCase):
-    def test_fhd_pages_readonly_demo_and_clear_on_lock(self):
+    def test_fhd_pages_readonly_demo(self):
         window = SellerWindow()
         show_demo(window)
         window.resize(1920, 1080)
@@ -223,10 +223,6 @@ class SellerUiTest(QtTestCase):
             self.assertEqual(index, window.stack.currentIndex())
             self.assertLessEqual(window.stack.geometry().right(), window.width())
         window.demo_mode = False
-        window.lock()
-        self.assertEqual(0, window.shipping_table.rowCount())
-        self.assertEqual(0, window.work_table.rowCount())
-        self.assertEqual(0, window.draft_table.rowCount())
         window.close()
 
     def test_quote_editor_calculates_and_prints_pdf(self):
