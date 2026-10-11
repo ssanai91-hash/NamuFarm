@@ -24,6 +24,7 @@ function secureServiceInfo_() {
     receiptFormat:'NAMU-YYYYMMDD-NNNN',receiptTimeZone:'Asia/Seoul',connectionFile:true,requestSnapshot:true,
     quoteEmail:true,quoteEmailSender:QUOTE_SENDER_EMAIL,
     quoteSms:true,quoteSmsProvider:'SOLAPI',
+    ledgerStorage:annualLedgersEnabled_()?'annual-v1':'legacy',quoteLedgerMonth:'receivedAt',orderLedgerMonth:'paidAt',
     commerceStates:['입금확인','배송완료','구매취소']};
 }
 function byteString_(value, minimum, maximum) {
@@ -239,10 +240,12 @@ function saveSale_(body) {
   const digest=saleDigest_(meta,personal,plain); assert_(body.fingerprint===digest);
   assert_(body.sourceRequestId==='' || UUID_PATTERN.test(body.sourceRequestId));
   return lock_(()=>{
-    const sheet=namedSheet_(SALE_SHEET,SALE_HEADERS,false), events=namedSheet_(SALE_EVENT_SHEET,SALE_EVENT_HEADERS,false);
+    const events=namedSheet_(SALE_EVENT_SHEET,SALE_EVENT_HEADERS,false);
+    const records=saleRecords_(),rows=records.map(r=>r.row);
+    const i=rows.findIndex(r=>r[0]===meta.orderNumber || r[0]===hash_(PropertiesService.getScriptProperties().getProperty('WEB_SECRET')+'expired-sale:'+meta.orderNumber));
+    reserveSaleSource_(body,records,i<0?null:records[i]);
     const receipts=namedRows_(events,5); const receipt=receipts.find(r=>r[0]===body.eventId);
-    if(receipt){assert_(receipt[1]===meta.orderNumber && Number(receipt[2])===meta.revision && receipt[3]===digest,'CONFLICT'); updateLinkedRequestStatus_(body.sourceRequestId,meta.status); return {saved:true,orderNumber:meta.orderNumber,revision:meta.revision,fingerprint:digest};}
-    const rows=namedRows_(sheet,20); const i=rows.findIndex(r=>r[0]===meta.orderNumber || r[0]===hash_(PropertiesService.getScriptProperties().getProperty('WEB_SECRET')+'expired-sale:'+meta.orderNumber));
+    if(receipt){assert_(receipt[1]===meta.orderNumber && Number(receipt[2])===meta.revision && receipt[3]===digest,'CONFLICT'); saleRequestSaved_(body); return {saved:true,orderNumber:meta.orderNumber,revision:meta.revision,fingerprint:digest};}
     const previous=i<0?null:JSON.parse(rows[i][15]);
     // Before accepting a newer revision, repair the previous write's missing receipt.
     // This keeps an earlier retry verifiable even if another device has since advanced the order.
@@ -255,8 +258,8 @@ function saveSale_(body) {
       if(previous){
         assert_(!previous.archived && meta.revision===previous.revision+1,'CONFLICT');
         assert_(!['배송완료','구매취소','판매완료','주문취소'].includes(previous.status),'CONFLICT');
-        const next={'입금확인':'배송완료','구매확정':'배송완료','배송확인':'배송완료'};
-        assert_(meta.status===previous.status || meta.status===next[previous.status] || (meta.status==='구매취소' && ['입금확인','구매확정'].includes(previous.status)),'CONFLICT');
+        const next={'구매확정':['입금확인','배송완료','구매취소','주문취소'],'입금확인':['배송완료','배송확인','구매취소','주문취소'],'배송확인':['배송완료','판매완료']};
+        assert_(meta.status===previous.status || (next[previous.status]||[]).includes(meta.status),'CONFLICT');
         ['orderNumber','orderDate','totalQty','totalPrice','isPrepaid','shippingFee','purchasedAt','taxAmount','items'].forEach(k=>assert_(canonical_(meta[k])===canonical_(previous[k]),'CONFLICT'));
         assert_(meta.updatedAt>=previous.updatedAt,'CONFLICT');
         ['paidAt','deliveredAt','completedAt'].forEach(k=>{if(previous[k]>0)assert_(previous[k]===meta[k],'CONFLICT');});
@@ -264,12 +267,16 @@ function saveSale_(body) {
       const props=PropertiesService.getScriptProperties(); const seq=rows.reduce((m,r)=>Math.max(m,Number(r[1])||0),Number(props.getProperty('SALE_SEQUENCE'))||0)+1;
       assert_(Number.isSafeInteger(seq),'NOT_READY'); props.setProperty('SALE_SEQUENCE',String(seq));
       const row=[meta.orderNumber,seq,meta.status,new Date(meta.purchasedAt).toISOString(),meta.completedAt?new Date(meta.completedAt).toISOString():'',meta.totalQty,meta.totalPrice,meta.taxAmount,meta.costTotal,meta.expenseTotal,meta.costConfirmed,meta.profitMode,meta.commissionBps,profit_(meta),retentionUntil_(meta),JSON.stringify(meta),JSON.stringify(stored),digest,body.eventId,meta.revision];
-      sheet.getRange(i<0?sheet.getLastRow()+1:i+2,1,1,20).setNumberFormat('@').setValues([row]); SpreadsheetApp.flush();
+      reserveSaleSource_(body,records,i<0?null:records[i],true);
+      const sheet=i<0?newSaleSheet_(meta):records[i].sheet;
+      const rowNumber=i<0?sheet.getLastRow()+1:records[i].index+2;
+      if(rowNumber>sheet.getMaxRows())sheet.insertRowsAfter(sheet.getMaxRows(),Math.max(100,rowNumber-sheet.getMaxRows()));
+      sheet.getRange(rowNumber,1,1,20).setNumberFormat('@').setValues([row]); SpreadsheetApp.flush();
     }
     if(!namedRows_(events,5).some(r=>r[0]===body.eventId)) {
       events.getRange(events.getLastRow()+1,1,1,5).setNumberFormat('@').setValues([[body.eventId,meta.orderNumber,meta.revision,digest,new Date().toISOString()]]); SpreadsheetApp.flush();
     }
-    updateLinkedRequestStatus_(body.sourceRequestId,meta.status);
+    saleRequestSaved_(body);
     return {saved:true,orderNumber:meta.orderNumber,revision:meta.revision,fingerprint:digest};
   });
 }
@@ -291,14 +298,7 @@ function updateLinkedRequestStatus_(id,status) {
     if(!entry || entry.values[QI.phase]!=='COMMITTED')return;
     const record=quoteRecord_(entry,cache,false);
     if(JSON.parse(record.row[15]).expired===true || record.row[9]===status)return;
-    assert_(requestStatusTransitionAllowed_(String(record.row[9]||'신규'),status),'CONFLICT');
-    const sequence=quoteNextSequence_(entries),next=record.row.slice();
-    next[1]=sequence;next[9]=status;quoteWriteVerified_(record.sheet,record.index+2,next);
-    entry.values[QI.seq]=sequence;entry.values[QI.status]=status;quoteSaveEntry_(entry);
-    if(entry.values[QI.copy]){
-      const legacy=quoteFindRow_(sheet_(),id);
-      if(legacy){const copy=legacy.row.slice();copy[1]=sequence;copy[9]=status;quoteWriteVerified_(legacy.sheet,legacy.index+2,copy);}
-    }
+    quoteUpdateEntryStatus_(entry,entries,cache,status);
     return;
   }
   const sheet=sheet_(),rows=receiptRows_(sheet),i=rows.findIndex(r=>r[0]===id);
@@ -474,7 +474,7 @@ function quoteSmsStatus_(body) {
 
 function listSales_(body) {
   assert_(Number.isSafeInteger(body.afterSequence) && body.afterSequence>=0);
-  const rows=namedRows_(namedSheet_(SALE_SHEET,SALE_HEADERS,false),20).filter(r=>Number(r[1])>body.afterSequence).sort((a,b)=>Number(a[1])-Number(b[1]));
+  const rows=saleRecords_().map(r=>r.row).filter(r=>Number(r[1])>body.afterSequence).sort((a,b)=>Number(a[1])-Number(b[1]));
   const page=rows.slice(0,100).map(r=>{
     const meta=JSON.parse(r[15]); if(meta.archived)return {sequence:Number(r[1]),expired:true};
     const stored=JSON.parse(r[16]),plain=stored.personalData!==undefined;
@@ -487,7 +487,7 @@ function seoulDay_(time) { return new Date(time+9*3600000).toISOString().slice(0
 function salesReport_(body) {
   assert_(['day','month','year'].includes(body.granularity));
   assert_([body.from,body.to].every(v=>typeof v==='string' && /^\d{4}-\d{2}-\d{2}$/.test(v) && Number.isFinite(Date.parse(v+'T00:00:00.000Z')) && new Date(v+'T00:00:00.000Z').toISOString().slice(0,10)===v) && body.from<=body.to);
-  const sums={}; namedRows_(namedSheet_(SALE_SHEET,SALE_HEADERS,false),20).forEach(row=>{
+  const sums={}; saleRecords_().forEach(({row})=>{
     const meta=JSON.parse(row[15]); if(!['배송완료','판매완료'].includes(meta.status))return;
     const day=seoulDay_(meta.completedAt); if(day<body.from||day>body.to)return;
     const period=day.slice(0,body.granularity==='day'?10:body.granularity==='month'?7:4);
@@ -504,8 +504,8 @@ function purgeExpiredCustomerData() {
     if(quoteStorageConfigured_())purgeIndexedQuotes_();
     else {const sheet=sheet_();rows_(sheet).forEach((r,i)=>{if(Date.parse(String(r[2]))+QUOTE_RETENTION_MS<=Date.now() && JSON.parse(r[15]).expired!==true)expireQuoteRow_(sheet,r,i);});}
     purgeArchivedQuoteCopies_();
-    const sales=namedSheet_(SALE_SHEET,SALE_HEADERS,false);const rows=namedRows_(sales,20);const events=namedSheet_(SALE_EVENT_SHEET,SALE_EVENT_HEADERS,false);
-    rows.forEach((r,i)=>{
+    const records=saleRecords_();const events=namedSheet_(SALE_EVENT_SHEET,SALE_EVENT_HEADERS,false);
+    records.forEach(({row:r,sheet:sales,index:i})=>{
       const meta=JSON.parse(r[15]); if(meta.archived || !['배송완료','구매취소','판매완료','주문취소'].includes(meta.status) || Date.parse(String(r[14]))>Date.now())return;
       const archive={archived:true,status:meta.status,completedAt:meta.completedAt,totalQty:meta.totalQty,totalPrice:meta.totalPrice,taxAmount:meta.taxAmount,costTotal:meta.costTotal,expenseTotal:meta.expenseTotal,costConfirmed:meta.costConfirmed,profitMode:meta.profitMode,commissionBps:meta.commissionBps};
       const row=r.slice();row[0]=hash_(PropertiesService.getScriptProperties().getProperty('WEB_SECRET')+'expired-sale:'+r[0]);row[3]='';row[15]=JSON.stringify(archive);row[16]='';row[17]='';row[18]='';row[19]=0;

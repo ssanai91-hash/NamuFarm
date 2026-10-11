@@ -26,6 +26,8 @@ readline.createInterface({input:process.stdin}).on('line',line=>{
   if(request.control==='init')result={backup:backup(),invite:f.context.createDeviceInvite()};
   else if(request.control==='invite')result={invite:f.context.createDeviceInvite()};
   else if(request.control==='info')result=f.context.doGet();
+  else if(request.control==='annual_setup')result=f.context.setupAnnualQuoteOrderLedgers();
+  else if(request.control==='annual_locations')result={sales:f.context.saleRecords_().map(r=>({orderNumber:r.row[0],file:r.sheet.getParent().getName(),sheet:r.sheet.getName(),revision:Number(r.row[19])})),requests:f.requestRows().map(r=>({requestId:r.row[0],status:r.row[9],file:r.book.getName(),sheet:r.sheet.getName()}))};
   else if(request.control==='seed')result=seed();
   else if(request.control==='connection_file'){f.properties.APP_CONNECTION_KEY='c'.repeat(64);result={format:'namufarm-connection',version:1,url:'https://script.google.com/macros/s/AKfycbzY7JKzXYmS9APLNFDt15k8dv09zb4EXKFHOOv_T1vpFmkr6TLwbqGznGLgpd2cIVgD/exec',connectionKey:f.properties.APP_CONNECTION_KEY};}
   else if(request.control==='clear_requests'){f.cells.splice(1);result={ok:true};}

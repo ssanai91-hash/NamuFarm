@@ -12,13 +12,13 @@ const QUOTE_INDEX_HEADERS = ['요청UUID','파일ID','시트ID','접수일(한�
 const QUOTE_SUMMARY = '월간현황';
 const QUOTE_SUMMARY_HEADERS = ['접수일','접수건수','신규','보관종료','갱신시각(한국)'];
 const QI = {id:0,book:1,sheet:2,day:3,created:4,receipt:5,seoul:6,hash:7,seq:8,phase:9,copy:10,targetBook:11,targetSheet:12,slot:13,status:14};
-function quoteStorageConfigured_() { return PropertiesService.getScriptProperties().getProperty('QUOTE_STORAGE_READY') === '1'; }
+function quoteStorageConfigured_() { return annualLedgersEnabled_() || PropertiesService.getScriptProperties().getProperty('QUOTE_STORAGE_READY') === '1'; }
 function quoteStorageReady_() {
   if (!quoteStorageConfigured_()) return PropertiesService.getScriptProperties().getProperty('QUOTE_STORAGE_MODE') !== 'monthly-v1';
   quoteTables_(); return true;
 }
 function quoteTables_() {
-  return {months:namedSheet_(QUOTE_MONTHS,QUOTE_MONTH_HEADERS,false), index:namedSheet_(QUOTE_INDEX,QUOTE_INDEX_HEADERS,false)};
+  return {months:namedSheet_(QUOTE_MONTHS,QUOTE_MONTH_HEADERS,false), index:namedSheet_(annualLedgersEnabled_()?ANNUAL_QUOTE_INDEX:QUOTE_INDEX,QUOTE_INDEX_HEADERS,false)};
 }
 function quoteWriteVerified_(sheet, rowNumber, values) {
   const maximum=sheet.getMaxRows();
@@ -31,8 +31,8 @@ function quoteWriteVerified_(sheet, rowNumber, values) {
   const actual=sheet.getRange(rowNumber,1,1,stored.length).getValues()[0];
   assert_(actual.every((value,i)=>stored.length===18 && i>=3 && i<=8 ? quoteCellEqual_(value,stored[i]) : value===stored[i]),'NOT_READY');
 }
-function quoteIndexEntries_() {
-  const sheet=quoteTables_().index, seen=new Set(), sequences=new Set(), receipts=new Set();
+function quoteIndexEntries_(indexSheet) {
+  const sheet=indexSheet || quoteTables_().index, seen=new Set(), sequences=new Set(), receipts=new Set();
   return namedRows_(sheet,QUOTE_INDEX_HEADERS.length).map((values,i)=>({values:values,index:i})).filter(e=>e.values.some(v=>v!=='')).map(e=>{
     const v=e.values;
     if(v[QI.copy]==='true' || v[QI.copy]==='false')v[QI.copy]=v[QI.copy]==='true';
@@ -41,7 +41,7 @@ function quoteIndexEntries_() {
     const receipt=RFQ_RECEIPT_PATTERN.exec(v[QI.receipt]);
     assert_(receipt && receipt[1]===v[QI.day].replace(/-/g,'') && Number.isSafeInteger(Number(receipt[2])) && Number(receipt[2])>0 && !receipts.has(v[QI.receipt]),'NOT_READY');receipts.add(v[QI.receipt]);
     assert_(/^[a-f0-9]{64}$/.test(v[QI.hash]) && ['신규','견적확정','견적발송완료','입금확인','배송완료','구매취소','보관종료'].includes(v[QI.status]) && typeof v[QI.copy]==='boolean','NOT_READY');
-    assert_(['PREPARED','COMMITTING','COMMITTED','DISPOSING','MIGRATING'].includes(v[QI.phase]),'NOT_READY');
+    assert_(['PREPARED','COMMITTING','COMMITTED','UPDATING','DISPOSING','MIGRATING'].includes(v[QI.phase]),'NOT_READY');
     assert_(Number.isSafeInteger(Number(v[QI.seq])) && Number(v[QI.seq])>=0,'NOT_READY');
     assert_(v[QI.phase]==='PREPARED' ? Number(v[QI.seq])===0 : Number(v[QI.seq])>0,'NOT_READY');
     if(Number(v[QI.seq])>0){assert_(!sequences.has(Number(v[QI.seq])),'NOT_READY');sequences.add(Number(v[QI.seq]));}
@@ -113,6 +113,18 @@ function quotePublish_(entry,entries,record) {
   quoteWriteVerified_(record.sheet,record.index+2,row);
   v[QI.phase]='COMMITTED';v[QI.status]=row[9];quoteSaveEntry_(entry);
 }
+function quoteUpdateEntryStatus_(entry,entries,cache,status) {
+  const v=entry.values,record=quoteRecord_(entry,cache,false);
+  if(v[QI.phase]==='COMMITTED'){
+    assert_(requestStatusTransitionAllowed_(String(record.row[9]||'신규'),status),'CONFLICT');
+    v[QI.seq]=quoteNextSequence_(entries);v[QI.status]=status;v[QI.phase]='UPDATING';quoteSaveEntry_(entry);
+  }
+  assert_(v[QI.phase]==='UPDATING','NOT_READY');
+  const copies=[record];
+  if(v[QI.copy]){const legacy=quoteFindRow_(sheet_(),v[QI.id]);assert_(legacy,'NOT_READY');copies.push(legacy);}
+  copies.forEach(r=>{const next=r.row.slice();next[1]=Number(v[QI.seq]);next[9]=v[QI.status];quoteWriteVerified_(r.sheet,r.index+2,next);});
+  v[QI.phase]='COMMITTED';quoteSaveEntry_(entry);
+}
 function quoteDisposeEntry_(entry,entries,cache) {
   const v=entry.values,record=quoteRecord_(entry,cache,false);
   if(v[QI.phase]==='COMMITTED' && JSON.parse(record.row[15]).expired===true)return;
@@ -148,7 +160,8 @@ function quoteRepairTransitions_(entries,cache) {
     if(phase==='PREPARED' || phase==='COMMITTING'){
       const record=quoteRecord_(entry,cache,phase==='PREPARED');
       if(record)quotePublish_(entry,entries,record);
-    }else if(phase==='DISPOSING')quoteDisposeEntry_(entry,entries,cache);
+    }else if(phase==='UPDATING')quoteUpdateEntryStatus_(entry,entries,cache,entry.values[QI.status]);
+    else if(phase==='DISPOSING')quoteDisposeEntry_(entry,entries,cache);
     else if(phase==='MIGRATING')quoteFinishMigration_(entry,cache,entries);
   });
 }
@@ -239,7 +252,7 @@ function submitIndexedQuote_(body,stored) {
   const now=Date.now();
   if(!entry){
     const created=new Date(now).toISOString(),day=receiptTime_(created).slice(0,10);
-    const sheet=PropertiesService.getScriptProperties().getProperty('QUOTE_STORAGE_MODE')==='monthly-v1'?quoteDaySheet_(day):sheet_();
+    const sheet=annualLedgersEnabled_()?annualQuoteSheet_(day):PropertiesService.getScriptProperties().getProperty('QUOTE_STORAGE_MODE')==='monthly-v1'?quoteDaySheet_(day):sheet_();
     const floor=entries.filter(e=>e.values[QI.day]===day).reduce((n,e)=>Math.max(n,Number(e.values[QI.receipt].split('-')[2])),0);
     const receipt=reserveReceipt_(PropertiesService.getScriptProperties(),day.replace(/-/g,''),floor);
     const slot=quoteAllocateSlot_(sheet,entries);
@@ -326,6 +339,7 @@ function recoverQuoteMonthFile(month,fileId) {
 }
 function maintainMonthlyQuoteStorage() {
   if(!quoteStorageConfigured_())return;
+  if(annualLedgersEnabled_())return lock_(()=>{const entries=quoteIndexEntries_();quoteRepairTransitions_(entries,{});return {checked:entries.length};});
   return lock_(()=>{const entries=quoteIndexEntries_();quoteRepairTransitions_(entries,{});quoteMonthRows_().forEach(m=>{quoteEnsureMonth_(m.values[0]);quoteSummary_(m.values[0],entries);});return {checked:entries.length};});
 }
 function quoteAudit_(allowUncreatedMonths,allowSimpleCopies) {

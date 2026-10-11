@@ -55,7 +55,7 @@ class DeviceVaultTest(unittest.TestCase):
             Vault.create_device(self.path, self.account)
         self.assertEqual(original, self.path.read_bytes())
 
-    def test_retired_backend_moves_to_new_url_without_losing_local_work(self):
+    def test_configured_backend_is_not_silently_repointed_with_pending_work(self):
         vault = Vault.create_device(self.path, self.account)
         credentials = vault.credentials()
         credentials.update(url=RETIRED_URL, paired=True)
@@ -64,8 +64,8 @@ class DeviceVaultTest(unittest.TestCase):
         vault.queue({'id': 'unchanged-event', 'action': 'close_request', 'payload': {'requestId': 'test'}})
         pending = vault.pending()
         manager = Manager(vault)
-        self.assertEqual(DEFAULT_URL, manager.api.url)
-        self.assertFalse(vault.credentials()['paired'])
+        self.assertEqual(RETIRED_URL, manager.api.url)
+        self.assertTrue(vault.credentials()['paired'])
         self.assertEqual(credentials['deviceToken'], vault.credentials()['deviceToken'])
         self.assertEqual(pending, vault.pending())
         self.assertEqual([{'customerName': '저장한 초안'}], vault.preference('drafts'))
@@ -122,14 +122,16 @@ class KeylessFlowTest(unittest.TestCase):
         view = self.manager.sync()
         draft = new_draft(view['requests'][0])
         draft['items'][0]['unitPrice'] = 1000
+        self.manager.confirm_quote(draft)
+        self.manager.mark_quote_sent(draft)
         view = self.manager.confirm_draft(draft)
         row = view['sales'][0]
         self.assertIn('personalData', row)
         self.assertNotIn('encryptedPersonal', row)
         self.assertIsNone(self.manager.seller)
-        self.assertFalse(view['requests'])
+        self.assertEqual('견적발송완료', view['requests'][0]['status'])
         number = row['metadata']['orderNumber']
-        view = self.manager.save_sale(number, 1, {}, target='입금확인')
+        view = self.manager.save_sale(number, 1, {})
         self.assertEqual('입금확인', view['sales'][0]['metadata']['status'])
         self.assertFalse(self.vault.pending())
         self.assertNotIn('김나무'.encode(), self.vault.path.read_bytes())

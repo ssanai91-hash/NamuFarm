@@ -3911,12 +3911,13 @@ class SellerWindow(MainWindow):
             return
         request = self.request_rows[index]
         status = request.get("status", "신규")
+        # Quote status remains sent after payment; use the immutable link instead.
+        sale = next((r for r in self.data.get("sales", []) if r["private"]["order"].get("sourceRequestId") == request["requestId"]), None)
+        if sale:
+            self.show_order(sale["metadata"]["orderNumber"])
+            return
         if status in ("입금확인", "배송완료", "구매취소"):
-            sale = next((r for r in self.data.get("sales", []) if r["private"]["order"].get("sourceRequestId") == request["requestId"]), None)
-            if sale:
-                self.show_order(sale["metadata"]["orderNumber"])
-            else:
-                QMessageBox.information(self, "판매 기록 확인", "판매 상태로 진행된 요청입니다. 판매 · 고객 관리에서 확인해주세요.")
+            QMessageBox.information(self, "판매 기록 확인", "판매 상태로 진행된 요청입니다. 판매 · 고객 관리에서 확인해주세요.")
             return
         existing = next((d for d in self.data.get("drafts", []) if d["sourceRequestId"] == request["requestId"]), None)
         draft = copy.deepcopy(existing) if existing else new_draft(request)

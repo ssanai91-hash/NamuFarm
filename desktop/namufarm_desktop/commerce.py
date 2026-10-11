@@ -116,7 +116,7 @@ def quote_document(draft):
     if draft["isPrepaid"]:
         lines.append({"name": "운반비", "specification": "선불", "quantity": 1, "unitPrice": draft["shippingFee"], "unit": "건"})
     return {"schemaVersion": 1, "id": draft["id"], "number": f"NQ-{date}-{draft['id'][:8].upper()}",
-            "sourceQuoteNumber": (draft.get("requestReceiptNumber") if draft.get("manualStatus") else "PCQ_" + draft["id"]), "issuedAt": stamp, "customerPhone": draft["customerPhone"],
+            "sourceQuoteNumber": (draft.get("requestReceiptNumber") or "PCQ_" + draft["id"]), "issuedAt": stamp, "customerPhone": draft["customerPhone"],
             "recipient": {"customerName": draft["customerName"], "customerEmail": draft["customerEmail"],
                           "recipientName": draft.get("quoteRecipientName") or draft["customerName"],
                           "replyChannel": draft.get("quoteReplyChannel", "sms"),
@@ -138,7 +138,7 @@ def order_from_draft(draft):
                  purchasedAt=stamp, paidAt=stamp, deliveredAt=0, completedAt=0, updatedAt=stamp, costTotal=amount["cost"], expenseTotal=0,
                  costConfirmed=draft["costConfirmed"], profitMode="resale", commissionBps=3000, taxAmount=amount["tax"],
                  sourceRequestId=draft["sourceRequestId"],
-                 sourceQuoteNumber=(draft.get("requestReceiptNumber") if draft.get("manualStatus") else "PCQ_" + draft["id"]))
+                 sourceQuoteNumber=(draft.get("requestReceiptNumber") or "PCQ_" + draft["id"]))
     # Existing Android codec explicitly treats this farm label as non-stock-backed.
     order["itemSummary"] = "\n".join("|".join([i["species"].strip(), "", "", i["specification"], "", str(i["quantity"]), str(i["unitPrice"]), "수기견적", str(i["unitCost"])]) for i in draft["items"])
     metadata(order)

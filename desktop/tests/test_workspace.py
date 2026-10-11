@@ -31,6 +31,12 @@ def draft_for_test():
     return draft
 
 
+def paid_draft_for_test():
+    draft = draft_for_test()
+    draft.update(manualStatus='견적발송완료', requestReceiptNumber='M-TEST-' + draft['id'])
+    return draft
+
+
 def row_for_test():
     order = order_from_draft(draft_for_test())
     order.update(status='입금확인', paidAt=order['purchasedAt'])
@@ -291,7 +297,7 @@ class WorkspaceServiceTest(unittest.TestCase):
         self.assertEqual('3043', final['smsStatusCode'])
 
     def test_shipping_export_preferences_are_encrypted_and_do_not_advance_sale(self):
-        row = self.manager.confirm_draft(draft_for_test())['sales'][0]
+        row = self.manager.confirm_draft(paid_draft_for_test())['sales'][0]
         before = self.manager.view()['sales']
         sender = {'name': '출고 설정 테스트', 'address': '테스트 출고지', 'phone': '01012345678', 'mobile': ''}
         number = row['metadata']['orderNumber']
@@ -302,7 +308,7 @@ class WorkspaceServiceTest(unittest.TestCase):
         self.assertEqual(before, self.manager.view()['sales'])
         self.assertNotIn(sender['name'].encode(), self.manager.vault.path.read_bytes())
 
-    def test_request_to_sale_closes_request_and_preserves_document(self):
+    def test_request_to_sale_keeps_sent_request_and_preserves_document(self):
         self.bridge.send(control='submit')
         view = self.manager.sync()
         draft = draft_for_test()
@@ -313,7 +319,7 @@ class WorkspaceServiceTest(unittest.TestCase):
         sent = self.manager.mark_quote_sent(draft)
         self.assertEqual('견적발송완료', sent['requests'][0]['status'])
         view = self.manager.confirm_draft(draft)
-        self.assertEqual([], view['requests'])
+        self.assertEqual('견적발송완료', view['requests'][0]['status'])
         self.assertEqual([], view['drafts'])
         self.assertEqual(1, len(view['sales']))
         self.assertIn('quoteDocumentJson', view['sales'][0]['private'])
@@ -323,7 +329,7 @@ class WorkspaceServiceTest(unittest.TestCase):
 
 
     def test_lost_new_order_ack_reuses_event_and_never_duplicates(self):
-        draft = draft_for_test()
+        draft = paid_draft_for_test()
         self.manager.api.lose_ack = True
         with self.assertRaises(NetworkError):
             self.manager.confirm_draft(draft)
@@ -345,10 +351,10 @@ class WorkspaceServiceTest(unittest.TestCase):
             self.manager.confirm_draft(draft)
 
     def test_tracking_sync_roundtrip_retry_and_duplicate_guard(self):
-        draft = draft_for_test()
+        draft = paid_draft_for_test()
         row = self.manager.confirm_draft(draft)['sales'][0]
         number = row['metadata']['orderNumber']
-        view = self.manager.save_sale(number, 1, {}, '입금확인')
+        view = self.manager.save_sale(number, 1, {})
         self.manager.api.lose_ack = True
         with self.assertRaises(NetworkError):
             self.manager.register_tracking(number, 2, '01234567890')
@@ -356,9 +362,9 @@ class WorkspaceServiceTest(unittest.TestCase):
         self.assertEqual('01234567890', tracking_number(row['private']['order']))
         self.assertEqual('입금확인', row['metadata']['status'])
         self.assertEqual(3, row['metadata']['revision'])
-        second = self.manager.confirm_draft(draft_for_test())['sales'][0]
+        second = self.manager.confirm_draft(paid_draft_for_test())['sales'][0]
         other = second['metadata']['orderNumber']
-        self.manager.save_sale(other, 1, {}, '입금확인')
+        self.manager.save_sale(other, 1, {})
         with self.assertRaises(UserError):
             self.manager.register_tracking(other, 2, '01234567890')
         self.manager.import_tracking({number: '01234567890'})

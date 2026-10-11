@@ -17,6 +17,8 @@
 
 PC 실행과 연결 방법은 [desktop/README.md](desktop/README.md)를 참고하세요.
 
+견적용·입금 주문용 구글 파일을 연도별/월별로 분리하는 설정과 적용 절차는 [연도별 견적·주문 장부](docs/ANNUAL_QUOTE_ORDER_LEDGERS.md)를 참고하세요.
+
 ## 현재 구조
 
 ```

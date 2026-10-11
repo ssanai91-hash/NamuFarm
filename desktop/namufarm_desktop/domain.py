@@ -132,7 +132,10 @@ def changed(private, fields, target=None, clock=None):
     stamp = clock if clock is not None else now_ms()
     require(stamp >= order["updatedAt"], "PC 시간을 확인해주세요.")
     if target is not None:
-        if target == "구매취소":
+        if target == "입금확인" and order["status"] == "구매확정":
+            # Compatibility for unpaid records created by older Android clients.
+            order["paidAt"] = order["paidAt"] or stamp
+        elif target == "구매취소":
             require(order["status"] in ("입금확인", "구매확정"), "배송 완료 전 입금확인 건만 구매취소할 수 있습니다.")
             if not order["paidAt"]:
                 order["paidAt"] = stamp

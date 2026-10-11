@@ -72,10 +72,10 @@ function simplifyQuoteStorage() {
 /** Retention/close also removes the pre-cutover copies, outside intake. */
 function purgeArchivedQuoteCopies_() {
   const props=PropertiesService.getScriptProperties();
-  if(props.getProperty('QUOTE_ARCHIVE_PENDING')!=='1' || quoteStorageConfigured_())return;
+  if(props.getProperty('QUOTE_ARCHIVE_PENDING')!=='1' || quoteStorageConfigured_() && !annualLedgersEnabled_())return;
   const current=new Map(receiptRows_(sheet_()).map(r=>[r[0],r]));
   const cache={};let pending=false;
-  quoteIndexEntries_().forEach(e=>{
+  quoteIndexEntries_(namedSheet_(QUOTE_INDEX,QUOTE_INDEX_HEADERS,false)).forEach(e=>{
     const source=quoteOpenSheet_(e.values[QI.book],e.values[QI.sheet],cache);
     if(source.getParent().getId()===props.getProperty('SPREADSHEET_ID') && source.getName()===RFQ_SHEET)return;
     const record=quoteFindRow_(source,e.values[QI.id],cache),live=current.get(e.values[QI.id]);

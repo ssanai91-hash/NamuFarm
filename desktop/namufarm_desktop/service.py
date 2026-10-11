@@ -108,7 +108,9 @@ class Manager:
         # Drafts contain personal data and follow the 30-day unpurchased retention rule.
         deleted = set(self.vault.snapshot_marker()["deletedRequests"])
         active = [d for d in drafts if d["createdAt"] > now_ms() - 30 * 86400000 and d["sourceRequestId"] not in deleted
-                  and not any(r["metadata"]["orderNumber"] == "PC_" + d["id"] for r in sales)]
+                  and not any(r["metadata"]["orderNumber"] == "PC_" + d["id"]
+                              or (d["sourceRequestId"] and r["private"]["order"].get("sourceRequestId") == d["sourceRequestId"])
+                              for r in decoded_sales)]
         if active != drafts:
             self.vault.save_preference("drafts", active)
         return {"requests": sorted(decoded_requests, key=lambda r: r["sequence"], reverse=True),
@@ -351,8 +353,11 @@ class Manager:
 
     def confirm_draft(self, draft):
         validate_draft(draft)
-        # Read cloud state before purchase confirmation; never replay a new order under a new ID.
-        snapshot = self.sync()
+        # Record the payment time and outbox locally before attempting the network.
+        # The server checks the source binding/revision again under its lock.
+        require(not self.vault.pending(), "기존 전송 대기를 먼저 처리해주세요.")
+        require(self.credentials.get("paired") is True, "PC를 먼저 연결해주세요.")
+        snapshot = self.view()
         number = "PC_" + draft["id"]
         require(not any(r["metadata"]["orderNumber"] == number for r in snapshot["sales"]),
                 "이미 판매 · 고객 관리로 이동한 견적입니다.")
@@ -525,7 +530,7 @@ class Manager:
         self.verify_server()
         return self._fetch_verified_snapshot()
 
-    def _fetch_verified_snapshot(self):
+    def _fetch_verified_snapshot(self, pending_create=None):
         requests, request_cursor, deleted = self._pages("list_requests", "requests")
         sales, sale_cursor, _ = self._pages("list_sales", "sales")
         old = self.vault.snapshot_marker()
@@ -538,8 +543,14 @@ class Manager:
         request_ids = {r["requestId"] for r in requests} | deleted
         require(self.request_snapshot or all(r["requestId"] in request_ids for r in self.vault.rows("requests")), "서버 문의 목록 일부가 누락되어 기존 기록을 유지합니다.")
         sale_ids = {r["metadata"]["orderNumber"] for r in sales}
-        require(all(r["metadata"]["orderNumber"] in sale_ids or sale_expired(r["metadata"], now_ms())
-                    for r in self.vault.rows("sales")), "서버 판매 목록 일부가 누락되어 기존 기록을 유지합니다.")
+        uncommitted = ""
+        if pending_create and pending_create["metadata"]["revision"] == 1:
+            source = pending_create.get("sourceRequestId", "")
+            if source and any(self.decode_sale(r)["order"].get("sourceRequestId") == source for r in sales):
+                uncommitted = pending_create["metadata"]["orderNumber"]
+        require(all(r["metadata"]["orderNumber"] in sale_ids or r["metadata"]["orderNumber"] == uncommitted
+                    or sale_expired(r["metadata"], now_ms()) for r in self.vault.rows("sales")),
+                "서버 판매 목록 일부가 누락되어 기존 기록을 유지합니다.")
         marker = {"requests": request_cursor, "sales": sale_cursor, "deletedRequests": sorted(deleted)}
         return requests, sales, marker
 
@@ -620,10 +631,16 @@ class Manager:
     def conflict_preview(self):
         pending = self.vault.pending()
         require(len(pending) == 1 and pending[0]["action"] == "save_sale", "판매 수정 충돌이 없습니다.")
-        requests, sales, marker = self.fetch_snapshot()
         operation = pending[0]
+        self.verify_server()
+        requests, sales, marker = self._fetch_verified_snapshot(pending_create=operation["payload"])
         number = operation["payload"]["metadata"]["orderNumber"]
         remote = next((r for r in sales if r["metadata"]["orderNumber"] == number), None)
+        # Another PC may have confirmed the same quote under a different draft ID.
+        # Only a first-revision create can resolve to that already-existing order.
+        source = operation["payload"].get("sourceRequestId", "")
+        if remote is None and source and operation["payload"]["metadata"]["revision"] == 1:
+            remote = next((r for r in sales if self.decode_sale(r)["order"].get("sourceRequestId") == source), None)
         require(remote is not None, "서버 기록이 만료되었거나 없습니다. 관리자 확인이 필요합니다.")
         require(remote["metadata"]["revision"] >= operation["payload"]["metadata"]["revision"],
                 "서버 저장 상태가 아직 확정되지 않았습니다. 동기화를 재시도해주세요.")
