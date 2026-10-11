@@ -55,15 +55,18 @@ class CommerceTest(unittest.TestCase):
         self.assertIn('견 적 서', html)
         self.assertIn('NO. NAMU-20261011-0003', html)
         self.assertIn('합계금액(공급가액+세액)', html)
-        self.assertIn('품명', html)
+        self.assertIn('품 명', html)
         self.assertIn('규격', html)
         self.assertIn('공급가액', html)
-        self.assertIn('세액', html)
+        self.assertIn('세 액', html)
         self.assertIn('중요사항', html)
         self.assertIn('나무팜농원', html)
         self.assertIn('213-94-24363', html)
+        self.assertIn('F:732-0981', html)
+        self.assertIn('농협 328-12-035671 오진웅', html)
+        self.assertIn('width:760px', html)
         self.assertIn('택배비 후불', html)
-        self.assertGreaterEqual(html.count('<tr>'), 18)
+        self.assertGreaterEqual(html.count('<tr>'), 22)
 
     def test_invalid_amount_overflow_and_pipe_are_rejected(self):
         for key, value in [('quantity', 0), ('quantity', True), ('unitPrice', -1), ('unitPrice', 2147483647), ('species', 'a|b')]:

@@ -454,7 +454,9 @@ def preview_temporary_document(parent, html):
     else:
         dialog.resize(1050, 900)
     layout = QVBoxLayout(dialog)
+    layout.setContentsMargins(12, 12, 12, 10)
     view = QTextBrowser()
+    view.setStyleSheet("QTextBrowser{background:#dfe3df;border:0;padding:18px;}")
     view.setHtml(html)
     layout.addWidget(view, 1)
     row = QHBoxLayout()

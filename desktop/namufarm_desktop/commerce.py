@@ -243,7 +243,7 @@ def quote_html(draft, final=False):
 
 
 def official_quote_html(draft):
-    """Render a temporary A4 official quotation modeled after the farm's paper form."""
+    """Render a temporary A4 official quotation closely matching the farm's paper form."""
     validate_draft(draft)
     e = lambda value: escape(str(value))
     issuer = draft["issuer"]
@@ -254,11 +254,11 @@ def official_quote_html(draft):
     business_type = issuer.get("businessType") or "농업,도소매"
     category = issuer.get("category") or "묘목,화훼"
 
-    lines = []
+    rows = []
     for item in draft.get("items", []):
         quantity = int(item["quantity"])
         unit_price = int(item["unitPrice"])
-        lines.append({
+        rows.append({
             "name": item["species"].strip(),
             "specification": item.get("specification", ""),
             "quantity": quantity,
@@ -268,137 +268,165 @@ def official_quote_html(draft):
         })
     if draft.get("isPrepaid") and int(draft.get("shippingFee", 0) or 0) > 0:
         fee = int(draft["shippingFee"])
-        lines.append({
-            "name": "택배비",
+        rows.append({
+            "name": "운반비",
             "specification": "선불",
             "quantity": 1,
             "unitPrice": fee,
             "amount": fee,
-            "note": "선불",
+            "note": "택배비",
         })
 
-    row_count = max(14, len(lines))
+    visible_rows = max(18, len(rows))
     item_rows = []
-    for index in range(row_count):
-        if index < len(lines):
-            line = lines[index]
+    for index in range(visible_rows):
+        if index < len(rows):
+            line = rows[index]
             item_rows.append(
                 "<tr>"
-                f"<td>{e(line['name'])}</td>"
-                f"<td>{e(line['specification'])}</td>"
-                f"<td class='num'>{line['quantity']:,}</td>"
+                f"<td class='name'>{e(line['name'])}</td>"
+                f"<td class='spec'>{e(line['specification'])}</td>"
+                f"<td class='qty'>{line['quantity']:,}</td>"
                 f"<td class='num'>{line['unitPrice']:,}</td>"
                 f"<td class='num'>{line['amount']:,}</td>"
                 "<td class='num'></td>"
-                f"<td>{e(line['note'])}</td>"
+                f"<td class='note'>{e(line['note'])}</td>"
                 "</tr>"
             )
         else:
-            item_rows.append("<tr><td>&nbsp;</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>")
+            item_rows.append(
+                "<tr><td>&nbsp;</td><td></td><td></td><td></td>"
+                "<td></td><td></td><td></td></tr>"
+            )
 
-    if draft.get("isPrepaid"):
-        shipping_note = f"택배비 선불 {int(draft.get('shippingFee', 0) or 0):,}원 · 합계 포함"
-    else:
-        shipping_note = f"택배비 후불 · 선불 시 {int(draft.get('shippingFee', 0) or 0):,}원"
+    shipping_note = (
+        f"택배비 선불 {int(draft.get('shippingFee', 0) or 0):,}원 · 합계 포함"
+        if draft.get("isPrepaid")
+        else f"택배비 후불 · 선불 시 {int(draft.get('shippingFee', 0) or 0):,}원"
+    )
+    payment = draft.get("paymentAccount", "").strip() or "농협 328-12-035671 오진웅"
+    note = draft.get("note", "").strip() or "별도 요청사항 없음"
+    fax = "732-0981"
 
-    payment = draft.get("paymentAccount", "").strip() or "입금계좌 : 별도 안내"
-    note = draft.get("note", "").strip()
-    note_line = f"<div>4. 요청사항 : {e(note)}</div>" if note else "<div>4. 요청사항 : 별도 없음</div>"
-
-    return f"""<html>
-<head>
-<meta charset="utf-8">
+    # Keep CSS outside the f-string. This prevents CSS braces from ever being
+    # interpreted as Python expressions while still giving us a fixed A4-like
+    # 760 x ~1075 preview canvas.
+    style = """
 <style>
-@page {{ size:A4 portrait; margin:8mm; }}
-body {{ font-family:"Malgun Gothic","NanumGothic",sans-serif; color:#111; font-size:9.5pt; margin:0; }}
-.official {{ width:100%; }}
-.topline {{ width:100%; border-collapse:collapse; margin-bottom:2mm; }}
-.topline td {{ border:0; padding:0; }}
-.no {{ width:35%; border-bottom:1px solid #333 !important; font-size:9pt; }}
-.title {{ text-align:center; font-size:25pt; font-weight:700; letter-spacing:10px; padding:0 0 2mm 0; }}
-.title-line {{ width:34%; border-top:2px solid #555; margin:0 auto 5mm auto; }}
-.party {{ width:100%; border-collapse:collapse; margin-bottom:3mm; }}
-.party td {{ vertical-align:top; }}
-.customer {{ width:42%; padding:2mm 4mm 0 2mm; }}
-.customer-line {{ border-bottom:1px solid #555; padding:1.2mm 2mm; font-size:10pt; }}
-.supplier {{ width:58%; border:1px solid #222; border-collapse:collapse; }}
-.supplier td {{ border:1px solid #555; padding:1.2mm 1.8mm; font-size:8.8pt; }}
-.supplier .key {{ width:18%; text-align:center; font-weight:700; background:#fafafa; }}
-.supplier .value {{ width:32%; }}
-.stamp {{ color:#a71919; font-weight:700; border:1px solid #a71919; padding:1px 3px; }}
-.intro {{ margin:1.5mm 0 2mm 1mm; }}
-.total-box {{ border:1.5px solid #222; padding:2.2mm 3mm; font-size:15pt; font-weight:700; margin-bottom:0; }}
-.items {{ width:100%; border-collapse:collapse; table-layout:fixed; }}
-.items th,.items td {{ border:1px solid #333; padding:1.5mm 1mm; height:7mm; }}
-.items th {{ text-align:center; font-size:9.2pt; background:#fff; }}
-.items td {{ font-size:9pt; }}
-.items .c-name {{ width:23%; }} .items .c-spec {{ width:12%; }} .items .c-qty {{ width:8%; }}
-.items .c-unit {{ width:14%; }} .items .c-supply {{ width:16%; }} .items .c-tax {{ width:11%; }} .items .c-note {{ width:16%; }}
-.num {{ text-align:right; }}
-.sum-row td {{ font-weight:700; height:8mm; }}
-.notes {{ border:1px solid #333; border-top:0; width:100%; border-collapse:collapse; }}
-.notes td {{ border-right:1px solid #333; padding:2mm; vertical-align:top; }}
-.notes .label {{ width:20%; text-align:center; font-size:12pt; font-weight:700; vertical-align:middle; }}
-.notes .body {{ line-height:1.85; font-size:9pt; }}
-.muted {{ color:#444; }}
+body { font-family:"Malgun Gothic","NanumGothic",sans-serif; color:#111; font-size:12px; margin:0; padding:0; }
+.paper { width:760px; background:#fff; border-collapse:collapse; table-layout:fixed; }
+.paper > tbody > tr > td { border:0; padding:0; }
+.no-table { width:100%; border-collapse:collapse; }
+.no-line { width:180px; border-bottom:1px solid #333; font-size:12px; padding:0 0 5px 0; }
+.doc-title { font-size:34px; font-weight:700; letter-spacing:18px; text-align:center; padding:0; }
+.title-rule { width:250px; border-top:2px solid #555; margin:3px auto 20px auto; }
+.party { width:100%; border-collapse:collapse; table-layout:fixed; margin:0 0 8px 0; }
+.customer { width:39%; vertical-align:top; padding:0 22px 0 4px; }
+.customer-line { border-bottom:1px solid #555; padding:7px 4px 5px 4px; font-size:14px; }
+.supplier-wrap { width:61%; vertical-align:top; }
+.supplier { width:100%; border-collapse:collapse; table-layout:fixed; }
+.supplier td { border:1px solid #333; padding:4px 5px; font-size:12px; line-height:1.15; }
+.supplier .side { width:32px; text-align:center; font-weight:700; letter-spacing:1px; }
+.supplier .key { width:74px; text-align:center; font-weight:700; background:#fff; }
+.supplier .small-key { width:52px; text-align:center; font-weight:700; }
+.stamp { color:#a71919; border:1px solid #a71919; border-radius:50%; padding:2px 4px; font-size:10px; font-weight:700; }
+.intro { font-size:14px; margin:8px 2px 8px 2px; }
+.total { width:100%; border-collapse:collapse; table-layout:fixed; }
+.total td { border:2px solid #222; padding:7px 9px; font-size:18px; font-weight:700; }
+.total .label { width:31%; }
+.items { width:100%; border-collapse:collapse; table-layout:fixed; }
+.items th, .items td { border:1px solid #333; height:27px; padding:2px 5px; font-size:12px; }
+.items th { font-size:13px; font-weight:700; text-align:center; }
+.items .name { width:23%; text-align:left; }
+.items .spec { width:8%; text-align:center; }
+.items .qty { width:7%; text-align:center; }
+.items .num { text-align:right; }
+.items .note { text-align:center; }
+.sum td { height:31px; font-weight:700; }
+.notes { width:100%; border-collapse:collapse; table-layout:fixed; }
+.notes td { border:1px solid #333; border-top:0; padding:10px 8px; vertical-align:top; }
+.notes .label { width:20%; text-align:center; vertical-align:middle; font-size:17px; font-weight:700; }
+.notes .body { line-height:2.05; font-size:12px; }
 </style>
-</head>
-<body>
-<div class="official">
-<table class="topline">
-<tr><td class="no">NO. {e(quote_number)}</td><td></td></tr>
-</table>
-<div class="title">견 적 서</div>
-<div class="title-line"></div>
+"""
 
-<table class="party">
-<tr>
-<td class="customer">
-  <div class="customer-line">{e(issued_text)}</div>
-  <div class="customer-line">{e(draft['customerName'])} 귀하</div>
-  <div class="customer-line">{e(draft['customerPhone'])}</div>
-</td>
-<td>
-  <table class="supplier">
-    <tr><td class="key">공급자</td><td class="key">등록번호</td><td colspan="3">{e(issuer['businessNumber'])}</td></tr>
-    <tr><td class="key" rowspan="4">공<br>급<br>자</td><td class="key">상호</td><td class="value">{e(issuer['businessName'])}</td><td class="key">성명</td><td>{e(issuer['representative'])} <span class="stamp">인</span></td></tr>
-    <tr><td class="key">사업장주소</td><td colspan="3">{e(issuer['address'])}</td></tr>
-    <tr><td class="key">업태</td><td>{e(business_type)}</td><td class="key">종목</td><td>{e(category)}</td></tr>
-    <tr><td class="key">연락처</td><td colspan="3">{e(issuer['phone'])}</td></tr>
+    body = f"""
+<table class="paper" align="center" cellspacing="0" cellpadding="0">
+<tr><td>
+  <table class="no-table"><tr><td class="no-line">NO. {e(quote_number)}</td><td></td></tr></table>
+  <div class="doc-title">견 적 서</div>
+  <div class="title-rule"></div>
+
+  <table class="party">
+    <tr>
+      <td class="customer">
+        <div class="customer-line">{e(issued_text)}</div>
+        <div class="customer-line">{e(draft['customerName'])} 귀하</div>
+        <div class="customer-line">{e(draft['customerPhone'])}</div>
+      </td>
+      <td class="supplier-wrap">
+        <table class="supplier">
+          <tr>
+            <td class="side" rowspan="5">공<br>급<br>자</td>
+            <td class="key">등록번호</td>
+            <td colspan="3">{e(issuer['businessNumber'])}</td>
+          </tr>
+          <tr>
+            <td class="key">상 호</td>
+            <td>{e(issuer['businessName'])}</td>
+            <td class="small-key">성 명</td>
+            <td>{e(issuer['representative'])} <span class="stamp">인</span></td>
+          </tr>
+          <tr>
+            <td class="key">사업장주소</td>
+            <td colspan="3">{e(issuer['address'])}</td>
+          </tr>
+          <tr>
+            <td class="key">업 태</td>
+            <td>{e(business_type)}</td>
+            <td class="small-key">종 목</td>
+            <td>{e(category)}</td>
+          </tr>
+          <tr>
+            <td class="key">연락처</td>
+            <td colspan="3">T:{e(issuer['phone'])}&nbsp;&nbsp;&nbsp;F:{e(fax)}</td>
+          </tr>
+        </table>
+      </td>
+    </tr>
   </table>
-</td>
-</tr>
-</table>
 
-<div class="intro">아래와 같이 견적합니다.</div>
-<div class="total-box">합계금액(공급가액+세액)&nbsp;&nbsp;&nbsp; ₩{amount['total']:,}원</div>
+  <div class="intro">아래와같이 견적 합니다.</div>
 
-<table class="items">
-<tr>
-  <th class="c-name">품명</th><th class="c-spec">규격</th><th class="c-qty">수량</th>
-  <th class="c-unit">단가</th><th class="c-supply">공급가액</th><th class="c-tax">세액</th><th class="c-note">비고</th>
-</tr>
-{''.join(item_rows)}
-<tr class="sum-row">
-  <td>계</td><td></td><td></td><td></td><td class="num">{amount['supply']:,}</td>
-  <td class="num">{amount['tax']:,}</td><td></td>
-</tr>
-</table>
+  <table class="total"><tr>
+    <td class="label">합계금액(공급가액+세액)</td>
+    <td>₩{amount['total']:,}원</td>
+  </tr></table>
 
-<table class="notes">
-<tr>
-<td class="label">중요사항</td>
-<td class="body">
-  <div>1. {e(payment)}</div>
-  <div>2. 견적 유효기간 : {e(draft['validUntil'])} · 유효기간 이후 금액이 변동될 수 있습니다.</div>
-  <div>3. {e(shipping_note)}</div>
-  {note_line}
-</td>
-</tr>
+  <table class="items">
+    <colgroup>
+      <col style="width:23%"><col style="width:8%"><col style="width:7%">
+      <col style="width:14%"><col style="width:16%"><col style="width:14%"><col style="width:18%">
+    </colgroup>
+    <tr><th>품 명</th><th>규격</th><th>수량</th><th>단 가</th><th>공급가액</th><th>세 액</th><th>비 고</th></tr>
+    {''.join(item_rows)}
+    <tr class="sum"><td style="text-align:center">계</td><td></td><td></td><td></td>
+      <td class="num">{amount['supply']:,}</td><td class="num">{amount['tax']:,}</td><td></td></tr>
+  </table>
+
+  <table class="notes"><tr>
+    <td class="label">중요사항</td>
+    <td class="body">
+      1. {e(payment)}<br>
+      2. 견적후 일정기간후 금액변동 있을수 있음.<br>
+      3. {e(shipping_note)}<br>
+      4. {e(note)}
+    </td>
+  </tr></table>
+</td></tr>
 </table>
-</div>
-</body>
-</html>"""
+"""
+    return "<html><head><meta charset='utf-8'>" + style + "</head><body>" + body + "</body></html>"
 
 
 def quote_document_html(doc, final=True):
