@@ -308,21 +308,17 @@ class MainWindow(QMainWindow):
         page = QWidget()
         layout = QVBoxLayout(page)
         self.request_search = QLineEdit()
-        self.request_search.setPlaceholderText("접수번호 · 고객명 · 전화번호 · 메일주소 · 묘목 · 지역 검색")
+        self.request_search.setPlaceholderText("접수번호 · 고객명 · 전화번호 · 메일주소 · 묘목 · 지역 · 요청사항 검색")
         self.request_search.textChanged.connect(self.refresh_requests)
         layout.addWidget(self.request_search)
-        split = QSplitter(Qt.Orientation.Vertical)
-        # The shared table helper stretches the final section, so keep the longest field last.
-        self.request_table = table(["접수번호", "접수일", "상태", "고객명", "전화번호", "메일주소", "지역", "견적서요청", "희망 묘목"])
+        self.request_table = table(["접수번호", "접수일", "상태", "고객명", "전화번호", "메일주소", "지역", "견적서요청", "희망 묘목", "요청사항"])
         self.request_table.setMinimumHeight(400)
-        self.request_table.itemSelectionChanged.connect(self.select_request)
-        split.addWidget(self.request_table)
-        self.request_detail = QPlainTextEdit()
-        self.request_detail.setReadOnly(True)
-        self.request_detail.setMinimumHeight(220)
-        split.addWidget(self.request_detail)
-        split.setSizes([470, 220])
-        layout.addWidget(split)
+        header = self.request_table.horizontalHeader()
+        header.setStretchLastSection(False)
+        header.setSectionResizeMode(8, QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(9, QHeaderView.ResizeMode.Stretch)
+        self.request_table.itemSelectionChanged.connect(self.update_controls)
+        layout.addWidget(self.request_table)
         row = QHBoxLayout()
         row.addWidget(QLabel("접수번호는 홈페이지·휴대폰과 동일합니다. 수동 견적·문자·PDF 발송은 휴대폰에서 처리합니다."))
         row.addStretch()
@@ -342,24 +338,11 @@ class MainWindow(QMainWindow):
         fill_table(self.request_table, [(r.get("receiptNumber") or r["requestId"], timestamp(r["createdAt"]), r.get("status", "신규"), r["personal"]["customerName"], r["personal"]["customerPhone"],
                    r["personal"].get("customerEmail") or "—", r["personal"]["region"],
                    "요청" if r["personal"].get("formalQuoteRequested") else "—",
-                   ", ".join(f"{i['species']} {i['quantity']}주" for i in r["personal"]["items"])) for r in self.request_rows])
+                   ", ".join(f"{i['species']} {i['quantity']}주" for i in r["personal"]["items"]),
+                   r["personal"].get("message") or "—") for r in self.request_rows])
         self.request_table.clearSelection()
         self.request_table.setCurrentCell(-1, -1)
         self.request_table.blockSignals(False)
-        self.request_detail.clear()
-        self.update_controls()
-
-    def select_request(self):
-        index = self.request_table.currentRow()
-        if 0 <= index < len(self.request_rows):
-            row, person = self.request_rows[index], self.request_rows[index]["personal"]
-            text = [f"접수번호: {row.get('receiptNumber') or row['requestId']}", f"상태: {row.get('status', '신규')}", f"고객: {person['customerName']} / {person['customerPhone']}", f"이메일: {person.get('customerEmail') or '없음'}",
-                    f"배송지역: {person['region']}", "희망 묘목:"]
-            text.extend(f"  · {i['species']} {i.get('specification', '')} / {i['quantity']:,}주" for i in person["items"])
-            text.extend([f"요청사항: {person.get('message', '')}", f"공식 견적 수신인: {person.get('recipientName', '')}",
-                         f"수신 방법: {dict(sms='문자', email='이메일', both='문자와 이메일').get(person.get('replyChannel', 'sms'))}",
-                         f"보관 종료: {timestamp(row['expiresAt'])}"])
-            self.request_detail.setPlainText("\n".join(text))
         self.update_controls()
 
     def delete_request(self):
