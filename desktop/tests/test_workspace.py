@@ -292,6 +292,10 @@ class SellerUiTest(QtTestCase):
         self.assertEqual(['묘목명', '수량', '판매 금액', '판매 단가'], headers)
         self.assertEqual('견적 확정', dialog.confirm_button.text())
         self.assertEqual('20,000', dialog.items.item(0, 2).text())
+        self.assertEqual('후불', dialog.shipping_method.currentText())
+        self.assertEqual('6000', dialog.shipping_fee.text())
+        self.assertEqual(6000, dialog.collect()['shippingFee'])
+        self.assertFalse(dialog.collect()['isPrepaid'])
 
         price = dialog.unit_price_editor(0)
         self.assertEqual('10000', price.text())
@@ -347,11 +351,25 @@ class SellerUiTest(QtTestCase):
         self.assertEqual('buyer@example.com', dialog.recipient_email.text())
         self.assertEqual('ssanai91@gmail.com', dialog.sender_email.text())
         self.assertEqual('묘목 견적 안내', dialog.subject.text())
-        self.assertIn('[나무팜 견적 안내]', dialog.message.toPlainText())
-        self.assertIn('소나무 2주', dialog.message.toPlainText())
+        body = dialog.message.toPlainText()
+        self.assertTrue(body.startswith('테스트 고객님, 안녕하세요.'))
+        self.assertIn('품목1 : 소나무 2주', body)
+        self.assertIn('판매금액 : 20,000원', body)
+        self.assertIn('총금액 : 20,000원', body)
+        self.assertIn('택배비 : 후불 / 선불 시 : 3,500원', body)
+        self.assertIn('010-4446-0304 / 043-732-0980', body)
         self.assertFalse(hasattr(dialog, 'items'))
         self.assertNotIn('<table', dialog.html_body())
         dialog.close()
+
+    def test_quote_email_message_includes_prepaid_shipping_in_total(self):
+        draft = draft_for_test()
+        draft.update(customerEmail='buyer@example.com', requestReceiptNumber='NAMU-20261011-0001',
+                     customerName='테스트 고객', shippingFee=6000, isPrepaid=True, taxAmount=0)
+        dialog = QuoteEmailDialog(draft)
+        body = dialog.default_message()
+        self.assertIn('총금액 : 26,000원', body)
+        self.assertIn('택배비 : 선불 6,000원 (총금액 포함)', body)
 
     def test_quote_editor_calculates_and_prints_pdf(self):
         draft = draft_for_test()

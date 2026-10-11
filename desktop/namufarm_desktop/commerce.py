@@ -108,7 +108,9 @@ def quote_document(draft):
                           "formalQuoteRequested": bool(draft.get("formalQuoteRequested", False)),
                           "sourceRequestId": draft["sourceRequestId"] or None},
             "issuer": copy.deepcopy(draft["issuer"]), "lines": lines, "supplyAmount": amounts["supply"], "taxAmount": amounts["tax"],
-            "totalAmount": amounts["total"], "shippingNote": "배송비 선불 · 합계 포함" if draft["isPrepaid"] else "배송비 착불 · 합계 미포함",
+            "totalAmount": amounts["total"],
+            "shippingNote": (f"택배비 선불 {draft['shippingFee']:,}원 · 합계 포함" if draft["isPrepaid"]
+                             else f"택배비 후불 · 선불 시 {draft['shippingFee']:,}원"),
             "validUntil": draft["validUntil"], "notes": draft["note"].replace("\t", " ")[:500], "paymentAccount": draft.get("paymentAccount", "")}
 
 

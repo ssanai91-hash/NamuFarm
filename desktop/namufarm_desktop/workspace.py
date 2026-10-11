@@ -474,14 +474,25 @@ class QuoteDialog(QDialog):
                 reply = QLineEdit(channel)
                 reply.setReadOnly(True)
                 form.addRow("수신 방법", reply)
+            self.shipping_method = QComboBox()
+            self.shipping_method.addItems(["후불", "선불"])
+            self.shipping_method.setCurrentIndex(1 if draft.get("isPrepaid") else 0)
+            form.addRow("택배비 방식", self.shipping_method)
+
+            self.shipping_fee = QLineEdit(str(int(draft.get("shippingFee") or 6000)))
+            self.shipping_fee.setValidator(QIntValidator(0, 2147483647, self.shipping_fee))
+            self.shipping_fee.setPlaceholderText("선불 시 택배비")
+            form.addRow("선불 시 택배비 (원)", self.shipping_fee)
+
             self.note = QPlainTextEdit(draft.get("note", ""))
             self.note.setReadOnly(True)
-            self.note.setMaximumHeight(140)
+            self.note.setMaximumHeight(120)
             form.addRow("요청사항", self.note)
-            form.addRow(label("고객이 요청한 품목과 수량을 확인하고 판매 단가만 입력하세요.", "muted", True))
+            form.addRow(label("고객이 요청한 품목·수량과 택배비를 확인하고 판매 단가를 입력하세요.", "muted", True))
             split.addWidget(info)
-            self.prepaid = QCheckBox()
             self.cost = QCheckBox()
+            self.shipping_method.currentIndexChanged.connect(self.recalculate)
+            self.shipping_fee.textChanged.connect(self.recalculate)
         else:
             info = QWidget()
             form = QFormLayout(info)
@@ -613,10 +624,12 @@ class QuoteDialog(QDialog):
         if self.simple_request:
             item_state = [[self.items.item(r, 0).text(), self.items.item(r, 1).text(), self.unit_price_editor(r).text()]
                           for r in range(self.items.rowCount())]
+            shipping_state = [self.shipping_method.currentText(), self.shipping_fee.text()]
         else:
             item_state = [[self.items.item(r, c).text() for c in range(5)] for r in range(self.items.rowCount())]
+            shipping_state = []
         return ([field.text() for field in self.fields.values()], self.note.toPlainText(), item_state,
-                copy.deepcopy(self.draft["issuer"]))
+                shipping_state, copy.deepcopy(self.draft["issuer"]))
 
     def reject(self):
         if hasattr(self, "initial") and self.raw_state() != self.initial:
@@ -627,7 +640,10 @@ class QuoteDialog(QDialog):
     def collect(self, validate=True):
         draft = copy.deepcopy(self.draft)
         if self.simple_request:
-            draft.update(shippingFee=0, isPrepaid=False, taxAmount=0, costConfirmed=False, items=[])
+            shipping_fee = self.shipping_fee.text().strip()
+            require(shipping_fee.isascii() and shipping_fee.isdigit(), "선불 시 택배비를 0 이상의 정수로 입력해주세요.")
+            draft.update(shippingFee=int(shipping_fee), isPrepaid=self.shipping_method.currentText() == "선불",
+                         taxAmount=0, costConfirmed=False, items=[])
             for row in range(self.items.rowCount()):
                 species = self.items.item(row, 0).text().strip()
                 quantity = self.items.item(row, 1).text().strip()
@@ -666,8 +682,19 @@ class QuoteDialog(QDialog):
             self.items.blockSignals(False)
             amount = draft_amounts(draft)
             self.total.setText(f"합계 {amount['total']:,}원")
-            self.amount_detail.setText(f"총 수량 {amount['quantity']:,}주 · 판매 금액 {amount['supply']:,}원" if self.simple_request
-                                       else f"{amount['quantity']:,}주   ·   공급가 {amount['supply']:,}원   ·   세액 {amount['tax']:,}원\n매입 원가 {amount['cost']:,}원")
+            if self.simple_request:
+                item_total = sum(i["quantity"] * i["unitPrice"] for i in draft["items"])
+                shipping_text = (f"택배비 선불 {draft['shippingFee']:,}원 · 합계 포함"
+                                 if draft["isPrepaid"]
+                                 else f"택배비 후불 · 선불 시 {draft['shippingFee']:,}원")
+                self.amount_detail.setText(
+                    f"총 수량 {amount['quantity']:,}주 · 묘목 금액 {item_total:,}원 · {shipping_text}"
+                )
+            else:
+                self.amount_detail.setText(
+                    f"{amount['quantity']:,}주   ·   공급가 {amount['supply']:,}원   ·   세액 {amount['tax']:,}원\n"
+                    f"매입 원가 {amount['cost']:,}원"
+                )
         except UserError:
             self.total.setText("판매 단가를 입력해주세요")
             self.amount_detail.setText("판매 금액 = 수량 × 판매 단가" if self.simple_request else "판매 금액은 수량 × 판매 단가로 계산합니다.")
@@ -729,8 +756,8 @@ class QuoteEmailDialog(QDialog):
         screen = parent.screen() if parent is not None and hasattr(parent, "screen") else QApplication.primaryScreen()
         available = screen.availableGeometry() if screen else None
         if available:
-            width = min(900, max(680, int(available.width() * 0.72)))
-            height = min(700, max(520, int(available.height() * 0.78)))
+            width = min(860, max(660, int(available.width() * 0.68)))
+            height = min(640, max(500, int(available.height() * 0.72)))
             width = min(width, max(560, available.width() - 40))
             height = min(height, max(460, available.height() - 60))
             self.resize(width, height)
@@ -773,16 +800,18 @@ class QuoteEmailDialog(QDialog):
         address.setColumnStretch(3, 2)
         layout.addWidget(address_card)
 
-        layout.addWidget(label("메일 제목", "emailSectionTitle"))
+        subject_row = QHBoxLayout()
+        subject_row.setSpacing(12)
+        subject_row.addWidget(label("메일 제목", "emailSectionTitle"))
         self.subject = QLineEdit("묘목 견적 안내")
         self.subject.setMaxLength(160)
-        layout.addWidget(self.subject)
+        subject_row.addWidget(self.subject, 1)
+        layout.addLayout(subject_row)
 
         layout.addWidget(label("메일 내용", "emailSectionTitle"))
-        layout.addWidget(label("문자 안내 형식처럼 간결하게 구성했습니다. 아래 내용을 전송 전에 자유롭게 수정할 수 있습니다.", "emailHelp", True))
 
         self.message = QPlainTextEdit(self.default_message())
-        self.message.setMinimumHeight(260)
+        self.message.setMinimumHeight(300)
         layout.addWidget(self.message, 1)
 
         self.status = label("Apps Script 발신 계정을 확인하고 있습니다.", "emailSendStatus", True)
@@ -806,26 +835,47 @@ class QuoteEmailDialog(QDialog):
 
     def default_message(self):
         customer = self.draft.get("customerName") or "고객"
-        items = ", ".join(
-            f"{item['species']} {int(item['quantity']):,}주"
-            for item in self.draft.get("items", [])
-        )
-        amount = draft_amounts(self.draft)["total"]
-        sender = self.draft.get("issuer", {}).get("businessName") or "나무팜농원"
-        phone = self.draft.get("issuer", {}).get("phone", "")
+        item_lines = []
+        for index, item in enumerate(self.draft.get("items", []), 1):
+            quantity = int(item["quantity"])
+            amount = quantity * int(item["unitPrice"])
+            item_lines.extend([
+                f"품목{index} : {item['species']} {quantity:,}주",
+                f"판매금액 : {amount:,}원",
+            ])
+            if index < len(self.draft.get("items", [])):
+                item_lines.append("")
+
+        item_total = sum(int(item["quantity"]) * int(item["unitPrice"]) for item in self.draft.get("items", []))
+        shipping_fee = int(self.draft.get("shippingFee", 0) or 0)
+        if self.draft.get("isPrepaid"):
+            total = item_total + shipping_fee
+            shipping_line = f"택배비 : 선불 {shipping_fee:,}원 (총금액 포함)"
+        else:
+            total = item_total
+            shipping_line = f"택배비 : 후불 / 선불 시 : {shipping_fee:,}원"
+
         return "\n".join([
-            "[나무팜 견적 안내]",
+            f"{customer}님, 안녕하세요.",
             "",
-            f"{customer}님, 요청하신 묘목 견적을 안내드립니다.",
-            f"견적번호: {self.quote_number()}",
-            f"품목: {items}",
-            f"판매금액: {amount:,}원",
+            "나무팜농원입니다.",
+            "요청하신 묘목 견적을 안내드립니다.",
             "",
-            "확인 후 문의사항이 있으시면 편하게 연락 부탁드립니다.",
+            "===========================",
+            "",
+            f"견적번호 : {self.quote_number()}",
+            *item_lines,
+            "",
+            f"총금액 : {total:,}원",
+            shipping_line,
+            "",
+            "===========================",
+            "",
+            "견적 내용을 확인하시고 궁금하신 사항은 편하게 연락 부탁드립니다.",
             "감사합니다.",
             "",
-            sender,
-            phone,
+            "나무팜농원",
+            "010-4446-0304 / 043-732-0980",
         ]).strip()
 
     def load_profile(self):
