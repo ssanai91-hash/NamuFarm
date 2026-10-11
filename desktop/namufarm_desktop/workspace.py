@@ -1,6 +1,7 @@
 """FHD seller workspace, built on the existing verified sync controller."""
 import copy
 import json
+import tempfile
 from datetime import datetime
 from pathlib import Path
 from html import escape as html_escape
@@ -252,6 +253,12 @@ QPushButton#pdfAction{
 
 QPushButton#pdfAction:hover{
     background:#edf3eb;
+}
+QLabel#quoteFileName{
+    color:#2f6842;
+    font-size:12px;
+    font-weight:700;
+    padding:0 4px;
 }
 
 QPushButton#closeAction{
@@ -679,6 +686,34 @@ def render_official_quote_image(draft):
 
     painter.end()
     return image
+
+
+def write_temporary_quote_pdf(image, path):
+    """Write one generated official quote to a temporary PDF path, replacing it atomically enough for UI use."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.exists():
+        path.unlink()
+
+    printer = QPrinter(QPrinter.PrinterMode.HighResolution)
+    printer.setPageSize(QPageSize(QPageSize.PageSizeId.A4))
+    printer.setOutputFormat(QPrinter.OutputFormat.PdfFormat)
+    printer.setOutputFileName(str(path))
+
+    painter = QPainter(printer)
+    page_rect = printer.pageLayout().paintRectPixels(printer.resolution())
+    printed = image.scaled(
+        page_rect.size(),
+        Qt.AspectRatioMode.KeepAspectRatio,
+        Qt.TransformationMode.SmoothTransformation,
+    )
+    x = page_rect.x() + (page_rect.width() - printed.width()) // 2
+    y = page_rect.y() + (page_rect.height() - printed.height()) // 2
+    painter.drawImage(x, y, printed)
+    painter.end()
+
+    require(path.is_file() and path.stat().st_size > 0, "공식견적서 PDF를 임시 생성하지 못했습니다.")
+    return path
 
 
 def preview_temporary_quote(parent, image):
@@ -1512,6 +1547,7 @@ class QuoteDeliveryDialog(QDialog):
         self.manager = manager
         self.delivery_state = dict(delivery_state or {})
         self.generated_quote_image = None
+        self.generated_quote_path = None
         self.request_status = (
             request_status
             or ("수기견적" if not draft.get("sourceRequestId") else "상태확인")
@@ -1880,6 +1916,9 @@ class QuoteDeliveryDialog(QDialog):
         self.preview_quote_button.setEnabled(False)
         self.preview_quote_button.clicked.connect(self.preview_official_quote)
 
+        self.quote_file_label = QLabel("미생성")
+        self.quote_file_label.setObjectName("quoteFileName")
+
         close_button = QPushButton("닫기")
         close_button.setObjectName("closeAction")
         close_button.clicked.connect(self.reject)
@@ -1896,6 +1935,7 @@ class QuoteDeliveryDialog(QDialog):
         actions.addWidget(self.email_button)
         actions.addWidget(self.generate_quote_button)
         actions.addWidget(self.preview_quote_button)
+        actions.addWidget(self.quote_file_label)
 
         actions.addStretch()
 
@@ -1934,9 +1974,10 @@ class QuoteDeliveryDialog(QDialog):
         if not hasattr(self, "total_value"):
             return
         if hasattr(self, "preview_quote_button") and self.generated_quote_image is not None:
-            self.generated_quote_image = None
+            self.cleanup_generated_quote()
             self.preview_quote_button.setEnabled(False)
             self.generate_quote_button.setText("공식견적서 생성")
+            self.quote_file_label.setText("미생성")
         prepaid = self.shipping_prepaid.isChecked()
         self.shipping_fee.setEnabled(prepaid)
         self.shipping_fee_label.setEnabled(prepaid)
@@ -2019,16 +2060,42 @@ class QuoteDeliveryDialog(QDialog):
             self.delivery_state = dict(dialog.delivery_state or self.delivery_state)
             self.update_delivery_badges()
 
+    def official_quote_filename(self):
+        safe_number = self.quote_number().replace("/", "_").replace("\\", "_")
+        return f"{safe_number}_공식견적서.pdf"
+
+    def cleanup_generated_quote(self):
+        path = self.generated_quote_path
+        self.generated_quote_image = None
+        self.generated_quote_path = None
+        if path:
+            try:
+                Path(path).unlink(missing_ok=True)
+            except OSError:
+                pass
+
     def generate_official_quote(self):
         if not self.persist_shipping():
             return
-        self.generated_quote_image = render_official_quote_image(self.draft)
-        self.preview_quote_button.setEnabled(True)
-        self.generate_quote_button.setText("공식견적서 재생성")
-        self.shipping_status.setText(self.shipping_status.text() + " · 공식견적서 임시 생성됨")
+        try:
+            image = render_official_quote_image(self.draft)
+            filename = self.official_quote_filename()
+            temp_dir = Path(tempfile.gettempdir()) / "NamuFarm" / "official_quotes"
+            path = write_temporary_quote_pdf(image, temp_dir / filename)
+            self.generated_quote_image = image
+            self.generated_quote_path = path
+            self.preview_quote_button.setEnabled(True)
+            self.generate_quote_button.setText("공식견적서 재생성")
+            self.quote_file_label.setText(filename)
+            self.shipping_status.setText(self.shipping_status.text() + " · 공식견적서 임시 생성됨")
+        except (UserError, OSError) as error:
+            self.cleanup_generated_quote()
+            self.preview_quote_button.setEnabled(False)
+            self.quote_file_label.setText("생성 실패")
+            QMessageBox.warning(self, "공식견적서 생성", str(error))
 
     def preview_official_quote(self):
-        if self.generated_quote_image is None:
+        if self.generated_quote_image is None or not self.generated_quote_path:
             QMessageBox.information(self, "공식견적서", "먼저 공식견적서를 생성해주세요.")
             return
         preview_temporary_quote(self, self.generated_quote_image)
@@ -2054,11 +2121,13 @@ class QuoteDeliveryDialog(QDialog):
             return
 
         self.mode = "sent"
+        self.cleanup_generated_quote()
         self.accept()
 
     def reject(self):
         if not self.persist_shipping():
             return
+        self.cleanup_generated_quote()
         super().reject()
 
 
