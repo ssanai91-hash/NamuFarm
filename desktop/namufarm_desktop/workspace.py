@@ -2618,8 +2618,20 @@ class QuoteDeliveryDialog(QDialog):
             QMessageBox.information(self, "메일 주소 확인", "고객 이메일이 입력되지 않았습니다.")
             return
 
+        # A customer's formal-quote request must result in a real attachment,
+        # not merely the "official quote requested" label on the screen.
+        requires_pdf = bool(self.draft.get("formalQuoteRequested"))
+        if requires_pdf and not (
+            self.generated_quote_path and Path(self.generated_quote_path).is_file()
+        ):
+            self.generate_official_quote()
         attachment_path = None
-        if self.generated_quote_path and Path(self.generated_quote_path).is_file():
+        if requires_pdf:
+            if not self.generated_quote_path or not Path(self.generated_quote_path).is_file():
+                QMessageBox.warning(self, "공식견적서 첨부", "PDF 파일을 만들지 못해 메일 발송을 중단했습니다.")
+                return
+            attachment_path = self.generated_quote_path
+        elif self.generated_quote_path and Path(self.generated_quote_path).is_file():
             answer = QMessageBox.question(
                 self,
                 "공식견적서 첨부",
