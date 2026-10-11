@@ -172,6 +172,14 @@ QLineEdit#deliveryShippingFee{
     font-weight:700;
     text-align:right;
 }
+QLineEdit#deliveryShippingFee:disabled{
+    background:#edf0ec;
+    color:#9aa49c;
+    border-color:#dde3dc;
+}
+QLabel#deliveryShippingFeeLabel:disabled{
+    color:#a0aaa2;
+}
 
 QFrame#quoteTotalBand{
     background:#e3eee0;
@@ -990,7 +998,18 @@ class QuoteDeliveryDialog(QDialog):
 
         self.setObjectName("quoteDeliveryDialog")
         self.setWindowTitle("견적 전달")
-        self.resize(1120, 820)
+        self.setSizeGripEnabled(True)
+
+        screen = parent.screen() if parent is not None and hasattr(parent, "screen") else QApplication.primaryScreen()
+        available = screen.availableGeometry() if screen else None
+        if available:
+            width = min(1240, max(1080, int(available.width() * 0.84)))
+            height = min(980, max(860, int(available.height() * 0.94)))
+            width = min(width, max(900, available.width() - 30))
+            height = min(height, max(760, available.height() - 30))
+            self.resize(width, height)
+        else:
+            self.resize(1180, 940)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(28, 24, 28, 24)
@@ -1143,7 +1162,8 @@ class QuoteDeliveryDialog(QDialog):
         self.items.setObjectName("deliveryItems")
         self.items.setAlternatingRowColors(True)
         self.items.setShowGrid(True)
-        self.items.setMinimumHeight(240)
+        visible_rows = min(max(len(self.draft.get("items", [])), 3), 8)
+        self.items.setMinimumHeight(62 + visible_rows * 54)
         self.items.verticalHeader().setDefaultSectionSize(54)
 
         header = self.items.horizontalHeader()
@@ -1221,7 +1241,9 @@ class QuoteDeliveryDialog(QDialog):
         shipping_layout.addWidget(self.shipping_prepaid)
 
         shipping_layout.addSpacing(12)
-        shipping_layout.addWidget(QLabel("선불 금액"))
+        self.shipping_fee_label = QLabel("선불 금액")
+        self.shipping_fee_label.setObjectName("deliveryShippingFeeLabel")
+        shipping_layout.addWidget(self.shipping_fee_label)
 
         self.shipping_fee = QLineEdit(str(int(self.draft.get("shippingFee", 0) or 6000)))
         self.shipping_fee.setObjectName("deliveryShippingFee")
@@ -1387,6 +1409,9 @@ class QuoteDeliveryDialog(QDialog):
     def recalculate_shipping(self, *args):
         if not hasattr(self, "total_value"):
             return
+        prepaid = self.shipping_prepaid.isChecked()
+        self.shipping_fee.setEnabled(prepaid)
+        self.shipping_fee_label.setEnabled(prepaid)
         try:
             self.apply_shipping(False)
             item_total = sum(int(item["quantity"]) * int(item["unitPrice"]) for item in self.draft.get("items", []))
