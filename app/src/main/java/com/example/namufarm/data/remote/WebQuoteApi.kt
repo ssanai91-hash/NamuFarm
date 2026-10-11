@@ -89,7 +89,7 @@ object WebQuoteValidator {
         val checked = rows.mapNotNull { nullable ->
             val outer = checkNotNull(nullable)
             val requestStatus = outer.status ?: "신규"
-            check(requestStatus in setOf("신규", "견적확정", "입금확인", "배송완료", "구매취소"))
+            check(requestStatus in setOf("신규", "견적확정", "견적발송완료", "입금확인", "배송완료", "구매취소"))
             var row = outer
             val id = checkNotNull(row.requestId)
             check(validId(id) && seen.add(id)) { "요청번호를 확인해주세요." }

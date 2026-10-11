@@ -15,7 +15,7 @@ from namufarm_desktop.commerce import (new_draft, draft_amounts, order_from_draf
     quote_html, shipping_html, shipping_csv, parse_tracking_csv, tracking_fields, tracking_number, TRACKING_PREFIX)
 from namufarm_desktop.domain import metadata, now_ms
 from namufarm_desktop.errors import UserError, NetworkError
-from namufarm_desktop.workspace import SellerWindow, QuoteDialog
+from namufarm_desktop.workspace import SellerWindow, QuoteDialog, QuoteDeliveryDialog
 from namufarm_desktop.demo import show_demo
 from support import Bridge, manager_at
 from qt_support import QtTestCase
@@ -145,6 +145,22 @@ class WorkspaceServiceTest(unittest.TestCase):
         self.assertEqual(draft['id'], confirmed['drafts'][0]['id'])
         self.assertNotIn('테스트 고객'.encode(), self.manager.vault.path.read_bytes())
 
+    def test_quote_sent_updates_server_state_before_purchase(self):
+        self.bridge.send(control='submit')
+        view = self.manager.sync()
+        draft = draft_for_test()
+        draft['sourceRequestId'] = view['requests'][0]['requestId']
+        self.manager.confirm_quote(draft)
+        sent = self.manager.mark_quote_sent(draft)
+        self.assertEqual('견적발송완료', sent['requests'][0]['status'])
+        with self.assertRaises(UserError):
+            # A fresh request that skipped the sent stage cannot become a sale.
+            other = draft_for_test()
+            other['sourceRequestId'] = self.bridge.send(control='submit_new')['requestId']
+            self.manager.sync()
+            self.manager.confirm_quote(other)
+            self.manager.confirm_draft(other)
+
     def test_shipping_export_preferences_are_encrypted_and_do_not_advance_sale(self):
         row = self.manager.confirm_draft(draft_for_test())['sales'][0]
         before = self.manager.view()['sales']
@@ -165,6 +181,8 @@ class WorkspaceServiceTest(unittest.TestCase):
         self.manager.save_draft(draft)
         confirmed = self.manager.confirm_quote(draft)
         self.assertEqual('견적확정', confirmed['requests'][0]['status'])
+        sent = self.manager.mark_quote_sent(draft)
+        self.assertEqual('견적발송완료', sent['requests'][0]['status'])
         view = self.manager.confirm_draft(draft)
         self.assertEqual([], view['requests'])
         self.assertEqual([], view['drafts'])
@@ -232,6 +250,8 @@ class SellerUiTest(QtTestCase):
         self.assertFalse(hasattr(window, 'inbox_sync_button'))
         self.assertEqual('견적요청 삭제', window.delete_button.text())
         self.assertEqual('견적 작성', window.request_quote_button.text())
+        draft_headers = [window.draft_table.horizontalHeaderItem(i).text() for i in range(window.draft_table.columnCount())]
+        self.assertEqual(['견적번호', '상태', '작성일', '고객명', '연락처', '메일', '공식견적서', '품목', '판매금액'], draft_headers)
         self.assertGreaterEqual(window.request_actions.indexOf(window.delete_button), 0)
         self.assertGreaterEqual(window.request_actions.indexOf(window.request_quote_button), 0)
         self.assertEqual(3, len(window.shipping_rows))
@@ -273,6 +293,27 @@ class SellerUiTest(QtTestCase):
         self.assertEqual('15000', price.text())
         self.assertEqual('30,000', dialog.items.item(0, 2).text())
         dialog.initial = dialog.raw_state()
+        dialog.close()
+
+    def test_delivery_dialog_is_separate_from_request_quote_editor(self):
+        draft = draft_for_test()
+        draft.update(
+            sourceRequestId='123e4567-e89b-12d3-a456-426614174000',
+            requestReceiptNumber='NAMU-20261011-0001',
+            customerEmail='buyer@example.com',
+            formalQuoteRequested=True,
+            quoteRecipientName='테스트 고객',
+            quoteReplyChannel='both',
+        )
+        dialog = QuoteDeliveryDialog(draft, '견적확정')
+        dialog.show()
+        self.app.processEvents()
+        headers = [dialog.items.horizontalHeaderItem(i).text() for i in range(dialog.items.columnCount())]
+        self.assertEqual(['묘목명', '수량', '판매 단가', '판매 금액'], headers)
+        self.assertTrue(dialog.sms_button.isEnabled())
+        self.assertTrue(dialog.email_button.isEnabled())
+        self.assertTrue(dialog.sent_button.isEnabled())
+        self.assertIn('NAMU-20261011-0001', dialog.delivery_text())
         dialog.close()
 
     def test_quote_editor_calculates_and_prints_pdf(self):

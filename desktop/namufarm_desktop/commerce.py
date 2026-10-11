@@ -67,6 +67,14 @@ def validate_draft(draft):
     require(re.fullmatch(r"0[0-9]{8,10}", draft["customerPhone"]), "전화번호를 숫자 9~11자리로 입력해주세요.")
     email = draft.get("customerEmail", "")
     require(not email or re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email), "이메일 형식을 확인해주세요.")
+    formal = draft.get("formalQuoteRequested", False)
+    recipient = draft.get("quoteRecipientName", "")
+    reply_channel = draft.get("quoteReplyChannel", "sms")
+    require(type(formal) is bool, "공식 견적서 요청값을 확인해주세요.")
+    require(isinstance(recipient, str) and len(recipient) <= 100 and not any(ord(c) < 32 for c in recipient),
+            "견적서 수신인을 확인해주세요.")
+    require(reply_channel in ("sms", "email", "both"), "견적 수신 방법을 확인해주세요.")
+    require(reply_channel == "sms" or bool(email), "메일 수신 견적에는 이메일 주소가 필요합니다.")
     require(type(draft.get("costConfirmed")) is bool)
     integer(draft.get("createdAt"), 1, now_ms() + 300000)
     require(isinstance(draft.get("validUntil"), str) and 1 <= len(draft["validUntil"]) <= 100)
@@ -94,8 +102,11 @@ def quote_document(draft):
         lines.append({"name": "운반비", "specification": "선불", "quantity": 1, "unitPrice": draft["shippingFee"], "unit": "건"})
     return {"schemaVersion": 1, "id": draft["id"], "number": f"NQ-{date}-{draft['id'][:8].upper()}",
             "sourceQuoteNumber": "PCQ_" + draft["id"], "issuedAt": stamp, "customerPhone": draft["customerPhone"],
-            "recipient": {"customerName": draft["customerName"], "customerEmail": draft["customerEmail"], "recipientName": draft["customerName"],
-                          "replyChannel": "sms", "formalQuoteRequested": True, "sourceRequestId": draft["sourceRequestId"] or None},
+            "recipient": {"customerName": draft["customerName"], "customerEmail": draft["customerEmail"],
+                          "recipientName": draft.get("quoteRecipientName") or draft["customerName"],
+                          "replyChannel": draft.get("quoteReplyChannel", "sms"),
+                          "formalQuoteRequested": bool(draft.get("formalQuoteRequested", False)),
+                          "sourceRequestId": draft["sourceRequestId"] or None},
             "issuer": copy.deepcopy(draft["issuer"]), "lines": lines, "supplyAmount": amounts["supply"], "taxAmount": amounts["tax"],
             "totalAmount": amounts["total"], "shippingNote": "배송비 선불 · 합계 포함" if draft["isPrepaid"] else "배송비 착불 · 합계 미포함",
             "validUntil": draft["validUntil"], "notes": draft["note"].replace("\t", " ")[:500], "paymentAccount": draft.get("paymentAccount", "")}

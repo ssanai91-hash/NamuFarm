@@ -3,6 +3,7 @@ import copy
 import json
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import quote as url_quote
 
 from PySide6.QtCore import Qt, QUrl, QSaveFile, QIODevice, Signal
 from PySide6.QtGui import QColor, QDesktopServices, QFont, QIntValidator, QKeySequence, QShortcut, QTextDocument, QPageSize
@@ -472,6 +473,134 @@ class QuoteDialog(QDialog):
             QMessageBox.warning(self, "견적 입력 확인", str(error))
 
 
+class QuoteDeliveryDialog(QDialog):
+    """Confirmed quote handoff. Editing remains in QuoteDialog; this window is for delivery."""
+
+    def __init__(self, draft, request_status, parent=None):
+        super().__init__(parent)
+        self.draft = copy.deepcopy(draft)
+        self.request_status = request_status or ("수기견적" if not draft.get("sourceRequestId") else "상태확인")
+        self.mode = ""
+        self.setWindowTitle("견적 전달")
+        self.resize(1040, 760)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(24, 20, 24, 20)
+        layout.setSpacing(14)
+
+        head = QHBoxLayout()
+        head.addWidget(label("견적 전달", "pageTitle"))
+        head.addStretch()
+        head.addWidget(label(self.request_status, "muted"))
+        layout.addLayout(head)
+        layout.addWidget(label("확정한 견적을 문자·메일·견적서로 고객에게 전달합니다. 실제 전송을 마친 뒤 견적발송완료로 변경하세요.", "muted", True))
+
+        info = QGroupBox("고객 · 견적 정보")
+        form = QFormLayout(info)
+        number = self.quote_number()
+        channel = {"sms": "문자", "email": "이메일", "both": "문자 + 이메일"}.get(draft.get("quoteReplyChannel", "sms"), "문자")
+        for title, value in (
+            ("견적번호", number),
+            ("고객명", draft.get("customerName", "")),
+            ("연락처", draft.get("customerPhone", "")),
+            ("메일", draft.get("customerEmail", "") or "미입력"),
+            ("공식견적서", "요청" if draft.get("formalQuoteRequested") else "미요청"),
+            ("수신방법", channel),
+        ):
+            field = QLineEdit(str(value))
+            field.setReadOnly(True)
+            form.addRow(title, field)
+        layout.addWidget(info)
+
+        self.items = table(["묘목명", "수량", "판매 단가", "판매 금액"])
+        rows = []
+        for item in draft.get("items", []):
+            rows.append((item["species"], f"{item['quantity']:,}주", f"{item['unitPrice']:,}원",
+                         f"{item['quantity'] * item['unitPrice']:,}원"))
+        fill_table(self.items, rows)
+        self.items.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        center_table_columns(self.items, (1, 2, 3))
+        layout.addWidget(self.items, 1)
+
+        amounts = draft_amounts(draft)
+        layout.addWidget(label(f"판매금액  {amounts['total']:,}원", "metricValue"))
+        if draft.get("note"):
+            note = QPlainTextEdit(draft.get("note", ""))
+            note.setReadOnly(True)
+            note.setMaximumHeight(90)
+            layout.addWidget(label("요청사항", "sectionTitle"))
+            layout.addWidget(note)
+
+        if draft.get("formalQuoteRequested"):
+            layout.addWidget(label("공식 견적서 요청 건입니다. 현재 PC 메일 작성은 받는 사람·제목·본문을 채워 엽니다. PDF는 아래 버튼에서 확인·출력한 뒤 메일에 첨부하세요.", "notice", True))
+        else:
+            layout.addWidget(label("문자·메일 앱에서 실제 전송이 끝난 뒤에만 견적발송완료를 눌러주세요.", "notice", True))
+
+        actions = QHBoxLayout()
+        self.sms_button = button("문자 보내기", self.open_sms)
+        self.email_button = button("메일 보내기", self.open_email)
+        self.pdf_button = button("공식 견적서 PDF / 출력" if draft.get("formalQuoteRequested") else "견적서 PDF / 출력", self.preview_pdf)
+        self.sms_button.setEnabled(bool(draft.get("customerPhone")))
+        self.email_button.setEnabled(bool(draft.get("customerEmail")))
+        actions.addWidget(self.sms_button)
+        actions.addWidget(self.email_button)
+        actions.addWidget(self.pdf_button)
+        actions.addStretch()
+        actions.addWidget(button("닫기", self.reject))
+        self.sent_button = button("견적발송완료", self.mark_sent, True)
+        self.sent_button.setEnabled(bool(draft.get("sourceRequestId")) and self.request_status == "견적확정")
+        actions.addWidget(self.sent_button)
+        layout.addLayout(actions)
+
+    def quote_number(self):
+        return self.draft.get("requestReceiptNumber") or ("PCQ_" + self.draft["id"][:8])
+
+    def delivery_text(self):
+        amount = draft_amounts(self.draft)["total"]
+        items = ", ".join(f"{item['species']} {item['quantity']:,}주" for item in self.draft["items"])
+        return "\n".join([
+            "[나무팜 견적 안내]",
+            f"{self.draft['customerName']}님, 요청하신 묘목 견적을 안내드립니다.",
+            f"견적번호: {self.quote_number()}",
+            f"품목: {items}",
+            f"판매금액: {amount:,}원",
+            "확인 후 문의사항이 있으시면 연락 부탁드립니다.",
+        ])
+
+    def open_sms(self):
+        body = self.delivery_text()
+        uri = f"sms:{self.draft['customerPhone']}?body={url_quote(body)}"
+        if not QDesktopServices.openUrl(QUrl.fromEncoded(uri.encode("utf-8"))):
+            QApplication.clipboard().setText(body)
+            QMessageBox.information(self, "문자 작성", "문자 앱을 열 수 없어 견적 내용을 클립보드에 복사했습니다.")
+
+    def open_email(self):
+        email = self.draft.get("customerEmail", "").strip()
+        if not email:
+            QMessageBox.information(self, "메일 주소 확인", "고객 이메일이 입력되지 않았습니다.")
+            return
+        body = self.delivery_text()
+        subject = f"[나무팜] {self.quote_number()} 견적 안내"
+        uri = f"mailto:{url_quote(email, safe='@.+')}?subject={url_quote(subject)}&body={url_quote(body)}"
+        if not QDesktopServices.openUrl(QUrl.fromEncoded(uri.encode("utf-8"))):
+            QApplication.clipboard().setText(body)
+            QMessageBox.information(self, "메일 작성", "메일 앱을 열 수 없어 견적 내용을 클립보드에 복사했습니다.")
+
+    def preview_pdf(self):
+        print_document(self, quote_html(self.draft, True), "나무팜_견적서_" + self.quote_number().replace("/", "_"))
+
+    def mark_sent(self):
+        if QMessageBox.question(
+            self, "견적발송완료",
+            "문자 또는 메일 등으로 고객에게 실제 견적 전송을 마쳤나요?\n확인하면 서버 상태를 '견적발송완료'로 변경합니다.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        ) != QMessageBox.StandardButton.Yes:
+            return
+        self.mode = "sent"
+        self.accept()
+
+
 class ShippingExportDialog(QDialog):
     def __init__(self, rows, saved_sender=None, parent=None):
         super().__init__(parent)
@@ -707,7 +836,7 @@ class SellerWindow(MainWindow):
         metrics = QHBoxLayout()
         metrics.setSpacing(16)
         self.metrics = []
-        for title, subtitle, target in (("새 견적 요청", "온라인 접수함", 1), ("견적확정", "견적 작업대", 2), ("출고 대기", "입금확인 · 배송완료 전", 4), ("이번 달 배송완료 매출", "공급가 기준 · 한국 시간", 5)):
+        for title, subtitle, target in (("새 견적 요청", "온라인 접수함", 1), ("견적 작업대", "확정 · 발송 관리", 2), ("출고 대기", "입금확인 · 배송완료 전", 4), ("이번 달 배송완료 매출", "공급가 기준 · 한국 시간", 5)):
             frame, box = card(title)
             value = label("—", "metricValue")
             self.metrics.append(value)
@@ -743,9 +872,16 @@ class SellerWindow(MainWindow):
     def build_drafts(self):
         page = QWidget()
         layout = QVBoxLayout(page)
-        layout.addWidget(label("견적확정된 건을 고객에게 전달하고 후속 작업을 관리하세요.", "sectionTitle"))
-        layout.addWidget(label("온라인 요청의 임시저장은 요청함에 남고, 견적확정하면 이 작업대로 이동합니다. 견적 내용은 이 PC에 암호화해 30일 보관합니다.", "muted", True))
-        self.draft_table = table(["작성일", "고객명", "연락처", "품목", "합계", "견적 번호"])
+        layout.addWidget(label("확정된 견적을 고객에게 전달하고 후속 작업을 관리하세요.", "sectionTitle"))
+        layout.addWidget(label("온라인 요청에서 견적을 확정하면 이 작업대로 이동합니다. 문자·메일·견적서 전달 후 견적발송완료 상태로 변경하세요.", "muted", True))
+        self.draft_table = table(["견적번호", "상태", "작성일", "고객명", "연락처", "메일", "공식견적서", "품목", "판매금액"])
+        header = self.draft_table.horizontalHeader()
+        header.setStretchLastSection(False)
+        header.setMinimumSectionSize(70)
+        for column, width in enumerate((190, 115, 145, 100, 135, 220, 105, 320, 120)):
+            header.setSectionResizeMode(column, QHeaderView.ResizeMode.Interactive)
+            self.draft_table.setColumnWidth(column, width)
+        header.setSectionResizeMode(7, QHeaderView.ResizeMode.Stretch)
         self.draft_table.itemDoubleClicked.connect(self.open_draft)
         layout.addWidget(self.draft_table)
         bar = QHBoxLayout()
@@ -857,7 +993,7 @@ class SellerWindow(MainWindow):
     def refresh_workspace(self):
         sales = self.data["sales"]
         self.metrics[0].setText(f"{sum(r.get('status','신규') == '신규' for r in self.data['requests']):,}건")
-        self.metrics[1].setText(f"{sum(r.get('status') == '견적확정' for r in self.data['requests']):,}건")
+        self.metrics[1].setText(f"{sum(r.get('status') in ('견적확정','견적발송완료') for r in self.data['requests']):,}건")
         self.metrics[2].setText(f"{sum(r['metadata']['status'] in ('입금확인','구매확정') for r in sales):,}건")
         month = datetime.now(SEOUL).strftime("%Y-%m")
         completed = [r for r in sales if r["metadata"]["status"] in ("배송완료","판매완료") and timestamp(r["metadata"]["completedAt"]).startswith(month)]
@@ -870,9 +1006,27 @@ class SellerWindow(MainWindow):
             rows.append((order.get("customerName") or order["orderNumber"], ", ".join(i["species"] for i in r["metadata"]["items"]), money(order["totalPrice"] + order["taxAmount"]), step))
         fill_table(self.work_table, rows)
         request_status = {r["requestId"]: r.get("status", "신규") for r in self.data["requests"]}
-        self.draft_rows = [d for d in self.data.get("drafts", [])
-                           if not d.get("sourceRequestId") or request_status.get(d["sourceRequestId"]) == "견적확정"]
-        fill_table(self.draft_table, [(timestamp(d["createdAt"]), d["customerName"], d["customerPhone"], ", ".join(i["species"] for i in d["items"]), money(draft_amounts(d)["total"]), "PCQ_" + d["id"][:8]) for d in self.draft_rows])
+        draft_pairs = []
+        for draft in self.data.get("drafts", []):
+            source = draft.get("sourceRequestId", "")
+            status = request_status.get(source, "상태확인") if source else "수기견적"
+            if source and status not in ("견적확정", "견적발송완료"):
+                continue
+            draft_pairs.append((draft, status))
+        self.draft_rows = [draft for draft, _status in draft_pairs]
+        self.draft_statuses = [status for _draft, status in draft_pairs]
+        fill_table(self.draft_table, [(
+            d.get("requestReceiptNumber") or ("PCQ_" + d["id"][:8]),
+            status,
+            timestamp(d["createdAt"]),
+            d["customerName"],
+            d["customerPhone"],
+            d.get("customerEmail") or "—",
+            "요청" if d.get("formalQuoteRequested") else "—",
+            ", ".join(f"{i['species']} {i['quantity']:,}주" for i in d["items"]),
+            money(draft_amounts(d)["total"]),
+        ) for d, status in draft_pairs])
+        center_table_columns(self.draft_table, (0, 1, 2, 3, 4, 6, 8))
         pending = len(self.data["pending"])
         self.health.setText(f"전송 대기 {pending}건\n동기화하여 저장 여부를 확인하세요." if pending else "운영 시트 연결됨\n수정 중에는 자동 새로고침을 멈춥니다." if self.data["paired"] else "연결 · 설정에서 보관함을 열고\nPC를 연결해주세요.")
         self.refresh_shipping()
@@ -976,14 +1130,35 @@ class SellerWindow(MainWindow):
 
     def open_draft(self, *args):
         index = self.draft_table.currentRow()
-        if 0 <= index < len(self.draft_rows):
-            draft = copy.deepcopy(self.draft_rows[index])
-            source = draft.get("sourceRequestId", "")
-            request = next((r for r in self.data.get("requests", []) if r["requestId"] == source), None) if source else None
-            if request:
-                draft["requestReceiptNumber"] = request.get("receiptNumber") or request["requestId"]
-                draft["customerEmail"] = request["personal"].get("customerEmail", "")
-            self.edit_quote(draft=draft, request_status=request.get("status", "") if request else "")
+        if not 0 <= index < len(self.draft_rows):
+            return
+        draft = copy.deepcopy(self.draft_rows[index])
+        status = self.draft_statuses[index] if index < len(self.draft_statuses) else ""
+        source = draft.get("sourceRequestId", "")
+        request = next((r for r in self.data.get("requests", []) if r["requestId"] == source), None) if source else None
+        if request:
+            draft["requestReceiptNumber"] = request.get("receiptNumber") or request["requestId"]
+            draft["customerEmail"] = request["personal"].get("customerEmail", "")
+        if source:
+            self.open_delivery_quote(draft, status)
+        else:
+            self.edit_quote(draft=draft, request_status=status)
+
+    def open_delivery_quote(self, draft, status):
+        if getattr(self, "demo_mode", False) or not self.manager or self.task:
+            return
+        dialog = QuoteDeliveryDialog(draft, status, self)
+        self.timer.stop()
+        result = dialog.exec()
+        self.timer.start()
+        if result == QDialog.DialogCode.Accepted and dialog.mode == "sent":
+            self.run_job("견적발송완료 상태를 운영 시트에 저장 중…",
+                         lambda: self.manager.mark_quote_sent(draft), self.quote_sent)
+
+    def quote_sent(self, value):
+        self.apply_view(value)
+        self.message.setText("견적발송완료로 저장했습니다. 고객 회신과 입금 여부를 확인하세요.")
+        self.navigate(2)
 
     def remove_draft(self):
         index = self.draft_table.currentRow()

@@ -69,12 +69,16 @@ test('v2 receipt hash and canonical JSON stay unchanged after v3 upgrade',()=>{
 });
 
 
-test('request status uses 견적확정 stage and removed 견적완료 is rejected',()=>{
+test('request status flows through 견적확정 and 견적발송완료 while removed 견적완료 is rejected',()=>{
   const f=fixture();f.submit();
   assert.equal(f.context.requestStatusTransitionAllowed_('신규','견적확정'),true);
+  assert.equal(f.context.requestStatusTransitionAllowed_('신규','견적발송완료'),false);
   assert.equal(f.context.requestStatusTransitionAllowed_('신규','입금확인'),false);
   assert.throws(()=>f.context.updateRequestStatus_({requestId:f.request.requestId,status:'견적완료'}));
-  const result=f.context.updateRequestStatus_({requestId:f.request.requestId,status:'견적확정'});
-  assert.equal(result.updated,true);assert.equal(result.status,'견적확정');
-  assert.equal(f.readRequests(0).requests[0].status,'견적확정');
+  const confirmed=f.context.updateRequestStatus_({requestId:f.request.requestId,status:'견적확정'});
+  assert.equal(confirmed.updated,true);assert.equal(confirmed.status,'견적확정');
+  const sent=f.context.updateRequestStatus_({requestId:f.request.requestId,status:'견적발송완료'});
+  assert.equal(sent.updated,true);assert.equal(sent.status,'견적발송완료');
+  assert.equal(f.readRequests(0).requests[0].status,'견적발송완료');
+  assert.equal(f.context.requestStatusTransitionAllowed_('견적발송완료','입금확인'),true);
 });
