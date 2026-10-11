@@ -844,7 +844,7 @@ class QuoteEmailDialog(QDialog):
                 f"판매금액 : {amount:,}원",
             ])
             if index < len(self.draft.get("items", [])):
-                item_lines.append("")
+                item_lines.extend(["", ""])
 
         item_total = sum(int(item["quantity"]) * int(item["unitPrice"]) for item in self.draft.get("items", []))
         shipping_fee = int(self.draft.get("shippingFee", 0) or 0)
@@ -858,21 +858,29 @@ class QuoteEmailDialog(QDialog):
         return "\n".join([
             f"{customer}님, 안녕하세요.",
             "",
+            "",
             "나무팜농원입니다.",
             "요청하신 묘목 견적을 안내드립니다.",
             "",
+            "",
             "===========================",
             "",
+            "",
             f"견적번호 : {self.quote_number()}",
+            "",
             *item_lines,
+            "",
             "",
             f"총금액 : {total:,}원",
             shipping_line,
             "",
+            "",
             "===========================",
+            "",
             "",
             "견적 내용을 확인하시고 궁금하신 사항은 편하게 연락 부탁드립니다.",
             "감사합니다.",
+            "",
             "",
             "나무팜농원",
             "010-4446-0304 / 043-732-0980",

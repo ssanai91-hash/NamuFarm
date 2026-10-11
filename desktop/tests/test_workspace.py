@@ -356,6 +356,8 @@ class SellerUiTest(QtTestCase):
         self.assertTrue(body.startswith('테스트 고객님, 안녕하세요.'))
         self.assertIn('품목1 : 소나무 2주', body)
         self.assertIn('판매금액 : 20,000원', body)
+        self.assertIn('안녕하세요.\n\n\n나무팜농원입니다.', body)
+        self.assertIn('===========================\n\n\n견적번호', body)
         self.assertIn('총금액 : 20,000원', body)
         self.assertIn('택배비 : 후불 / 선불 시 : 3,500원', body)
         self.assertIn('010-4446-0304 / 043-732-0980', body)
