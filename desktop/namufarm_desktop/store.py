@@ -180,6 +180,9 @@ class Vault:
         with self.mutex, self._db() as db:
             return [self._open(blob, "outbox:" + identifier) for identifier, blob in db.execute("SELECT id,body FROM outbox ORDER BY seq")]
 
+    def held_payments(self):
+        return self.preference("held_payments", [])
+
     def snapshot_marker(self):
         with self.mutex, self._db() as db:
             return self._read_snapshot_marker(db)
@@ -240,10 +243,34 @@ class Vault:
             # commit together, only after the server acknowledgement was checked.
             db.execute("DELETE FROM outbox WHERE id=?", (identifier,))
 
-    def discard_conflict(self, identifier, requests, sales, marker):
+    def mark_rejected(self, identifier):
         with self.mutex, self._db() as db:
+            row = db.execute("SELECT body FROM outbox WHERE id=?", (identifier,)).fetchone()
+            require(row is not None, "전송 대기가 변경되었습니다.")
+            op = self._open(row[0], "outbox:" + identifier)
+            require(op["action"] == "save_sale")
+            op["rejected"] = True
+            db.execute("UPDATE outbox SET body=? WHERE id=?",
+                       (self._seal(op, "outbox:" + identifier), identifier))
+
+    def discard_conflict(self, identifier, requests, sales, marker, hold_payment=False):
+        with self.mutex, self._db() as db:
+            if hold_payment:
+                require(db.execute("SELECT COUNT(*) FROM outbox").fetchone()[0] == 1)
+                row = db.execute("SELECT body FROM outbox WHERE id=?", (identifier,)).fetchone()
+                require(row is not None)
+                op = self._open(row[0], "outbox:" + identifier)
+                require(op["action"] == "save_sale" and op.get("rejected") is True
+                        and op["payload"]["metadata"]["revision"] == 1)
+                scope = "workspace:held_payments"
+                saved = db.execute("SELECT value FROM config WHERE name=?", (scope,)).fetchone()
+                held = self._open(saved[0], scope) if saved else []
+                require(len(held) < 100 and not any(h["operation"]["id"] == identifier for h in held))
+                held.insert(0, {"operation": op, "heldAt": now_ms()})
+                db.execute("INSERT OR REPLACE INTO config VALUES (?,?)",
+                           (scope, self._seal(held, scope)))
             db.execute("DELETE FROM outbox WHERE id=?", (identifier,))
-            # Separate public methods cannot commit halfway through a discard/replace.
+            # The recovery record and replacement snapshot commit atomically.
             db.execute("DELETE FROM cache")
             for kind, rows in (("requests", requests), ("sales", sales)):
                 for row in rows:
@@ -251,6 +278,28 @@ class Vault:
                     index = self._index(kind, reference)
                     db.execute("INSERT INTO cache VALUES (?,?,?)", (kind, index, self._seal(row, kind + ":" + index)))
             db.execute("INSERT OR REPLACE INTO config VALUES ('snapshot',?)", (self._seal(marker, "snapshot"),))
+
+    def resume_held_payment(self, identifier):
+        # Requeue the original ID, price and payment timestamp; no new order.
+        with self.mutex, self._db() as db:
+            require(db.execute("SELECT COUNT(*) FROM outbox").fetchone()[0] == 0)
+            scope = "workspace:held_payments"
+            saved = db.execute("SELECT value FROM config WHERE name=?", (scope,)).fetchone()
+            held = self._open(saved[0], scope) if saved else []
+            matches = [h for h in held if h["operation"]["id"] == identifier]
+            require(len(matches) == 1, "보류 입금 기록을 찾지 못했습니다.")
+            op = dict(matches[0]["operation"])
+            require(op["action"] == "save_sale" and op["payload"]["metadata"]["revision"] == 1)
+            op.pop("rejected", None)
+            payload = op["payload"]
+            row = {**payload, "sequence": 0, "expired": False}
+            index = self._index("sales", payload["metadata"]["orderNumber"])
+            db.execute("INSERT INTO outbox(id,body) VALUES (?,?)",
+                       (identifier, self._seal(op, "outbox:" + identifier)))
+            db.execute("INSERT OR REPLACE INTO cache VALUES ('sales',?,?)",
+                       (index, self._seal(row, "sales:" + index)))
+            db.execute("INSERT OR REPLACE INTO config VALUES (?,?)",
+                       (scope, self._seal([h for h in held if h["operation"]["id"] != identifier], scope)))
 
     def purge(self, clock=None):
         clock = now_ms() if clock is None else clock

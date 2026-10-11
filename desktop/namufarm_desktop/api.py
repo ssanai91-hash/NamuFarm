@@ -71,8 +71,8 @@ class ScriptApi:
             result = json.loads(raw)
             if not isinstance(result, dict) or result.get("ok") is not True:
                 code = result.get("code") if isinstance(result, dict) else None
-                if code == "CONFLICT":
-                    raise ConflictError("앱이나 다른 PC에서 먼저 수정했습니다. 전송 대기를 확인해주세요.")
+                if code == "CONFLICT" or (code == "INVALID" and payload and payload.get("action") == "save_sale"):
+                    raise ConflictError("서버가 판매 저장을 거절했습니다. 전송 대기를 지우지 말고 '저장 거절/충돌 확인'에서 확인해주세요.")
                 messages = {"UNAUTHORIZED": "연결파일을 다시 불러와주세요. 이전 방식에서는 연결 코드를 확인해주세요.",
                             "NOT_READY": "구글시트 서버 설정과 배포 버전을 확인해주세요.",
                             "UPGRADE_REQUIRED": "앱과 구글시트 서버를 최신 버전으로 업데이트해주세요.",

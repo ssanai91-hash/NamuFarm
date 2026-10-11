@@ -132,6 +132,72 @@ class AnnualLedgerFlowTest(unittest.TestCase):
         self.assertTrue(self.locations()['sales'][0]['file'].startswith('나무팜_주문_'))
         self.assertEqual([], view['requests'])
 
+    def test_rejected_create_can_be_held_and_replayed_with_identical_payment_event(self):
+        draft = self.sent_quote()
+        real_call = self.manager.api.call
+        def reject_first_write(action, **fields):
+            if action == 'save_sale':
+                raise ConflictError('definitive refusal')
+            return real_call(action, **fields)
+        self.manager.api.call = reject_first_write
+        try:
+            with self.assertRaises(ConflictError):
+                self.manager.confirm_draft(draft)
+        finally:
+            self.manager.api.call = real_call
+        original = copy.deepcopy(self.manager.vault.pending()[0])
+        self.assertTrue(original['rejected'])
+        preview = self.manager.conflict_preview()
+        self.assertEqual('rejected_create', preview['kind'])
+        view = self.manager.hold_conflicted_payment(preview)
+        self.assertEqual([], view['pending'])
+        self.assertEqual([], view['sales'])
+        self.assertEqual(original, view['heldPayments'][0]['operation'])
+        self.assertNotIn(draft['customerName'].encode('utf-8'), self.manager.vault.path.read_bytes())
+        restarted = Manager(self.manager.vault, self.manager.api)
+        self.assertEqual(original, restarted.view()['heldPayments'][0]['operation'])
+        saved = restarted.retry_held_payment(original['id'])
+        self.assertEqual([], saved['heldPayments'])
+        self.assertEqual([], saved['pending'])
+        self.assertEqual(1, len(saved['sales']))
+        self.assertEqual(original['payload']['eventId'], saved['sales'][0]['eventId'])
+        self.assertEqual(original['payload']['metadata']['paidAt'], saved['sales'][0]['metadata']['paidAt'])
+        self.assertEqual(1, len(self.locations()['sales']))
+
+    def test_closed_source_keeps_rejected_payment_safe_without_blocking_other_orders(self):
+        draft = self.sent_quote()
+        other = self.other_manager('closer')
+        other.close_request(draft['sourceRequestId'])
+        with self.assertRaises(ConflictError):
+            self.manager.confirm_draft(draft)
+        operation = copy.deepcopy(self.manager.vault.pending()[0])
+        preview = self.manager.conflict_preview()
+        self.assertEqual('rejected_create', preview['kind'])
+        held = self.manager.hold_conflicted_payment(preview)
+        self.assertEqual([], held['pending'])
+        self.assertEqual(operation, held['heldPayments'][0]['operation'])
+        with self.assertRaises(UserError):
+            self.manager.retry_held_payment(operation['id'])
+        self.assertEqual([], self.manager.vault.pending())
+        manual = new_manual_draft()
+        manual.update(customerName='새 고객', customerPhone='01012345678', receiverName='새 고객',
+                      items=[{'species': '소나무', 'specification': '', 'quantity': 1, 'unitPrice': 1000, 'unitCost': 500}])
+        sent = self.manager.mark_quote_sent(manual)['drafts'][0]
+        view = self.manager.confirm_draft(sent)
+        self.assertEqual(1, len(view['sales']))
+        self.assertEqual(operation, view['heldPayments'][0]['operation'])
+
+    def test_offline_payment_is_not_mistaken_for_definite_rejection(self):
+        draft = self.sent_quote()
+        self.manager.api.offline = True
+        with self.assertRaises(NetworkError):
+            self.manager.confirm_draft(draft)
+        self.manager.api.offline = False
+        with self.assertRaises(UserError):
+            self.manager.conflict_preview()
+        self.assertFalse(self.manager.vault.pending()[0].get('rejected', False))
+        self.assertEqual([], self.manager.vault.held_payments())
+
     def test_stale_pc_update_never_overwrites_newer_shipping_record(self):
         draft = self.sent_quote()
         row = self.manager.confirm_draft(draft)['sales'][0]

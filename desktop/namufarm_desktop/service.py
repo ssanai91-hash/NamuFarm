@@ -115,7 +115,9 @@ class Manager:
             self.vault.save_preference("drafts", active)
         return {"requests": sorted(decoded_requests, key=lambda r: r["sequence"], reverse=True),
                 "sales": sorted(decoded_sales, key=lambda r: r["sequence"], reverse=True),
-                "drafts": active, "pending": self.vault.pending(), "paired": self.credentials.get("paired") is True}
+                "drafts": active, "pending": self.vault.pending(),
+                "heldPayments": self.vault.held_payments(),
+                "paired": self.credentials.get("paired") is True}
 
     def save_draft(self, draft):
         validate_draft(draft)
@@ -545,9 +547,9 @@ class Manager:
         sale_ids = {r["metadata"]["orderNumber"] for r in sales}
         uncommitted = ""
         if pending_create and pending_create["metadata"]["revision"] == 1:
-            source = pending_create.get("sourceRequestId", "")
-            if source and any(self.decode_sale(r)["order"].get("sourceRequestId") == source for r in sales):
-                uncommitted = pending_create["metadata"]["orderNumber"]
+            # Permit only this explicitly inspected pending first-write to be
+            # absent from the verified server snapshot.
+            uncommitted = pending_create["metadata"]["orderNumber"]
         require(all(r["metadata"]["orderNumber"] in sale_ids or r["metadata"]["orderNumber"] == uncommitted
                     or sale_expired(r["metadata"], now_ms()) for r in self.vault.rows("sales")),
                 "서버 판매 목록 일부가 누락되어 기존 기록을 유지합니다.")
@@ -557,7 +559,12 @@ class Manager:
     def flush(self):
         for operation in self.vault.pending():
             payload = operation["payload"]
-            response = self.api.call(operation["action"], **payload)
+            try:
+                response = self.api.call(operation["action"], **payload)
+            except ConflictError:
+                if operation["action"] == "save_sale":
+                    self.vault.mark_rejected(operation["id"])
+                raise
             if operation["action"] == "save_sale":
                 require(response.get("saved") is True and response.get("orderNumber") == payload["metadata"]["orderNumber"]
                         and response.get("revision") == payload["metadata"]["revision"]
@@ -632,6 +639,8 @@ class Manager:
         pending = self.vault.pending()
         require(len(pending) == 1 and pending[0]["action"] == "save_sale", "판매 수정 충돌이 없습니다.")
         operation = pending[0]
+        require(operation.get("rejected") is True,
+                "서버의 명확한 저장 거절이 있을 때만 충돌 복구할 수 있습니다.")
         self.verify_server()
         requests, sales, marker = self._fetch_verified_snapshot(pending_create=operation["payload"])
         number = operation["payload"]["metadata"]["orderNumber"]
@@ -641,19 +650,60 @@ class Manager:
         source = operation["payload"].get("sourceRequestId", "")
         if remote is None and source and operation["payload"]["metadata"]["revision"] == 1:
             remote = next((r for r in sales if self.decode_sale(r)["order"].get("sourceRequestId") == source), None)
-        require(remote is not None, "서버 기록이 만료되었거나 없습니다. 관리자 확인이 필요합니다.")
+        if remote is None:
+            require(operation["payload"]["metadata"]["revision"] == 1,
+                    "기존 주문을 서버에서 찾지 못했습니다. 관리자 확인이 필요합니다.")
+            return {"kind": "rejected_create", "operation": operation, "remote": None,
+                    "requests": requests, "sales": sales, "marker": marker}
         require(remote["metadata"]["revision"] >= operation["payload"]["metadata"]["revision"],
                 "서버 저장 상태가 아직 확정되지 않았습니다. 동기화를 재시도해주세요.")
-        return {"operation": operation, "remote": remote, "requests": requests, "sales": sales, "marker": marker}
+        return {"kind": "server", "operation": operation, "remote": remote,
+                "requests": requests, "sales": sales, "marker": marker}
 
     def use_server_version(self, preview):
         pending = self.vault.pending()
         require(len(pending) == 1 and pending[0] == preview["operation"], "전송 대기가 변경되었습니다. 다시 확인해주세요.")
         # Re-read before discarding so another device's newer change is not replaced by an old preview.
+        require(preview.get("kind") == "server",
+                "서버에 없는 주문은 서버 기록으로 대체할 수 없습니다.")
         fresh = self.conflict_preview()
-        require(fresh["remote"]["fingerprint"] == preview["remote"]["fingerprint"], "서버 기록이 다시 변경되었습니다. 충돌 내용을 새로 확인해주세요.")
+        require(fresh["kind"] == "server" and fresh["remote"]["fingerprint"] == preview["remote"]["fingerprint"],
+                "서버 기록이 다시 변경되었습니다. 충돌 내용을 새로 확인해주세요.")
         self.vault.discard_conflict(pending[0]["id"], fresh["requests"], fresh["sales"], fresh["marker"])
         return self.local_copy_view()
+
+    def hold_conflicted_payment(self, preview):
+        """Release a refused new order but preserve its original paid event locally."""
+        require(preview.get("kind") == "rejected_create",
+                "처음 등록하는 입금확인 거절만 보류할 수 있습니다.")
+        fresh = self.conflict_preview()
+        require(fresh["kind"] == "rejected_create" and fresh["operation"] == preview["operation"],
+                "서버 기록이 변경되었습니다. 다시 확인해주세요.")
+        self.vault.discard_conflict(fresh["operation"]["id"], fresh["requests"],
+                                    fresh["sales"], fresh["marker"], hold_payment=True)
+        return self.local_copy_view()
+
+    def retry_held_payment(self, identifier):
+        """Retry only after checking the source and the entire server order snapshot."""
+        require(not self.vault.pending(), "기존 전송 대기를 먼저 처리해주세요.")
+        held = next((h for h in self.vault.held_payments()
+                     if h["operation"]["id"] == identifier), None)
+        require(held is not None, "선택한 보류 입금확인 기록이 없습니다.")
+        payload = held["operation"]["payload"]
+        require(payload["metadata"]["revision"] == 1)
+        self.verify_server()
+        requests, sales, _ = self._fetch_verified_snapshot()
+        number, source = payload["metadata"]["orderNumber"], payload.get("sourceRequestId", "")
+        require(not any(r["metadata"]["orderNumber"] == number or
+                        (source and self.decode_sale(r)["order"].get("sourceRequestId") == source)
+                        for r in sales),
+                "서버에 동일 주문 또는 같은 견적의 주문이 있습니다. 중복 주문 방지를 위해 재전송하지 않습니다.")
+        if source:
+            request = next((r for r in requests if r["requestId"] == source), None)
+            require(request is not None and request.get("status") == "견적발송완료",
+                    "원본 견적이 종료되었거나 발송완료가 아닙니다. 보류 입금 기록은 보존됩니다.")
+        self.vault.resume_held_payment(identifier)
+        return self.sync()
 
     def report(self, unit, start, end):
         require(unit in ("day", "month", "year"))

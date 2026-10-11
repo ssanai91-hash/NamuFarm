@@ -3130,6 +3130,11 @@ class SellerWindow(MainWindow):
             old_pages.append(page)
         self.tabs.setParent(self)
         self.tabs.hide()
+        # The legacy sale editor is still referenced by MainWindow's shared
+        # control updater. Keep its Qt parent alive even though it is hidden.
+        self._legacy_sales_page = old_pages[1]
+        self._legacy_sales_page.setParent(self)
+        self._legacy_sales_page.hide()
         root = QWidget()
         root.setObjectName("workspace")
         self.setCentralWidget(root)

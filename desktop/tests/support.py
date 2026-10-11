@@ -58,7 +58,7 @@ class TestApi:
             raise NetworkError('offline')
         result = self.bridge.send(action=action, deviceToken=self.token, **fields)
         if result.get('ok') is not True:
-            if result.get('code') == 'CONFLICT':
+            if result.get('code') == 'CONFLICT' or (result.get('code') == 'INVALID' and action == 'save_sale'):
                 raise ConflictError('conflict')
             raise UserError('server failed')
         if action in ('save_sale', 'close_request') and self.lose_ack:

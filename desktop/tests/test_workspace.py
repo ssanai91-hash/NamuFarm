@@ -373,6 +373,20 @@ class WorkspaceServiceTest(unittest.TestCase):
 
 
 class SellerUiTest(QtTestCase):
+    def test_hidden_legacy_sale_editor_survives_event_loop_and_data_refresh(self):
+        from shiboken6 import isValid
+        window = SellerWindow()
+        self.app.processEvents()
+        self.assertTrue(isValid(window.sale_editor))
+        self.assertTrue(isValid(window._legacy_sales_page))
+        window.apply_view({'requests': [], 'sales': [], 'pending': [], 'paired': False,
+                           'drafts': [], 'heldPayments': []})
+        self.app.processEvents()
+        window.update_controls()
+        self.assertTrue(isValid(window.sale_editor))
+        self.assertFalse(window._legacy_sales_page.isVisible())
+        window.close()
+
     def test_button_styles_have_pressed_depth_feedback(self):
         window = SellerWindow()
         style = window.styleSheet()

@@ -316,6 +316,7 @@ class MainWindow(QMainWindow):
         self.cancel_sale_button.setEnabled(editable and self.selected_sale["metadata"]["status"] in ("입금확인", "구매확정"))
         self.report_button.setEnabled(paired)
         self.resolve_button.setEnabled(paired and pending and self.conflict)
+        self.retry_payment_button.setEnabled(paired and not pending and self.held_payment_table.currentRow() >= 0)
         self.summary.setText(f"문의 {len(self.data['requests'])}건 · 판매 {len(self.data['sales'])}건 · 전송 대기 {len(self.data['pending'])}건" if self.manager else "PC 자료 준비 중")
         self.connection_status.setText("연결 정보 자동 복원됨" if self.data["paired"] else "연결파일 필요")
         self.pending_status.setText("전송 대기는 암호화해 보관합니다. '지금 동기화'로 재시도하세요." if pending else "전송 대기 없음")
@@ -338,7 +339,25 @@ class MainWindow(QMainWindow):
         self.dirty = False
         self.refresh_requests()
         self.refresh_sales()
+        self.refresh_held_payments()
         self.update_controls()
+
+    def refresh_held_payments(self):
+        held = self.data.get("heldPayments", [])
+        self.held_payment_table.blockSignals(True)
+        fill_table(self.held_payment_table, [(
+            h["operation"]["payload"]["metadata"]["orderNumber"],
+            timestamp(h["operation"]["payload"]["metadata"]["paidAt"]),
+            h["operation"]["payload"]["personalData"]["order"].get("sourceQuoteNumber", "—")
+            if "personalData" in h["operation"]["payload"] else "이전 주문",
+        ) for h in held])
+        self.held_payment_table.clearSelection()
+        self.held_payment_table.setCurrentCell(-1, -1)
+        self.held_payment_table.blockSignals(False)
+        self.held_payment_status.setText(
+            f"서버에 등록되지 않은 입금확인 보류 {len(held)}건 · 이 PC에 암호화 보관됩니다."
+            if held else "보류 입금확인 기록 없음"
+        )
 
     def build_requests(self):
         page = QWidget()
@@ -661,9 +680,19 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.auto_check)
         self.pending_status = QLabel("전송 대기 없음")
         layout.addWidget(self.pending_status)
-        self.resolve_button = QPushButton("수정 충돌 확인")
+        self.resolve_button = QPushButton("저장 거절/충돌 확인")
         self.resolve_button.clicked.connect(self.resolve_conflict)
         layout.addWidget(self.resolve_button)
+        self.held_payment_status = QLabel("보류 입금확인 기록 없음")
+        layout.addWidget(self.held_payment_status)
+        self.held_payment_table = table(["주문번호", "입금확인 시각", "원본 견적번호"])
+        self.held_payment_table.setMinimumHeight(90)
+        self.held_payment_table.setMaximumHeight(180)
+        self.held_payment_table.itemSelectionChanged.connect(self.update_controls)
+        layout.addWidget(self.held_payment_table)
+        self.retry_payment_button = QPushButton("선택한 보류 입금 재전송")
+        self.retry_payment_button.clicked.connect(self.retry_held_payment)
+        layout.addWidget(self.retry_payment_button)
         self.legacy_button = QPushButton("이전 자료 복원 (필요한 경우)")
         self.legacy_button.clicked.connect(self.restore_legacy)
         layout.addWidget(self.legacy_button)
@@ -712,17 +741,56 @@ class MainWindow(QMainWindow):
             return self.manager.pair(invite)
         self.run_job("PC 연결 중…", work)
 
+    def retry_held_payment(self):
+        index = self.held_payment_table.currentRow()
+        held = self.data.get("heldPayments", [])
+        if not self.manager or not 0 <= index < len(held):
+            return
+        identifier = held[index]["operation"]["id"]
+        if QMessageBox.question(
+                self, "보류 입금 재전송",
+                "서버의 견적 상태와 중복 주문을 다시 확인한 후 원래 입금확인 기록을 재전송할까요?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No) == QMessageBox.StandardButton.Yes:
+            self.run_job("보류 입금확인 재전송 중…", lambda: self.manager.retry_held_payment(identifier))
+
     def resolve_conflict(self):
         self.run_job("서버 최신 판매 기록 확인 중…", self.manager.conflict_preview, self.confirm_conflict)
 
     def confirm_conflict(self, preview):
+        if preview.get("kind") == "rejected_create":
+            dialog = QDialog(self)
+            dialog.setWindowTitle("입금확인 주문 등록 거절")
+            layout = QVBoxLayout(dialog)
+            meta = preview["operation"]["payload"]["metadata"]
+            notice = QLabel(
+                f"주문 {meta['orderNumber']} · 입금 {timestamp(meta['paidAt'])}\n"
+                "서버에 같은 주문이 없고 최초 등록이 거절되었습니다.\n"
+                "입금확인 원본과 전송 ID를 이 PC에 암호화 보관하고, "
+                "전송 대기를 해제하여 다른 업무를 계속할 수 있습니다.\n"
+                "이 기록은 서버 주문이 아닙니다. 원본 견적 상태를 확인한 후 "
+                "연결 · 설정의 보류 목록에서 재전송하세요."
+            )
+            notice.setWordWrap(True)
+            layout.addWidget(notice)
+            buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Cancel)
+            hold = buttons.addButton("입금 기록 보관 · 전송 대기 해제", QDialogButtonBox.ButtonRole.AcceptRole)
+            hold.clicked.connect(dialog.accept)
+            buttons.rejected.connect(dialog.reject)
+            layout.addWidget(buttons)
+            if dialog.exec() == QDialog.DialogCode.Accepted:
+                self.run_job("거절된 입금확인 기록 보관 중…",
+                             lambda: self.manager.hold_conflicted_payment(preview))
+            return
         dialog = QDialog(self)
         dialog.setWindowTitle("동시 수정 충돌")
         dialog.resize(800, 500)
         layout = QVBoxLayout(dialog)
         layout.addWidget(QLabel("PC 수정은 아직 서버에 반영되지 않았습니다. 서버 내용을 확인하고 선택하세요."))
         comparison = table(["항목", "PC 전송 대기", "서버 최신"])
-        local_order = self.manager.seller.open(preview["operation"]["payload"]["encryptedPersonal"], "order", preview["operation"]["payload"]["eventId"])["order"]
+        payload = preview["operation"]["payload"]
+        local_order = (payload["personalData"]["order"] if "personalData" in payload
+                       else self.manager.seller.open(payload["encryptedPersonal"], "order", payload["eventId"])["order"])
         server_order = self.manager.decode_sale(preview["remote"])["order"]
         names = ["revision", "status", *EDITABLE, "costTotal", "expenseTotal", "costConfirmed", "profitMode", "commissionBps"]
         fill_table(comparison, [(name, local_order.get(name, ""), server_order.get(name, "")) for name in names if local_order.get(name) != server_order.get(name)])
