@@ -984,7 +984,7 @@ class QuoteDeliveryDialog(QDialog):
         self.email_status_badge = QLabel()
         for badge in (self.sms_status_badge, self.email_status_badge):
             badge.setObjectName("channelStatusBadge")
-            badge.setFixedSize(94, 24)
+            badge.setFixedSize(88, 24)
             badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
             delivery_badges.addWidget(badge)
         self.update_delivery_badges()
@@ -993,7 +993,7 @@ class QuoteDeliveryDialog(QDialog):
         status = QLabel(self.request_status)
         status.setObjectName("quoteStatusBadge")
         status.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        status.setFixedSize(150, 52)
+        status.setFixedSize(176, 52)
 
         head.addWidget(status)
         layout.addLayout(head)
