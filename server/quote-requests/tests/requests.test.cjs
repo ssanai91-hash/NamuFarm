@@ -146,3 +146,19 @@ test('quote sms refuses sending without SOLAPI credentials',()=>{
     requestId:f.request.requestId,recipientPhone:'01012345678',text:'견적 안내입니다.'
   }));
 });
+
+
+test('quote sms status reports final success and user-facing reason',()=>{
+  const f=fixture();f.properties.SOLAPI_KEY='test-api-key';f.properties.SOLAPI_SECRET='test-api-secret';f.properties.SOLAPI_FROM='01044460304';
+  f.setSmsStatus('4000','COMPLETE');
+  const result=f.context.quoteSmsStatus_({messageId:'M4V_TEST'});
+  assert.equal(result.state,'success');assert.equal(result.final,true);assert.equal(result.success,true);
+  assert.equal(result.statusMessage,'문자 전송에 성공했습니다.');
+});
+test('quote sms status reports carrier failure reason',()=>{
+  const f=fixture();f.properties.SOLAPI_KEY='test-api-key';f.properties.SOLAPI_SECRET='test-api-secret';f.properties.SOLAPI_FROM='01044460304';
+  f.setSmsStatus('3043','COMPLETE');
+  const result=f.context.quoteSmsStatus_({messageId:'M4V_TEST'});
+  assert.equal(result.state,'failed');assert.equal(result.final,true);assert.equal(result.success,false);
+  assert.equal(result.statusMessage,'수신 단말기 전원이 꺼져 있습니다.');
+});

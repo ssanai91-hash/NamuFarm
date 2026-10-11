@@ -17,6 +17,7 @@ function open(envelope,kind,reference) {
 function fixture({configure=true,now=Date.now(),monthly=false}={}) {
  const properties={SPREADSHEET_ID:'test',WEB_SECRET:'a'.repeat(64)},books=new Map(),files=new Map(),cache=new Map(),sent=[],mail=[],sms=[],triggers=['dispatchQuoteNotifications'];
  let locked=false,failCache=false,failWrite=false,failPush=false,failReceipt=false,clock=now,nextSheet=0,nextBook=0,createFailure=null,writeFailure=null,lockFailure=false,writeHook=null;
+ let smsStatusCode='4000',smsProviderState='COMPLETE';
  const operations=[],reads=[];
  class FixtureDate extends Date { constructor(...args){super(...(args.length?args:[clock]));} static now(){return clock;} }
  function makeBook(id,name) {
@@ -52,8 +53,9 @@ function fixture({configure=true,now=Date.now(),monthly=false}={}) {
  ScriptApp:{getOAuthToken:()=> 'test-token',getProjectTriggers:()=>triggers.map(name=>({getHandlerFunction:()=>name})),newTrigger(name){return{timeBased(){return this},everyMinutes(){return this},create(){triggers.push(name)}}}},
  MailApp:{getRemainingDailyQuota:()=>100,sendEmail:options=>mail.push(JSON.parse(JSON.stringify(options)))},
  ContentService:{MimeType:{JSON:'json'},createTextOutput:text=>({setMimeType:()=>JSON.parse(text)})},
- UrlFetchApp:{fetch(url,options){assert.equal(locked,false,'Network must not hold submission lock');const payload=JSON.parse(options.payload);
+ UrlFetchApp:{fetch(url,options){assert.equal(locked,false,'Network must not hold submission lock');const payload=options.payload?JSON.parse(options.payload):null;
  if(url==='https://api.solapi.com/messages/v4/send-many/detail'){sms.push({url,payload,headers:{...(options.headers||{})}});return{getResponseCode:()=>200,getContentText:()=>JSON.stringify({groupInfo:{groupId:'G4V_TEST'},failedMessageList:[],messageList:[{messageId:'M4V_TEST',statusCode:'2000',statusMessage:'정상 접수'}]})}}
+ if(url.startsWith('https://api.solapi.com/messages/v4/list?')){sms.push({url,payload:null,headers:{...(options.headers||{})}});return{getResponseCode:()=>200,getContentText:()=>JSON.stringify({messageList:{M4V_TEST:{messageId:'M4V_TEST',status:smsProviderState,statusCode:smsStatusCode,log:[]}}})}}
  sent.push(payload);if(failPush)throw Error('offline');
  if(url.endsWith('/api/internal/encrypt')) {const request=context.validateRequest_({...payload.request,website:''});return{getResponseCode:()=>200,getContentText:()=>JSON.stringify({ok:true,encryptedRequest:seal(request,'quote',request.requestId),fingerprint:crypto.createHmac('sha256',properties.WEB_SECRET).update(JSON.stringify(request)).digest('hex')})}}
  return{getResponseCode:()=>200,getContentText:()=> '{}'}}}
@@ -73,7 +75,8 @@ function fixture({configure=true,now=Date.now(),monthly=false}={}) {
  return{seedEncrypted,context,cells,properties,request,submit,post,sent,mail,sms,book,books,files,operations,reads,requestRows,publicKey,keyId,seal,open,saved,readRequests,
  setTime:value=>clock=Date.parse(value),getTimeZone:()=>management.timeZone,clearRate:()=>cache.clear(),
  failCache:()=>failCache=true,failWrite:()=>failWrite=true,failPush:()=>failPush=true,failReceipt:()=>failReceipt=true,
- failNextWrite:(predicate,{after=false}={})=>writeFailure={predicate,after},failCreate:({after=false}={})=>createFailure={after},failLock:()=>lockFailure=true,onNextWrite:hook=>writeHook=hook};
+ failNextWrite:(predicate,{after=false}={})=>writeFailure={predicate,after},failCreate:({after=false}={})=>createFailure={after},failLock:()=>lockFailure=true,onNextWrite:hook=>writeHook=hook,
+ setSmsStatus:(code,state='COMPLETE')=>{smsStatusCode=String(code);smsProviderState=state;}};
 }
 module.exports={fixture,seal,open,publicKey,keyId,pair};
 

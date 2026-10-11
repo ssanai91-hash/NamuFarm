@@ -156,26 +156,64 @@ class Manager:
         require(valid_id(identifier), "견적 식별자를 확인해주세요.")
         states = self.vault.preference("quote_delivery", {})
         value = states.get(identifier, {}) if isinstance(states, dict) else {}
+        sms_message_id = str(value.get("smsMessageId", "") or "")
+        sms_state = str(value.get("smsState", "") or "")
+        if not sms_state and sms_message_id:
+            # Older builds marked 2000 (accepted) as sent. Treat those records as
+            # needing a final result check instead of assuming delivery success.
+            sms_state = "pending"
+        logs = value.get("smsLogs", [])
+        logs = logs if isinstance(logs, list) else []
+        normalized_logs = []
+        for entry in logs[-20:]:
+            if not isinstance(entry, dict):
+                continue
+            normalized_logs.append({
+                "at": int(entry.get("at", 0) or 0),
+                "state": str(entry.get("state", "") or ""),
+                "message": str(entry.get("message", "") or ""),
+                "statusCode": str(entry.get("statusCode", "") or ""),
+                "messageId": str(entry.get("messageId", "") or ""),
+            })
         return {"smsSentAt": int(value.get("smsSentAt", 0) or 0),
                 "emailSentAt": int(value.get("emailSentAt", 0) or 0),
                 "smsTo": str(value.get("smsTo", "") or ""),
                 "senderPhone": str(value.get("senderPhone", "") or ""),
-                "smsMessageId": str(value.get("smsMessageId", "") or ""),
+                "smsMessageId": sms_message_id,
+                "smsState": sms_state,
+                "smsStatusCode": str(value.get("smsStatusCode", "") or ""),
+                "smsStatusMessage": str(value.get("smsStatusMessage", "") or ""),
+                "smsUpdatedAt": int(value.get("smsUpdatedAt", 0) or 0),
+                "smsLogs": normalized_logs,
                 "emailTo": str(value.get("emailTo", "") or ""),
                 "senderEmail": str(value.get("senderEmail", "") or "")}
 
-    def _mark_quote_channel_sent(self, identifier, channel, **extra):
-        require(valid_id(identifier) and channel in ("sms", "email"))
+    def _save_quote_delivery_state(self, identifier, state):
+        require(valid_id(identifier), "견적 식별자를 확인해주세요.")
         states = self.vault.preference("quote_delivery", {})
         states = copy.deepcopy(states) if isinstance(states, dict) else {}
-        state = dict(states.get(identifier, {}))
-        state[channel + "SentAt"] = now_ms()
-        state.update(extra)
-        states[identifier] = state
+        states[identifier] = copy.deepcopy(state)
         if len(states) > 1000:
             states = dict(list(states.items())[-1000:])
         self.vault.save_preference("quote_delivery", states)
         return self.quote_delivery_state(identifier)
+
+    @staticmethod
+    def _append_sms_log(state, sms_state, message, status_code="", message_id=""):
+        logs = state.get("smsLogs", [])
+        logs = copy.deepcopy(logs) if isinstance(logs, list) else []
+        entry = {"at": now_ms(), "state": sms_state, "message": str(message or ""),
+                 "statusCode": str(status_code or ""), "messageId": str(message_id or "")}
+        if not logs or any(logs[-1].get(k) != entry[k] for k in ("state", "message", "statusCode", "messageId")):
+            logs.append(entry)
+        state["smsLogs"] = logs[-20:]
+
+    def _mark_quote_channel_sent(self, identifier, channel, **extra):
+        require(valid_id(identifier) and channel in ("sms", "email"))
+        state = self.quote_delivery_state(identifier)
+        state[channel + "SentAt"] = now_ms()
+        state.update(extra)
+        return self._save_quote_delivery_state(identifier, state)
 
     def sms_profile(self):
         require(self.credentials.get("paired") is True, "PC를 먼저 연결해주세요.")
@@ -192,6 +230,7 @@ class Manager:
         require(isinstance(text, str) and 1 <= len(text.strip()) <= 1000, "문자 내용을 1~1,000자로 입력해주세요.")
         recipient = draft.get("customerPhone", "").strip()
         require(recipient, "고객 연락처가 입력되지 않았습니다.")
+        recipient_digits = "".join(ch for ch in recipient if ch.isdigit())
         source = draft.get("sourceRequestId", "")
         if source:
             request = next((r for r in self.vault.rows("requests") if r["requestId"] == source), None)
@@ -199,15 +238,45 @@ class Manager:
             require(request.get("status", "신규") in ("견적확정", "견적발송완료"),
                     "견적확정 이후에 문자를 전송해주세요.")
         result = self.api.call("send_quote_sms", requestId=source, recipientPhone=recipient, text=text.strip())
-        require(result.get("sent") is True and result.get("recipientPhone") == recipient,
+        require(result.get("sent") is True and result.get("recipientPhone") == recipient_digits,
                 "문자 전송 접수를 확인하지 못했습니다.")
-        delivery = self._mark_quote_channel_sent(
-            draft["id"], "sms", smsTo=recipient, senderPhone=result.get("senderPhone", ""),
-            smsMessageId=result.get("messageId", "")
-        )
+        state = self.quote_delivery_state(draft["id"])
+        state.update({"smsSentAt": 0, "smsTo": recipient_digits,
+                      "senderPhone": result.get("senderPhone", ""),
+                      "smsMessageId": result.get("messageId", ""),
+                      "smsState": "pending",
+                      "smsStatusCode": str(result.get("statusCode", "") or "2000"),
+                      "smsStatusMessage": str(result.get("statusMessage", "") or "문자 발송을 접수했습니다."),
+                      "smsUpdatedAt": now_ms()})
+        self._append_sms_log(state, "pending", state["smsStatusMessage"],
+                             state["smsStatusCode"], state["smsMessageId"])
+        delivery = self._save_quote_delivery_state(draft["id"], state)
         return {"delivery": delivery, "senderPhone": result.get("senderPhone", ""),
                 "messageId": result.get("messageId", ""), "statusCode": result.get("statusCode", ""),
                 "statusMessage": result.get("statusMessage", ""), "sentAt": result.get("sentAt", "")}
+
+    def refresh_quote_sms_status(self, identifier):
+        state = self.quote_delivery_state(identifier)
+        message_id = state.get("smsMessageId", "")
+        require(message_id, "확인할 문자 발송 기록이 없습니다.")
+        result = self.api.call("quote_sms_status", messageId=message_id)
+        require(result.get("checked") is True and result.get("messageId") == message_id,
+                "문자 발송 결과를 확인하지 못했습니다.")
+        sms_state = str(result.get("state") or "pending")
+        status_code = str(result.get("statusCode") or "")
+        status_message = str(result.get("statusMessage") or "문자 발송 결과를 확인하고 있습니다.")
+        changed = (sms_state != state.get("smsState") or status_code != state.get("smsStatusCode")
+                   or status_message != state.get("smsStatusMessage"))
+        state.update({"smsState": sms_state, "smsStatusCode": status_code,
+                      "smsStatusMessage": status_message, "smsUpdatedAt": now_ms()})
+        if sms_state == "success":
+            if not state.get("smsSentAt"):
+                state["smsSentAt"] = now_ms()
+        elif sms_state == "failed":
+            state["smsSentAt"] = 0
+        if changed:
+            self._append_sms_log(state, sms_state, status_message, status_code, message_id)
+        return self._save_quote_delivery_state(identifier, state)
 
     def email_profile(self):
         require(self.credentials.get("paired") is True, "PC를 먼저 연결해주세요.")

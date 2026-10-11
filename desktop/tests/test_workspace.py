@@ -212,11 +212,32 @@ class WorkspaceServiceTest(unittest.TestCase):
         self.assertTrue(profile['configured'])
         self.assertEqual('01044460304', profile['senderPhone'])
         result = self.manager.send_quote_sms(draft, '테스트 고객님 견적 안내입니다.')
-        self.assertTrue(result['delivery']['smsSentAt'] > 0)
+        self.assertEqual(0, result['delivery']['smsSentAt'])
+        self.assertEqual('pending', result['delivery']['smsState'])
         self.assertEqual('01012345678', result['delivery']['smsTo'])
         self.assertEqual('01044460304', result['delivery']['senderPhone'])
         self.assertEqual('M4V_TEST', result['delivery']['smsMessageId'])
-        self.assertEqual(result['delivery'], self.manager.quote_delivery_state(draft['id']))
+        self.assertEqual('접수', {'pending':'접수'}[result['delivery']['smsLogs'][-1]['state']])
+        final = self.manager.refresh_quote_sms_status(draft['id'])
+        self.assertEqual('success', final['smsState'])
+        self.assertTrue(final['smsSentAt'] > 0)
+        self.assertEqual('문자 전송에 성공했습니다.', final['smsStatusMessage'])
+        self.assertEqual(result['delivery']['smsMessageId'], final['smsMessageId'])
+
+    def test_quote_sms_failure_is_logged_without_marking_sent(self):
+        self.bridge.send(control='configure_sms')
+        self.bridge.send(control='sms_status_fail')
+        self.bridge.send(control='submit')
+        view = self.manager.sync()
+        draft = draft_for_test()
+        draft['sourceRequestId'] = view['requests'][0]['requestId']
+        self.manager.confirm_quote(draft)
+        self.manager.send_quote_sms(draft, '실패 상태 확인용 문자입니다.')
+        final = self.manager.refresh_quote_sms_status(draft['id'])
+        self.assertEqual('failed', final['smsState'])
+        self.assertEqual(0, final['smsSentAt'])
+        self.assertIn('전원이 꺼져', final['smsStatusMessage'])
+        self.assertEqual('failed', final['smsLogs'][-1]['state'])
 
     def test_shipping_export_preferences_are_encrypted_and_do_not_advance_sale(self):
         row = self.manager.confirm_draft(draft_for_test())['sales'][0]
@@ -494,46 +515,78 @@ class SellerUiTest(QtTestCase):
         if dialog.profile_task:
             self.assertTrue(dialog.profile_task.wait(10000))
             self.app.processEvents()
-        self.assertEqual('SOLAPI 설정 필요', dialog.sender_phone.text())
+        self.assertEqual('설정 필요', dialog.sender_phone.text())
         self.assertFalse(dialog.send_button.isEnabled())
-        self.assertIn('SOLAPI_KEY', dialog.status.text())
+        self.assertIn('문자 발신 설정이 필요합니다', dialog.status.text())
+        self.assertNotIn('SOLAPI', dialog.status.text())
         self.assertIn('품목1 : 소나무 2주', dialog.message.toPlainText())
         dialog.close()
 
-    def test_quote_sms_success_updates_delivery_state_and_closes_cleanly(self):
+    def test_quote_sms_success_logs_final_result_and_closes_cleanly(self):
         class FakeSmsManager:
+            def __init__(self):
+                self.state = {'smsSentAt': 0, 'smsState': '', 'smsMessageId': '', 'smsLogs': []}
+
+            def quote_delivery_state(self, identifier):
+                return copy.deepcopy(self.state)
+
             def sms_profile(self):
                 return {'provider': 'SOLAPI', 'configured': True, 'senderPhone': '01044460304'}
 
             def send_quote_sms(self, draft, text):
-                return {
-                    'delivery': {'smsSentAt': 123456789, 'smsTo': draft['customerPhone'],
-                                 'senderPhone': '01044460304', 'smsMessageId': 'M4V_TEST'},
-                    'senderPhone': '01044460304', 'messageId': 'M4V_TEST',
-                    'statusCode': '2000', 'statusMessage': '정상 접수',
+                self.state = {
+                    'smsSentAt': 0, 'smsState': 'pending', 'smsMessageId': 'M4V_TEST',
+                    'smsTo': draft['customerPhone'], 'senderPhone': '01044460304',
+                    'smsStatusCode': '2000', 'smsStatusMessage': '문자 발송을 접수했습니다.',
+                    'smsLogs': [{'at': now_ms(), 'state': 'pending', 'message': '문자 발송을 접수했습니다.',
+                                'statusCode': '2000', 'messageId': 'M4V_TEST'}]
                 }
+                return {'delivery': copy.deepcopy(self.state), 'senderPhone': '01044460304',
+                        'messageId': 'M4V_TEST', 'statusCode': '2000'}
+
+            def refresh_quote_sms_status(self, identifier):
+                self.state.update({
+                    'smsSentAt': now_ms(), 'smsState': 'success', 'smsStatusCode': '4000',
+                    'smsStatusMessage': '문자 전송에 성공했습니다.'
+                })
+                self.state['smsLogs'].append({
+                    'at': now_ms(), 'state': 'success', 'message': '문자 전송에 성공했습니다.',
+                    'statusCode': '4000', 'messageId': 'M4V_TEST'
+                })
+                return copy.deepcopy(self.state)
 
         draft = draft_for_test()
         draft.update(sourceRequestId='123e4567-e89b-12d3-a456-426614174000',
                      requestReceiptNumber='NAMU-20261011-0001', shippingFee=6000, isPrepaid=False, taxAmount=0)
-        dialog = QuoteSmsDialog(draft, FakeSmsManager())
+        manager = FakeSmsManager()
+        dialog = QuoteSmsDialog(draft, manager)
         dialog.show()
         self.app.processEvents()
         if dialog.profile_task:
             self.assertTrue(dialog.profile_task.wait(10000))
             self.app.processEvents()
         self.assertTrue(dialog.send_button.isEnabled())
+        self.assertNotIn('SOLAPI', dialog.status.text())
+
+        dialog.send_sms()
+        task = dialog.send_task
+        self.assertIsNotNone(task)
+        self.assertTrue(task.wait(10000))
+        self.app.processEvents()
+        self.assertEqual('pending', dialog.delivery_state['smsState'])
+        self.assertIn('접수', dialog.log_view.toPlainText())
 
         with patch('namufarm_desktop.workspace.QMessageBox.information') as notice:
-            dialog.send_sms()
-            task = dialog.send_task
+            dialog.check_status()
+            task = dialog.status_task
             self.assertIsNotNone(task)
             self.assertTrue(task.wait(10000))
             self.app.processEvents()
 
-        self.assertIsNone(dialog.send_task)
+        self.assertIsNone(dialog.status_task)
         self.assertEqual(QDialog.DialogCode.Accepted, dialog.result())
-        self.assertEqual(123456789, dialog.delivery_state['smsSentAt'])
+        self.assertEqual('success', dialog.delivery_state['smsState'])
+        self.assertIn('성공', dialog.log_view.toPlainText())
         notice.assert_called_once()
 
     def test_quote_email_dialog_is_message_focused_and_uses_customer_name(self):

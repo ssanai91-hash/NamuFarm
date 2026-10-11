@@ -7,6 +7,7 @@ const UUID_PATTERN = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3
 const QUOTE_RETENTION_MS = 30*86400000;
 const QUOTE_SENDER_EMAIL = 'ssanai91@gmail.com';
 const SOLAPI_ENDPOINT = 'https://api.solapi.com/messages/v4/send-many/detail';
+const SOLAPI_LIST_ENDPOINT = 'https://api.solapi.com/messages/v4/list';
 function sellerKey_() {
   const raw = PropertiesService.getScriptProperties().getProperty('SELLER_PUBLIC_KEY');
   return raw ? JSON.parse(raw) : null;
@@ -373,6 +374,31 @@ function quoteSmsProfile_() {
   return {provider:'SOLAPI',configured:settings.configured,
     senderPhone:settings.configured?settings.senderPhone:''};
 }
+function quoteSmsAuthorization_(settings) {
+  const date=new Date().toISOString();
+  const salt=Utilities.getUuid().replace(/-/g,'');
+  const signature=Utilities.computeHmacSha256Signature(date+salt,settings.apiSecret)
+    .map(b=>('0'+((b+256)%256).toString(16)).slice(-2)).join('');
+  return 'HMAC-SHA256 apiKey='+settings.apiKey+', date='+date+', salt='+salt+', signature='+signature;
+}
+function quoteSmsReason_(code) {
+  const reasons={
+    '2000':'문자 발송을 접수했습니다.',
+    '3000':'통신사 전달 후 결과를 확인하고 있습니다.',
+    '4000':'문자 전송에 성공했습니다.',
+    '1030':'문자 발송 잔액이 부족합니다.','2230':'문자 발송 잔액이 부족합니다.',
+    '1062':'등록된 발신번호를 확인해주세요.','2062':'등록된 발신번호를 확인해주세요.',
+    '3010':'수신번호 형식을 확인해주세요.','3032':'가입되지 않은 번호입니다.',
+    '3040':'전송 시간이 초과되었습니다.','3041':'수신 단말기가 사용 중입니다.',
+    '3042':'수신 단말기가 음영지역에 있습니다.','3043':'수신 단말기 전원이 꺼져 있습니다.',
+    '3044':'수신 단말기 메시지 저장공간이 부족합니다.','3045':'수신 단말기가 일시 정지 상태입니다.',
+    '3047':'수신자가 착신을 거절했습니다.','3054':'스팸 차단으로 전송되지 않았습니다.',
+    '3055':'스팸 차단으로 전송되지 않았습니다.','3056':'통신망에서 전송에 실패했습니다.',
+    '3057':'통신망에서 전송에 실패했습니다.','3058':'전송 경로를 찾지 못했습니다.',
+    '3059':'발신번호 문제로 전송되지 않았습니다.','3063':'중복 메시지로 차단되었습니다.'
+  };
+  return reasons[code] || (code ? '문자 전송에 실패했습니다.' : '문자 발송 결과를 확인하고 있습니다.');
+}
 function sendQuoteSms_(body) {
   assert_(body && typeof body==='object');
   const requestId=String(body.requestId||'');
@@ -383,14 +409,10 @@ function sendQuoteSms_(body) {
   const settings=quoteSmsSettings_();
   assert_(settings.configured,'NOT_READY');
 
-  const date=new Date().toISOString();
-  const salt=Utilities.getUuid().replace(/-/g,'');
-  const signature=Utilities.computeHmacSha256Signature(date+salt,settings.apiSecret)
-    .map(b=>('0'+((b+256)%256).toString(16)).slice(-2)).join('');
   const response=UrlFetchApp.fetch(SOLAPI_ENDPOINT,{
     method:'post',
     contentType:'application/json',
-    headers:{Authorization:'HMAC-SHA256 apiKey='+settings.apiKey+', date='+date+', salt='+salt+', signature='+signature},
+    headers:{Authorization:quoteSmsAuthorization_(settings)},
     payload:JSON.stringify({messages:[{to:recipientPhone,from:settings.senderPhone,text:message,autoTypeDetect:true}],
       showMessageList:true}),
     muteHttpExceptions:true
@@ -403,10 +425,38 @@ function sendQuoteSms_(body) {
   const list=Array.isArray(result.messageList)?result.messageList:[];
   assert_(failed.length===0 && list.length===1 && String(list[0].statusCode)==='2000','UNAVAILABLE');
   const accepted=list[0];
-  return {sent:true,provider:'SOLAPI',recipientPhone:recipientPhone,senderPhone:settings.senderPhone,
-    messageId:String(accepted.messageId||''),statusCode:String(accepted.statusCode||''),
-    statusMessage:String(accepted.statusMessage||''),groupId:result.groupInfo&&result.groupInfo.groupId?String(result.groupInfo.groupId):'',
+  return {sent:true,accepted:true,recipientPhone:recipientPhone,senderPhone:settings.senderPhone,
+    messageId:String(accepted.messageId||''),state:'pending',statusCode:'2000',
+    statusMessage:quoteSmsReason_('2000'),groupId:result.groupInfo&&result.groupInfo.groupId?String(result.groupInfo.groupId):'',
     sentAt:new Date().toISOString()};
+}
+function quoteSmsStatus_(body) {
+  assert_(body && typeof body==='object');
+  const messageId=text_(body.messageId,120,5);
+  assert_(/^M[A-Za-z0-9_-]+$/.test(messageId),'INVALID');
+  const settings=quoteSmsSettings_();
+  assert_(settings.configured,'NOT_READY');
+  const url=SOLAPI_LIST_ENDPOINT+'?criteria=messageId&cond=eq&value='+encodeURIComponent(messageId)+'&limit=1';
+  const response=UrlFetchApp.fetch(url,{
+    method:'get',
+    headers:{Authorization:quoteSmsAuthorization_(settings)},
+    muteHttpExceptions:true
+  });
+  const httpCode=response.getResponseCode();
+  let result;
+  try { result=JSON.parse(response.getContentText()); } catch (_) { fail_('UNAVAILABLE'); }
+  assert_(httpCode>=200 && httpCode<300 && result && result.messageList,'UNAVAILABLE');
+  const row=result.messageList[messageId] || Object.values(result.messageList)[0];
+  assert_(row && String(row.messageId||'')===messageId,'INVALID');
+  const code=String(row.statusCode||'');
+  const providerState=String(row.status||'');
+  const success=code==='4000';
+  const failed=providerState==='COMPLETE' && !success ||
+    /^[12]/.test(code) && code!=='2000' ||
+    /^3/.test(code) && code!=='3000';
+  const state=success?'success':failed?'failed':'pending';
+  return {checked:true,messageId:messageId,state:state,final:state!=='pending',success:success,
+    statusCode:code,statusMessage:quoteSmsReason_(code),updatedAt:new Date().toISOString()};
 }
 
 function listSales_(body) {

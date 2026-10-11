@@ -34,6 +34,9 @@ readline.createInterface({input:process.stdin}).on('line',line=>{
   else if(request.control==='submit'){f.seedEncrypted();result={requestId:f.request.requestId};}
   else if(request.control==='submit_new'){const req={...f.request,requestId:crypto.randomUUID()};f.seedEncrypted(req);result={requestId:req.requestId};}
   else if(request.control==='configure_sms'){f.properties.SOLAPI_KEY='test-api-key';f.properties.SOLAPI_SECRET='test-api-secret';f.properties.SOLAPI_FROM='01044460304';result={ok:true};}
+  else if(request.control==='sms_status_success'){f.setSmsStatus('4000','COMPLETE');result={ok:true};}
+  else if(request.control==='sms_status_fail'){f.setSmsStatus('3043','COMPLETE');result={ok:true};}
+  else if(request.control==='sms_status_pending'){f.setSmsStatus('3000','SENDING');result={ok:true};}
   else if(request.control==='fail_write'){f.failWrite();result={ok:true};}
   else if(request.control==='fail_receipt'){f.failReceipt();result={ok:true};}
   else if(request.control==='stored') {
