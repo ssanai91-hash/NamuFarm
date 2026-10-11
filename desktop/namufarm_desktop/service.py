@@ -176,7 +176,11 @@ class Manager:
 
     def email_profile(self):
         require(self.credentials.get("paired") is True, "PC를 먼저 연결해주세요.")
-        self.verify_server()
+        info = self.verify_server()
+        require(info.get("quoteEmail") is True,
+                "현재 PC가 연결된 Apps Script 웹앱은 메일 기능 이전 버전입니다. 기존 /exec 배포를 최신 코드로 새 버전 배포해주세요.")
+        require(info.get("quoteEmailSender") == "ssanai91@gmail.com",
+                "Apps Script 메일 발신 계정을 ssanai91@gmail.com으로 배포해주세요.")
         result = self.api.call("email_profile")
         email = result.get("senderEmail", "")
         require(isinstance(email, str) and "@" in email and "." in email, "메일 발신 계정을 확인하지 못했습니다.")

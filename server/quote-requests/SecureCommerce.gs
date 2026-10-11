@@ -20,6 +20,7 @@ function secureServiceInfo_() {
     processingBases:['quote_request'],requestFields:['customerEmail','formalQuoteRequested','recipientName','replyChannel'],
     encryptionReady:false,customerDataStorage:'plain',sellerKey:key,retentionDays:30,requestDeletionSync:true,
     receiptFormat:'NAMU-YYYYMMDD-NNNN',receiptTimeZone:'Asia/Seoul',connectionFile:true,requestSnapshot:true,
+    quoteEmail:true,quoteEmailSender:QUOTE_SENDER_EMAIL,
     commerceStates:['입금확인','배송완료','구매취소']};
 }
 function byteString_(value, minimum, maximum) {
@@ -326,9 +327,17 @@ function quoteRequestStatus_(id) {
   return String(record.row[9]||'신규');
 }
 function quoteEmailProfile_() {
-  const senderEmail=String(Session.getEffectiveUser().getEmail()||'').trim().toLowerCase();
-  assert_(senderEmail===QUOTE_SENDER_EMAIL,'NOT_READY');
+  // The web app already runs as USER_DEPLOYING. Avoid Session identity lookups here:
+  // Google can withhold identity in non-FULL authorization contexts even though
+  // MailApp is allowed to send as the deployment owner.
   return {senderName:'나무팜농원',senderEmail:QUOTE_SENDER_EMAIL,remainingDailyQuota:MailApp.getRemainingDailyQuota()};
+}
+function authorizeQuoteMail_() {
+  // Run this once manually in the Apps Script editor after adding script.send_mail.
+  // It intentionally sends nothing; invoking MailApp is enough to request/verify authorization.
+  const profile=quoteEmailProfile_();
+  console.log('Quote mail ready: '+profile.senderEmail+' / quota '+profile.remainingDailyQuota);
+  return profile;
 }
 function sendQuoteEmail_(body) {
   assert_(body && typeof body==='object');

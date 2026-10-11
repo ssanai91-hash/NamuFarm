@@ -50,7 +50,6 @@ function fixture({configure=true,now=Date.now(),monthly=false}={}) {
  CacheService:{getScriptCache:()=>({get:k=>cache.get(k),put(k,v){if(failCache){failCache=false;throw Error('cache failure')};cache.set(k,v)}})},
  Utilities:{DigestAlgorithm:{SHA_256:'sha256'},Charset:{UTF_8:'utf8'},computeDigest:(_,v)=>[...crypto.createHash('sha256').update(v).digest()],getUuid:()=>crypto.randomUUID(),base64Decode:v=>[...Buffer.from(v,'base64')],base64Encode:v=>Buffer.from(v.map(x=>(x+256)%256)).toString('base64')},
  ScriptApp:{getOAuthToken:()=> 'test-token',getProjectTriggers:()=>triggers.map(name=>({getHandlerFunction:()=>name})),newTrigger(name){return{timeBased(){return this},everyMinutes(){return this},create(){triggers.push(name)}}}},
- Session:{getEffectiveUser:()=>({getEmail:()=> 'ssanai91@gmail.com'})},
  MailApp:{getRemainingDailyQuota:()=>100,sendEmail:options=>mail.push(JSON.parse(JSON.stringify(options)))},
  ContentService:{MimeType:{JSON:'json'},createTextOutput:text=>({setMimeType:()=>JSON.parse(text)})},
  UrlFetchApp:{fetch(url,options){assert.equal(locked,false,'Network must not hold submission lock');const payload=JSON.parse(options.payload);sent.push(payload);if(failPush)throw Error('offline');

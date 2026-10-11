@@ -86,6 +86,8 @@ test('request status flows through 견적확정 and 견적발송완료 while rem
 test('authenticated quote email profile and send use Apps Script mail account',()=>{
   const f=fixture();f.submit();
   f.context.updateRequestStatus_({requestId:f.request.requestId,status:'견적확정'});
+  const info=f.context.secureServiceInfo_();
+  assert.equal(info.quoteEmail,true);assert.equal(info.quoteEmailSender,'ssanai91@gmail.com');
   const profile=f.context.quoteEmailProfile_();
   assert.equal(profile.senderEmail,'ssanai91@gmail.com');
   const sent=f.context.sendQuoteEmail_({
