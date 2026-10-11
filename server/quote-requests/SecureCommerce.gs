@@ -260,7 +260,7 @@ function saveSale_(body) {
         ['orderNumber','orderDate','totalQty','totalPrice','isPrepaid','shippingFee','purchasedAt','taxAmount','items'].forEach(k=>assert_(canonical_(meta[k])===canonical_(previous[k]),'CONFLICT'));
         assert_(meta.updatedAt>=previous.updatedAt,'CONFLICT');
         ['paidAt','deliveredAt','completedAt'].forEach(k=>{if(previous[k]>0)assert_(previous[k]===meta[k],'CONFLICT');});
-      }else assert_(meta.revision===1 && ['입금확인','구매취소','구매확정','주문취소'].includes(meta.status),'CONFLICT');
+      }else assert_(meta.revision===1 && ['입금확인','구매확정','주문취소'].includes(meta.status),'CONFLICT');
       const props=PropertiesService.getScriptProperties(); const seq=rows.reduce((m,r)=>Math.max(m,Number(r[1])||0),Number(props.getProperty('SALE_SEQUENCE'))||0)+1;
       assert_(Number.isSafeInteger(seq),'NOT_READY'); props.setProperty('SALE_SEQUENCE',String(seq));
       const row=[meta.orderNumber,seq,meta.status,new Date(meta.purchasedAt).toISOString(),meta.completedAt?new Date(meta.completedAt).toISOString():'',meta.totalQty,meta.totalPrice,meta.taxAmount,meta.costTotal,meta.expenseTotal,meta.costConfirmed,meta.profitMode,meta.commissionBps,profit_(meta),retentionUntil_(meta),JSON.stringify(meta),JSON.stringify(stored),digest,body.eventId,meta.revision];
@@ -279,7 +279,7 @@ function requestStatusTransitionAllowed_(from,status) {
   if(status==='견적발송완료')return from==='견적확정';
   if(status==='입금확인')return from==='견적발송완료';
   if(status==='배송완료')return from==='입금확인';
-  if(status==='구매취소')return ['신규','견적확정','견적발송완료','입금확인'].includes(from);
+  if(status==='구매취소')return from==='입금확인';
   return false;
 }
 function updateLinkedRequestStatus_(id,status) {

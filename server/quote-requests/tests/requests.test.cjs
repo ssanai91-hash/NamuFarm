@@ -81,6 +81,8 @@ test('request status flows through 견적확정 and 견적발송완료 while rem
   assert.equal(sent.updated,true);assert.equal(sent.status,'견적발송완료');
   assert.equal(f.readRequests(0).requests[0].status,'견적발송완료');
   assert.equal(f.context.requestStatusTransitionAllowed_('견적발송완료','입금확인'),true);
+  assert.equal(f.context.requestStatusTransitionAllowed_('견적발송완료','구매취소'),false);
+  assert.equal(f.context.requestStatusTransitionAllowed_('입금확인','구매취소'),true);
 });
 
 test('authenticated quote email profile and send use Apps Script mail account',()=>{
@@ -180,32 +182,4 @@ test('quote sms status reports carrier failure reason',()=>{
   const result=f.context.quoteSmsStatus_({messageId:'M4V_TEST'});
   assert.equal(result.state,'failed');assert.equal(result.final,true);assert.equal(result.success,false);
   assert.equal(result.statusMessage,'수신 단말기 전원이 꺼져 있습니다.');
-});
-
-
-test('new sale may be created directly as 구매취소 after a sent quote',()=>{
-  const f=fixture();f.submit();
-  f.context.updateRequestStatus_({requestId:f.request.requestId,status:'견적확정'});
-  f.context.updateRequestStatus_({requestId:f.request.requestId,status:'견적발송완료'});
-  const now=Date.now();
-  const meta={
-    orderNumber:'PC_TEST_CANCEL',orderDate:'2026-10-11 17:30',status:'구매취소',revision:1,
-    totalQty:1,totalPrice:10000,isPrepaid:false,shippingFee:6000,
-    purchasedAt:now,paidAt:now,deliveredAt:0,completedAt:0,updatedAt:now,
-    costTotal:0,expenseTotal:0,costConfirmed:false,profitMode:'resale',commissionBps:3000,taxAmount:0,
-    items:[{species:'감나무',quantity:1,unitPrice:10000}]
-  };
-  const order={...meta};delete order.items;
-  Object.assign(order,{orderId:null,customerName:'김나무',customerPhone:'01012345678',customerEmail:'',
-    receiverName:'김나무',zipNo:'',roadAddress:'',detailAddress:'',note:'',
-    itemSummary:'감나무|||묘목||1|10000|수기견적|0',
-    sourceRequestId:f.request.requestId,sourceQuoteNumber:'PCQ_TEST_CANCEL'});
-  const personal={order:order,quoteDocumentJson:null};
-  const digest=f.context.saleDigest_(meta,personal,true);
-  const result=f.context.saveSale_({
-    eventId:'123e4567-e89b-12d3-a456-426614174099',metadata:meta,personalData:personal,
-    fingerprint:digest,protocolVersion:5,sourceRequestId:f.request.requestId
-  });
-  assert.equal(result.saved,true);
-  assert.equal(f.readRequests(0).requests[0].status,'구매취소');
 });

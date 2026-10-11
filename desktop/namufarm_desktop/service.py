@@ -322,10 +322,9 @@ class Manager:
         self.vault.save_preference("drafts", [d for d in self.view()["drafts"] if d["id"] != identifier])
         return self.view()
 
-    def _draft_to_sale(self, draft, initial_status):
+    def confirm_draft(self, draft):
         validate_draft(draft)
-        require(initial_status in ("입금확인", "구매취소"))
-        # Read cloud state before conversion; never replay a new order under a new ID.
+        # Read cloud state before purchase confirmation; never replay a new order under a new ID.
         snapshot = self.sync()
         number = "PC_" + draft["id"]
         require(not any(r["metadata"]["orderNumber"] == number for r in snapshot["sales"]),
@@ -341,7 +340,6 @@ class Manager:
 
         self.save_draft(draft)
         order = order_from_draft(draft)
-        order["status"] = initial_status
         private = {"order": order, "quoteDocumentJson": canonical(quote_document(draft))}
         meta, event_id = metadata(order), str(uuid.uuid4())
         payload = {"eventId": event_id, "metadata": meta, "personalData": private,
@@ -350,12 +348,6 @@ class Manager:
         self.vault.queue({"id": event_id, "action": "save_sale", "payload": payload},
                          {**payload, "sequence": 0, "expired": False})
         return self.sync()
-
-    def confirm_draft(self, draft):
-        return self._draft_to_sale(draft, "입금확인")
-
-    def cancel_draft_purchase(self, draft):
-        return self._draft_to_sale(draft, "구매취소")
 
     def register_tracking(self, number, expected_revision, tracking):
         value = normalize_tracking(tracking)

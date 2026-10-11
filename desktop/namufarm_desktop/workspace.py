@@ -2010,8 +2010,8 @@ class QuoteDeliveryDialog(QDialog):
         # ─────────────────────────────
         if self.request_status == "견적발송완료":
             notice_text = (
-                "견적 전달이 완료된 건입니다. 실제 입금을 확인하면 입금확인을 눌러 "
-                "판매 · 고객 관리로 이동하세요. 고객이 구매하지 않으면 구매 취소로 기록할 수 있습니다."
+                "견적 전달이 완료된 건입니다. 실제 고객 입금을 확인하면 입금확인을 눌러 "
+                "판매 · 고객 관리로 이동하세요. 입금 전에는 견적 작업대에 그대로 유지됩니다."
             )
         elif self.draft.get("formalQuoteRequested"):
             notice_text = (
@@ -2076,15 +2076,6 @@ class QuoteDeliveryDialog(QDialog):
             and self.request_status == "견적확정"
         )
 
-        self.cancel_purchase_button = QPushButton("구매 취소")
-        self.cancel_purchase_button.setObjectName("danger")
-        self.cancel_purchase_button.clicked.connect(self.cancel_purchase)
-        self.cancel_purchase_button.setVisible(self.request_status == "견적발송완료")
-        self.cancel_purchase_button.setEnabled(
-            bool(self.draft.get("sourceRequestId"))
-            and self.request_status == "견적발송완료"
-        )
-
         self.payment_button = QPushButton("입금확인")
         self.payment_button.setObjectName("sentAction")
         self.payment_button.clicked.connect(self.confirm_payment)
@@ -2102,7 +2093,6 @@ class QuoteDeliveryDialog(QDialog):
 
         actions.addStretch()
 
-        actions.addWidget(self.cancel_purchase_button)
         actions.addWidget(close_button)
         actions.addWidget(self.sent_button)
         actions.addWidget(self.payment_button)
@@ -2338,26 +2328,6 @@ class QuoteDeliveryDialog(QDialog):
         if answer != QMessageBox.StandardButton.Yes:
             return
         self.mode = "paid"
-        self.cleanup_generated_quote()
-        self.accept()
-
-    def cancel_purchase(self):
-        if self.request_status != "견적발송완료" or not self.persist_shipping():
-            return
-        answer = QMessageBox.question(
-            self,
-            "구매 취소",
-            (
-                "고객이 구매하지 않기로 확정했나요?\n\n"
-                "확인하면 이 견적은 구매취소 상태로 판매 · 고객 관리에 이동하며, "
-                "목록에서 이력으로 계속 유지됩니다."
-            ),
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No,
-        )
-        if answer != QMessageBox.StandardButton.Yes:
-            return
-        self.mode = "cancel"
         self.cleanup_generated_quote()
         self.accept()
 
@@ -2899,7 +2869,7 @@ class SellerWindow(MainWindow):
         page = QWidget()
         layout = QVBoxLayout(page)
         layout.addWidget(label("확정된 견적을 고객에게 전달하고 후속 작업을 관리하세요.", "sectionTitle"))
-        layout.addWidget(label("견적확정 → 고객 전달 → 견적발송완료까지 이 작업대에서 관리합니다. 이후 실제 입금을 확인하면 입금확인으로 판매 · 고객 관리에 이동하고, 구매하지 않으면 구매취소로 이동합니다.", "muted", True))
+        layout.addWidget(label("견적확정 → 고객 전달 → 견적발송완료까지 이 작업대에서 관리합니다. 이후 실제 입금을 확인하면 입금확인으로 판매 · 고객 관리에 이동합니다.", "muted", True))
         self.draft_table = table(["견적번호", "상태", "작성일", "고객명", "연락처", "메일", "공식견적서", "품목", "판매금액"])
         self.draft_sort_descending = False
         header = self.draft_table.horizontalHeader()
@@ -3412,22 +3382,10 @@ class SellerWindow(MainWindow):
                 lambda: self.manager.confirm_draft(delivery_draft),
                 self.quote_confirmed,
             )
-        elif dialog.mode == "cancel":
-            self.run_job(
-                "구매취소 이력을 운영 시트에 저장 중…",
-                lambda: self.manager.cancel_draft_purchase(delivery_draft),
-                self.quote_cancelled,
-            )
-
     def quote_sent(self, value):
         self.apply_view(value)
         self.message.setText("견적발송완료로 저장했습니다. 고객 회신과 입금 여부를 확인하세요.")
         self.navigate(2)
-
-    def quote_cancelled(self, value):
-        self.apply_view(value)
-        self.message.setText("구매취소로 기록했습니다. 판매 · 고객 관리 목록에서 이력을 확인할 수 있습니다.")
-        self.navigate(3)
 
     def remove_draft(self):
         index = self.draft_table.currentRow()
