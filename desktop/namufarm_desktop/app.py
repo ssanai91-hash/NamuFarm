@@ -714,7 +714,9 @@ def main():
     app.setStyleSheet("QPushButton {padding:7px 12px;} QLineEdit,QComboBox,QDateEdit {padding:5px;} QTabBar::tab {padding:10px 20px;} QGroupBox {font-weight:600;}")
     from .workspace import SellerWindow
     window = SellerWindow()
-    window.showMaximized()
+    # SellerWindow already uses a 1920x1080 (FHD) default size. Open it as a normal window
+    # instead of forcing it to the monitor's maximum size.
+    window.show()
     if "--self-check" in sys.argv:
         app.processEvents()
         require(window.stack.count() == 7, "PC 화면 초기화에 실패했습니다.")
