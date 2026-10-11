@@ -559,9 +559,6 @@ class SellerWindow(MainWindow):
             self.nav.append(widget)
             side.addWidget(widget)
         side.addStretch()
-        side.addWidget(label("  나무를 파는 일에\n  더 집중할 수 있도록.", "navFoot"))
-        side.addSpacing(16)
-        side.addWidget(self.lock_button)
         outer.addWidget(sidebar)
         content = QWidget()
         content_layout = QVBoxLayout(content)
@@ -785,7 +782,7 @@ class SellerWindow(MainWindow):
         if getattr(self, "demo_mode", False):
             for widget in (self.sync_button, self.inbox_sync_button, self.new_quote_button, self.request_quote_button,
                            self.draft_open, self.draft_delete, self.export_button, self.import_button, self.print_button,
-                           self.tracking_save, self.open_button, self.pair_button, self.report_button, self.lock_button,
+                           self.tracking_save, self.open_button, self.pair_button, self.report_button,
                            self.connection_file_button, self.copy_button):
                 widget.setEnabled(False)
 
@@ -1055,13 +1052,6 @@ class SellerWindow(MainWindow):
         if self.selected_sale and self.selected_sale["private"].get("quoteDocumentJson") and not self.data["pending"]:
             doc = json.loads(self.selected_sale["private"]["quoteDocumentJson"])
             print_document(self, quote_document_html(doc), "나무팜_" + doc["number"])
-
-    def lock(self):
-        super().lock()
-        if self.manager is None and self.workspace_ready:
-            self.global_search.clear()
-            self.shipping_search.clear()
-            self.navigate(6)
 
     def accept_manager(self, result):
         super().accept_manager(result)
