@@ -361,6 +361,12 @@ class Manager:
         require(self.credentials.get("paired") is True, "PC를 먼저 연결해주세요.")
         snapshot = self.view()
         number = "PC_" + draft["id"]
+        require(not any(
+            h["operation"]["payload"]["metadata"]["orderNumber"] == number
+            or (draft["sourceRequestId"]
+                and h["operation"]["payload"].get("sourceRequestId") == draft["sourceRequestId"])
+            for h in self.vault.held_payments()),
+            "이미 입금확인 후 등록 보류된 견적입니다. 연결 · 설정의 보류 목록에서 확인해주세요.")
         require(not any(r["metadata"]["orderNumber"] == number for r in snapshot["sales"]),
                 "이미 판매 · 고객 관리로 이동한 견적입니다.")
         source = draft["sourceRequestId"]

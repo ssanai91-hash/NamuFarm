@@ -156,6 +156,8 @@ class AnnualLedgerFlowTest(unittest.TestCase):
         self.assertNotIn(draft['customerName'].encode('utf-8'), self.manager.vault.path.read_bytes())
         restarted = Manager(self.manager.vault, self.manager.api)
         self.assertEqual(original, restarted.view()['heldPayments'][0]['operation'])
+        with self.assertRaises(UserError):
+            restarted.confirm_draft(draft)  # Held payment cannot be paid a second time.
         saved = restarted.retry_held_payment(original['id'])
         self.assertEqual([], saved['heldPayments'])
         self.assertEqual([], saved['pending'])

@@ -139,6 +139,7 @@ class ShippingDialogTest(QtTestCase):
         view = {"requests": [], "sales": rows, "drafts": [], "pending": [], "paired": True}
         window = SellerWindow()
         window.manager = Mock()
+        window.manager.request_notification_state.return_value = {"seenSequence": 0, "notifiedSequence": 0}
         window.manager.shipping_export_preferences.return_value = {"sender": SENDER, "history": {}}
         def accept(dialog):
             dialog.common_freight.setValue(4500)

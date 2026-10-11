@@ -461,6 +461,8 @@ class SellerUiTest(QtTestCase):
 
         window = SellerWindow()
         show_demo(window)
+        window.show()
+        self.app.processEvents()
         window.demo_mode = False
         window.manager = FakeNotificationManager()
         window.data['paired'] = True
