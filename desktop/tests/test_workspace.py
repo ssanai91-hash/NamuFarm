@@ -421,7 +421,7 @@ class SellerUiTest(QtTestCase):
         self.assertIsNone(dialog.generated_quote_image)
         dialog.generate_official_quote()
         self.assertIsNotNone(dialog.generated_quote_image)
-        self.assertEqual((954, 1349), (dialog.generated_quote_image.width(), dialog.generated_quote_image.height()))
+        self.assertEqual((955, 1342), (dialog.generated_quote_image.width(), dialog.generated_quote_image.height()))
         self.assertTrue(dialog.preview_quote_button.isEnabled())
         self.assertEqual('공식견적서 재생성', dialog.generate_quote_button.text())
         dialog.shipping_prepaid.click()
@@ -435,9 +435,16 @@ class SellerUiTest(QtTestCase):
         draft.update(requestReceiptNumber='NAMU-20261011-0003', taxAmount=0,
                      shippingFee=6000, isPrepaid=False)
         image = render_official_quote_image(draft)
-        self.assertEqual(954, image.width())
-        self.assertEqual(1349, image.height())
+        self.assertEqual(955, image.width())
+        self.assertEqual(1342, image.height())
         self.assertFalse(image.isNull())
+        red_pixels = 0
+        for y in range(86, 136, 4):
+            for x in range(858, 912, 4):
+                color = image.pixelColor(x, y)
+                if color.red() > color.green() + 20 and color.red() > color.blue() + 20:
+                    red_pixels += 1
+        self.assertGreater(red_pixels, 3)
 
     def test_delivery_dialog_expands_item_area_for_multiple_rows(self):
         draft = draft_for_test()

@@ -16,3 +16,6 @@ namufarm-desktop = "namufarm_desktop.app:main"
 where = ["."]
 include = ["namufarm_desktop*"]
 
+
+[tool.setuptools.package-data]
+namufarm_desktop = ["assets/*.png"]
