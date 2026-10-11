@@ -180,7 +180,7 @@ internal fun WebRequestCustomerActions(request: WebQuoteRequestEntity, customerP
     }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Outlined.Description, null); Spacer(Modifier.width(8.dp)); Text("수동 견적 작성") }
     if (request.status == "신규") {
         OutlinedButton(onClick = { onConfirm(request.requestId) }, modifier = Modifier.fillMaxWidth()) {
-            Icon(Icons.Outlined.CheckCircle, null); Spacer(Modifier.width(8.dp)); Text("견적확정로 표시")
+            Icon(Icons.Outlined.CheckCircle, null); Spacer(Modifier.width(8.dp)); Text("견적확정으로 표시")
         }
     }
     OutlinedButton(onClick = {

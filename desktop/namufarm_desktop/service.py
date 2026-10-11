@@ -166,7 +166,7 @@ class Manager:
         if source:
             request = next((r for r in snapshot["requests"] if r["requestId"] == source), None)
             require(request is not None, "접수된 문의가 삭제·만료되었습니다.")
-            require(request.get("status", "신규") == "견적확정", "먼저 견적확정로 처리해주세요.")
+            require(request.get("status", "신규") == "견적확정", "먼저 견적확정으로 처리해주세요.")
             require(not any(r["private"]["order"].get("sourceRequestId") == source for r in snapshot["sales"]), "이미 판매로 등록된 문의입니다.")
         self.save_draft(draft)
         order = order_from_draft(draft)
