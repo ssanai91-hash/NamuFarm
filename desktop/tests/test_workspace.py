@@ -216,6 +216,11 @@ class SellerUiTest(QtTestCase):
         self.assertFalse(window.sync_button.isEnabled())
         self.assertFalse(window.connection_file_button.isEnabled())
         self.assertFalse(window.copy_button.isEnabled())
+        self.assertFalse(hasattr(window, 'inbox_sync_button'))
+        self.assertEqual('견적요청 삭제', window.delete_button.text())
+        self.assertEqual('견적 작성', window.request_quote_button.text())
+        self.assertGreaterEqual(window.request_actions.indexOf(window.delete_button), 0)
+        self.assertGreaterEqual(window.request_actions.indexOf(window.request_quote_button), 0)
         self.assertEqual(3, len(window.shipping_rows))
         for index in range(7):
             window.navigate(index)

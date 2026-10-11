@@ -297,7 +297,6 @@ class MainWindow(QMainWindow):
         paired = ready and self.data["paired"]
         self.tabs.setEnabled(self.task is None)
         self.sync_button.setEnabled(paired)
-        self.inbox_sync_button.setEnabled(paired)
         self.open_button.setEnabled(self.manager is None and self.task is None)
         self.legacy_button.setEnabled(ready and self.data["paired"])
         self.connection_file_button.setEnabled(ready)
@@ -338,12 +337,6 @@ class MainWindow(QMainWindow):
         self.refresh_sales()
         self.update_controls()
 
-    def apply_inbox(self, value):
-        # An inbox refresh must keep the seller's unsaved sale editor intact.
-        self.data.update(requests=value["requests"], pending=value["pending"], paired=value["paired"])
-        self.refresh_requests()
-        self.update_controls()
-
     def build_requests(self):
         page = QWidget()
         layout = QVBoxLayout(page)
@@ -364,16 +357,13 @@ class MainWindow(QMainWindow):
         self.request_table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
         self.request_table.itemSelectionChanged.connect(self.update_controls)
         layout.addWidget(self.request_table)
-        row = QHBoxLayout()
-        row.addWidget(QLabel("접수번호는 홈페이지·휴대폰과 동일합니다. 수동 견적·문자·PDF 발송은 휴대폰에서 처리합니다."))
-        row.addStretch()
-        self.delete_button = QPushButton("선택 문의 삭제")
+        self.request_actions = QHBoxLayout()
+        self.request_actions.addWidget(QLabel("접수번호는 홈페이지·휴대폰과 동일합니다. 수동 견적·문자·PDF 발송은 휴대폰에서 처리합니다."))
+        self.request_actions.addStretch()
+        self.delete_button = QPushButton("견적요청 삭제")
         self.delete_button.clicked.connect(self.delete_request)
-        self.inbox_sync_button = QPushButton("새 요청 가져오기")
-        self.inbox_sync_button.clicked.connect(lambda: self.run_job("온라인 견적 요청 가져오는 중…", self.manager.sync_requests, self.apply_inbox))
-        row.addWidget(self.inbox_sync_button)
-        row.addWidget(self.delete_button)
-        layout.addLayout(row)
+        self.request_actions.addWidget(self.delete_button)
+        layout.addLayout(self.request_actions)
         self.tabs.addTab(page, "온라인 견적 요청함")
 
     def refresh_requests(self):

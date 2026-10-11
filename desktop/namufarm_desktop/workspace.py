@@ -596,9 +596,9 @@ class SellerWindow(MainWindow):
         content_layout.addWidget(self.summary)
         outer.addWidget(content, 1)
         old_root.deleteLater()
-        self.request_quote_button = button("선택 요청으로 견적 작성", self.quote_request, True)
+        self.request_quote_button = button("견적 작성", self.quote_request, True)
         self.request_table.itemDoubleClicked.connect(self.quote_request)
-        old_pages[0].layout().addWidget(self.request_quote_button, 0, Qt.AlignmentFlag.AlignRight)
+        self.request_actions.addWidget(self.request_quote_button)
         for item in old_pages[0].findChildren(QLabel):
             if "수동 견적" in item.text():
                 item.setText("요청을 더블클릭해 견적을 작성하세요. 견적완료 후 입금확인으로 판매 등록합니다.")
@@ -780,7 +780,7 @@ class SellerWindow(MainWindow):
         self.shipping_edit.setEnabled(ready)
         self.quote_print_button.setEnabled(ready and not self.data["pending"] and self.selected_sale is not None and bool(self.selected_sale["private"].get("quoteDocumentJson")))
         if getattr(self, "demo_mode", False):
-            for widget in (self.sync_button, self.inbox_sync_button, self.new_quote_button, self.request_quote_button,
+            for widget in (self.sync_button, self.new_quote_button, self.request_quote_button,
                            self.draft_open, self.draft_delete, self.export_button, self.import_button, self.print_button,
                            self.tracking_save, self.open_button, self.pair_button, self.report_button,
                            self.connection_file_button, self.copy_button):
@@ -788,12 +788,6 @@ class SellerWindow(MainWindow):
 
     def apply_view(self, value):
         super().apply_view(value)
-        if self.workspace_ready:
-            self.refresh_workspace()
-
-    def apply_inbox(self, value):
-        super().apply_inbox(value)
-        self.data["drafts"] = value.get("drafts", [])
         if self.workspace_ready:
             self.refresh_workspace()
 
