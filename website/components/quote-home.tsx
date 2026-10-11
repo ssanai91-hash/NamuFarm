@@ -248,7 +248,13 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
     <main id="home">
       <section className="hero" aria-labelledby="hero-title">
         <img src="/nursery-hero.webp" alt="햇살 아래 자라는 어린 묘목" width="1672" height="940" fetchPriority="high" className="hero-image" /><div className="hero-shade" />
-        <div className="hero-inner"><span className="eyebrow">충북 옥천에서, 나무팜</span><h1 id="hero-title">심고 싶은 나무,<br />견적부터 <em>편하게.</em></h1><p>필요한 묘목을 고르면,<br />재고와 규격부터 배송까지 함께 확인해요.</p><div className="hero-actions"><Button asChild className="hero-cta"><a href="#trees"><Sprout />묘목 찾아보기</a></Button><a className="hero-direct" href="#quote">견적 바로 작성</a></div><span className="hero-note">결제 없이 상담부터 시작하세요.</span></div>
+        <div className="hero-inner">
+          <span className="eyebrow">충북 옥천 · 묘목 견적 상담</span>
+          <h1 id="hero-title">심고 싶은 나무,<br />견적부터 <em>편하게.</em></h1>
+          <p>원하는 묘목을 고르고 수량을 알려주세요.<br />규격과 배송은 상담을 통해 안내해 드립니다.</p>
+          <div className="hero-actions"><Button asChild className="hero-cta"><a href="#trees"><Sprout />묘목 찾아보기</a></Button><a className="hero-direct" href="#quote">견적 바로 작성 →</a></div>
+          <div className="hero-highlights" aria-label="견적 상담 특징"><span>회원가입 없이 요청</span><span>규격 상담 가능</span><span>결제는 상담 후 결정</span></div>
+        </div>
       </section>
       <div className="journey-strip wrap" aria-label="견적 상담 순서"><span><b>1</b>묘목 고르기</span><span><b>2</b>수량·연락처 입력</span><span><b>3</b>상담 후 결정</span></div>
       <SpeciesBrowser lines={lines} onSelect={selectSpecies} onRemove={removeLine} notice={notice} locked={locked} />
