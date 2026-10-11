@@ -63,6 +63,191 @@ QScrollBar::add-page:vertical,QScrollBar::sub-page:vertical{background:transpare
 QCheckBox{spacing:8px;} QCheckBox::indicator{width:16px;height:16px;}
 QTextBrowser{background:#fff;border:1px solid #dfe7df;padding:16px;}
 QToolTip{background:#153e33;color:#fff;border:0;padding:8px;}
+QDialog#quoteDeliveryDialog{
+    background:#f4f7f3;
+}
+
+QLabel#deliveryTitle{
+    font-size:28px;
+    font-weight:800;
+    color:#173f2f;
+}
+
+QLabel#deliverySubtitle{
+    color:#6f8175;
+    font-size:13px;
+}
+
+QLabel#quoteStatusBadge{
+    background:#dcebdc;
+    color:#23593a;
+    border:1px solid #bdd2bd;
+    border-radius:14px;
+    padding:6px 14px;
+    font-weight:700;
+}
+
+QFrame#deliveryInfoCard{
+    background:#ffffff;
+    border:1px solid #d9e4da;
+    border-radius:12px;
+}
+
+QLabel#infoCaption{
+    color:#7b8b80;
+    font-size:11px;
+    font-weight:600;
+}
+
+QLabel#infoValue{
+    color:#183d2d;
+    font-size:14px;
+    font-weight:700;
+}
+
+QFrame#quoteItemsCard{
+    background:#ffffff;
+    border:1px solid #cbdcca;
+    border-radius:12px;
+}
+
+QLabel#quoteItemsTitle{
+    color:#173f2f;
+    font-size:20px;
+    font-weight:800;
+}
+
+QLabel#quoteItemsHint{
+    color:#77877d;
+    font-size:12px;
+}
+
+QTableWidget#deliveryItems{
+    background:#ffffff;
+    alternate-background-color:#f7faf6;
+    border:1px solid #ceddce;
+    border-radius:8px;
+    gridline-color:#d4e1d4;
+    selection-background-color:#e0eddf;
+    selection-color:#173f2f;
+}
+
+QTableWidget#deliveryItems::item{
+    padding:12px 10px;
+    border-right:1px solid #dde7dd;
+    border-bottom:1px solid #dde7dd;
+    font-size:14px;
+}
+
+QTableWidget#deliveryItems QHeaderView::section{
+    background:#2f6842;
+    color:#ffffff;
+    border:0;
+    border-right:1px solid #5c8265;
+    padding:11px 10px;
+    font-weight:800;
+}
+
+QFrame#quoteTotalBand{
+    background:#e3eee0;
+    border:1px solid #c4d8c1;
+    border-radius:10px;
+}
+
+QLabel#quoteTotalCaption{
+    color:#42644e;
+    font-size:14px;
+    font-weight:700;
+}
+
+QLabel#quoteTotalValue{
+    color:#174c31;
+    font-size:30px;
+    font-weight:900;
+}
+
+QFrame#requestNoteCard{
+    background:#ffffff;
+    border:1px solid #dbe5db;
+    border-radius:10px;
+}
+
+QLabel#deliveryNotice{
+    background:#eaf2e7;
+    color:#49654f;
+    border:1px solid #d6e4d3;
+    border-radius:8px;
+    padding:11px 13px;
+}
+
+QPushButton#smsAction{
+    background:#3e7a50;
+    color:#ffffff;
+    border:1px solid #3e7a50;
+    border-radius:8px;
+    padding:11px 20px;
+    font-weight:700;
+}
+
+QPushButton#smsAction:hover{
+    background:#316640;
+    border-color:#316640;
+}
+
+QPushButton#mailAction{
+    background:#416f9d;
+    color:#ffffff;
+    border:1px solid #416f9d;
+    border-radius:8px;
+    padding:11px 20px;
+    font-weight:700;
+}
+
+QPushButton#mailAction:hover{
+    background:#345d86;
+    border-color:#345d86;
+}
+
+QPushButton#pdfAction{
+    background:#ffffff;
+    color:#3c5546;
+    border:1px solid #9caf9f;
+    border-radius:8px;
+    padding:11px 20px;
+    font-weight:700;
+}
+
+QPushButton#pdfAction:hover{
+    background:#edf3eb;
+}
+
+QPushButton#closeAction{
+    background:#ffffff;
+    color:#657269;
+    border:1px solid #ccd5cd;
+    border-radius:8px;
+    padding:11px 20px;
+}
+
+QPushButton#sentAction{
+    background:#185d3c;
+    color:#ffffff;
+    border:1px solid #185d3c;
+    border-radius:8px;
+    padding:12px 24px;
+    font-weight:800;
+}
+
+QPushButton#sentAction:hover{
+    background:#104a2f;
+    border-color:#104a2f;
+}
+
+QPushButton#sentAction:disabled{
+    background:#a9baad;
+    color:#edf2ed;
+    border-color:#a9baad;
+}
 """
 
 
@@ -474,129 +659,452 @@ class QuoteDialog(QDialog):
 
 
 class QuoteDeliveryDialog(QDialog):
-    """Confirmed quote handoff. Editing remains in QuoteDialog; this window is for delivery."""
+    """확정된 견적의 고객 전달만 담당하는 전용 팝업."""
 
     def __init__(self, draft, request_status, parent=None):
         super().__init__(parent)
+
         self.draft = copy.deepcopy(draft)
-        self.request_status = request_status or ("수기견적" if not draft.get("sourceRequestId") else "상태확인")
+        self.request_status = (
+            request_status
+            or ("수기견적" if not draft.get("sourceRequestId") else "상태확인")
+        )
         self.mode = ""
+
+        self.setObjectName("quoteDeliveryDialog")
         self.setWindowTitle("견적 전달")
-        self.resize(1040, 760)
+        self.resize(1120, 820)
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(24, 20, 24, 20)
-        layout.setSpacing(14)
+        layout.setContentsMargins(28, 24, 28, 24)
+        layout.setSpacing(16)
 
+        # ─────────────────────────────
+        # Header
+        # ─────────────────────────────
         head = QHBoxLayout()
-        head.addWidget(label("견적 전달", "pageTitle"))
+        head.setSpacing(12)
+
+        title_box = QVBoxLayout()
+        title_box.setSpacing(3)
+
+        title = QLabel("견적 전달")
+        title.setObjectName("deliveryTitle")
+
+        subtitle = QLabel(
+            "확정된 견적을 확인하고 문자·메일·견적서로 고객에게 전달합니다."
+        )
+        subtitle.setObjectName("deliverySubtitle")
+
+        title_box.addWidget(title)
+        title_box.addWidget(subtitle)
+
+        head.addLayout(title_box)
         head.addStretch()
-        head.addWidget(label(self.request_status, "muted"))
+
+        status = QLabel(self.request_status)
+        status.setObjectName("quoteStatusBadge")
+        status.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        head.addWidget(status)
         layout.addLayout(head)
-        layout.addWidget(label("확정한 견적을 문자·메일·견적서로 고객에게 전달합니다. 실제 전송을 마친 뒤 견적발송완료로 변경하세요.", "muted", True))
 
-        info = QGroupBox("고객 · 견적 정보")
-        form = QFormLayout(info)
-        number = self.quote_number()
-        channel = {"sms": "문자", "email": "이메일", "both": "문자 + 이메일"}.get(draft.get("quoteReplyChannel", "sms"), "문자")
-        for title, value in (
-            ("견적번호", number),
-            ("고객명", draft.get("customerName", "")),
-            ("연락처", draft.get("customerPhone", "")),
-            ("메일", draft.get("customerEmail", "") or "미입력"),
-            ("공식견적서", "요청" if draft.get("formalQuoteRequested") else "미요청"),
+        # ─────────────────────────────
+        # Customer / quote summary
+        # ─────────────────────────────
+        info_card = QFrame()
+        info_card.setObjectName("deliveryInfoCard")
+
+        info = QGridLayout(info_card)
+        info.setContentsMargins(20, 16, 20, 16)
+        info.setHorizontalSpacing(28)
+        info.setVerticalSpacing(9)
+
+        channel = {
+            "sms": "문자",
+            "email": "이메일",
+            "both": "문자 + 이메일",
+        }.get(
+            self.draft.get("quoteReplyChannel", "sms"),
+            "문자",
+        )
+
+        summary = (
+            ("견적번호", self.quote_number()),
+            ("고객명", self.draft.get("customerName", "")),
+            ("연락처", self.draft.get("customerPhone", "")),
+            ("메일", self.draft.get("customerEmail") or "미입력"),
+            (
+                "공식견적서",
+                "요청"
+                if self.draft.get("formalQuoteRequested")
+                else "미요청",
+            ),
             ("수신방법", channel),
-        ):
-            field = QLineEdit(str(value))
-            field.setReadOnly(True)
-            form.addRow(title, field)
-        layout.addWidget(info)
+        )
 
-        self.items = table(["묘목명", "수량", "판매 단가", "판매 금액"])
+        for index, (caption, value) in enumerate(summary):
+            column = (index % 3) * 2
+            row = index // 3
+
+            caption_label = QLabel(caption)
+            caption_label.setObjectName("infoCaption")
+
+            value_label = QLabel(str(value))
+            value_label.setObjectName("infoValue")
+            value_label.setTextInteractionFlags(
+                Qt.TextInteractionFlag.TextSelectableByMouse
+            )
+
+            info.addWidget(caption_label, row, column)
+            info.addWidget(value_label, row, column + 1)
+
+        info.setColumnStretch(1, 1)
+        info.setColumnStretch(3, 1)
+        info.setColumnStretch(5, 2)
+
+        layout.addWidget(info_card)
+
+        # ─────────────────────────────
+        # Quote items — main area
+        # ─────────────────────────────
+        items_card = QFrame()
+        items_card.setObjectName("quoteItemsCard")
+
+        items_layout = QVBoxLayout(items_card)
+        items_layout.setContentsMargins(18, 16, 18, 18)
+        items_layout.setSpacing(10)
+
+        items_head = QHBoxLayout()
+
+        items_title_box = QVBoxLayout()
+        items_title_box.setSpacing(2)
+
+        items_title = QLabel("견적 품목")
+        items_title.setObjectName("quoteItemsTitle")
+
+        items_hint = QLabel(
+            "고객에게 전달할 묘목 · 수량 · 판매단가를 최종 확인하세요."
+        )
+        items_hint.setObjectName("quoteItemsHint")
+
+        items_title_box.addWidget(items_title)
+        items_title_box.addWidget(items_hint)
+
+        items_head.addLayout(items_title_box)
+        items_head.addStretch()
+
+        count = sum(
+            int(item.get("quantity", 0))
+            for item in self.draft.get("items", [])
+        )
+
+        count_label = QLabel(
+            f"{len(self.draft.get('items', []))}개 품목 · 총 {count:,}주"
+        )
+        count_label.setObjectName("quoteItemsHint")
+        items_head.addWidget(count_label)
+
+        items_layout.addLayout(items_head)
+
+        self.items = table(
+            ["묘목명", "수량", "판매 단가", "판매 금액"]
+        )
+        self.items.setObjectName("deliveryItems")
+        self.items.setAlternatingRowColors(True)
+        self.items.setShowGrid(True)
+        self.items.setMinimumHeight(240)
+        self.items.verticalHeader().setDefaultSectionSize(54)
+
+        header = self.items.horizontalHeader()
+        header.setStretchLastSection(False)
+        header.setSectionResizeMode(
+            0,
+            QHeaderView.ResizeMode.Stretch,
+        )
+        header.setSectionResizeMode(
+            1,
+            QHeaderView.ResizeMode.Fixed,
+        )
+        header.setSectionResizeMode(
+            2,
+            QHeaderView.ResizeMode.Fixed,
+        )
+        header.setSectionResizeMode(
+            3,
+            QHeaderView.ResizeMode.Fixed,
+        )
+
+        self.items.setColumnWidth(1, 130)
+        self.items.setColumnWidth(2, 170)
+        self.items.setColumnWidth(3, 180)
+
         rows = []
-        for item in draft.get("items", []):
-            rows.append((item["species"], f"{item['quantity']:,}주", f"{item['unitPrice']:,}원",
-                         f"{item['quantity'] * item['unitPrice']:,}원"))
+
+        for item in self.draft.get("items", []):
+            quantity = int(item["quantity"])
+            unit_price = int(item["unitPrice"])
+            amount = quantity * unit_price
+
+            rows.append(
+                (
+                    item["species"],
+                    f"{quantity:,}주",
+                    f"{unit_price:,}원",
+                    f"{amount:,}원",
+                )
+            )
+
         fill_table(self.items, rows)
-        self.items.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         center_table_columns(self.items, (1, 2, 3))
-        layout.addWidget(self.items, 1)
 
-        amounts = draft_amounts(draft)
-        layout.addWidget(label(f"판매금액  {amounts['total']:,}원", "metricValue"))
-        if draft.get("note"):
-            note = QPlainTextEdit(draft.get("note", ""))
-            note.setReadOnly(True)
-            note.setMaximumHeight(90)
-            layout.addWidget(label("요청사항", "sectionTitle"))
-            layout.addWidget(note)
+        # 묘목명은 왼쪽 정렬 + 약간 강조
+        for row in range(self.items.rowCount()):
+            cell = self.items.item(row, 0)
+            if cell:
+                font = cell.font()
+                font.setBold(True)
+                cell.setFont(font)
+                cell.setTextAlignment(
+                    Qt.AlignmentFlag.AlignLeft
+                    | Qt.AlignmentFlag.AlignVCenter
+                )
 
-        if draft.get("formalQuoteRequested"):
-            layout.addWidget(label("공식 견적서 요청 건입니다. 현재 PC 메일 작성은 받는 사람·제목·본문을 채워 엽니다. PDF는 아래 버튼에서 확인·출력한 뒤 메일에 첨부하세요.", "notice", True))
+        items_layout.addWidget(self.items)
+
+        # Total amount band
+        total_band = QFrame()
+        total_band.setObjectName("quoteTotalBand")
+
+        total_layout = QHBoxLayout(total_band)
+        total_layout.setContentsMargins(20, 12, 20, 12)
+
+        total_caption = QLabel("총 판매금액")
+        total_caption.setObjectName("quoteTotalCaption")
+
+        amounts = draft_amounts(self.draft)
+
+        total_value = QLabel(
+            f"{amounts['total']:,}원"
+        )
+        total_value.setObjectName("quoteTotalValue")
+
+        total_layout.addWidget(total_caption)
+        total_layout.addStretch()
+        total_layout.addWidget(total_value)
+
+        items_layout.addWidget(total_band)
+
+        layout.addWidget(items_card, 1)
+
+        # ─────────────────────────────
+        # Customer request note
+        # ─────────────────────────────
+        if self.draft.get("note"):
+            note_card = QFrame()
+            note_card.setObjectName("requestNoteCard")
+
+            note_layout = QVBoxLayout(note_card)
+            note_layout.setContentsMargins(16, 12, 16, 14)
+            note_layout.setSpacing(7)
+
+            note_title = QLabel("요청사항")
+            note_title.setObjectName("sectionTitle")
+
+            note_text = QLabel(self.draft.get("note", ""))
+            note_text.setWordWrap(True)
+            note_text.setTextInteractionFlags(
+                Qt.TextInteractionFlag.TextSelectableByMouse
+            )
+
+            note_layout.addWidget(note_title)
+            note_layout.addWidget(note_text)
+
+            layout.addWidget(note_card)
+
+        # ─────────────────────────────
+        # Delivery notice
+        # ─────────────────────────────
+        if self.draft.get("formalQuoteRequested"):
+            notice_text = (
+                "공식 견적서 요청 건입니다. "
+                "PDF / 출력에서 견적서를 확인한 뒤 문자 또는 메일로 전달하세요. "
+                "실제 발송이 끝난 후 견적발송완료를 눌러주세요."
+            )
         else:
-            layout.addWidget(label("문자·메일 앱에서 실제 전송이 끝난 뒤에만 견적발송완료를 눌러주세요.", "notice", True))
+            notice_text = (
+                "문자 또는 메일 앱을 여는 것만으로는 발송완료 처리되지 않습니다. "
+                "고객에게 실제 전송을 마친 뒤 견적발송완료를 눌러주세요."
+            )
 
+        notice = QLabel(notice_text)
+        notice.setObjectName("deliveryNotice")
+        notice.setWordWrap(True)
+
+        layout.addWidget(notice)
+
+        # ─────────────────────────────
+        # Action buttons
+        # ─────────────────────────────
         actions = QHBoxLayout()
-        self.sms_button = button("문자 보내기", self.open_sms)
-        self.email_button = button("메일 보내기", self.open_email)
-        self.pdf_button = button("공식 견적서 PDF / 출력" if draft.get("formalQuoteRequested") else "견적서 PDF / 출력", self.preview_pdf)
-        self.sms_button.setEnabled(bool(draft.get("customerPhone")))
-        self.email_button.setEnabled(bool(draft.get("customerEmail")))
+        actions.setSpacing(10)
+
+        self.sms_button = QPushButton("문자 보내기")
+        self.sms_button.setObjectName("smsAction")
+        self.sms_button.clicked.connect(self.open_sms)
+        self.sms_button.setEnabled(
+            bool(self.draft.get("customerPhone"))
+        )
+
+        self.email_button = QPushButton("메일 보내기")
+        self.email_button.setObjectName("mailAction")
+        self.email_button.clicked.connect(self.open_email)
+        self.email_button.setEnabled(
+            bool(self.draft.get("customerEmail"))
+        )
+
+        self.pdf_button = QPushButton(
+            "공식 견적서 PDF / 출력"
+            if self.draft.get("formalQuoteRequested")
+            else "견적서 PDF / 출력"
+        )
+        self.pdf_button.setObjectName("pdfAction")
+        self.pdf_button.clicked.connect(self.preview_pdf)
+
+        close_button = QPushButton("닫기")
+        close_button.setObjectName("closeAction")
+        close_button.clicked.connect(self.reject)
+
+        self.sent_button = QPushButton("견적발송완료")
+        self.sent_button.setObjectName("sentAction")
+        self.sent_button.clicked.connect(self.mark_sent)
+        self.sent_button.setEnabled(
+            bool(self.draft.get("sourceRequestId"))
+            and self.request_status == "견적확정"
+        )
+
         actions.addWidget(self.sms_button)
         actions.addWidget(self.email_button)
         actions.addWidget(self.pdf_button)
+
         actions.addStretch()
-        actions.addWidget(button("닫기", self.reject))
-        self.sent_button = button("견적발송완료", self.mark_sent, True)
-        self.sent_button.setEnabled(bool(draft.get("sourceRequestId")) and self.request_status == "견적확정")
+
+        actions.addWidget(close_button)
         actions.addWidget(self.sent_button)
+
         layout.addLayout(actions)
 
     def quote_number(self):
-        return self.draft.get("requestReceiptNumber") or ("PCQ_" + self.draft["id"][:8])
+        return (
+            self.draft.get("requestReceiptNumber")
+            or ("PCQ_" + self.draft["id"][:8])
+        )
 
     def delivery_text(self):
         amount = draft_amounts(self.draft)["total"]
-        items = ", ".join(f"{item['species']} {item['quantity']:,}주" for item in self.draft["items"])
-        return "\n".join([
-            "[나무팜 견적 안내]",
-            f"{self.draft['customerName']}님, 요청하신 묘목 견적을 안내드립니다.",
-            f"견적번호: {self.quote_number()}",
-            f"품목: {items}",
-            f"판매금액: {amount:,}원",
-            "확인 후 문의사항이 있으시면 연락 부탁드립니다.",
-        ])
+
+        items = ", ".join(
+            f"{item['species']} {item['quantity']:,}주"
+            for item in self.draft["items"]
+        )
+
+        return "\n".join(
+            [
+                "[나무팜 견적 안내]",
+                "",
+                f"{self.draft['customerName']}님, 요청하신 묘목 견적을 안내드립니다.",
+                "",
+                f"견적번호: {self.quote_number()}",
+                f"품목: {items}",
+                f"판매금액: {amount:,}원",
+                "",
+                "확인 후 문의사항이 있으시면 연락 부탁드립니다.",
+            ]
+        )
 
     def open_sms(self):
         body = self.delivery_text()
-        uri = f"sms:{self.draft['customerPhone']}?body={url_quote(body)}"
-        if not QDesktopServices.openUrl(QUrl.fromEncoded(uri.encode("utf-8"))):
+
+        uri = (
+            f"sms:{self.draft['customerPhone']}"
+            f"?body={url_quote(body)}"
+        )
+
+        if not QDesktopServices.openUrl(
+            QUrl.fromEncoded(uri.encode("utf-8"))
+        ):
             QApplication.clipboard().setText(body)
-            QMessageBox.information(self, "문자 작성", "문자 앱을 열 수 없어 견적 내용을 클립보드에 복사했습니다.")
+
+            QMessageBox.information(
+                self,
+                "문자 작성",
+                "문자 앱을 열 수 없어 견적 내용을 클립보드에 복사했습니다.",
+            )
 
     def open_email(self):
-        email = self.draft.get("customerEmail", "").strip()
+        email = self.draft.get(
+            "customerEmail",
+            "",
+        ).strip()
+
         if not email:
-            QMessageBox.information(self, "메일 주소 확인", "고객 이메일이 입력되지 않았습니다.")
+            QMessageBox.information(
+                self,
+                "메일 주소 확인",
+                "고객 이메일이 입력되지 않았습니다.",
+            )
             return
+
         body = self.delivery_text()
-        subject = f"[나무팜] {self.quote_number()} 견적 안내"
-        uri = f"mailto:{url_quote(email, safe='@.+')}?subject={url_quote(subject)}&body={url_quote(body)}"
-        if not QDesktopServices.openUrl(QUrl.fromEncoded(uri.encode("utf-8"))):
+
+        subject = (
+            f"[나무팜] "
+            f"{self.quote_number()} 견적 안내"
+        )
+
+        uri = (
+            f"mailto:{url_quote(email, safe='@.+')}"
+            f"?subject={url_quote(subject)}"
+            f"&body={url_quote(body)}"
+        )
+
+        if not QDesktopServices.openUrl(
+            QUrl.fromEncoded(uri.encode("utf-8"))
+        ):
             QApplication.clipboard().setText(body)
-            QMessageBox.information(self, "메일 작성", "메일 앱을 열 수 없어 견적 내용을 클립보드에 복사했습니다.")
+
+            QMessageBox.information(
+                self,
+                "메일 작성",
+                "메일 앱을 열 수 없어 견적 내용을 클립보드에 복사했습니다.",
+            )
 
     def preview_pdf(self):
-        print_document(self, quote_html(self.draft, True), "나무팜_견적서_" + self.quote_number().replace("/", "_"))
+        print_document(
+            self,
+            quote_html(self.draft, True),
+            "나무팜_견적서_"
+            + self.quote_number().replace("/", "_"),
+        )
 
     def mark_sent(self):
-        if QMessageBox.question(
-            self, "견적발송완료",
-            "문자 또는 메일 등으로 고객에게 실제 견적 전송을 마쳤나요?\n확인하면 서버 상태를 '견적발송완료'로 변경합니다.",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        answer = QMessageBox.question(
+            self,
+            "견적발송완료",
+            (
+                "문자 또는 메일 등으로 고객에게 "
+                "실제 견적 전송을 마쳤나요?\n\n"
+                "확인하면 서버 상태를 "
+                "'견적발송완료'로 변경합니다."
+            ),
+            QMessageBox.StandardButton.Yes
+            | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
-        ) != QMessageBox.StandardButton.Yes:
+        )
+
+        if answer != QMessageBox.StandardButton.Yes:
             return
+
         self.mode = "sent"
         self.accept()
 
