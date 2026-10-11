@@ -357,6 +357,11 @@ class MainWindow(QMainWindow):
         header.setStretchLastSection(False)
         header.setSectionResizeMode(8, QHeaderView.ResizeMode.Stretch)
         header.setSectionResizeMode(9, QHeaderView.ResizeMode.Stretch)
+        # Long seedling/request text should stay visible inside the row instead of being clipped.
+        # Columns 0-7 keep their content-sized widths, while the two stretch columns wrap.
+        self.request_table.setWordWrap(True)
+        self.request_table.setTextElideMode(Qt.TextElideMode.ElideNone)
+        self.request_table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
         self.request_table.itemSelectionChanged.connect(self.update_controls)
         layout.addWidget(self.request_table)
         row = QHBoxLayout()

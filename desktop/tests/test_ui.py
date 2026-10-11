@@ -7,6 +7,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QHeaderView, QMessageBox
 from namufarm_desktop.app import MainWindow
 from support import Bridge, manager_at
@@ -58,6 +59,12 @@ class UiTest(QtTestCase):
         self.assertFalse(header.stretchLastSection())
         self.assertEqual(QHeaderView.ResizeMode.Stretch, header.sectionResizeMode(8))
         self.assertEqual(QHeaderView.ResizeMode.Stretch, header.sectionResizeMode(9))
+        self.assertTrue(self.window.request_table.wordWrap())
+        self.assertEqual(Qt.TextElideMode.ElideNone, self.window.request_table.textElideMode())
+        self.assertEqual(
+            QHeaderView.ResizeMode.ResizeToContents,
+            self.window.request_table.verticalHeader().sectionResizeMode(0),
+        )
         self.assertGreaterEqual(self.window.height(), 900)
         self.assertGreaterEqual(self.window.request_table.minimumHeight(), 400)
         self.assertFalse(hasattr(self.window, 'request_detail'))
