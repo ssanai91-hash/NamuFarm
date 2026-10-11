@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from PySide6.QtWidgets import QDialog, QTableWidgetItem
+from PySide6.QtWidgets import QDialog, QMessageBox, QTableWidgetItem
 from PySide6.QtGui import QTextDocument
 from PySide6.QtPrintSupport import QPrinter
 from namufarm_desktop.commerce import (new_draft, draft_amounts, order_from_draft, quote_document,
@@ -200,6 +200,23 @@ class WorkspaceServiceTest(unittest.TestCase):
         self.assertEqual('buyer@example.com', result['delivery']['emailTo'])
         self.assertEqual('ssanai91@gmail.com', result['delivery']['senderEmail'])
         self.assertEqual(result['delivery'], self.manager.quote_delivery_state(draft['id']))
+
+    def test_quote_email_attaches_generated_official_pdf(self):
+        self.bridge.send(control='submit')
+        view = self.manager.sync()
+        draft = draft_for_test()
+        draft['sourceRequestId'] = view['requests'][0]['requestId']
+        draft['customerEmail'] = 'buyer@example.com'
+        self.manager.confirm_quote(draft)
+        with tempfile.TemporaryDirectory() as directory:
+            pdf = Path(directory) / 'NAMU-20261011-0001_공식견적서.pdf'
+            pdf.write_bytes(b'%PDF-1.4\nNAMUFARM PDF TEST\n')
+            result = self.manager.send_quote_email(
+                draft, '묘목 견적 안내', '견적 안내입니다.',
+                '<p>견적 안내입니다.</p>', attachment_path=pdf
+            )
+        self.assertEqual('NAMU-20261011-0001_공식견적서.pdf', result['attachmentName'])
+        self.assertTrue(result['delivery']['emailSentAt'] > 0)
 
     def test_quote_sms_sends_through_server_and_records_delivery_state(self):
         self.bridge.send(control='configure_sms')
@@ -522,6 +539,23 @@ class SellerUiTest(QtTestCase):
         self.assertIn('품목1 : 소나무 2주', dialog.message.toPlainText())
         dialog.close()
 
+    def test_quote_sms_does_not_replay_previous_success_on_open(self):
+        class FakeSmsManager:
+            def quote_delivery_state(self, identifier):
+                return {'smsSentAt': now_ms(), 'smsState': 'success', 'smsMessageId': 'M4V_OLD'}
+            def sms_profile(self):
+                return {'provider': 'SOLAPI', 'configured': True, 'senderPhone': '01044460304'}
+
+        draft = draft_for_test()
+        dialog = QuoteSmsDialog(draft, FakeSmsManager())
+        dialog.show()
+        self.app.processEvents()
+        if dialog.profile_task:
+            self.assertTrue(dialog.profile_task.wait(10000))
+            self.app.processEvents()
+        self.assertEqual('문자 발신 준비 완료', dialog.status.text())
+        dialog.close()
+
     def test_quote_sms_success_uses_single_status_line(self):
         class FakeSmsManager:
             def __init__(self):
@@ -582,6 +616,35 @@ class SellerUiTest(QtTestCase):
         self.assertEqual(QDialog.DialogCode.Rejected, dialog.result())
         dialog.close()
 
+    def test_delivery_email_prompt_offers_generated_official_quote_attachment(self):
+        class FakeManager:
+            def save_draft(self, draft):
+                return None
+            def quote_delivery_state(self, identifier):
+                return {}
+
+        draft = draft_for_test()
+        draft.update(customerEmail='buyer@example.com', sourceRequestId='123e4567-e89b-12d3-a456-426614174000',
+                     requestReceiptNumber='NAMU-20261011-0001', shippingFee=6000, isPrepaid=False, taxAmount=0)
+        dialog = QuoteDeliveryDialog(draft, '견적확정', FakeManager())
+        with tempfile.TemporaryDirectory() as directory:
+            pdf = Path(directory) / 'NAMU-20261011-0001_공식견적서.pdf'
+            pdf.write_bytes(b'%PDF-1.4\nTEST\n')
+            dialog.generated_quote_path = pdf
+            captured = {}
+            class FakeEmailDialog:
+                def __init__(self, draft, manager, parent, attachment_path=None):
+                    captured['path'] = attachment_path
+                    self.delivery_state = {}
+                def exec(self):
+                    return QDialog.DialogCode.Rejected
+            with patch('namufarm_desktop.workspace.QMessageBox.question',
+                       return_value=QMessageBox.StandardButton.Yes),                  patch('namufarm_desktop.workspace.QuoteEmailDialog', FakeEmailDialog):
+                dialog.open_email()
+            self.assertEqual(pdf, captured['path'])
+        dialog.generated_quote_path = None
+        dialog.close()
+
     def test_quote_email_dialog_is_message_focused_and_uses_customer_name(self):
         draft = draft_for_test()
         draft.update(customerEmail='buyer@example.com', requestReceiptNumber='NAMU-20261011-0001',
@@ -608,12 +671,51 @@ class SellerUiTest(QtTestCase):
         self.assertNotIn('<table', dialog.html_body())
         dialog.close()
 
+    def test_quote_email_dialog_sends_selected_official_quote_attachment(self):
+        class FakeMailManager:
+            def email_profile(self):
+                return {'senderName': '나무팜농원', 'senderEmail': 'ssanai91@gmail.com', 'remainingDailyQuota': 99}
+
+            def send_quote_email(self, draft, subject, plain, html, attachment_path=None):
+                self.attachment_path = attachment_path
+                return {
+                    'delivery': {'emailSentAt': 123456789, 'emailTo': draft['customerEmail'],
+                                 'senderEmail': 'ssanai91@gmail.com'},
+                    'senderEmail': 'ssanai91@gmail.com',
+                    'attachmentName': Path(attachment_path).name if attachment_path else '',
+                    'sentAt': '2026-10-11T05:00:00.000Z',
+                    'remainingDailyQuota': 98,
+                }
+
+        draft = draft_for_test()
+        draft.update(customerEmail='buyer@example.com', requestReceiptNumber='NAMU-20261011-0001',
+                     customerName='테스트 고객', shippingFee=6000, isPrepaid=False, taxAmount=0)
+        manager = FakeMailManager()
+        with tempfile.TemporaryDirectory() as directory:
+            pdf = Path(directory) / 'NAMU-20261011-0001_공식견적서.pdf'
+            pdf.write_bytes(b'%PDF-1.4\nTEST\n')
+            dialog = QuoteEmailDialog(draft, manager, attachment_path=pdf)
+            dialog.show()
+            self.app.processEvents()
+            if dialog.profile_task:
+                self.assertTrue(dialog.profile_task.wait(10000))
+                self.app.processEvents()
+            self.assertEqual(pdf.name, dialog.attachment_label.text())
+            with patch('namufarm_desktop.workspace.QMessageBox.information'):
+                dialog.send_email()
+                task = dialog.send_task
+                self.assertIsNotNone(task)
+                self.assertTrue(task.wait(10000))
+                self.app.processEvents()
+            self.assertEqual(pdf, manager.attachment_path)
+            self.assertEqual(QDialog.DialogCode.Accepted, dialog.result())
+
     def test_quote_email_success_completion_stays_on_gui_thread_and_closes_cleanly(self):
         class FakeMailManager:
             def email_profile(self):
                 return {'senderName': '나무팜농원', 'senderEmail': 'ssanai91@gmail.com', 'remainingDailyQuota': 99}
 
-            def send_quote_email(self, draft, subject, plain, html):
+            def send_quote_email(self, draft, subject, plain, html, attachment_path=None):
                 return {
                     'delivery': {'emailSentAt': 123456789, 'emailTo': draft['customerEmail'],
                                  'senderEmail': 'ssanai91@gmail.com'},

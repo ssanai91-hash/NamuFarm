@@ -1,7 +1,9 @@
+import base64
 import copy
 import json
 import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 
 from .api import DEFAULT_URL, ScriptApi
 from .crypto import canonical, digest, customer_digest, SellerKey
@@ -262,13 +264,24 @@ class Manager:
                 "senderEmail": email,
                 "remainingDailyQuota": int(result.get("remainingDailyQuota", 0) or 0)}
 
-    def send_quote_email(self, draft, subject, body_text, body_html):
+    def send_quote_email(self, draft, subject, body_text, body_html, attachment_path=None):
         validate_draft(draft)
         recipient = draft.get("customerEmail", "").strip()
         require(recipient, "고객 이메일이 입력되지 않았습니다.")
         require(isinstance(subject, str) and 1 <= len(subject.strip()) <= 160, "메일 제목을 확인해주세요.")
         require(isinstance(body_text, str) and 1 <= len(body_text.strip()) <= 12000, "메일 내용을 확인해주세요.")
         require(isinstance(body_html, str) and 1 <= len(body_html.strip()) <= 24000, "메일 내용을 확인해주세요.")
+
+        attachment_name = ""
+        attachment_base64 = ""
+        if attachment_path:
+            path = Path(attachment_path)
+            require(path.is_file() and path.suffix.lower() == ".pdf", "첨부할 공식견적서 PDF를 찾지 못했습니다.")
+            size = path.stat().st_size
+            require(0 < size <= 2 * 1024 * 1024, "공식견적서 PDF 첨부 용량은 2MB 이하여야 합니다.")
+            attachment_name = path.name
+            attachment_base64 = base64.b64encode(path.read_bytes()).decode("ascii")
+
         source = draft.get("sourceRequestId", "")
         if source:
             request = next((r for r in self.vault.rows("requests") if r["requestId"] == source), None)
@@ -278,12 +291,16 @@ class Manager:
         result = self.api.call("send_quote_email", requestId=source, recipientEmail=recipient,
                                senderName=draft.get("issuer", {}).get("businessName") or "나무팜농원",
                                quoteNumber=draft.get("requestReceiptNumber") or ("PCQ_" + draft["id"][:8]),
-                               subject=subject.strip(), bodyText=body_text.strip(), bodyHtml=body_html.strip())
+                               subject=subject.strip(), bodyText=body_text.strip(), bodyHtml=body_html.strip(),
+                               attachmentName=attachment_name, attachmentBase64=attachment_base64)
         require(result.get("sent") is True and result.get("recipientEmail") == recipient,
                 "메일 전송 완료를 확인하지 못했습니다.")
+        if attachment_name:
+            require(result.get("attachmentName") == attachment_name, "공식견적서 첨부 전송을 확인하지 못했습니다.")
         delivery = self._mark_quote_channel_sent(draft["id"], "email", emailTo=recipient,
                                                  senderEmail=result.get("senderEmail", ""))
         return {"delivery": delivery, "senderEmail": result.get("senderEmail", ""),
+                "attachmentName": result.get("attachmentName", ""),
                 "sentAt": result.get("sentAt", ""), "remainingDailyQuota": result.get("remainingDailyQuota", 0)}
 
     def shipping_export_preferences(self):

@@ -1289,16 +1289,9 @@ class QuoteSmsDialog(QDialog):
         sender = str(value.get("senderPhone") or "")
         self.sender_phone.setText(sender)
         self.send_button.setEnabled(bool(self.recipient_phone.text().strip()) and bool(sender))
-        state = self.delivery_state.get("smsState", "")
-        if state == "success":
-            self.status.setText("문자전송 성공")
-        elif state == "failed":
-            self.status.setText("문자전송 실패")
-        elif self.delivery_state.get("smsMessageId"):
-            self.status.setText("문자전송 결과 확인중…")
-            QTimer.singleShot(200, self.check_status)
-        else:
-            self.status.setText("문자 발신 준비 완료")
+        # Opening the popup never replays an earlier result. Only the outcome
+        # of a send initiated in this open window is shown as success/failure.
+        self.status.setText("문자 발신 준비 완료")
 
     def send_sms(self):
         message = self.message.toPlainText().strip()
@@ -1407,10 +1400,11 @@ class QuoteEmailDialog(QDialog):
 
     SENDER_EMAIL = "ssanai91@gmail.com"
 
-    def __init__(self, draft, manager=None, parent=None):
+    def __init__(self, draft, manager=None, parent=None, attachment_path=None):
         super().__init__(parent)
         self.draft = copy.deepcopy(draft)
         self.manager = manager
+        self.attachment_path = Path(attachment_path) if attachment_path else None
         self.delivery_state = {}
         self.profile_task = None
         self.send_task = None
@@ -1472,6 +1466,15 @@ class QuoteEmailDialog(QDialog):
         self.subject.setMaxLength(160)
         subject_row.addWidget(self.subject, 1)
         layout.addLayout(subject_row)
+
+        if self.attachment_path is not None:
+            attachment_row = QHBoxLayout()
+            attachment_row.setSpacing(12)
+            attachment_row.addWidget(label("첨부파일", "emailSectionTitle"))
+            self.attachment_label = QLabel(self.attachment_path.name)
+            self.attachment_label.setObjectName("quoteFileName")
+            attachment_row.addWidget(self.attachment_label, 1)
+            layout.addLayout(attachment_row)
 
         layout.addWidget(label("메일 내용", "emailSectionTitle"))
 
@@ -1603,7 +1606,13 @@ class QuoteEmailDialog(QDialog):
         self.cancel_button.setEnabled(False)
         self.status.setText("고객에게 견적 메일을 전송하고 있습니다…")
         plain, html = self.plain_body(), self.html_body()
-        task = Task(lambda: self.manager.send_quote_email(self.draft, subject, plain, html), None, self)
+        task = Task(
+            lambda: self.manager.send_quote_email(
+                self.draft, subject, plain, html,
+                attachment_path=self.attachment_path,
+            ),
+            None, self
+        )
         self.send_task = task
         # Keep all dialog/widget work on the GUI thread. In particular, the
         # success QMessageBox and accept() must never be called by the worker.
@@ -1633,8 +1642,12 @@ class QuoteEmailDialog(QDialog):
             return
         self.delivery_state = dict(value.get("delivery") or {})
         self.sender_email.setText(self.SENDER_EMAIL)
-        self.status.setText("메일 전송완료 · 고객 메일함으로 실제 전송했습니다.")
-        QMessageBox.information(self, "메일 전송완료", f"{self.recipient_email.text()} 주소로 견적 메일을 전송했습니다.")
+        attached = bool(value.get("attachmentName"))
+        self.status.setText("메일 전송완료" + (" · 공식견적서 첨부완료" if attached else ""))
+        detail = f"{self.recipient_email.text()} 주소로 견적 메일을 전송했습니다."
+        if attached:
+            detail += f"\n\n첨부파일: {value['attachmentName']}"
+        QMessageBox.information(self, "메일 전송완료", detail)
         self.accept()
 
     def reject(self):
@@ -2176,7 +2189,27 @@ class QuoteDeliveryDialog(QDialog):
         if not email:
             QMessageBox.information(self, "메일 주소 확인", "고객 이메일이 입력되지 않았습니다.")
             return
-        dialog = QuoteEmailDialog(self.draft, self.manager, self)
+
+        attachment_path = None
+        if self.generated_quote_path and Path(self.generated_quote_path).is_file():
+            answer = QMessageBox.question(
+                self,
+                "공식견적서 첨부",
+                (
+                    "공식견적서가 생성되어 있습니다.\n"
+                    f"{Path(self.generated_quote_path).name}\n\n"
+                    "메일에 첨부해서 보내시겠습니까?"
+                ),
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.Yes,
+            )
+            if answer == QMessageBox.StandardButton.Yes:
+                attachment_path = self.generated_quote_path
+
+        dialog = QuoteEmailDialog(
+            self.draft, self.manager, self,
+            attachment_path=attachment_path,
+        )
         if dialog.exec() == QDialog.DialogCode.Accepted:
             self.delivery_state = dict(dialog.delivery_state or self.delivery_state)
             self.update_delivery_badges()

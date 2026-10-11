@@ -59,7 +59,8 @@ class ScriptApi:
 
         try:
             data = None if payload is None else canonical(payload).encode("utf-8")
-            if data is not None and len(data) > 65000:
+            limit = 3000000 if payload is not None and payload.get("action") == "send_quote_email" else 65000
+            if data is not None and len(data) > limit:
                 raise UserError("전송할 기록이 너무 큽니다.")
             request = urllib.request.Request(self.url, data=data,
                        headers={"Content-Type": "application/json", "User-Agent": "NamuFarmDesktop/0.4"})

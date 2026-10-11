@@ -354,11 +354,24 @@ function sendQuoteEmail_(body) {
   const plainBody=text_(body.bodyText,12000,1);
   const htmlBody=text_(body.bodyHtml,24000,1);
   assert_(!/<\s*(script|iframe|object|embed|form)\b/i.test(htmlBody));
+
+  const attachmentName=body.attachmentName?text_(body.attachmentName,180,5):'';
+  const attachmentBase64=String(body.attachmentBase64||'');
+  assert_((!attachmentName&&!attachmentBase64)||(attachmentName&&attachmentBase64),'INVALID');
+  const options={to:recipient,subject:subject,body:plainBody,htmlBody:htmlBody,name:senderName};
+  if(attachmentName){
+    assert_(/^[^\\/:*?"<>|]+\.pdf$/i.test(attachmentName),'INVALID');
+    const encoded=byteString_(attachmentBase64,1,2*1024*1024);
+    const bytes=Utilities.base64Decode(encoded);
+    options.attachments=[Utilities.newBlob(bytes,'application/pdf',attachmentName)];
+  }
+
   const profile=quoteEmailProfile_();
   assert_(profile.remainingDailyQuota>0,'NOT_READY');
-  MailApp.sendEmail({to:recipient,subject:subject,body:plainBody,htmlBody:htmlBody,name:senderName});
+  MailApp.sendEmail(options);
   return {sent:true,quoteNumber:quoteNumber,recipientEmail:recipient,senderEmail:profile.senderEmail,
-    sentAt:new Date().toISOString(),remainingDailyQuota:MailApp.getRemainingDailyQuota()};
+    attachmentName:attachmentName,sentAt:new Date().toISOString(),
+    remainingDailyQuota:MailApp.getRemainingDailyQuota()};
 }
 
 function quoteSmsSettings_() {

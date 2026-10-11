@@ -13,8 +13,9 @@ const RFQ_RECEIPT_PATTERN = /^(?:NAMU|NFQ)-(\d{8})-(\d{4,16})$/;
 function doPost(e) {
   try {
     const text = e && e.postData && e.postData.contents;
-    assert_(typeof text === 'string' && text.length <= 65000, 'INVALID');
+    assert_(typeof text === 'string' && text.length <= 3000000, 'INVALID');
     const body = JSON.parse(text);
+    if(body.action!=='send_quote_email')assert_(text.length<=65000,'INVALID');
     let value;
     if (body.action === 'submit_request') {
       const secret = PropertiesService.getScriptProperties().getProperty('WEB_SECRET');

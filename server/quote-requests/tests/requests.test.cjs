@@ -100,6 +100,25 @@ test('authenticated quote email profile and send use Apps Script mail account',(
   assert.equal(f.mail.length,1);assert.equal(f.mail[0].to,'buyer@example.com');
   assert.equal(f.mail[0].name,'나무팜농원');
 });
+test('quote email can attach generated official PDF',()=>{
+  const f=fixture();f.submit();
+  f.context.updateRequestStatus_({requestId:f.request.requestId,status:'견적확정'});
+  const pdf=Buffer.from('%PDF-1.4\nNAMUFARM TEST PDF\n');
+  const sent=f.context.sendQuoteEmail_({
+    requestId:f.request.requestId,recipientEmail:'buyer@example.com',senderName:'나무팜농원',
+    quoteNumber:'NAMU-20261011-0001',subject:'묘목 견적 안내',
+    bodyText:'견적 안내입니다.',bodyHtml:'<p>견적 안내입니다.</p>',
+    attachmentName:'NAMU-20261011-0001_공식견적서.pdf',
+    attachmentBase64:pdf.toString('base64')
+  });
+  assert.equal(sent.sent,true);
+  assert.equal(sent.attachmentName,'NAMU-20261011-0001_공식견적서.pdf');
+  assert.equal(f.mail.length,1);
+  assert.equal(f.mail[0].attachments.length,1);
+  assert.equal(f.mail[0].attachments[0].name,'NAMU-20261011-0001_공식견적서.pdf');
+  assert.equal(f.mail[0].attachments[0].mime,'application/pdf');
+  assert.equal(Buffer.from(f.mail[0].attachments[0].bytes).toString(),pdf.toString());
+});
 test('quote email cannot send before quote confirmation',()=>{
   const f=fixture();f.submit();
   assert.throws(()=>f.context.sendQuoteEmail_({
