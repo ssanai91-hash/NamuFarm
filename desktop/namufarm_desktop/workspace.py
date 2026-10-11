@@ -4,8 +4,8 @@ import json
 from datetime import datetime
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QUrl, QSaveFile, QIODevice
-from PySide6.QtGui import QColor, QDesktopServices, QFont, QKeySequence, QShortcut, QTextDocument, QPageSize
+from PySide6.QtCore import Qt, QUrl, QSaveFile, QIODevice, Signal
+from PySide6.QtGui import QColor, QDesktopServices, QFont, QIntValidator, QKeySequence, QShortcut, QTextDocument, QPageSize
 from PySide6.QtPrintSupport import QPrinter, QPrintDialog
 from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDialog, QFileDialog, QFormLayout,
     QFrame, QGridLayout, QGroupBox, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QListWidget,
@@ -96,6 +96,55 @@ def polish_table(widget):
     widget.setShowGrid(False)
     widget.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
     widget.horizontalHeader().setDefaultAlignment(Qt.AlignmentFlag.AlignCenter)
+
+
+class UnitPriceEditor(QWidget):
+    """Manual unit-price input with 1,000-won step buttons.
+
+    Keeping the price in a dedicated editor also gives a future Excel price
+    lookup one stable place to inject an automatically resolved unit price.
+    """
+    changed = Signal()
+    STEP = 1000
+    MAX_PRICE = 2147483647
+
+    def __init__(self, value=0, parent=None):
+        super().__init__(parent)
+        self.setObjectName("unitPriceEditor")
+        row = QHBoxLayout(self)
+        row.setContentsMargins(4, 2, 4, 2)
+        row.setSpacing(5)
+
+        self.minus = QPushButton("-")
+        self.minus.setToolTip("판매 단가 1,000원 내리기")
+        self.minus.setFixedWidth(38)
+        self.minus.clicked.connect(lambda: self.adjust(-self.STEP))
+        row.addWidget(self.minus)
+
+        self.input = QLineEdit(str(max(0, int(value or 0))))
+        self.input.setValidator(QIntValidator(0, self.MAX_PRICE, self.input))
+        self.input.setAlignment(Qt.AlignmentFlag.AlignRight)
+        self.input.setPlaceholderText("판매 단가")
+        self.input.textChanged.connect(lambda _text: self.changed.emit())
+        row.addWidget(self.input, 1)
+
+        self.plus = QPushButton("+")
+        self.plus.setToolTip("판매 단가 1,000원 올리기")
+        self.plus.setFixedWidth(38)
+        self.plus.clicked.connect(lambda: self.adjust(self.STEP))
+        row.addWidget(self.plus)
+
+    def text(self):
+        return self.input.text().strip()
+
+    def set_value(self, value):
+        value = max(0, min(self.MAX_PRICE, int(value)))
+        self.input.setText(str(value))
+
+    def adjust(self, delta):
+        raw = self.text()
+        current = int(raw) if raw.isascii() and raw.isdigit() else 0
+        self.set_value(max(0, min(self.MAX_PRICE, current + delta)))
 
 def center_table_columns(widget, columns=None):
     columns = range(widget.columnCount()) if columns is None else columns
@@ -230,7 +279,7 @@ class QuoteDialog(QDialog):
         content.addWidget(label("견적 품목", "sectionTitle"))
         if self.simple_request:
             content.addWidget(label("수량은 홈페이지 요청값입니다. 판매 단가를 입력하면 판매 금액을 계산합니다.", "muted", True))
-            self.items = table(["묘목명", "수량", "판매 단가", "판매 금액"])
+            self.items = table(["묘목명", "수량", "판매 금액", "판매 단가"])
         else:
             content.addWidget(label("수기 견적 품목으로 등록합니다. 휴대폰 재고 수량은 차감하지 않습니다.", "muted", True))
             self.items = table(["묘목명", "규격", "수량", "판매 단가", "매입 단가", "판매 금액"])
@@ -283,13 +332,15 @@ class QuoteDialog(QDialog):
         index = self.items.rowCount()
         self.items.insertRow(index)
         if self.simple_request:
-            values = (item["species"], item["quantity"], item["unitPrice"], item["quantity"] * item["unitPrice"])
+            values = (item["species"], item["quantity"], f"{item['quantity'] * item['unitPrice']:,}")
             for column, value in enumerate(values):
                 cell = QTableWidgetItem(str(value))
                 cell.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-                if column != 2:
-                    cell.setFlags(cell.flags() & ~Qt.ItemFlag.ItemIsEditable)
+                cell.setFlags(cell.flags() & ~Qt.ItemFlag.ItemIsEditable)
                 self.items.setItem(index, column, cell)
+            price_editor = UnitPriceEditor(item["unitPrice"], self.items)
+            price_editor.changed.connect(self.recalculate)
+            self.items.setCellWidget(index, 3, price_editor)
         else:
             for column, key in enumerate(("species", "specification", "quantity", "unitPrice", "unitCost")):
                 cell = QTableWidgetItem(str(item[key]))
@@ -303,6 +354,15 @@ class QuoteDialog(QDialog):
         self.items.blockSignals(False)
         self.recalculate()
 
+    def unit_price_editor(self, row):
+        editor = self.items.cellWidget(row, 3) if self.simple_request else None
+        require(isinstance(editor, UnitPriceEditor), "판매 단가 입력칸을 확인해주세요.")
+        return editor
+
+    def set_unit_price(self, row, value):
+        """Set one request item's unit price; future Excel lookup can call this."""
+        self.unit_price_editor(row).set_value(value)
+
     def remove_item(self):
         if self.simple_request:
             return
@@ -312,9 +372,12 @@ class QuoteDialog(QDialog):
             self.recalculate()
 
     def raw_state(self):
-        columns = 3 if self.simple_request else 5
-        return ([field.text() for field in self.fields.values()], self.note.toPlainText(),
-                [[self.items.item(r, c).text() for c in range(columns)] for r in range(self.items.rowCount())],
+        if self.simple_request:
+            item_state = [[self.items.item(r, 0).text(), self.items.item(r, 1).text(), self.unit_price_editor(r).text()]
+                          for r in range(self.items.rowCount())]
+        else:
+            item_state = [[self.items.item(r, c).text() for c in range(5)] for r in range(self.items.rowCount())]
+        return ([field.text() for field in self.fields.values()], self.note.toPlainText(), item_state,
                 copy.deepcopy(self.draft["issuer"]))
 
     def reject(self):
@@ -330,7 +393,7 @@ class QuoteDialog(QDialog):
             for row in range(self.items.rowCount()):
                 species = self.items.item(row, 0).text().strip()
                 quantity = self.items.item(row, 1).text().strip()
-                price = self.items.item(row, 2).text().strip()
+                price = self.unit_price_editor(row).text()
                 require(quantity.isascii() and quantity.isdigit() and price.isascii() and price.isdigit(),
                         f"{row+1}번째 품목 수량·판매 단가를 정수로 입력해주세요.")
                 draft["items"].append(dict(species=species, specification="", quantity=int(quantity), unitPrice=int(price), unitCost=0))
@@ -358,7 +421,7 @@ class QuoteDialog(QDialog):
             self.items.blockSignals(True)
             if self.simple_request:
                 for row, item in enumerate(draft["items"]):
-                    self.items.item(row, 3).setText(f"{item['quantity'] * item['unitPrice']:,}")
+                    self.items.item(row, 2).setText(f"{item['quantity'] * item['unitPrice']:,}")
             else:
                 for row, item in enumerate(draft["items"]):
                     self.items.item(row, 5).setText(f"{item['quantity'] * item['unitPrice']:,}")

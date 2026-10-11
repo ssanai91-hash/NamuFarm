@@ -230,6 +230,37 @@ class SellerUiTest(QtTestCase):
         window.demo_mode = False
         window.close()
 
+    def test_request_quote_price_editor_steps_and_manual_input(self):
+        draft = draft_for_test()
+        draft['sourceRequestId'] = '123e4567-e89b-12d3-a456-426614174000'
+        dialog = QuoteDialog(draft, request_status='신규')
+        dialog.show()
+        self.app.processEvents()
+
+        headers = [dialog.items.horizontalHeaderItem(i).text() for i in range(dialog.items.columnCount())]
+        self.assertEqual(['묘목명', '수량', '판매 금액', '판매 단가'], headers)
+        self.assertEqual('20,000', dialog.items.item(0, 2).text())
+
+        price = dialog.unit_price_editor(0)
+        self.assertEqual('10000', price.text())
+        price.plus.click()
+        self.app.processEvents()
+        self.assertEqual('11000', price.text())
+        self.assertEqual('22,000', dialog.items.item(0, 2).text())
+
+        price.minus.click()
+        price.input.setText('12500')
+        self.app.processEvents()
+        self.assertEqual(12500, dialog.collect()['items'][0]['unitPrice'])
+        self.assertEqual('25,000', dialog.items.item(0, 2).text())
+
+        dialog.set_unit_price(0, 15000)
+        self.app.processEvents()
+        self.assertEqual('15000', price.text())
+        self.assertEqual('30,000', dialog.items.item(0, 2).text())
+        dialog.initial = dialog.raw_state()
+        dialog.close()
+
     def test_quote_editor_calculates_and_prints_pdf(self):
         draft = draft_for_test()
         dialog = QuoteDialog(draft)
