@@ -5,8 +5,9 @@ from datetime import datetime
 from pathlib import Path
 from html import escape as html_escape
 
-from PySide6.QtCore import Qt, QUrl, QSaveFile, QIODevice, QTimer, Signal, Slot
-from PySide6.QtGui import QColor, QDesktopServices, QFont, QIntValidator, QKeySequence, QShortcut, QTextDocument, QPageSize
+from PySide6.QtCore import Qt, QUrl, QSaveFile, QIODevice, QTimer, Signal, Slot, QRectF
+from PySide6.QtGui import (QColor, QDesktopServices, QFont, QImage, QIntValidator, QKeySequence,
+    QPainter, QPen, QPixmap, QShortcut, QTextDocument, QPageSize)
 from PySide6.QtPrintSupport import QPrinter, QPrintDialog
 from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDialog, QFileDialog, QFormLayout,
     QFrame, QGridLayout, QGroupBox, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QListWidget,
@@ -15,7 +16,7 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDialog, QFil
 
 from . import __version__
 from .app import MainWindow, Task, table, fill_table, money, timestamp
-from .commerce import (ISSUER, new_draft, draft_amounts, validate_draft, quote_html, quote_document_html, official_quote_html, shipping_html,
+from .commerce import (ISSUER, new_draft, draft_amounts, validate_draft, quote_html, quote_document_html, shipping_html,
                        shipping_problem, parse_tracking_csv, tracking_number)
 from .domain import SEOUL, profit, require
 from .errors import UserError
@@ -443,24 +444,288 @@ def center_table_columns(widget, columns=None):
                 item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
 
 
-def preview_temporary_document(parent, html):
-    """Preview/print an in-memory official quote without saving a local document."""
+def _quote_font(pixel_size, bold=False):
+    font = QFont("Malgun Gothic")
+    font.setPixelSize(pixel_size)
+    font.setBold(bold)
+    return font
+
+
+def _paint_text(painter, rect, text, pixel_size=13, bold=False,
+                align=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                color=QColor("#111111"), wrap=False):
+    painter.setPen(color)
+    painter.setFont(_quote_font(pixel_size, bold))
+    flags = align
+    if wrap:
+        flags |= Qt.TextFlag.TextWordWrap
+    painter.drawText(QRectF(*rect), int(flags), str(text))
+
+
+def render_official_quote_image(draft):
+    """Render the paper-style official quotation onto an exact A4-ratio in-memory image."""
+    validate_draft(draft)
+    width, height = 954, 1349
+    image = QImage(width, height, QImage.Format.Format_ARGB32)
+    image.fill(QColor("white"))
+
+    painter = QPainter(image)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+    black = QColor("#202020")
+    thin = QPen(black, 1)
+    thick = QPen(black, 2)
+
+    def line(x1, y1, x2, y2, pen=thin):
+        painter.setPen(pen)
+        painter.drawLine(x1, y1, x2, y2)
+
+    def rect(x, y, w, h, pen=thin):
+        painter.setPen(pen)
+        painter.drawRect(x, y, w, h)
+
+    def cell_text(x, y, w, h, text, size=13, bold=False,
+                  align=Qt.AlignmentFlag.AlignCenter, wrap=False, color=black):
+        _paint_text(painter, (x + 4, y + 2, max(0, w - 8), max(0, h - 4)),
+                    text, size, bold, align, color, wrap)
+
+    margin = 26
+    right = width - margin
+    quote_number = draft.get("requestReceiptNumber") or ("PCQ_" + draft["id"][:8])
+    issued = datetime.now(SEOUL)
+    issued_text = f"{issued.year}년  {issued.month}월  {issued.day}일"
+    issuer = draft["issuer"]
+    business_type = issuer.get("businessType") or "농업,도소매"
+    category = issuer.get("category") or "묘목,화훼"
+
+    # NO. line and centered title.
+    cell_text(margin, 16, 220, 28, f"NO. {quote_number}", 13,
+              align=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+    line(margin, 48, 230, 48)
+    title_font = _quote_font(38, True)
+    title_font.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 12)
+    painter.setFont(title_font)
+    painter.setPen(black)
+    painter.drawText(QRectF(260, 42, 440, 52), int(Qt.AlignmentFlag.AlignCenter), "견 적 서")
+    line(295, 97, 655, 97, QPen(QColor("#555555"), 2))
+
+    # Customer block at left.
+    customer_x, customer_y, customer_w = margin, 118, 350
+    customer_row_h = 38
+    customer_values = [issued_text, f"{draft['customerName']} 귀하", draft["customerPhone"]]
+    for i, value in enumerate(customer_values):
+        y = customer_y + i * customer_row_h
+        cell_text(customer_x + 35, y, customer_w - 35, customer_row_h, value, 15,
+                  align=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        line(customer_x + 8, y + customer_row_h - 2, customer_x + customer_w, y + customer_row_h - 2)
+
+    # Supplier block, proportions copied from the existing paper form.
+    sx, sy, sw, sh = 430, 115, right - 430, 142
+    side_w, key_w = 42, 82
+    value_w = sw - side_w - key_w
+    row_heights = [27, 29, 34, 26, 26]
+    rect(sx, sy, sw, sh, thick)
+    line(sx + side_w, sy, sx + side_w, sy + sh)
+    cell_text(sx, sy, side_w, sh, "공\n급\n자", 14, True, wrap=True)
+
+    cy = sy
+    # registration
+    h = row_heights[0]
+    rect(sx + side_w, cy, key_w, h)
+    rect(sx + side_w + key_w, cy, value_w, h)
+    cell_text(sx + side_w, cy, key_w, h, "등록번호", 12, True)
+    cell_text(sx + side_w + key_w, cy, value_w, h, issuer["businessNumber"], 12,
+              align=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+    cy += h
+
+    # company / representative
+    h = row_heights[1]
+    company_w, rep_key_w = 165, 62
+    rep_w = value_w - key_w - company_w - rep_key_w
+    rect(sx + side_w, cy, key_w, h)
+    rect(sx + side_w + key_w, cy, company_w, h)
+    rect(sx + side_w + key_w + company_w, cy, rep_key_w, h)
+    rect(sx + side_w + key_w + company_w + rep_key_w, cy, rep_w, h)
+    cell_text(sx + side_w, cy, key_w, h, "상 호", 12, True)
+    cell_text(sx + side_w + key_w, cy, company_w, h, issuer["businessName"], 12,
+              align=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+    cell_text(sx + side_w + key_w + company_w, cy, rep_key_w, h, "성 명", 12, True)
+    cell_text(sx + side_w + key_w + company_w + rep_key_w, cy, rep_w - 32, h,
+              issuer["representative"], 12,
+              align=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+    painter.setPen(QPen(QColor("#a71919"), 2))
+    painter.drawEllipse(sx + sw - 31, cy + 4, 22, 22)
+    cell_text(sx + sw - 31, cy + 4, 22, 22, "인", 10, True, color=QColor("#a71919"))
+    cy += h
+
+    # address
+    h = row_heights[2]
+    rect(sx + side_w, cy, key_w, h)
+    rect(sx + side_w + key_w, cy, value_w, h)
+    cell_text(sx + side_w, cy, key_w, h, "사업장주소", 11, True)
+    cell_text(sx + side_w + key_w, cy, value_w, h, issuer["address"], 11,
+              align=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, wrap=True)
+    cy += h
+
+    # business type / category
+    h = row_heights[3]
+    type_w, cat_key_w = 165, 62
+    cat_w = value_w - key_w - type_w - cat_key_w
+    rect(sx + side_w, cy, key_w, h)
+    rect(sx + side_w + key_w, cy, type_w, h)
+    rect(sx + side_w + key_w + type_w, cy, cat_key_w, h)
+    rect(sx + side_w + key_w + type_w + cat_key_w, cy, cat_w, h)
+    cell_text(sx + side_w, cy, key_w, h, "업 태", 12, True)
+    cell_text(sx + side_w + key_w, cy, type_w, h, business_type, 11,
+              align=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+    cell_text(sx + side_w + key_w + type_w, cy, cat_key_w, h, "종 목", 12, True)
+    cell_text(sx + side_w + key_w + type_w + cat_key_w, cy, cat_w, h, category, 11,
+              align=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+    cy += h
+
+    # contact
+    h = row_heights[4]
+    rect(sx + side_w, cy, key_w, h)
+    rect(sx + side_w + key_w, cy, value_w, h)
+    cell_text(sx + side_w, cy, key_w, h, "연락처", 12, True)
+    cell_text(sx + side_w + key_w, cy, value_w, h,
+              f"T:{issuer['phone']}   F:732-0981", 11,
+              align=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+
+    # Intro and total.
+    cell_text(margin + 2, 262, 350, 28, "아래와같이 견적 합니다.", 15,
+              align=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+    total_y, total_h = 294, 48
+    label_w = 315
+    rect(margin, total_y, right - margin, total_h, thick)
+    line(margin + label_w, total_y, margin + label_w, total_y + total_h)
+    cell_text(margin + 8, total_y, label_w - 8, total_h, "합계금액(공급가액+세액)", 18, True,
+              align=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+    amounts = draft_amounts(draft)
+    cell_text(margin + label_w + 14, total_y, right - margin - label_w - 14, total_h,
+              f"₩{amounts['total']:,}원", 19, True,
+              align=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+
+    # Main item table.
+    table_y = total_y + total_h
+    table_w = right - margin
+    columns = [200, 70, 50, 125, 125, 125, 209]
+    headers = ["품 명", "규격", "수량", "단 가", "공급가액", "세 액", "비 고"]
+    header_h, row_h, data_rows, sum_h = 34, 30, 23, 34
+    x = margin
+    rect(margin, table_y, table_w, header_h, thick)
+    for idx, (cw, header) in enumerate(zip(columns, headers)):
+        if idx:
+            line(x, table_y, x, table_y + header_h)
+        cell_text(x, table_y, cw, header_h, header, 14, True)
+        x += cw
+
+    item_data = []
+    for item in draft.get("items", []):
+        qty = int(item["quantity"])
+        unit = int(item["unitPrice"])
+        item_data.append((item["species"], item.get("specification", ""), qty, unit, qty * unit, "", ""))
+    if draft.get("isPrepaid") and int(draft.get("shippingFee", 0) or 0) > 0:
+        fee = int(draft["shippingFee"])
+        item_data.append(("운반비", "선불", 1, fee, fee, "", "택배비"))
+
+    data_y = table_y + header_h
+    for row_index in range(data_rows):
+        y = data_y + row_index * row_h
+        rect(margin, y, table_w, row_h)
+        x = margin
+        for idx, cw in enumerate(columns):
+            if idx:
+                line(x, y, x, y + row_h)
+            value = ""
+            if row_index < len(item_data):
+                value = item_data[row_index][idx]
+            align = Qt.AlignmentFlag.AlignCenter
+            if idx == 0:
+                align = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+            elif idx in (3, 4, 5):
+                align = Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+            if isinstance(value, int):
+                value = f"{value:,}"
+            cell_text(x, y, cw, row_h, value, 13, False, align)
+            x += cw
+
+    sum_y = data_y + data_rows * row_h
+    rect(margin, sum_y, table_w, sum_h, thick)
+    x = margin
+    for idx, cw in enumerate(columns):
+        if idx:
+            line(x, sum_y, x, sum_y + sum_h)
+        if idx == 0:
+            value = "계"
+        elif idx == 4:
+            value = f"{amounts['supply']:,}"
+        elif idx == 5:
+            value = f"{amounts['tax']:,}" if amounts["tax"] else ""
+        else:
+            value = ""
+        align = Qt.AlignmentFlag.AlignCenter if idx not in (4, 5) else Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+        cell_text(x, sum_y, cw, sum_h, value, 14, True, align)
+        x += cw
+
+    # Important notes area.
+    notes_y, notes_h = sum_y + sum_h, 218
+    label_notes_w = 200
+    rect(margin, notes_y, table_w, notes_h, thick)
+    line(margin + label_notes_w, notes_y, margin + label_notes_w, notes_y + notes_h)
+    cell_text(margin, notes_y, label_notes_w, notes_h, "중요사항", 18, True)
+
+    payment = draft.get("paymentAccount", "").strip() or "농협 328-12-035671 오진웅"
+    shipping_note = (
+        f"택배비 선불 {int(draft.get('shippingFee', 0) or 0):,}원 · 합계 포함"
+        if draft.get("isPrepaid")
+        else f"택배비 후불 · 선불 시 {int(draft.get('shippingFee', 0) or 0):,}원"
+    )
+    note = draft.get("note", "").strip() or "별도 요청사항 없음"
+    notes = [
+        f"1. {payment}",
+        "2. 견적후 일정기간후 금액변동 있을수 있음.",
+        "3. 계산서 또는 현금영수증 발행은 정상가격 처리후 7일이내 발행 가능합니다.",
+        f"4. {shipping_note}",
+        f"5. 요청사항 : {note}",
+    ]
+    _paint_text(painter,
+                (margin + label_notes_w + 20, notes_y + 14, table_w - label_notes_w - 34, notes_h - 24),
+                "\n\n".join(notes), 13, False,
+                Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop, black, True)
+
+    painter.end()
+    return image
+
+
+def preview_temporary_quote(parent, image):
+    """Preview/print an in-memory A4 quote image without creating a local file."""
     dialog = QDialog(parent)
     dialog.setWindowTitle("공식 견적서 미리보기")
     screen = parent.screen() if parent is not None and hasattr(parent, "screen") else QApplication.primaryScreen()
     available = screen.availableGeometry() if screen else None
     if available:
-        dialog.resize(min(1120, available.width() - 50), min(960, available.height() - 50))
+        dialog.resize(min(1180, available.width() - 50), min(1000, available.height() - 50))
+        max_preview_w = max(520, dialog.width() - 90)
+        max_preview_h = max(680, dialog.height() - 125)
     else:
-        dialog.resize(1050, 900)
+        dialog.resize(1120, 940)
+        max_preview_w, max_preview_h = 1000, 820
+
     layout = QVBoxLayout(dialog)
     layout.setContentsMargins(12, 12, 12, 10)
-    view = QTextBrowser()
-    view.setStyleSheet("QTextBrowser{background:#dfe3df;border:0;padding:18px;}")
-    view.setHtml(html)
-    layout.addWidget(view, 1)
+
+    page = QLabel()
+    page.setAlignment(Qt.AlignmentFlag.AlignCenter)
+    page.setStyleSheet("QLabel{background:#dfe3df;border:0;padding:12px;}")
+    pixmap = QPixmap.fromImage(image)
+    scaled = pixmap.scaled(max_preview_w, max_preview_h,
+                           Qt.AspectRatioMode.KeepAspectRatio,
+                           Qt.TransformationMode.SmoothTransformation)
+    page.setPixmap(scaled)
+    layout.addWidget(page, 1)
+
     row = QHBoxLayout()
-    row.addWidget(label("임시 생성 문서 · 별도 파일로 저장하지 않습니다.", "muted"))
+    row.addWidget(label("A4 비율 임시 생성 문서 · 별도 파일로 저장하지 않습니다.", "muted"))
     row.addStretch()
 
     def print_only():
@@ -468,9 +733,15 @@ def preview_temporary_document(parent, html):
         printer.setPageSize(QPageSize(QPageSize.PageSizeId.A4))
         if QPrintDialog(printer, dialog).exec() != QDialog.DialogCode.Accepted:
             return
-        document = QTextDocument()
-        document.setHtml(html)
-        document.print_(printer)
+        painter = QPainter(printer)
+        page_rect = printer.pageLayout().paintRectPixels(printer.resolution())
+        printed = image.scaled(page_rect.size(),
+                               Qt.AspectRatioMode.KeepAspectRatio,
+                               Qt.TransformationMode.SmoothTransformation)
+        x = page_rect.x() + (page_rect.width() - printed.width()) // 2
+        y = page_rect.y() + (page_rect.height() - printed.height()) // 2
+        painter.drawImage(x, y, printed)
+        painter.end()
 
     row.addWidget(button("프린터 출력", print_only))
     row.addWidget(button("닫기", dialog.accept, True))
@@ -1256,7 +1527,7 @@ class QuoteDeliveryDialog(QDialog):
             self.draft["shippingFee"] = 6000
         self.manager = manager
         self.delivery_state = dict(delivery_state or {})
-        self.generated_quote_html = ""
+        self.generated_quote_image = None
         self.request_status = (
             request_status
             or ("수기견적" if not draft.get("sourceRequestId") else "상태확인")
@@ -1678,8 +1949,8 @@ class QuoteDeliveryDialog(QDialog):
     def recalculate_shipping(self, *args):
         if not hasattr(self, "total_value"):
             return
-        if hasattr(self, "preview_quote_button") and self.generated_quote_html:
-            self.generated_quote_html = ""
+        if hasattr(self, "preview_quote_button") and self.generated_quote_image is not None:
+            self.generated_quote_image = None
             self.preview_quote_button.setEnabled(False)
             self.generate_quote_button.setText("공식견적서 생성")
         prepaid = self.shipping_prepaid.isChecked()
@@ -1767,16 +2038,16 @@ class QuoteDeliveryDialog(QDialog):
     def generate_official_quote(self):
         if not self.persist_shipping():
             return
-        self.generated_quote_html = official_quote_html(self.draft)
+        self.generated_quote_image = render_official_quote_image(self.draft)
         self.preview_quote_button.setEnabled(True)
         self.generate_quote_button.setText("공식견적서 재생성")
         self.shipping_status.setText(self.shipping_status.text() + " · 공식견적서 임시 생성됨")
 
     def preview_official_quote(self):
-        if not self.generated_quote_html:
+        if self.generated_quote_image is None:
             QMessageBox.information(self, "공식견적서", "먼저 공식견적서를 생성해주세요.")
             return
-        preview_temporary_document(self, self.generated_quote_html)
+        preview_temporary_quote(self, self.generated_quote_image)
 
     def mark_sent(self):
         if not self.persist_shipping():

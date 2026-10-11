@@ -15,7 +15,8 @@ from namufarm_desktop.commerce import (new_draft, draft_amounts, order_from_draf
     quote_html, official_quote_html, shipping_html, shipping_csv, parse_tracking_csv, tracking_fields, tracking_number, TRACKING_PREFIX)
 from namufarm_desktop.domain import metadata, now_ms
 from namufarm_desktop.errors import UserError, NetworkError
-from namufarm_desktop.workspace import SellerWindow, QuoteDialog, QuoteDeliveryDialog, QuoteEmailDialog, QuoteSmsDialog
+from namufarm_desktop.workspace import (SellerWindow, QuoteDialog, QuoteDeliveryDialog, QuoteEmailDialog,
+    QuoteSmsDialog, render_official_quote_image)
 from namufarm_desktop.demo import show_demo
 from support import Bridge, manager_at
 from qt_support import QtTestCase
@@ -417,16 +418,26 @@ class SellerUiTest(QtTestCase):
                      requestReceiptNumber='NAMU-20261011-0001', shippingFee=6000,
                      isPrepaid=False, taxAmount=0)
         dialog = QuoteDeliveryDialog(draft, '견적확정')
-        self.assertEqual('', dialog.generated_quote_html)
+        self.assertIsNone(dialog.generated_quote_image)
         dialog.generate_official_quote()
-        self.assertIn('견 적 서', dialog.generated_quote_html)
+        self.assertIsNotNone(dialog.generated_quote_image)
+        self.assertEqual((954, 1349), (dialog.generated_quote_image.width(), dialog.generated_quote_image.height()))
         self.assertTrue(dialog.preview_quote_button.isEnabled())
         self.assertEqual('공식견적서 재생성', dialog.generate_quote_button.text())
         dialog.shipping_prepaid.click()
         self.app.processEvents()
-        self.assertEqual('', dialog.generated_quote_html)
+        self.assertIsNone(dialog.generated_quote_image)
         self.assertFalse(dialog.preview_quote_button.isEnabled())
         dialog.close()
+
+    def test_official_quote_renderer_uses_exact_a4_ratio_canvas(self):
+        draft = draft_for_test()
+        draft.update(requestReceiptNumber='NAMU-20261011-0003', taxAmount=0,
+                     shippingFee=6000, isPrepaid=False)
+        image = render_official_quote_image(draft)
+        self.assertEqual(954, image.width())
+        self.assertEqual(1349, image.height())
+        self.assertFalse(image.isNull())
 
     def test_delivery_dialog_expands_item_area_for_multiple_rows(self):
         draft = draft_for_test()
