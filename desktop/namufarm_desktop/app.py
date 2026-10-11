@@ -308,11 +308,12 @@ class MainWindow(QMainWindow):
         page = QWidget()
         layout = QVBoxLayout(page)
         self.request_search = QLineEdit()
-        self.request_search.setPlaceholderText("접수번호 · 고객명 · 전화번호 · 묘목 · 지역 검색")
+        self.request_search.setPlaceholderText("접수번호 · 고객명 · 전화번호 · 메일주소 · 묘목 · 지역 검색")
         self.request_search.textChanged.connect(self.refresh_requests)
         layout.addWidget(self.request_search)
         split = QSplitter(Qt.Orientation.Vertical)
-        self.request_table = table(["접수번호", "접수일", "상태", "고객명", "전화번호", "희망 묘목", "지역", "견적서"])
+        # The shared table helper stretches the final section, so keep the longest field last.
+        self.request_table = table(["접수번호", "접수일", "상태", "고객명", "전화번호", "메일주소", "지역", "견적서요청", "희망 묘목"])
         self.request_table.itemSelectionChanged.connect(self.select_request)
         split.addWidget(self.request_table)
         self.request_detail = QPlainTextEdit()
@@ -337,8 +338,9 @@ class MainWindow(QMainWindow):
         self.request_rows = [r for r in self.data["requests"] if query in (r["requestId"] + r.get("receiptNumber", "") + str(r["personal"])).casefold()]
         self.request_table.blockSignals(True)
         fill_table(self.request_table, [(r.get("receiptNumber") or r["requestId"], timestamp(r["createdAt"]), r.get("status", "신규"), r["personal"]["customerName"], r["personal"]["customerPhone"],
-                   ", ".join(f"{i['species']} {i['quantity']}주" for i in r["personal"]["items"]), r["personal"]["region"],
-                   "요청" if r["personal"].get("formalQuoteRequested") else "—") for r in self.request_rows])
+                   r["personal"].get("customerEmail") or "—", r["personal"]["region"],
+                   "요청" if r["personal"].get("formalQuoteRequested") else "—",
+                   ", ".join(f"{i['species']} {i['quantity']}주" for i in r["personal"]["items"])) for r in self.request_rows])
         self.request_table.clearSelection()
         self.request_table.setCurrentCell(-1, -1)
         self.request_table.blockSignals(False)

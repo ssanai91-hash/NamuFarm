@@ -49,6 +49,19 @@ class UiTest(QtTestCase):
 
     def test_request_search_selection_and_personal_details(self):
         self.assertEqual(1, self.window.request_table.rowCount())
+        headers = [self.window.request_table.horizontalHeaderItem(i).text() for i in range(self.window.request_table.columnCount())]
+        self.assertEqual(
+            ['접수번호', '접수일', '상태', '고객명', '전화번호', '메일주소', '지역', '견적서요청', '희망 묘목'],
+            headers,
+        )
+        self.assertTrue(self.window.request_table.horizontalHeader().stretchLastSection())
+        person = self.window.request_rows[0]['personal']
+        self.assertEqual(person['customerPhone'], self.window.request_table.item(0, 4).text())
+        self.assertEqual(person.get('customerEmail') or '—', self.window.request_table.item(0, 5).text())
+        self.assertEqual(person['region'], self.window.request_table.item(0, 6).text())
+        self.assertEqual('요청' if person.get('formalQuoteRequested') else '—', self.window.request_table.item(0, 7).text())
+        expected_items = ', '.join(f"{i['species']} {i['quantity']}주" for i in person['items'])
+        self.assertEqual(expected_items, self.window.request_table.item(0, 8).text())
         self.window.request_table.selectRow(0)
         self.app.processEvents()
         self.assertIn('01012345678', self.window.request_detail.toPlainText())
