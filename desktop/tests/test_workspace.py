@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from PySide6.QtWidgets import QDialog, QMessageBox, QTableWidgetItem
+from PySide6.QtWidgets import QDialog, QLabel, QMessageBox, QTableWidgetItem
 from PySide6.QtGui import QTextDocument
 from PySide6.QtPrintSupport import QPrinter
 from namufarm_desktop.commerce import (new_draft, draft_amounts, order_from_draft, quote_document,
@@ -16,7 +16,7 @@ from namufarm_desktop.commerce import (new_draft, draft_amounts, order_from_draf
 from namufarm_desktop.domain import metadata, now_ms
 from namufarm_desktop.errors import UserError, NetworkError
 from namufarm_desktop.workspace import (SellerWindow, QuoteDialog, QuoteDeliveryDialog, QuoteEmailDialog,
-    QuoteSmsDialog, render_official_quote_image, write_temporary_quote_pdf)
+    QuoteSmsDialog, CustomerOrderDialog, render_official_quote_image, write_temporary_quote_pdf)
 from namufarm_desktop.demo import show_demo
 from support import Bridge, manager_at
 from qt_support import QtTestCase
@@ -346,6 +346,12 @@ class SellerUiTest(QtTestCase):
         self.assertEqual('견적 작성', window.request_quote_button.text())
         draft_headers = [window.draft_table.horizontalHeaderItem(i).text() for i in range(window.draft_table.columnCount())]
         self.assertEqual(['견적번호', '상태', '작성일', '고객명', '연락처', '메일', '공식견적서', '품목', '판매금액'], draft_headers)
+        customer_headers = [window.sale_table.horizontalHeaderItem(i).text() for i in range(window.sale_table.columnCount())]
+        self.assertEqual(
+            ['주문번호', '상태', '주문일', '고객명', '연락처', '이메일', '수령인', '배송주소', '품목', '결제금액'],
+            customer_headers,
+        )
+        self.assertEqual(['입금확인', '입금확인', '입금확인'], [window.sale_table.item(i, 1).text() for i in range(3)])
         self.assertGreaterEqual(window.request_actions.indexOf(window.delete_button), 0)
         self.assertGreaterEqual(window.request_actions.indexOf(window.request_quote_button), 0)
         self.assertEqual(3, len(window.shipping_rows))
@@ -356,6 +362,24 @@ class SellerUiTest(QtTestCase):
             self.assertLessEqual(window.stack.geometry().right(), window.width())
         window.demo_mode = False
         window.close()
+
+    def test_customer_order_dialog_matches_current_workflow_and_collects_fields(self):
+        draft = draft_for_test()
+        order = order_from_draft(draft)
+        row = {'metadata': metadata(order), 'private': {'order': order}}
+        dialog = CustomerOrderDialog(row)
+        dialog.show()
+        self.app.processEvents()
+        self.assertEqual('입금확인', dialog.findChild(QLabel, 'customerStatusBadge').text())
+        headers = [dialog.items.horizontalHeaderItem(i).text() for i in range(dialog.items.columnCount())]
+        self.assertEqual(['묘목명', '규격', '수량', '판매 단가', '판매 금액'], headers)
+        self.assertTrue(dialog.delivery_button.isEnabled())
+        self.assertTrue(dialog.cancel_order_button.isEnabled())
+        dialog.customer_fields['customerEmail'].setText('buyer@example.com')
+        fields = dialog.collect_fields()
+        self.assertEqual('buyer@example.com', fields['customerEmail'])
+        self.assertIn('costConfirmed', fields)
+        dialog.close()
 
     def test_request_quote_price_editor_steps_and_manual_input(self):
         draft = draft_for_test()
