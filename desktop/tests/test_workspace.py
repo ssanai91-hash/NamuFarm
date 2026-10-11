@@ -292,10 +292,17 @@ class SellerUiTest(QtTestCase):
         self.assertEqual(['묘목명', '수량', '판매 금액', '판매 단가'], headers)
         self.assertEqual('견적 확정', dialog.confirm_button.text())
         self.assertEqual('20,000', dialog.items.item(0, 2).text())
-        self.assertEqual('후불', dialog.shipping_method.currentText())
+        self.assertTrue(dialog.shipping_cod.isChecked())
+        self.assertFalse(dialog.shipping_prepaid.isChecked())
         self.assertEqual('6000', dialog.shipping_fee.text())
         self.assertEqual(6000, dialog.collect()['shippingFee'])
         self.assertFalse(dialog.collect()['isPrepaid'])
+        self.assertGreaterEqual(dialog.note.width(), dialog.width() * 0.75)
+
+        dialog.shipping_prepaid.click()
+        self.app.processEvents()
+        self.assertTrue(dialog.shipping_prepaid.isChecked())
+        self.assertTrue(dialog.collect()['isPrepaid'])
 
         price = dialog.unit_price_editor(0)
         self.assertEqual('10000', price.text())
