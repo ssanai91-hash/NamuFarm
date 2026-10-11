@@ -15,7 +15,7 @@ function open(envelope,kind,reference) {
  return JSON.parse(Buffer.concat([aes.update(bytes.subarray(0,-16)),aes.final()]).toString('utf8'));
 }
 function fixture({configure=true,now=Date.now(),monthly=false}={}) {
- const properties={SPREADSHEET_ID:'test',WEB_SECRET:'a'.repeat(64)},books=new Map(),files=new Map(),cache=new Map(),sent=[],mail=[],triggers=['dispatchQuoteNotifications'];
+ const properties={SPREADSHEET_ID:'test',WEB_SECRET:'a'.repeat(64)},books=new Map(),files=new Map(),cache=new Map(),sent=[],mail=[],sms=[],triggers=['dispatchQuoteNotifications'];
  let locked=false,failCache=false,failWrite=false,failPush=false,failReceipt=false,clock=now,nextSheet=0,nextBook=0,createFailure=null,writeFailure=null,lockFailure=false,writeHook=null;
  const operations=[],reads=[];
  class FixtureDate extends Date { constructor(...args){super(...(args.length?args:[clock]));} static now(){return clock;} }
@@ -48,11 +48,13 @@ function fixture({configure=true,now=Date.now(),monthly=false}={}) {
  },get:id=>files.get(id),list({q}){const token=/key='namufarmQuoteToken' and value='([^']+)'/.exec(q)[1];return{files:[...files.values()].filter(f=>f.appProperties.namufarmQuoteToken===token).map(f=>({id:f.id}))}}}},
  LockService:{getScriptLock:()=>({tryLock(){if(lockFailure){lockFailure=false;return false}if(locked)return false;locked=true;return true},releaseLock(){locked=false}})},
  CacheService:{getScriptCache:()=>({get:k=>cache.get(k),put(k,v){if(failCache){failCache=false;throw Error('cache failure')};cache.set(k,v)}})},
- Utilities:{DigestAlgorithm:{SHA_256:'sha256'},Charset:{UTF_8:'utf8'},computeDigest:(_,v)=>[...crypto.createHash('sha256').update(v).digest()],getUuid:()=>crypto.randomUUID(),base64Decode:v=>[...Buffer.from(v,'base64')],base64Encode:v=>Buffer.from(v.map(x=>(x+256)%256)).toString('base64')},
+ Utilities:{DigestAlgorithm:{SHA_256:'sha256'},Charset:{UTF_8:'utf8'},computeDigest:(_,v)=>[...crypto.createHash('sha256').update(v).digest()],computeHmacSha256Signature:(v,k)=>[...crypto.createHmac('sha256',k).update(v).digest()],getUuid:()=>crypto.randomUUID(),base64Decode:v=>[...Buffer.from(v,'base64')],base64Encode:v=>Buffer.from(v.map(x=>(x+256)%256)).toString('base64')},
  ScriptApp:{getOAuthToken:()=> 'test-token',getProjectTriggers:()=>triggers.map(name=>({getHandlerFunction:()=>name})),newTrigger(name){return{timeBased(){return this},everyMinutes(){return this},create(){triggers.push(name)}}}},
  MailApp:{getRemainingDailyQuota:()=>100,sendEmail:options=>mail.push(JSON.parse(JSON.stringify(options)))},
  ContentService:{MimeType:{JSON:'json'},createTextOutput:text=>({setMimeType:()=>JSON.parse(text)})},
- UrlFetchApp:{fetch(url,options){assert.equal(locked,false,'Network must not hold submission lock');const payload=JSON.parse(options.payload);sent.push(payload);if(failPush)throw Error('offline');
+ UrlFetchApp:{fetch(url,options){assert.equal(locked,false,'Network must not hold submission lock');const payload=JSON.parse(options.payload);
+ if(url==='https://api.solapi.com/messages/v4/send-many/detail'){sms.push({url,payload,headers:{...(options.headers||{})}});return{getResponseCode:()=>200,getContentText:()=>JSON.stringify({groupInfo:{groupId:'G4V_TEST'},failedMessageList:[],messageList:[{messageId:'M4V_TEST',statusCode:'2000',statusMessage:'정상 접수'}]})}}
+ sent.push(payload);if(failPush)throw Error('offline');
  if(url.endsWith('/api/internal/encrypt')) {const request=context.validateRequest_({...payload.request,website:''});return{getResponseCode:()=>200,getContentText:()=>JSON.stringify({ok:true,encryptedRequest:seal(request,'quote',request.requestId),fingerprint:crypto.createHmac('sha256',properties.WEB_SECRET).update(JSON.stringify(request)).digest('hex')})}}
  return{getResponseCode:()=>200,getContentText:()=> '{}'}}}
  });
@@ -68,7 +70,7 @@ function fixture({configure=true,now=Date.now(),monthly=false}={}) {
  const saved=()=>{const r=requestRows()[0].row;const raw=JSON.parse(r[15]);return raw.request||open(raw.encryptedRequest,'quote',r[0])};
  const readRequests=after=>{const page=context.listRequests_({afterSequence:after});return{...page,requests:page.requests.map(r=>r.expired||!r.encryptedRequest?r:{...r,...open(r.encryptedRequest,'quote',r.requestId)})}};
  const seedEncrypted=(req=request)=>{const checked=context.validateRequest_(req);return context.commitQuoteRequest_({requestId:checked.requestId,fingerprint:crypto.createHmac('sha256',properties.WEB_SECRET).update(JSON.stringify(checked)).digest('hex')},{encryptedRequest:seal(checked,'quote',checked.requestId)})};
- return{seedEncrypted,context,cells,properties,request,submit,post,sent,mail,book,books,files,operations,reads,requestRows,publicKey,keyId,seal,open,saved,readRequests,
+ return{seedEncrypted,context,cells,properties,request,submit,post,sent,mail,sms,book,books,files,operations,reads,requestRows,publicKey,keyId,seal,open,saved,readRequests,
  setTime:value=>clock=Date.parse(value),getTimeZone:()=>management.timeZone,clearRate:()=>cache.clear(),
  failCache:()=>failCache=true,failWrite:()=>failWrite=true,failPush:()=>failPush=true,failReceipt:()=>failReceipt=true,
  failNextWrite:(predicate,{after=false}={})=>writeFailure={predicate,after},failCreate:({after=false}={})=>createFailure={after},failLock:()=>lockFailure=true,onNextWrite:hook=>writeHook=hook};

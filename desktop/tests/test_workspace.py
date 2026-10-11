@@ -15,7 +15,7 @@ from namufarm_desktop.commerce import (new_draft, draft_amounts, order_from_draf
     quote_html, shipping_html, shipping_csv, parse_tracking_csv, tracking_fields, tracking_number, TRACKING_PREFIX)
 from namufarm_desktop.domain import metadata, now_ms
 from namufarm_desktop.errors import UserError, NetworkError
-from namufarm_desktop.workspace import SellerWindow, QuoteDialog, QuoteDeliveryDialog, QuoteEmailDialog
+from namufarm_desktop.workspace import SellerWindow, QuoteDialog, QuoteDeliveryDialog, QuoteEmailDialog, QuoteSmsDialog
 from namufarm_desktop.demo import show_demo
 from support import Bridge, manager_at
 from qt_support import QtTestCase
@@ -177,6 +177,23 @@ class WorkspaceServiceTest(unittest.TestCase):
         self.assertTrue(result['delivery']['emailSentAt'] > 0)
         self.assertEqual('buyer@example.com', result['delivery']['emailTo'])
         self.assertEqual('ssanai91@gmail.com', result['delivery']['senderEmail'])
+        self.assertEqual(result['delivery'], self.manager.quote_delivery_state(draft['id']))
+
+    def test_quote_sms_sends_through_server_and_records_delivery_state(self):
+        self.bridge.send(control='configure_sms')
+        self.bridge.send(control='submit')
+        view = self.manager.sync()
+        draft = draft_for_test()
+        draft['sourceRequestId'] = view['requests'][0]['requestId']
+        self.manager.confirm_quote(draft)
+        profile = self.manager.sms_profile()
+        self.assertTrue(profile['configured'])
+        self.assertEqual('01044460304', profile['senderPhone'])
+        result = self.manager.send_quote_sms(draft, '테스트 고객님 견적 안내입니다.')
+        self.assertTrue(result['delivery']['smsSentAt'] > 0)
+        self.assertEqual('01012345678', result['delivery']['smsTo'])
+        self.assertEqual('01044460304', result['delivery']['senderPhone'])
+        self.assertEqual('M4V_TEST', result['delivery']['smsMessageId'])
         self.assertEqual(result['delivery'], self.manager.quote_delivery_state(draft['id']))
 
     def test_shipping_export_preferences_are_encrypted_and_do_not_advance_sale(self):
@@ -382,6 +399,62 @@ class SellerUiTest(QtTestCase):
         dialog = QuoteDeliveryDialog(draft, '견적확정')
         self.assertGreaterEqual(dialog.items.minimumHeight(), 62 + 6 * 54)
         dialog.close()
+
+    def test_quote_sms_dialog_shows_setup_needed_without_keys(self):
+        class FakeSmsManager:
+            def sms_profile(self):
+                return {'provider': 'SOLAPI', 'configured': False, 'senderPhone': ''}
+
+        draft = draft_for_test()
+        draft.update(sourceRequestId='123e4567-e89b-12d3-a456-426614174000',
+                     requestReceiptNumber='NAMU-20261011-0001', shippingFee=6000, isPrepaid=False, taxAmount=0)
+        dialog = QuoteSmsDialog(draft, FakeSmsManager())
+        dialog.show()
+        self.app.processEvents()
+        if dialog.profile_task:
+            self.assertTrue(dialog.profile_task.wait(10000))
+            self.app.processEvents()
+        self.assertEqual('SOLAPI 설정 필요', dialog.sender_phone.text())
+        self.assertFalse(dialog.send_button.isEnabled())
+        self.assertIn('SOLAPI_KEY', dialog.status.text())
+        self.assertIn('품목1 : 소나무 2주', dialog.message.toPlainText())
+        dialog.close()
+
+    def test_quote_sms_success_updates_delivery_state_and_closes_cleanly(self):
+        class FakeSmsManager:
+            def sms_profile(self):
+                return {'provider': 'SOLAPI', 'configured': True, 'senderPhone': '01044460304'}
+
+            def send_quote_sms(self, draft, text):
+                return {
+                    'delivery': {'smsSentAt': 123456789, 'smsTo': draft['customerPhone'],
+                                 'senderPhone': '01044460304', 'smsMessageId': 'M4V_TEST'},
+                    'senderPhone': '01044460304', 'messageId': 'M4V_TEST',
+                    'statusCode': '2000', 'statusMessage': '정상 접수',
+                }
+
+        draft = draft_for_test()
+        draft.update(sourceRequestId='123e4567-e89b-12d3-a456-426614174000',
+                     requestReceiptNumber='NAMU-20261011-0001', shippingFee=6000, isPrepaid=False, taxAmount=0)
+        dialog = QuoteSmsDialog(draft, FakeSmsManager())
+        dialog.show()
+        self.app.processEvents()
+        if dialog.profile_task:
+            self.assertTrue(dialog.profile_task.wait(10000))
+            self.app.processEvents()
+        self.assertTrue(dialog.send_button.isEnabled())
+
+        with patch('namufarm_desktop.workspace.QMessageBox.information') as notice:
+            dialog.send_sms()
+            task = dialog.send_task
+            self.assertIsNotNone(task)
+            self.assertTrue(task.wait(10000))
+            self.app.processEvents()
+
+        self.assertIsNone(dialog.send_task)
+        self.assertEqual(QDialog.DialogCode.Accepted, dialog.result())
+        self.assertEqual(123456789, dialog.delivery_state['smsSentAt'])
+        notice.assert_called_once()
 
     def test_quote_email_dialog_is_message_focused_and_uses_customer_name(self):
         draft = draft_for_test()

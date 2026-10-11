@@ -108,3 +108,41 @@ test('quote email cannot send before quote confirmation',()=>{
     bodyText:'견적 안내입니다.',bodyHtml:'<p>견적 안내입니다.</p>'
   }));
 });
+
+
+test('quote sms profile is available before SOLAPI keys are configured',()=>{
+  const f=fixture();
+  const info=f.context.secureServiceInfo_();
+  assert.equal(info.quoteSms,true);assert.equal(info.quoteSmsProvider,'SOLAPI');
+  const profile=f.context.quoteSmsProfile_();
+  assert.deepEqual(JSON.parse(JSON.stringify(profile)),{provider:'SOLAPI',configured:false,senderPhone:''});
+});
+
+test('confirmed quote sms is accepted by SOLAPI with registered sender settings',()=>{
+  const f=fixture();f.submit();
+  f.context.updateRequestStatus_({requestId:f.request.requestId,status:'견적확정'});
+  f.properties.SOLAPI_KEY='test-api-key';
+  f.properties.SOLAPI_SECRET='test-api-secret';
+  f.properties.SOLAPI_FROM='010-4446-0304';
+  const profile=f.context.quoteSmsProfile_();
+  assert.equal(profile.configured,true);assert.equal(profile.senderPhone,'01044460304');
+  const result=f.context.sendQuoteSms_({
+    requestId:f.request.requestId,recipientPhone:'010-1234-5678',
+    text:'김나무님, 요청하신 묘목 견적입니다.\n총금액 40,000원'
+  });
+  assert.equal(result.sent,true);assert.equal(result.statusCode,'2000');
+  assert.equal(result.senderPhone,'01044460304');assert.equal(result.recipientPhone,'01012345678');
+  assert.equal(f.sms.length,1);
+  assert.equal(f.sms[0].payload.messages[0].from,'01044460304');
+  assert.equal(f.sms[0].payload.messages[0].to,'01012345678');
+  assert.equal(f.sms[0].payload.messages[0].autoTypeDetect,true);
+  assert.match(f.sms[0].headers.Authorization,/^HMAC-SHA256 apiKey=test-api-key,/);
+});
+
+test('quote sms refuses sending without SOLAPI credentials',()=>{
+  const f=fixture();f.submit();
+  f.context.updateRequestStatus_({requestId:f.request.requestId,status:'견적확정'});
+  assert.throws(()=>f.context.sendQuoteSms_({
+    requestId:f.request.requestId,recipientPhone:'01012345678',text:'견적 안내입니다.'
+  }));
+});

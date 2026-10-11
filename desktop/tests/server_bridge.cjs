@@ -33,6 +33,7 @@ readline.createInterface({input:process.stdin}).on('line',line=>{
   else if(request.control==='submit_plain'){const req={...f.request,requestId:crypto.randomUUID()};const resultId=req.requestId;const receipt=f.post({action:'submit_request',protocolVersion:5,request:req,requestId:resultId,rateKey:'b'.repeat(64),fingerprint:crypto.createHash('sha256').update(JSON.stringify(req)).digest('hex'),webSecret:f.properties.WEB_SECRET});result={...receipt,requestId:resultId};}
   else if(request.control==='submit'){f.seedEncrypted();result={requestId:f.request.requestId};}
   else if(request.control==='submit_new'){const req={...f.request,requestId:crypto.randomUUID()};f.seedEncrypted(req);result={requestId:req.requestId};}
+  else if(request.control==='configure_sms'){f.properties.SOLAPI_KEY='test-api-key';f.properties.SOLAPI_SECRET='test-api-secret';f.properties.SOLAPI_FROM='01044460304';result={ok:true};}
   else if(request.control==='fail_write'){f.failWrite();result={ok:true};}
   else if(request.control==='fail_receipt'){f.failReceipt();result={ok:true};}
   else if(request.control==='stored') {

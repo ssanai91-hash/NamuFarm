@@ -4,7 +4,6 @@ import json
 from datetime import datetime
 from pathlib import Path
 from html import escape as html_escape
-from urllib.parse import quote as url_quote
 
 from PySide6.QtCore import Qt, QUrl, QSaveFile, QIODevice, QTimer, Signal, Slot
 from PySide6.QtGui import QColor, QDesktopServices, QFont, QIntValidator, QKeySequence, QShortcut, QTextDocument, QPageSize
@@ -332,6 +331,25 @@ QPushButton#emailSendPrimary{
 }
 QPushButton#emailSendPrimary:hover{background:#275680;border-color:#275680;}
 QPushButton#emailSendPrimary:disabled{background:#aab8c6;border-color:#aab8c6;color:#eef2f5;}
+
+QDialog#quoteSmsDialog{background:#f4f7f3;}
+QLabel#smsSendStatus{
+    background:#edf4ea;
+    color:#47624e;
+    border:1px solid #d5e2d2;
+    border-radius:8px;
+    padding:9px 11px;
+}
+QPushButton#smsSendPrimary{
+    background:#3e7a50;
+    color:#ffffff;
+    border:1px solid #3e7a50;
+    border-radius:8px;
+    padding:11px 24px;
+    font-weight:800;
+}
+QPushButton#smsSendPrimary:hover{background:#316640;border-color:#316640;}
+QPushButton#smsSendPrimary:disabled{background:#a9baad;border-color:#a9baad;color:#eef2ed;}
 """
 
 
@@ -751,6 +769,204 @@ class QuoteDialog(QDialog):
             self.accept()
         except UserError as error:
             QMessageBox.warning(self, "견적 입력 확인", str(error))
+
+
+class QuoteSmsDialog(QDialog):
+    """SOLAPI를 통한 실제 견적 문자 작성/전송 팝업."""
+
+    def __init__(self, draft, manager=None, parent=None):
+        super().__init__(parent)
+        self.draft = copy.deepcopy(draft)
+        self.manager = manager
+        self.delivery_state = {}
+        self.profile_task = None
+        self.send_task = None
+        self.setObjectName("quoteSmsDialog")
+        self.setWindowTitle("견적 문자 보내기")
+        self.setSizeGripEnabled(True)
+
+        screen = parent.screen() if parent is not None and hasattr(parent, "screen") else QApplication.primaryScreen()
+        available = screen.availableGeometry() if screen else None
+        if available:
+            width = min(860, max(700, int(available.width() * 0.66)))
+            height = min(820, max(640, int(available.height() * 0.82)))
+            width = min(width, max(620, available.width() - 40))
+            height = min(height, max(540, available.height() - 50))
+            self.resize(width, height)
+        else:
+            self.resize(840, 760)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(24, 20, 24, 20)
+        layout.setSpacing(12)
+        layout.addWidget(label("견적 문자 보내기", "deliveryTitle"))
+        layout.addWidget(label("고객 번호와 견적 내용을 확인한 뒤 SOLAPI를 통해 실제 문자를 전송합니다.", "deliverySubtitle", True))
+
+        address_card = QFrame()
+        address_card.setObjectName("emailAddressCard")
+        address = QGridLayout(address_card)
+        address.setContentsMargins(16, 12, 16, 12)
+        address.setHorizontalSpacing(12)
+        address.setVerticalSpacing(8)
+
+        self.recipient_name = QLineEdit(self.draft.get("customerName", ""))
+        self.recipient_name.setReadOnly(True)
+        self.recipient_phone = QLineEdit(self.draft.get("customerPhone", ""))
+        self.recipient_phone.setReadOnly(True)
+        self.sender_phone = QLineEdit("SOLAPI 설정 확인 중…")
+        self.sender_phone.setReadOnly(True)
+
+        address.addWidget(label("받는 사람"), 0, 0)
+        address.addWidget(self.recipient_name, 0, 1)
+        address.addWidget(label("수신번호"), 0, 2)
+        address.addWidget(self.recipient_phone, 0, 3)
+        address.addWidget(label("발신번호"), 1, 0)
+        address.addWidget(self.sender_phone, 1, 1, 1, 3)
+        address.setColumnStretch(1, 1)
+        address.setColumnStretch(3, 2)
+        layout.addWidget(address_card)
+
+        layout.addWidget(label("문자 내용", "emailSectionTitle"))
+        self.message = QPlainTextEdit(self.default_message())
+        self.message.setMinimumHeight(360)
+        layout.addWidget(self.message, 1)
+
+        self.status = label("SOLAPI 발신 설정을 확인하고 있습니다.", "smsSendStatus", True)
+        layout.addWidget(self.status)
+
+        actions = QHBoxLayout()
+        self.cancel_button = button("취소", self.reject)
+        self.send_button = QPushButton("문자 전송")
+        self.send_button.setObjectName("smsSendPrimary")
+        self.send_button.setEnabled(False)
+        self.send_button.clicked.connect(self.send_sms)
+        actions.addStretch()
+        actions.addWidget(self.cancel_button)
+        actions.addWidget(self.send_button)
+        layout.addLayout(actions)
+
+        QTimer.singleShot(0, self.load_profile)
+
+    def quote_number(self):
+        return self.draft.get("requestReceiptNumber") or ("PCQ_" + self.draft["id"][:8])
+
+    def default_message(self):
+        customer = self.draft.get("customerName") or "고객"
+        lines = [
+            f"{customer}님, 안녕하세요.",
+            "나무팜농원입니다.",
+            "",
+            "요청하신 묘목 견적을 안내드립니다.",
+            f"견적번호 : {self.quote_number()}",
+            "",
+        ]
+        for index, item in enumerate(self.draft.get("items", []), 1):
+            quantity = int(item["quantity"])
+            amount = quantity * int(item["unitPrice"])
+            lines.extend([
+                f"품목{index} : {item['species']} {quantity:,}주",
+                f"판매금액 : {amount:,}원",
+                "",
+            ])
+        total = draft_amounts(self.draft)["total"]
+        shipping = (
+            f"택배비 : 선불 {int(self.draft.get('shippingFee', 0) or 0):,}원 (총금액 포함)"
+            if self.draft.get("isPrepaid")
+            else f"택배비 : 후불 / 선불 시 {int(self.draft.get('shippingFee', 0) or 0):,}원"
+        )
+        lines.extend([
+            f"총금액 : {total:,}원",
+            shipping,
+            "",
+            "견적 확인 후 문의사항이 있으시면 연락 부탁드립니다.",
+            "010-4446-0304 / 043-732-0980",
+        ])
+        return "\n".join(lines).strip()
+
+    def load_profile(self):
+        if not self.manager:
+            self.sender_phone.setText("PC 연결 필요")
+            self.status.setText("문자 전송은 PC를 서버에 연결한 뒤 사용할 수 있습니다.")
+            return
+        self.send_button.setEnabled(False)
+        task = Task(self.manager.sms_profile, None, self)
+        self.profile_task = task
+        task.completed.connect(self.profile_loaded)
+        task.start()
+
+    @Slot(object, str, bool)
+    def profile_loaded(self, value, error, conflict):
+        task = self.profile_task
+        if task is not None:
+            task.wait()
+            self.profile_task = None
+            task.deleteLater()
+        if error:
+            self.sender_phone.setText("확인 실패")
+            self.status.setText(error)
+            self.send_button.setEnabled(False)
+            return
+        if not isinstance(value, dict) or value.get("configured") is not True:
+            self.sender_phone.setText("SOLAPI 설정 필요")
+            self.status.setText(
+                "아직 SOLAPI 키가 없습니다. Apps Script 스크립트 속성에 SOLAPI_KEY, SOLAPI_SECRET, SOLAPI_FROM을 설정하면 전송 버튼이 활성화됩니다."
+            )
+            self.send_button.setEnabled(False)
+            return
+        sender = str(value.get("senderPhone") or "")
+        self.sender_phone.setText(sender)
+        self.status.setText("SOLAPI 발신 설정 확인 완료 · 실제 문자 전송 준비됨")
+        self.send_button.setEnabled(bool(self.recipient_phone.text().strip()) and bool(sender))
+
+    def send_sms(self):
+        message = self.message.toPlainText().strip()
+        if not message:
+            QMessageBox.warning(self, "문자 확인", "문자 내용을 입력해주세요.")
+            return
+        if not self.manager or self.send_task:
+            return
+        self.message.setEnabled(False)
+        self.send_button.setEnabled(False)
+        self.cancel_button.setEnabled(False)
+        self.status.setText("고객에게 견적 문자를 전송하고 있습니다…")
+        task = Task(lambda: self.manager.send_quote_sms(self.draft, message), None, self)
+        self.send_task = task
+        task.completed.connect(self.sms_sent)
+        task.start()
+
+    @Slot(object, str, bool)
+    def sms_sent(self, value, error, conflict):
+        task = self.send_task
+        if task is not None:
+            task.wait()
+            self.send_task = None
+            task.deleteLater()
+        if error:
+            self.message.setEnabled(True)
+            self.cancel_button.setEnabled(True)
+            self.send_button.setEnabled(True)
+            self.status.setText(error)
+            return
+        if not isinstance(value, dict):
+            self.message.setEnabled(True)
+            self.cancel_button.setEnabled(True)
+            self.send_button.setEnabled(True)
+            self.status.setText("문자 전송 결과를 확인하지 못했습니다. 다시 시도해주세요.")
+            return
+        self.delivery_state = dict(value.get("delivery") or {})
+        self.sender_phone.setText(str(value.get("senderPhone") or self.sender_phone.text()))
+        self.status.setText("문자 전송완료 · SOLAPI에 정상 접수했습니다.")
+        QMessageBox.information(
+            self, "문자 전송완료",
+            f"{self.recipient_phone.text()} 번호로 견적 문자를 SOLAPI에 정상 접수했습니다."
+        )
+        self.accept()
+
+    def reject(self):
+        if self.profile_task or self.send_task:
+            self.status.setText("현재 문자 처리가 끝난 뒤 창을 닫아주세요.")
+            return
+        super().reject()
 
 
 class QuoteEmailDialog(QDialog):
@@ -1487,25 +1703,12 @@ class QuoteDeliveryDialog(QDialog):
         )
 
     def open_sms(self):
-        body = self.delivery_text()
-        if not body:
+        if not self.persist_shipping():
             return
-
-        uri = (
-            f"sms:{self.draft['customerPhone']}"
-            f"?body={url_quote(body)}"
-        )
-
-        if not QDesktopServices.openUrl(
-            QUrl.fromEncoded(uri.encode("utf-8"))
-        ):
-            QApplication.clipboard().setText(body)
-
-            QMessageBox.information(
-                self,
-                "문자 작성",
-                "문자 앱을 열 수 없어 견적 내용을 클립보드에 복사했습니다.",
-            )
+        dialog = QuoteSmsDialog(self.draft, self.manager, self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self.delivery_state = dict(dialog.delivery_state or self.delivery_state)
+            self.update_delivery_badges()
 
     def open_email(self):
         if not self.persist_shipping():

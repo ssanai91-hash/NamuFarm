@@ -6,6 +6,7 @@ const SALE_EVENT_HEADERS = ['변경번호','주문번호','revision','내용해�
 const UUID_PATTERN = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 const QUOTE_RETENTION_MS = 30*86400000;
 const QUOTE_SENDER_EMAIL = 'ssanai91@gmail.com';
+const SOLAPI_ENDPOINT = 'https://api.solapi.com/messages/v4/send-many/detail';
 function sellerKey_() {
   const raw = PropertiesService.getScriptProperties().getProperty('SELLER_PUBLIC_KEY');
   return raw ? JSON.parse(raw) : null;
@@ -21,6 +22,7 @@ function secureServiceInfo_() {
     encryptionReady:false,customerDataStorage:'plain',sellerKey:key,retentionDays:30,requestDeletionSync:true,
     receiptFormat:'NAMU-YYYYMMDD-NNNN',receiptTimeZone:'Asia/Seoul',connectionFile:true,requestSnapshot:true,
     quoteEmail:true,quoteEmailSender:QUOTE_SENDER_EMAIL,
+    quoteSms:true,quoteSmsProvider:'SOLAPI',
     commerceStates:['입금확인','배송완료','구매취소']};
 }
 function byteString_(value, minimum, maximum) {
@@ -356,6 +358,55 @@ function sendQuoteEmail_(body) {
   MailApp.sendEmail({to:recipient,subject:subject,body:plainBody,htmlBody:htmlBody,name:senderName});
   return {sent:true,quoteNumber:quoteNumber,recipientEmail:recipient,senderEmail:profile.senderEmail,
     sentAt:new Date().toISOString(),remainingDailyQuota:MailApp.getRemainingDailyQuota()};
+}
+
+function quoteSmsSettings_() {
+  const props=PropertiesService.getScriptProperties();
+  const apiKey=String(props.getProperty('SOLAPI_KEY')||'').trim();
+  const apiSecret=String(props.getProperty('SOLAPI_SECRET')||'').trim();
+  const senderPhone=String(props.getProperty('SOLAPI_FROM')||'').replace(/\D/g,'');
+  return {apiKey:apiKey,apiSecret:apiSecret,senderPhone:senderPhone,
+    configured:!!apiKey && !!apiSecret && /^0\d{8,10}$/.test(senderPhone)};
+}
+function quoteSmsProfile_() {
+  const settings=quoteSmsSettings_();
+  return {provider:'SOLAPI',configured:settings.configured,
+    senderPhone:settings.configured?settings.senderPhone:''};
+}
+function sendQuoteSms_(body) {
+  assert_(body && typeof body==='object');
+  const requestId=String(body.requestId||'');
+  if(requestId)assert_(['견적확정','견적발송완료'].includes(quoteRequestStatus_(requestId)),'CONFLICT');
+  const recipientPhone=String(body.recipientPhone||'').replace(/\D/g,'');
+  assert_(/^0\d{8,10}$/.test(recipientPhone),'INVALID');
+  const message=text_(body.text,1000,1);
+  const settings=quoteSmsSettings_();
+  assert_(settings.configured,'NOT_READY');
+
+  const date=new Date().toISOString();
+  const salt=Utilities.getUuid().replace(/-/g,'');
+  const signature=Utilities.computeHmacSha256Signature(date+salt,settings.apiSecret)
+    .map(b=>('0'+((b+256)%256).toString(16)).slice(-2)).join('');
+  const response=UrlFetchApp.fetch(SOLAPI_ENDPOINT,{
+    method:'post',
+    contentType:'application/json',
+    headers:{Authorization:'HMAC-SHA256 apiKey='+settings.apiKey+', date='+date+', salt='+salt+', signature='+signature},
+    payload:JSON.stringify({messages:[{to:recipientPhone,from:settings.senderPhone,text:message,autoTypeDetect:true}],
+      showMessageList:true}),
+    muteHttpExceptions:true
+  });
+  const httpCode=response.getResponseCode();
+  let result;
+  try { result=JSON.parse(response.getContentText()); } catch (_) { fail_('UNAVAILABLE'); }
+  assert_(httpCode>=200 && httpCode<300,'UNAVAILABLE');
+  const failed=Array.isArray(result.failedMessageList)?result.failedMessageList:[];
+  const list=Array.isArray(result.messageList)?result.messageList:[];
+  assert_(failed.length===0 && list.length===1 && String(list[0].statusCode)==='2000','UNAVAILABLE');
+  const accepted=list[0];
+  return {sent:true,provider:'SOLAPI',recipientPhone:recipientPhone,senderPhone:settings.senderPhone,
+    messageId:String(accepted.messageId||''),statusCode:String(accepted.statusCode||''),
+    statusMessage:String(accepted.statusMessage||''),groupId:result.groupInfo&&result.groupInfo.groupId?String(result.groupInfo.groupId):'',
+    sentAt:new Date().toISOString()};
 }
 
 function listSales_(body) {

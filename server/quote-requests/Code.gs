@@ -31,6 +31,8 @@ function doPost(e) {
       else if (body.action === 'update_request_status') value = updateRequestStatus_(body);
       else if (body.action === 'email_profile') value = quoteEmailProfile_();
       else if (body.action === 'send_quote_email') value = sendQuoteEmail_(body);
+      else if (body.action === 'sms_profile') value = quoteSmsProfile_();
+      else if (body.action === 'send_quote_sms') value = sendQuoteSms_(body);
       else if (body.action === 'register_push') value = registerPush_(body, device);
       else if (body.action === 'save_sale') value = saveSale_(body);
       else if (body.action === 'list_sales') value = listSales_(body);

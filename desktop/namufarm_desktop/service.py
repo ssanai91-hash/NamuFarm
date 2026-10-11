@@ -158,6 +158,9 @@ class Manager:
         value = states.get(identifier, {}) if isinstance(states, dict) else {}
         return {"smsSentAt": int(value.get("smsSentAt", 0) or 0),
                 "emailSentAt": int(value.get("emailSentAt", 0) or 0),
+                "smsTo": str(value.get("smsTo", "") or ""),
+                "senderPhone": str(value.get("senderPhone", "") or ""),
+                "smsMessageId": str(value.get("smsMessageId", "") or ""),
                 "emailTo": str(value.get("emailTo", "") or ""),
                 "senderEmail": str(value.get("senderEmail", "") or "")}
 
@@ -173,6 +176,38 @@ class Manager:
             states = dict(list(states.items())[-1000:])
         self.vault.save_preference("quote_delivery", states)
         return self.quote_delivery_state(identifier)
+
+    def sms_profile(self):
+        require(self.credentials.get("paired") is True, "PC를 먼저 연결해주세요.")
+        info = self.verify_server()
+        require(info.get("quoteSms") is True,
+                "현재 PC가 연결된 Apps Script 웹앱은 문자 기능 이전 버전입니다. 기존 /exec 배포를 최신 코드로 새 버전 배포해주세요.")
+        result = self.api.call("sms_profile")
+        return {"provider": str(result.get("provider") or "SOLAPI"),
+                "configured": result.get("configured") is True,
+                "senderPhone": str(result.get("senderPhone") or "")}
+
+    def send_quote_sms(self, draft, text):
+        validate_draft(draft)
+        require(isinstance(text, str) and 1 <= len(text.strip()) <= 1000, "문자 내용을 1~1,000자로 입력해주세요.")
+        recipient = draft.get("customerPhone", "").strip()
+        require(recipient, "고객 연락처가 입력되지 않았습니다.")
+        source = draft.get("sourceRequestId", "")
+        if source:
+            request = next((r for r in self.vault.rows("requests") if r["requestId"] == source), None)
+            require(request is not None, "견적 요청을 다시 동기화해주세요.")
+            require(request.get("status", "신규") in ("견적확정", "견적발송완료"),
+                    "견적확정 이후에 문자를 전송해주세요.")
+        result = self.api.call("send_quote_sms", requestId=source, recipientPhone=recipient, text=text.strip())
+        require(result.get("sent") is True and result.get("recipientPhone") == recipient,
+                "문자 전송 접수를 확인하지 못했습니다.")
+        delivery = self._mark_quote_channel_sent(
+            draft["id"], "sms", smsTo=recipient, senderPhone=result.get("senderPhone", ""),
+            smsMessageId=result.get("messageId", "")
+        )
+        return {"delivery": delivery, "senderPhone": result.get("senderPhone", ""),
+                "messageId": result.get("messageId", ""), "statusCode": result.get("statusCode", ""),
+                "statusMessage": result.get("statusMessage", ""), "sentAt": result.get("sentAt", "")}
 
     def email_profile(self):
         require(self.credentials.get("paired") is True, "PC를 먼저 연결해주세요.")
