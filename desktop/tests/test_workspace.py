@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from PySide6.QtWidgets import QTableWidgetItem
+from PySide6.QtWidgets import QDialog, QTableWidgetItem
 from PySide6.QtGui import QTextDocument
 from PySide6.QtPrintSupport import QPrinter
 from namufarm_desktop.commerce import (new_draft, draft_amounts, order_from_draft, quote_document,
@@ -408,6 +408,44 @@ class SellerUiTest(QtTestCase):
         self.assertFalse(hasattr(dialog, 'items'))
         self.assertNotIn('<table', dialog.html_body())
         dialog.close()
+
+    def test_quote_email_success_completion_stays_on_gui_thread_and_closes_cleanly(self):
+        class FakeMailManager:
+            def email_profile(self):
+                return {'senderName': '나무팜농원', 'senderEmail': 'ssanai91@gmail.com', 'remainingDailyQuota': 99}
+
+            def send_quote_email(self, draft, subject, plain, html):
+                return {
+                    'delivery': {'emailSentAt': 123456789, 'emailTo': draft['customerEmail'],
+                                 'senderEmail': 'ssanai91@gmail.com'},
+                    'senderEmail': 'ssanai91@gmail.com',
+                    'sentAt': '2026-10-11T05:00:00.000Z',
+                    'remainingDailyQuota': 98,
+                }
+
+        draft = draft_for_test()
+        draft.update(customerEmail='buyer@example.com', requestReceiptNumber='NAMU-20261011-0001',
+                     customerName='테스트 고객', shippingFee=6000, isPrepaid=False, taxAmount=0)
+        dialog = QuoteEmailDialog(draft, FakeMailManager())
+        dialog.show()
+        self.app.processEvents()
+
+        if dialog.profile_task:
+            self.assertTrue(dialog.profile_task.wait(10000))
+            self.app.processEvents()
+        self.assertIsNone(dialog.profile_task)
+
+        with patch('namufarm_desktop.workspace.QMessageBox.information') as notice:
+            dialog.send_email()
+            task = dialog.send_task
+            self.assertIsNotNone(task)
+            self.assertTrue(task.wait(10000))
+            self.app.processEvents()
+
+        self.assertIsNone(dialog.send_task)
+        self.assertEqual(QDialog.DialogCode.Accepted, dialog.result())
+        self.assertEqual(123456789, dialog.delivery_state['emailSentAt'])
+        notice.assert_called_once()
 
     def test_quote_email_message_includes_prepaid_shipping_in_total(self):
         draft = draft_for_test()

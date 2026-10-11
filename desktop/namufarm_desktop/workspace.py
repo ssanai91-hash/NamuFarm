@@ -6,7 +6,7 @@ from pathlib import Path
 from html import escape as html_escape
 from urllib.parse import quote as url_quote
 
-from PySide6.QtCore import Qt, QUrl, QSaveFile, QIODevice, QTimer, Signal
+from PySide6.QtCore import Qt, QUrl, QSaveFile, QIODevice, QTimer, Signal, Slot
 from PySide6.QtGui import QColor, QDesktopServices, QFont, QIntValidator, QKeySequence, QShortcut, QTextDocument, QPageSize
 from PySide6.QtPrintSupport import QPrinter, QPrintDialog
 from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDialog, QFileDialog, QFormLayout,
@@ -901,14 +901,18 @@ class QuoteEmailDialog(QDialog):
         self.send_button.setEnabled(False)
         task = Task(self.manager.email_profile, None, self)
         self.profile_task = task
-        task.completed.connect(lambda value, error, conflict: self.profile_loaded(task, value, error))
+        # Connect directly to a QObject slot. A lambda here can run in the worker
+        # thread in PySide, which makes subsequent widget access unsafe.
+        task.completed.connect(self.profile_loaded)
         task.start()
 
-    def profile_loaded(self, task, value, error):
-        task.wait()
-        if self.profile_task is task:
+    @Slot(object, str, bool)
+    def profile_loaded(self, value, error, conflict):
+        task = self.profile_task
+        if task is not None:
+            task.wait()
             self.profile_task = None
-        task.deleteLater()
+            task.deleteLater()
         if error:
             self.status.setText(error)
             self.send_button.setEnabled(False)
@@ -952,20 +956,31 @@ class QuoteEmailDialog(QDialog):
         plain, html = self.plain_body(), self.html_body()
         task = Task(lambda: self.manager.send_quote_email(self.draft, subject, plain, html), None, self)
         self.send_task = task
-        task.completed.connect(lambda value, error, conflict: self.email_sent(task, value, error))
+        # Keep all dialog/widget work on the GUI thread. In particular, the
+        # success QMessageBox and accept() must never be called by the worker.
+        task.completed.connect(self.email_sent)
         task.start()
 
-    def email_sent(self, task, value, error):
-        task.wait()
-        if self.send_task is task:
+    @Slot(object, str, bool)
+    def email_sent(self, value, error, conflict):
+        task = self.send_task
+        if task is not None:
+            task.wait()
             self.send_task = None
-        task.deleteLater()
+            task.deleteLater()
         if error:
             self.subject.setEnabled(True)
             self.message.setEnabled(True)
             self.cancel_button.setEnabled(True)
             self.send_button.setEnabled(True)
             self.status.setText(error)
+            return
+        if not isinstance(value, dict):
+            self.subject.setEnabled(True)
+            self.message.setEnabled(True)
+            self.cancel_button.setEnabled(True)
+            self.send_button.setEnabled(True)
+            self.status.setText("메일 전송 결과를 확인하지 못했습니다. 다시 시도해주세요.")
             return
         self.delivery_state = dict(value.get("delivery") or {})
         self.sender_email.setText(self.SENDER_EMAIL)
