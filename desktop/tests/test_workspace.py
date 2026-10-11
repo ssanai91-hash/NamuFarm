@@ -283,7 +283,7 @@ class SellerUiTest(QtTestCase):
 
     def test_request_quote_price_editor_steps_and_manual_input(self):
         draft = draft_for_test()
-        draft['sourceRequestId'] = '123e4567-e89b-12d3-a456-426614174000'
+        draft.update(sourceRequestId='123e4567-e89b-12d3-a456-426614174000', shippingFee=0, isPrepaid=False)
         dialog = QuoteDialog(draft, request_status='신규')
         dialog.show()
         self.app.processEvents()
@@ -343,7 +343,8 @@ class SellerUiTest(QtTestCase):
     def test_quote_email_dialog_is_message_focused_and_uses_customer_name(self):
         draft = draft_for_test()
         draft.update(customerEmail='buyer@example.com', requestReceiptNumber='NAMU-20261011-0001',
-                     customerName='테스트 고객', quoteRecipientName='다른 수신인')
+                     customerName='테스트 고객', quoteRecipientName='다른 수신인',
+                     shippingFee=3500, isPrepaid=False, taxAmount=0)
         dialog = QuoteEmailDialog(draft)
         dialog.show()
         self.app.processEvents()
