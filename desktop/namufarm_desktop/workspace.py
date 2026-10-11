@@ -756,13 +756,13 @@ class QuoteEmailDialog(QDialog):
         screen = parent.screen() if parent is not None and hasattr(parent, "screen") else QApplication.primaryScreen()
         available = screen.availableGeometry() if screen else None
         if available:
-            width = min(860, max(660, int(available.width() * 0.68)))
-            height = min(640, max(500, int(available.height() * 0.72)))
-            width = min(width, max(560, available.width() - 40))
-            height = min(height, max(460, available.height() - 60))
+            width = min(1000, max(760, int(available.width() * 0.78)))
+            height = min(900, max(700, int(available.height() * 0.90)))
+            width = min(width, max(620, available.width() - 40))
+            height = min(height, max(560, available.height() - 50))
             self.resize(width, height)
         else:
-            self.resize(880, 660)
+            self.resize(980, 860)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 20, 24, 20)
@@ -811,7 +811,7 @@ class QuoteEmailDialog(QDialog):
         layout.addWidget(label("메일 내용", "emailSectionTitle"))
 
         self.message = QPlainTextEdit(self.default_message())
-        self.message.setMinimumHeight(300)
+        self.message.setMinimumHeight(420)
         layout.addWidget(self.message, 1)
 
         self.status = label("Apps Script 발신 계정을 확인하고 있습니다.", "emailSendStatus", True)
@@ -844,7 +844,7 @@ class QuoteEmailDialog(QDialog):
                 f"판매금액 : {amount:,}원",
             ])
             if index < len(self.draft.get("items", [])):
-                item_lines.extend(["", ""])
+                item_lines.append("")
 
         item_total = sum(int(item["quantity"]) * int(item["unitPrice"]) for item in self.draft.get("items", []))
         shipping_fee = int(self.draft.get("shippingFee", 0) or 0)
@@ -858,29 +858,21 @@ class QuoteEmailDialog(QDialog):
         return "\n".join([
             f"{customer}님, 안녕하세요.",
             "",
-            "",
             "나무팜농원입니다.",
             "요청하신 묘목 견적을 안내드립니다.",
             "",
-            "",
             "===========================",
             "",
-            "",
             f"견적번호 : {self.quote_number()}",
-            "",
             *item_lines,
-            "",
             "",
             f"총금액 : {total:,}원",
             shipping_line,
             "",
-            "",
             "===========================",
-            "",
             "",
             "견적 내용을 확인하시고 궁금하신 사항은 편하게 연락 부탁드립니다.",
             "감사합니다.",
-            "",
             "",
             "나무팜농원",
             "010-4446-0304 / 043-732-0980",
