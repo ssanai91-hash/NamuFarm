@@ -129,25 +129,15 @@ class UiTest(QtTestCase):
         self.assertIs(task, self.window.task)
         self.wait_job()
 
-    def test_wrong_server_shows_destructive_reset_action(self):
-        old = self.window.manager.api.url
-        self.window.manager.api.url = 'https://script.google.com/macros/s/AKabcdefghijklmnopqrstuvwxyz1234567890/exec'
-        self.window.update_controls()
-        self.assertFalse(self.window.reset_server_button.isHidden())
-        self.assertTrue(self.window.reset_server_button.isEnabled())
-        self.window.manager.api.url = old
-        self.window.update_controls()
-        self.assertTrue(self.window.reset_server_button.isHidden())
+    def test_connection_screen_has_no_destructive_reset_action(self):
+        self.assertFalse(hasattr(self.window, "reset_server_button"))
+        self.assertFalse(hasattr(self.window, "reset_connection_button"))
 
-    def test_statistics_job_and_lock_clear_customer_data(self):
+    def test_statistics_job_keeps_open_workspace(self):
         self.window.fetch_report()
         self.wait_job()
         self.assertIn('총', self.window.report_summary.text())
-        self.window.sale_table.selectRow(0)
-        self.window.request_table.selectRow(0)
-        self.window.lock()
-        self.assertIsNone(self.window.manager)
-        self.assertEqual(0, self.window.sale_table.rowCount())
+        self.assertIsNotNone(self.window.manager)
         self.assertEqual(0, self.window.request_table.rowCount())
         self.assertEqual('', self.window.request_detail.toPlainText())
         self.assertEqual('', self.window.fields['customerName'].text())
