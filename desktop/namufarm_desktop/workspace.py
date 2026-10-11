@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDialog, QFil
     QMessageBox, QPlainTextEdit, QPushButton, QScrollArea, QSplitter, QStackedWidget,
     QTableWidgetItem, QTextBrowser, QVBoxLayout, QWidget, QSpinBox)
 
+from . import __version__
 from .app import MainWindow, table, fill_table, money, timestamp
 from .commerce import (ISSUER, new_draft, draft_amounts, validate_draft, quote_html, quote_document_html, shipping_html,
                        shipping_problem, parse_tracking_csv, tracking_number)
@@ -163,8 +164,10 @@ class QuoteDialog(QDialog):
         if self.simple_request:
             info = QWidget()
             form = QFormLayout(info)
-            for title, value in (("고객명", draft.get("customerName", "")),
+            for title, value in (("견적번호", draft.get("requestReceiptNumber", "") or draft.get("sourceRequestId", "")),
+                                 ("고객명", draft.get("customerName", "")),
                                  ("연락처", draft.get("customerPhone", "")),
+                                 ("이메일", draft.get("customerEmail", "") or "미입력"),
                                  ("지역", draft.get("requestRegion", ""))):
                 field = QLineEdit(str(value))
                 field.setReadOnly(True)
@@ -184,11 +187,6 @@ class QuoteDialog(QDialog):
                 reply = QLineEdit(channel)
                 reply.setReadOnly(True)
                 form.addRow("수신 방법", reply)
-                if draft.get("customerEmail", ""):
-                    email = QLineEdit(draft.get("customerEmail", ""))
-                    email.setReadOnly(True)
-                    form.addRow("이메일", email)
-
             self.note = QPlainTextEdit(draft.get("note", ""))
             self.note.setReadOnly(True)
             self.note.setMaximumHeight(140)
@@ -552,7 +550,7 @@ class SellerWindow(MainWindow):
         side.setContentsMargins(18, 32, 18, 22)
         side.setSpacing(9)
         side.addWidget(label("  namufarm", "brand"))
-        side.addWidget(label("    나무팜 판매관리", "navFoot"))
+        side.addWidget(label(f"    나무팜 판매관리 (Ver. {__version__})", "navFoot"))
         side.addSpacing(35)
         self.nav = []
         for index, (title, _) in enumerate(self.PAGES):
@@ -564,7 +562,6 @@ class SellerWindow(MainWindow):
         side.addWidget(label("  나무를 파는 일에\n  더 집중할 수 있도록.", "navFoot"))
         side.addSpacing(16)
         side.addWidget(self.lock_button)
-        side.addWidget(label("  NAMUFARM DESKTOP  /  0.3", "navFoot"))
         outer.addWidget(sidebar)
         content = QWidget()
         content_layout = QVBoxLayout(content)
@@ -909,14 +906,20 @@ class SellerWindow(MainWindow):
                 QMessageBox.information(self, "판매 기록 확인", "판매 상태로 진행된 요청입니다. 판매 · 고객 관리에서 확인해주세요.")
             return
         existing = next((d for d in self.data.get("drafts", []) if d["sourceRequestId"] == request["requestId"]), None)
-        self.edit_quote(draft=existing or new_draft(request), request_status=status)
+        draft = copy.deepcopy(existing) if existing else new_draft(request)
+        draft["requestReceiptNumber"] = request.get("receiptNumber") or request["requestId"]
+        draft["customerEmail"] = request["personal"].get("customerEmail", "")
+        self.edit_quote(draft=draft, request_status=status)
 
     def open_draft(self, *args):
         index = self.draft_table.currentRow()
         if 0 <= index < len(self.draft_rows):
-            draft = self.draft_rows[index]
+            draft = copy.deepcopy(self.draft_rows[index])
             source = draft.get("sourceRequestId", "")
             request = next((r for r in self.data.get("requests", []) if r["requestId"] == source), None) if source else None
+            if request:
+                draft["requestReceiptNumber"] = request.get("receiptNumber") or request["requestId"]
+                draft["customerEmail"] = request["personal"].get("customerEmail", "")
             self.edit_quote(draft=draft, request_status=request.get("status", "") if request else "")
 
     def remove_draft(self):

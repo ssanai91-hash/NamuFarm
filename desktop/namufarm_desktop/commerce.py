@@ -18,7 +18,9 @@ EXPORT_HEADERS = ("주문번호", "수하인명", "수하인전화", "우편번�
 def new_draft(request=None):
     person = request["personal"] if request else {}
     identifier = str(uuid.uuid4())
-    return {"id": identifier, "sourceRequestId": request["requestId"] if request else "", "createdAt": now_ms(),
+    return {"id": identifier, "sourceRequestId": request["requestId"] if request else "",
+            "requestReceiptNumber": (request.get("receiptNumber") or request["requestId"]) if request else "",
+            "createdAt": now_ms(),
             "customerName": person.get("customerName", ""), "customerPhone": person.get("customerPhone", ""),
             "customerEmail": person.get("customerEmail", ""), "receiverName": person.get("customerName", ""),
             "formalQuoteRequested": bool(person.get("formalQuoteRequested", False)),
