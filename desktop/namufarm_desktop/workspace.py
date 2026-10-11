@@ -2311,6 +2311,19 @@ def customer_status_text(status):
     }.get(status, status)
 
 
+def draft_quote_number(draft):
+    return draft.get("requestReceiptNumber") or ("PCQ_" + draft["id"][:8])
+
+
+def draft_quote_sort_key(draft):
+    """Stable quote-number ordering; created/id are deterministic tie breakers."""
+    return (
+        draft_quote_number(draft).casefold(),
+        int(draft.get("createdAt", 0) or 0),
+        str(draft.get("id", "")),
+    )
+
+
 class CustomerOrderDialog(QDialog):
     """판매 단계의 고객·배송·원가를 한 화면에서 확인하고 수정하는 팝업."""
 
@@ -2822,8 +2835,12 @@ class SellerWindow(MainWindow):
         layout.addWidget(label("확정된 견적을 고객에게 전달하고 후속 작업을 관리하세요.", "sectionTitle"))
         layout.addWidget(label("온라인 요청에서 견적을 확정하면 이 작업대로 이동합니다. 문자·메일·견적서 전달 후 견적발송완료 상태로 변경하세요.", "muted", True))
         self.draft_table = table(["견적번호", "상태", "작성일", "고객명", "연락처", "메일", "공식견적서", "품목", "판매금액"])
+        self.draft_sort_descending = False
         header = self.draft_table.horizontalHeader()
         header.setStretchLastSection(False)
+        header.setSortIndicatorShown(True)
+        header.setSortIndicator(0, Qt.SortOrder.AscendingOrder)
+        header.sectionClicked.connect(self.sort_drafts_by_header)
         header.setMinimumSectionSize(70)
         for column, width in enumerate((190, 115, 145, 100, 135, 220, 105, 320, 120)):
             header.setSectionResizeMode(column, QHeaderView.ResizeMode.Interactive)
@@ -2839,6 +2856,16 @@ class SellerWindow(MainWindow):
         bar.addWidget(self.draft_open)
         layout.addLayout(bar)
         return page
+
+    def sort_drafts_by_header(self, section):
+        if section != 0:
+            return
+        self.draft_sort_descending = not self.draft_sort_descending
+        self.draft_table.horizontalHeader().setSortIndicator(
+            0,
+            Qt.SortOrder.DescendingOrder if self.draft_sort_descending else Qt.SortOrder.AscendingOrder,
+        )
+        self.refresh_workspace()
 
     def build_customer_management(self):
         page = QWidget()
@@ -3010,10 +3037,14 @@ class SellerWindow(MainWindow):
             if source and status not in ("견적확정", "견적발송완료"):
                 continue
             draft_pairs.append((draft, status))
+        draft_pairs.sort(
+            key=lambda pair: draft_quote_sort_key(pair[0]),
+            reverse=self.draft_sort_descending,
+        )
         self.draft_rows = [draft for draft, _status in draft_pairs]
         self.draft_statuses = [status for _draft, status in draft_pairs]
         fill_table(self.draft_table, [(
-            d.get("requestReceiptNumber") or ("PCQ_" + d["id"][:8]),
+            draft_quote_number(d),
             status,
             timestamp(d["createdAt"]),
             d["customerName"],

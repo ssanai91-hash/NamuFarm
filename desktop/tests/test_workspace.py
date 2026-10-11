@@ -16,7 +16,7 @@ from namufarm_desktop.commerce import (new_draft, draft_amounts, order_from_draf
 from namufarm_desktop.domain import metadata, now_ms
 from namufarm_desktop.errors import UserError, NetworkError
 from namufarm_desktop.workspace import (SellerWindow, QuoteDialog, QuoteDeliveryDialog, QuoteEmailDialog,
-    QuoteSmsDialog, CustomerOrderDialog, render_official_quote_image, write_temporary_quote_pdf)
+    QuoteSmsDialog, CustomerOrderDialog, draft_quote_sort_key, render_official_quote_image, write_temporary_quote_pdf)
 from namufarm_desktop.demo import show_demo
 from support import Bridge, manager_at
 from qt_support import QtTestCase
@@ -360,6 +360,31 @@ class SellerUiTest(QtTestCase):
             self.app.processEvents()
             self.assertEqual(index, window.stack.currentIndex())
             self.assertLessEqual(window.stack.geometry().right(), window.width())
+        window.demo_mode = False
+        window.close()
+
+    def test_quote_workbench_is_stably_sorted_by_quote_number_and_header_toggles(self):
+        window = SellerWindow()
+        show_demo(window)
+        samples = []
+        for number in ('NAMU-20261011-0010', 'NAMU-20261011-0002', 'NAMU-20261011-0007'):
+            draft = draft_for_test()
+            draft.update(requestReceiptNumber=number, sourceRequestId='')
+            samples.append(draft)
+        window.data['drafts'] = samples
+        window.refresh_workspace()
+        ascending = [window.draft_table.item(i, 0).text() for i in range(window.draft_table.rowCount())]
+        self.assertEqual(
+            ['NAMU-20261011-0002', 'NAMU-20261011-0007', 'NAMU-20261011-0010'],
+            ascending,
+        )
+        window.sort_drafts_by_header(0)
+        descending = [window.draft_table.item(i, 0).text() for i in range(window.draft_table.rowCount())]
+        self.assertEqual(
+            ['NAMU-20261011-0010', 'NAMU-20261011-0007', 'NAMU-20261011-0002'],
+            descending,
+        )
+        self.assertEqual('NAMU-20261011-0010', window.draft_rows[0]['requestReceiptNumber'])
         window.demo_mode = False
         window.close()
 
