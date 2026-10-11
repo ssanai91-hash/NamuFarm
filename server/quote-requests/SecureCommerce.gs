@@ -332,7 +332,7 @@ function quoteEmailProfile_() {
   // MailApp is allowed to send as the deployment owner.
   return {senderName:'나무팜농원',senderEmail:QUOTE_SENDER_EMAIL,remainingDailyQuota:MailApp.getRemainingDailyQuota()};
 }
-function authorizeQuoteMail_() {
+function authorizeQuoteMail() {
   // Run this once manually in the Apps Script editor after adding script.send_mail.
   // It intentionally sends nothing; invoking MailApp is enough to request/verify authorization.
   const profile=quoteEmailProfile_();
