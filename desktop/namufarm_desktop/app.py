@@ -42,12 +42,52 @@ def table(headers):
     result.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
     result.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
     result.setAlternatingRowColors(True)
+    result.setShowGrid(True)
+    result.setGridStyle(Qt.PenStyle.SolidLine)
     result.verticalHeader().hide()
-    result.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
-    result.horizontalHeader().setStretchLastSection(True)
+
+    header = result.horizontalHeader()
+    header.setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+    header.setStretchLastSection(True)
+    header.setDefaultAlignment(Qt.AlignmentFlag.AlignCenter)
+    header.setHighlightSections(False)
+
+    result.setStyleSheet("""
+        QTableWidget {
+            background: #f6faf6;
+            alternate-background-color: #edf4ed;
+            border: 1px solid #8ea48e;
+            border-radius: 6px;
+            gridline-color: #b7c8b7;
+            selection-background-color: #dbe9d8;
+            selection-color: #17311d;
+        }
+        QTableCornerButton::section {
+            background-color: #2f5d3a;
+            border: 1px solid #24472d;
+        }
+        QHeaderView::section {
+            background-color: #2f5d3a;
+            color: #ffffff;
+            font-weight: 700;
+            padding: 8px 10px;
+            border-top: 1px solid #24472d;
+            border-bottom: 1px solid #24472d;
+            border-right: 1px solid #dbe7db;
+        }
+        QTableWidget::item {
+            padding: 7px 8px;
+            border-right: 1px solid #d7e1d7;
+            border-bottom: 1px solid #d7e1d7;
+        }
+        QTableWidget::item:selected {
+            background: #dbe9d8;
+            color: #17311d;
+        }
+    """)
+
     result.setWordWrap(False)
     return result
-
 
 def fill_table(widget, rows):
     widget.setRowCount(len(rows))
