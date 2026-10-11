@@ -6,24 +6,77 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  server:
+  verify:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - name: Server regression tests
-        run: node --test server/quote-requests/tests/*.test.cjs
-      - name: Package source for local regression verification
-        if: always()
-        run: git archive --format=tar.gz --output=namufarm-source.tar.gz HEAD
-      - uses: actions/upload-artifact@v4
-        if: always()
+      - uses: actions/setup-python@v5
         with:
-          name: storage-regression-source
-          path: namufarm-source.tar.gz
-          retention-days: 1
+          python-version: '3.12'
+      - name: Check pending implementation patch
+        id: pending
+        run: |
+          if test -f scripts/yearly-ledgers.patch; then
+            echo 'apply=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'apply=false' >> "$GITHUB_OUTPUT"
+          fi
+      - name: Install non-GUI test dependencies
+        if: steps.pending.outputs.apply == 'true'
+        run: python -m pip install 'cryptography>=44,<52' 'xlwt==1.3.0' 'xlrd>=2.0.1,<3'
+      - name: Record original failures and apply reviewed patch
+        if: steps.pending.outputs.apply == 'true'
+        run: |
+          mkdir -p "$RUNNER_TEMP/ledger-results"
+          node --test --test-reporter=tap server/quote-requests/tests/*.test.cjs > "$RUNNER_TEMP/ledger-results/before.log" 2>&1 || true
+          git apply --check scripts/yearly-ledgers.patch
+          git apply --index scripts/yearly-ledgers.patch
+          git diff --cached --check
+      - name: Verify new storage and desktop flows
+        if: steps.pending.outputs.apply == 'true'
+        env:
+          PYTHONPATH: desktop:desktop/tests
+        run: |
+          set -o pipefail
+          node --test --test-reporter=tap server/quote-requests/tests/yearly-ledgers.test.cjs | tee "$RUNNER_TEMP/ledger-results/yearly.log"
+          python -m unittest test_yearly_ledgers test_local_sync -v 2>&1 | tee "$RUNNER_TEMP/ledger-results/desktop.log"
+          python -m compileall -q desktop/namufarm_desktop desktop/tests/test_yearly_ledgers.py
+      - name: Reject any new server regression
+        if: steps.pending.outputs.apply == 'true'
+        run: |
+          node --test --test-reporter=tap server/quote-requests/tests/*.test.cjs > "$RUNNER_TEMP/ledger-results/after.log" 2>&1 || true
+          python - <<'PY'
+          import os, re
+          from pathlib import Path
+          root = Path(os.environ['RUNNER_TEMP']) / 'ledger-results'
+          before = (root / 'before.log').read_text()
+          after = (root / 'after.log').read_text()
+          failed = lambda s: set(re.findall(r'^not ok \d+ - (.*)$', s, re.M))
+          count = lambda s: int(re.search(r'^# tests (\d+)$', s, re.M).group(1))
+          assert count(before) == 136, 'Unexpected baseline; inspect before applying'
+          assert count(after) == 156, 'Incomplete server test execution'
+          assert failed(after) == failed(before), f'Changed failures: {failed(after) ^ failed(before)}'
+          assert len(failed(before)) == 8, 'Baseline differs from local verification'
+          print('156 tests: 148 passed; same 8 pre-existing failures; no new regressions.')
+          PY
+      - name: Commit verified implementation without touching main
+        if: steps.pending.outputs.apply == 'true'
+        run: |
+          git rm scripts/yearly-ledgers.patch
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'feat: separate yearly quote and paid-order ledgers with monthly tabs'
+          git push origin HEAD:fix/yearly-quote-order-sync
+          git rev-parse HEAD > "$RUNNER_TEMP/ledger-results/commit.txt"
+      - uses: actions/upload-artifact@v4
+        if: always() && steps.pending.outputs.apply == 'true'
+        with:
+          name: yearly-ledger-verification
+          path: ${{ runner.temp }}/ledger-results/
+          retention-days: 7
