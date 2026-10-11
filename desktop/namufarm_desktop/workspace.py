@@ -3,12 +3,13 @@ import copy
 import json
 import tempfile
 from datetime import datetime
+from importlib.resources import files as package_files
 from pathlib import Path
 from html import escape as html_escape
 
 from PySide6.QtCore import Qt, QUrl, QSaveFile, QIODevice, QTimer, Signal, Slot, QRectF
 from PySide6.QtGui import (QColor, QDesktopServices, QFont, QFontMetricsF, QImage, QIntValidator,
-    QKeySequence, QPainter, QPen, QPixmap, QShortcut, QTextDocument, QPageSize)
+    QKeySequence, QPainter, QPdfWriter, QPen, QPixmap, QShortcut, QTextDocument, QPageSize)
 from PySide6.QtPrintSupport import QPrinter, QPrintDialog
 from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDialog, QFileDialog, QFormLayout,
     QFrame, QGridLayout, QGroupBox, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QListWidget,
@@ -583,12 +584,25 @@ def render_official_quote_image(draft):
     fitted_text((sx2, sy[4], sx3 - sx2, sy[5] - sy[4]),
                 "T:(043)732-0980 F:732-0981", 14, False, minimum=11)
 
-    # Same stamp image cropped from the user's original form.
-    stamp_path = Path(__file__).resolve().parent / "assets" / "quote_stamp.png"
-    if stamp_path.is_file():
-        stamp = QImage(str(stamp_path))
-        if not stamp.isNull():
-            painter.drawImage(QRectF(858, 86, 54, 50), stamp)
+    # Same stamp image cropped from the user's original form. Load it through
+    # package resources so editable installs and packaged wheels behave the same.
+    stamp = QImage()
+    try:
+        stamp_bytes = package_files("namufarm_desktop").joinpath("assets", "quote_stamp.png").read_bytes()
+        stamp = QImage.fromData(stamp_bytes, "PNG")
+    except (FileNotFoundError, OSError):
+        pass
+    if not stamp.isNull():
+        painter.drawImage(QRectF(850, 82, 60, 56), stamp)
+    else:
+        # Visible emergency fallback: never silently omit the representative seal.
+        painter.save()
+        seal_pen = QPen(QColor("#a71919"), 2)
+        painter.setPen(seal_pen)
+        painter.drawEllipse(QRectF(854, 84, 52, 52))
+        _paint_text(painter, (861, 87, 38, 46), "오\n진\n웅", 10, True,
+                    Qt.AlignmentFlag.AlignCenter, QColor("#a71919"), True)
+        painter.restore()
 
     # --- Main form grid: measured directly from the reference. ---
     left, right = 26, 910
@@ -689,19 +703,20 @@ def render_official_quote_image(draft):
 
 
 def write_temporary_quote_pdf(image, path):
-    """Write one generated official quote to a temporary PDF path, replacing it atomically enough for UI use."""
+    """Write a temporary A4 PDF without touching the Windows printer subsystem."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.exists():
         path.unlink()
 
-    printer = QPrinter(QPrinter.PrinterMode.HighResolution)
-    printer.setPageSize(QPageSize(QPageSize.PageSizeId.A4))
-    printer.setOutputFormat(QPrinter.OutputFormat.PdfFormat)
-    printer.setOutputFileName(str(path))
+    writer = QPdfWriter(str(path))
+    writer.setPageSize(QPageSize(QPageSize.PageSizeId.A4))
+    writer.setResolution(300)
 
-    painter = QPainter(printer)
-    page_rect = printer.pageLayout().paintRectPixels(printer.resolution())
+    painter = QPainter(writer)
+    if not painter.isActive():
+        raise UserError("공식견적서 PDF를 임시 생성하지 못했습니다.")
+    page_rect = writer.pageLayout().paintRectPixels(writer.resolution())
     printed = image.scaled(
         page_rect.size(),
         Qt.AspectRatioMode.KeepAspectRatio,

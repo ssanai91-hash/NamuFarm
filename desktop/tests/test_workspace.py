@@ -16,7 +16,7 @@ from namufarm_desktop.commerce import (new_draft, draft_amounts, order_from_draf
 from namufarm_desktop.domain import metadata, now_ms
 from namufarm_desktop.errors import UserError, NetworkError
 from namufarm_desktop.workspace import (SellerWindow, QuoteDialog, QuoteDeliveryDialog, QuoteEmailDialog,
-    QuoteSmsDialog, render_official_quote_image)
+    QuoteSmsDialog, render_official_quote_image, write_temporary_quote_pdf)
 from namufarm_desktop.demo import show_demo
 from support import Bridge, manager_at
 from qt_support import QtTestCase
@@ -455,6 +455,18 @@ class SellerUiTest(QtTestCase):
                 if color.red() > color.green() + 20 and color.red() > color.blue() + 20:
                     red_pixels += 1
         self.assertGreater(red_pixels, 3)
+
+    def test_temporary_official_quote_pdf_does_not_require_printer(self):
+        draft = draft_for_test()
+        draft.update(requestReceiptNumber='NAMU-20261011-0003', taxAmount=0,
+                     shippingFee=6000, isPrepaid=False)
+        image = render_official_quote_image(draft)
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'NAMU-20261011-0003_공식견적서.pdf'
+            result = write_temporary_quote_pdf(image, path)
+            self.assertEqual(path, result)
+            self.assertTrue(path.is_file())
+            self.assertGreater(path.stat().st_size, 1000)
 
     def test_delivery_dialog_expands_item_area_for_multiple_rows(self):
         draft = draft_for_test()
