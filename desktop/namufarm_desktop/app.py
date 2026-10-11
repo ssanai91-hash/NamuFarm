@@ -747,7 +747,27 @@ def main():
     app.setApplicationName("NamuFarmDesktop")
     app.setOrganizationName("NamuFarm")
     app.setStyle("Fusion")
-    app.setStyleSheet("QPushButton {padding:7px 12px;} QLineEdit,QComboBox,QDateEdit {padding:5px;} QTabBar::tab {padding:10px 20px;} QGroupBox {font-weight:600;}")
+    app.setStyleSheet("""
+        QPushButton {
+            padding:7px 12px 8px 12px;
+            border:1px solid #c9d6cb;
+            border-bottom:3px solid #aebfb2;
+            border-radius:7px;
+            font-weight:600;
+        }
+        QPushButton:hover {background:#eaf1e7;border-color:#94ad99;border-bottom-color:#78967f;}
+        QPushButton:pressed {
+            background:#d8e6d6;
+            border:1px solid #8da392;
+            border-top:3px solid #708c76;
+            border-bottom:1px solid #a8b8aa;
+            padding:9px 12px 6px 12px;
+        }
+        QPushButton:disabled {color:#9aa69d;border-color:#e1e6df;border-bottom:2px solid #d9dfd9;}
+        QLineEdit,QComboBox,QDateEdit {padding:5px;}
+        QTabBar::tab {padding:10px 20px;}
+        QGroupBox {font-weight:600;}
+    """)
     from .workspace import SellerWindow
     window = SellerWindow()
     # SellerWindow already uses a 1920x1080 (FHD) default size. Open it as a normal window

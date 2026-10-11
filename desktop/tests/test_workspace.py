@@ -332,6 +332,18 @@ class WorkspaceServiceTest(unittest.TestCase):
 
 
 class SellerUiTest(QtTestCase):
+    def test_button_styles_have_pressed_depth_feedback(self):
+        window = SellerWindow()
+        style = window.styleSheet()
+        self.assertIn('QPushButton:pressed', style)
+        self.assertIn('border-bottom:3px solid', style)
+        self.assertIn('QPushButton#primary:pressed', style)
+        self.assertIn('QPushButton#danger:pressed', style)
+        self.assertIn('QPushButton#sentAction:pressed', style)
+        self.assertIn('QPushButton#smsAction:pressed', style)
+        self.assertIn('QPushButton#mailAction:pressed', style)
+        window.close()
+
     def test_fhd_pages_readonly_demo(self):
         window = SellerWindow()
         show_demo(window)
