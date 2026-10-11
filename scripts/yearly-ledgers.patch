@@ -1,0 +1,604 @@
+diff --git a/desktop/README.md b/desktop/README.md
+index f0b9c68..84af617 100644
+--- a/desktop/README.md
++++ b/desktop/README.md
+@@ -1,4 +1,6 @@
+-# 나무팜 PC 판매관리 0.4.8
++# 나무팜 PC 판매관리 0.4.9
++
++견적/입금확인 주문의 연도별 파일·월별 시트 분리는 [운영 반영 안내](../docs/YEARLY_LEDGERS.md)를 참고하세요.
+ 
+ Windows에서 견적 접수·작성, 입금확인, 배송완료, 로젠 송장번호, 매출·이익을 관리합니다. Google Sheets API v5와 기기 인증을 사용합니다. 연결파일을 처음 한 번 선택하면 됩니다. 별도 키 입력·복호화 백업·새 비밀번호 설정이 필요 없습니다.
+ 
+diff --git a/desktop/namufarm_desktop/__init__.py b/desktop/namufarm_desktop/__init__.py
+index d018a77..9da9fa0 100644
+--- a/desktop/namufarm_desktop/__init__.py
++++ b/desktop/namufarm_desktop/__init__.py
+@@ -1,3 +1,3 @@
+ """NamuFarm desktop. Production credentials and customer data are never bundled."""
+ 
+-__version__ = "0.4.8"
++__version__ = "0.4.9"
+diff --git a/desktop/namufarm_desktop/service.py b/desktop/namufarm_desktop/service.py
+index a2c56a2..ded4c15 100644
+--- a/desktop/namufarm_desktop/service.py
++++ b/desktop/namufarm_desktop/service.py
+@@ -104,6 +104,16 @@ class Manager:
+         for row in sales:
+             private = self.decode_sale(row)
+             decoded_sales.append({**row, "private": private})
++        # The quote ledger ends at quote-sent. Project linked order progress
++        # locally so paid requests open the order instead of another payment.
++        linked = {r["private"]["order"].get("sourceRequestId"): r for r in decoded_sales
++                  if r["private"]["order"].get("sourceRequestId")}
++        for request in decoded_requests:
++            sale = linked.get(request["requestId"])
++            if sale:
++                request["quoteStatus"] = request.get("status", "신규")
++                request["status"] = sale["metadata"]["status"]
++                request["linkedOrderNumber"] = sale["metadata"]["orderNumber"]
+         drafts = self.vault.preference("drafts", [])
+         # Drafts contain personal data and follow the 30-day unpurchased retention rule.
+         deleted = set(self.vault.snapshot_marker()["deletedRequests"])
+diff --git a/desktop/pyproject.toml b/desktop/pyproject.toml
+index 28743db..257ba9a 100644
+--- a/desktop/pyproject.toml
++++ b/desktop/pyproject.toml
+@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
+ 
+ [project]
+ name = "namufarm-desktop"
+-version = "0.4.8"
++version = "0.4.9"
+ description = "NamuFarm seller workspace with automatic local protection"
+ requires-python = ">=3.11"
+ dependencies = ["PySide6>=6.8,<7", "cryptography>=44,<52", "xlwt==1.3.0", "xlrd>=2.0.1,<3"]
+diff --git a/desktop/tests/server_bridge.cjs b/desktop/tests/server_bridge.cjs
+index c906bd4..188a1b1 100644
+--- a/desktop/tests/server_bridge.cjs
++++ b/desktop/tests/server_bridge.cjs
+@@ -27,6 +27,8 @@ readline.createInterface({input:process.stdin}).on('line',line=>{
+   else if(request.control==='invite')result={invite:f.context.createDeviceInvite()};
+   else if(request.control==='info')result=f.context.doGet();
+   else if(request.control==='seed')result=seed();
++  else if(request.control==='setup_yearly')result=f.context.setupYearlyLedgers();
++  else if(request.control==='ledger_summary')result={quotes:f.requestRows().map(r=>({id:r.row[0],status:r.row[9],book:r.book.getName(),month:r.sheet.getName()})),orders:f.context.saleStorageRows_().map(r=>({number:r[0],status:r[2],revision:Number(r[19])}))};
+   else if(request.control==='connection_file'){f.properties.APP_CONNECTION_KEY='c'.repeat(64);result={format:'namufarm-connection',version:1,url:'https://script.google.com/macros/s/AKfycbzY7JKzXYmS9APLNFDt15k8dv09zb4EXKFHOOv_T1vpFmkr6TLwbqGznGLgpd2cIVgD/exec',connectionKey:f.properties.APP_CONNECTION_KEY};}
+   else if(request.control==='clear_requests'){f.cells.splice(1);result={ok:true};}
+   else if(request.control==='clear_key'){delete f.properties.SELLER_PUBLIC_KEY;result={ok:true};}
+diff --git a/desktop/tests/test_yearly_ledgers.py b/desktop/tests/test_yearly_ledgers.py
+new file mode 100644
+index 0000000..10eebee
+--- /dev/null
++++ b/desktop/tests/test_yearly_ledgers.py
+@@ -0,0 +1,63 @@
++"""Real desktop Manager -> actual Apps Script, using synthetic Sheet storage."""
++import tempfile
++import unittest
++from pathlib import Path
++
++from namufarm_desktop.commerce import new_draft
++from namufarm_desktop.errors import NetworkError, UserError
++from support import Bridge, manager_at
++
++
++class YearlyLedgerFlowTest(unittest.TestCase):
++    def setUp(self):
++        self.bridge = Bridge()
++        self.tmp = tempfile.TemporaryDirectory()
++        self.manager = manager_at(Path(self.tmp.name) / 'vault.db', self.bridge)
++        result = self.bridge.send(control='setup_yearly')
++        self.assertTrue(result.get('ready'), result)
++        self.bridge.send(control='submit_plain')
++        request = self.manager.sync()['requests'][0]
++        self.draft = new_draft(request)
++        self.draft.update(zipNo='12345', roadAddress='서울 테스트로 1', detailAddress='100호',
++                          items=[dict(species='소나무', specification='H1.0m', quantity=2,
++                                      unitPrice=10000, unitCost=5000)])
++        self.manager.confirm_quote(self.draft)
++        self.manager.mark_quote_sent(self.draft)
++
++    def tearDown(self):
++        self.bridge.close()
++        self.tmp.cleanup()
++
++    def test_payment_and_delivery_update_order_but_keep_original_quote_sent(self):
++        view = self.manager.confirm_draft(self.draft)
++        self.assertEqual('입금확인', view['requests'][0]['status'])
++        self.assertEqual('견적발송완료', view['requests'][0]['quoteStatus'])
++        self.assertEqual('견적발송완료', self.manager.vault.rows('requests')[0]['status'])
++        number = view['sales'][0]['metadata']['orderNumber']
++        self.assertEqual(number, view['requests'][0]['linkedOrderNumber'])
++        view = self.manager.save_sale(number, 1, {'costConfirmed': True}, target='배송완료')
++        self.assertEqual('배송완료', view['requests'][0]['status'])
++        state = self.bridge.send(control='ledger_summary')
++        self.assertEqual('견적발송완료', state['quotes'][0]['status'])
++        self.assertTrue(state['quotes'][0]['book'].startswith('나무팜_견적_'))
++        self.assertEqual([dict(number=number, status='배송완료', revision=2)], state['orders'])
++
++    def test_lost_payment_ack_keeps_outbox_then_retries_the_same_order_once(self):
++        self.manager.api.lose_ack = True
++        with self.assertRaises(NetworkError):
++            self.manager.confirm_draft(self.draft)
++        pending = self.manager.vault.pending()
++        self.assertEqual(1, len(pending))
++        view = self.manager.sync()
++        self.assertEqual([], view['pending'])
++        self.assertEqual(1, len(view['sales']))
++        state = self.bridge.send(control='ledger_summary')
++        self.assertEqual(1, len(state['orders']))
++        self.assertEqual('견적발송완료', state['quotes'][0]['status'])
++
++    def test_payment_reclick_is_rejected_without_creating_another_order(self):
++        self.manager.confirm_draft(self.draft)
++        with self.assertRaises(UserError):
++            self.manager.confirm_draft(self.draft)
++        self.assertEqual(1, len(self.bridge.send(control='ledger_summary')['orders']))
++        self.assertEqual([], self.manager.vault.pending())
+diff --git a/docs/YEARLY_LEDGERS.md b/docs/YEARLY_LEDGERS.md
+new file mode 100644
+index 0000000..be9c9f3
+--- /dev/null
++++ b/docs/YEARLY_LEDGERS.md
+@@ -0,0 +1,34 @@
++# 견적 / 입금확인 주문 장부 분리
++
++## 운영 방식
++
++- 견적: `나무팜_견적_2026`의 `01월`~`12월` 시트. 접수시각의 한국 시간 기준 월에 저장합니다.
++- 주문: `나무팜_주문_2026`의 `01월`~`12월` 시트. 로컬의 최초 `paidAt`(입금확인시각)을 한국 시간으로 환산한 월에 저장합니다.
++- 새 연도의 파일은 해당 연도 첫 저장 때 자동 생성합니다. 초기 설정 시에는 현재 연도의 두 파일을 준비합니다.
++- 입금 확인은 기존 PC `save_sale` 전송 대기 → 서버 저장 → 응답 확인 흐름을 그대로 사용합니다.
++- 입금 이후 견적 원본은 `견적발송완료`에 남깁니다. 배송·취소는 주문 원본에만 반영합니다.
++- 배송월이 바뀌어도 주문을 옮기지 않습니다. 주문번호/견적요청 ID, 버전 검사와 기존 재시도 기록으로 중복과 오래된 덮어쓰기를 막습니다.
++- PC 화면은 연결된 주문 상태를 로컬에서 표시합니다. 구글 견적 행에는 입금/배송 상태를 다시 쓰지 않습니다.
++- 과거 연도와 기존 단일 시트 주문도 함께 조회합니다. **기존 자료를 자동 이동하거나 삭제하지 않습니다.** 이 기능은 새 입력의 저장 위치를 바꾸는 전환입니다.
++- 관리용 기존 스프레드시트의 `연도별장부`와 `주문저장위치`는 파일 위치·식별자만 저장하는 내부 표입니다. 운영자가 따로 관리할 장부가 아닙니다.
++- 기존 개인정보 보관 정책(견적 30일, 종료 주문 5년)은 변경하지 않았습니다. 연도별 파일 구성이 보관기간을 연장하지는 않습니다.
++
++## 운영 반영
++
++1. 기존 Apps Script 프로젝트에 `Code.gs`, `SecureCommerce.gs`, `MonthlyStorage.gs`, `RecoverySetup.gs` 및 새 `YearlyLedgers.gs`를 같은 버전으로 넣습니다. 기존 `appsscript.json`의 Drive v3 서비스와 권한을 유지합니다.
++2. Apps Script 편집기에서 소유자 계정으로 **`setupYearlyLedgers()`를 한 번 실행**합니다. 권한 승인이 필요하면 승인합니다. 반환값의 `ready: true`, 두 파일 ID와 해당 파일의 월 탭을 확인합니다. 이 함수는 다시 실행해도 기존 주문을 복제하지 않습니다.
++3. 기존 웹 앱 배포의 버전을 갱신합니다. 배포 URL/연결파일/PC 로컬 보관함을 바꾸거나 초기화하지 않습니다.
++4. PC 0.4.9 코드를 적용하고 기존 동기화 버튼을 사용합니다. 실제 입금 확인 1건, 배송 처리 1건으로 운영 환경의 권한과 연결을 점검합니다.
++
++소스 커밋만으로 기존 Apps Script 웹 앱 배포가 바뀌지는 않습니다. 이 변경의 자동 테스트는 가짜 고객과 메모리 시트를 사용하는 테스트이며 실제 고객 장부에 쓰지 않습니다.
++
++## 검증
++
++```sh
++node --test server/quote-requests/tests/yearly-ledgers.test.cjs
++PYTHONPATH=desktop:desktop/tests python -m unittest test_yearly_ledgers test_local_sync -v
++```
++
++서버 신규 테스트 20개와 실제 PC Manager → 실제 Apps Script 소스를 연결한 신규 통합 테스트 3개를 추가했습니다. 월말/연말 한국 시간 경계, 원본 월 유지, 견적 원본 유지, 정렬 후 갱신, 재클릭·응답 유실·중간 실패, 버전 충돌, 과거 장부 조회, 이전 단일 시트 전환 이력과 개인정보 만료를 검사합니다.
++
++수정 전 서버 전체 136개 중 8개가 기존 구매확정/판매완료·견적 삭제 정책 관련 기대값으로 실패했습니다. 수정 후 전체 156개 중 148개 통과, 같은 8개 실패이며 새 실패는 없습니다. 기존 실패를 숨기거나 통과 처리하지 않았습니다. 별도로 기존 PC `test_simple_connection`에서도 서버 URL/연결 방식 관련 실패가 확인되어 전체 회귀 테스트 통과로 보고하지 않습니다.
+diff --git a/server/quote-requests/MonthlyStorage.gs b/server/quote-requests/MonthlyStorage.gs
+index 837a847..5a2b9a5 100644
+--- a/server/quote-requests/MonthlyStorage.gs
++++ b/server/quote-requests/MonthlyStorage.gs
+@@ -14,7 +14,7 @@ const QUOTE_SUMMARY_HEADERS = ['접수일','접수건수','신규','보관종료
+ const QI = {id:0,book:1,sheet:2,day:3,created:4,receipt:5,seoul:6,hash:7,seq:8,phase:9,copy:10,targetBook:11,targetSheet:12,slot:13,status:14};
+ function quoteStorageConfigured_() { return PropertiesService.getScriptProperties().getProperty('QUOTE_STORAGE_READY') === '1'; }
+ function quoteStorageReady_() {
+-  if (!quoteStorageConfigured_()) return PropertiesService.getScriptProperties().getProperty('QUOTE_STORAGE_MODE') !== 'monthly-v1';
++  if (!quoteStorageConfigured_()) return !['monthly-v1','yearly-v1'].includes(PropertiesService.getScriptProperties().getProperty('QUOTE_STORAGE_MODE'));
+   quoteTables_(); return true;
+ }
+ function quoteTables_() {
+@@ -239,7 +239,8 @@ function submitIndexedQuote_(body,stored) {
+   const now=Date.now();
+   if(!entry){
+     const created=new Date(now).toISOString(),day=receiptTime_(created).slice(0,10);
+-    const sheet=PropertiesService.getScriptProperties().getProperty('QUOTE_STORAGE_MODE')==='monthly-v1'?quoteDaySheet_(day):sheet_();
++    const mode=PropertiesService.getScriptProperties().getProperty('QUOTE_STORAGE_MODE');
++    const sheet=mode==='yearly-v1'?ledgerMonthSheet_('quote',day.slice(0,7)):mode==='monthly-v1'?quoteDaySheet_(day):sheet_();
+     const floor=entries.filter(e=>e.values[QI.day]===day).reduce((n,e)=>Math.max(n,Number(e.values[QI.receipt].split('-')[2])),0);
+     const receipt=reserveReceipt_(PropertiesService.getScriptProperties(),day.replace(/-/g,''),floor);
+     const slot=quoteAllocateSlot_(sheet,entries);
+@@ -332,7 +333,7 @@ function quoteAudit_(allowUncreatedMonths,allowSimpleCopies) {
+   const entries=quoteIndexEntries_(),cache={},byId=new Map(entries.map(e=>[e.values[QI.id],e]));
+   // An audit is read-only. Resolve interrupted transitions with maintenance first.
+   assert_(entries.every(e=>['PREPARED','COMMITTED'].includes(e.values[QI.phase])),'NOT_READY');
+-  const locations=[sheet_()];quoteMonthRows_().forEach(m=>{
++  const locations=[sheet_()].concat(ledgerSheets_('quote'));quoteMonthRows_().forEach(m=>{
+     assert_(allowUncreatedMonths || m.values[1] && m.values[3]==='READY','NOT_READY');
+     if(!m.values[1])return;
+     SpreadsheetApp.openById(m.values[1]).getSheets().filter(s=>/^\d{4}-\d{2}-\d{2}$/.test(s.getName())).forEach(s=>locations.push(s));
+diff --git a/server/quote-requests/SecureCommerce.gs b/server/quote-requests/SecureCommerce.gs
+index 906a4d2..7115587 100644
+--- a/server/quote-requests/SecureCommerce.gs
++++ b/server/quote-requests/SecureCommerce.gs
+@@ -24,6 +24,8 @@ function secureServiceInfo_() {
+     receiptFormat:'NAMU-YYYYMMDD-NNNN',receiptTimeZone:'Asia/Seoul',connectionFile:true,requestSnapshot:true,
+     quoteEmail:true,quoteEmailSender:QUOTE_SENDER_EMAIL,
+     quoteSms:true,quoteSmsProvider:'SOLAPI',
++    ledgerStorage:yearlyLedgersEnabled_()?'yearly-v1':'legacy',
++    quoteLedgerStatus:'견적발송완료',orderLedgerDate:'paidAt',ledgerTimeZone:'Asia/Seoul',
+     commerceStates:['입금확인','배송완료','구매취소']};
+ }
+ function byteString_(value, minimum, maximum) {
+@@ -239,7 +241,7 @@ function saveSale_(body) {
+   const digest=saleDigest_(meta,personal,plain); assert_(body.fingerprint===digest);
+   assert_(body.sourceRequestId==='' || UUID_PATTERN.test(body.sourceRequestId));
+   return lock_(()=>{
+-    const sheet=namedSheet_(SALE_SHEET,SALE_HEADERS,false), events=namedSheet_(SALE_EVENT_SHEET,SALE_EVENT_HEADERS,false);
++    const sheet=saleWriteSheet_(meta,body.sourceRequestId), events=namedSheet_(SALE_EVENT_SHEET,SALE_EVENT_HEADERS,false);
+     const receipts=namedRows_(events,5); const receipt=receipts.find(r=>r[0]===body.eventId);
+     if(receipt){assert_(receipt[1]===meta.orderNumber && Number(receipt[2])===meta.revision && receipt[3]===digest,'CONFLICT'); updateLinkedRequestStatus_(body.sourceRequestId,meta.status); return {saved:true,orderNumber:meta.orderNumber,revision:meta.revision,fingerprint:digest};}
+     const rows=namedRows_(sheet,20); const i=rows.findIndex(r=>r[0]===meta.orderNumber || r[0]===hash_(PropertiesService.getScriptProperties().getProperty('WEB_SECRET')+'expired-sale:'+meta.orderNumber));
+@@ -283,7 +285,7 @@ function requestStatusTransitionAllowed_(from,status) {
+   return false;
+ }
+ function updateLinkedRequestStatus_(id,status) {
+-  if(!id)return;
++  if(!id || yearlyLedgersEnabled_() && !['견적확정','견적발송완료'].includes(status))return;
+   assert_(['견적확정','견적발송완료','입금확인','배송완료','구매취소'].includes(status),'INVALID');
+   if(quoteStorageConfigured_()){
+     const entries=quoteIndexEntries_(),cache={};quoteRepairTransitions_(entries,cache);
+@@ -474,7 +476,7 @@ function quoteSmsStatus_(body) {
+ 
+ function listSales_(body) {
+   assert_(Number.isSafeInteger(body.afterSequence) && body.afterSequence>=0);
+-  const rows=namedRows_(namedSheet_(SALE_SHEET,SALE_HEADERS,false),20).filter(r=>Number(r[1])>body.afterSequence).sort((a,b)=>Number(a[1])-Number(b[1]));
++  const rows=saleStorageRows_().filter(r=>Number(r[1])>body.afterSequence).sort((a,b)=>Number(a[1])-Number(b[1]));
+   const page=rows.slice(0,100).map(r=>{
+     const meta=JSON.parse(r[15]); if(meta.archived)return {sequence:Number(r[1]),expired:true};
+     const stored=JSON.parse(r[16]),plain=stored.personalData!==undefined;
+@@ -487,7 +489,7 @@ function seoulDay_(time) { return new Date(time+9*3600000).toISOString().slice(0
+ function salesReport_(body) {
+   assert_(['day','month','year'].includes(body.granularity));
+   assert_([body.from,body.to].every(v=>typeof v==='string' && /^\d{4}-\d{2}-\d{2}$/.test(v) && Number.isFinite(Date.parse(v+'T00:00:00.000Z')) && new Date(v+'T00:00:00.000Z').toISOString().slice(0,10)===v) && body.from<=body.to);
+-  const sums={}; namedRows_(namedSheet_(SALE_SHEET,SALE_HEADERS,false),20).forEach(row=>{
++  const sums={}; saleStorageRows_().forEach(row=>{
+     const meta=JSON.parse(row[15]); if(!['배송완료','판매완료'].includes(meta.status))return;
+     const day=seoulDay_(meta.completedAt); if(day<body.from||day>body.to)return;
+     const period=day.slice(0,body.granularity==='day'?10:body.granularity==='month'?7:4);
+@@ -504,14 +506,16 @@ function purgeExpiredCustomerData() {
+     if(quoteStorageConfigured_())purgeIndexedQuotes_();
+     else {const sheet=sheet_();rows_(sheet).forEach((r,i)=>{if(Date.parse(String(r[2]))+QUOTE_RETENTION_MS<=Date.now() && JSON.parse(r[15]).expired!==true)expireQuoteRow_(sheet,r,i);});}
+     purgeArchivedQuoteCopies_();
+-    const sales=namedSheet_(SALE_SHEET,SALE_HEADERS,false);const rows=namedRows_(sales,20);const events=namedSheet_(SALE_EVENT_SHEET,SALE_EVENT_HEADERS,false);
+-    rows.forEach((r,i)=>{
++    const events=namedSheet_(SALE_EVENT_SHEET,SALE_EVENT_HEADERS,false);
++    saleStorageSheets_().forEach(sales=>namedRows_(sales,20).forEach((r,i)=>{
++      if(r[0]==='')return;
+       const meta=JSON.parse(r[15]); if(meta.archived || !['배송완료','구매취소','판매완료','주문취소'].includes(meta.status) || Date.parse(String(r[14]))>Date.now())return;
+       const archive={archived:true,status:meta.status,completedAt:meta.completedAt,totalQty:meta.totalQty,totalPrice:meta.totalPrice,taxAmount:meta.taxAmount,costTotal:meta.costTotal,expenseTotal:meta.expenseTotal,costConfirmed:meta.costConfirmed,profitMode:meta.profitMode,commissionBps:meta.commissionBps};
+       const row=r.slice();row[0]=hash_(PropertiesService.getScriptProperties().getProperty('WEB_SECRET')+'expired-sale:'+r[0]);row[3]='';row[15]=JSON.stringify(archive);row[16]='';row[17]='';row[18]='';row[19]=0;
++      archiveOrderLocation_(r[0],row[0]);
+       sales.getRange(i+2,1,1,20).setValues([row]);
+       namedRows_(events,5).forEach((e,j)=>{if(e[1]===r[0])events.getRange(j+2,1,1,5).setValues([['','','','','']]);});
+-    });SpreadsheetApp.flush();
++    }));SpreadsheetApp.flush();
+   });
+ }
+ 
+diff --git a/server/quote-requests/YearlyLedgers.gs b/server/quote-requests/YearlyLedgers.gs
+new file mode 100644
+index 0000000..6c589f5
+--- /dev/null
++++ b/server/quote-requests/YearlyLedgers.gs
+@@ -0,0 +1,177 @@
++/** Separate business ledgers: one quote book and one paid-order book per KST year.
++ * Called under the existing script lock. The management book only stores routing
++ * metadata; no customer data is duplicated in these routing tables.
++ */
++const LEDGER_FILES = '연도별장부';
++const LEDGER_FILE_HEADERS = ['구분','연도','파일ID','생성토큰','생성상태'];
++const ORDER_LOCATIONS = '주문저장위치';
++const ORDER_LOCATION_HEADERS = ['주문번호','견적요청UUID','파일ID','시트ID','최초입금확인시각'];
++function yearlyLedgersEnabled_() {
++  return PropertiesService.getScriptProperties().getProperty('LEDGER_STORAGE_MODE') === 'yearly-v1';
++}
++function ledgerFiles_() {
++  const book=SpreadsheetApp.openById(PropertiesService.getScriptProperties().getProperty('SPREADSHEET_ID'));
++  const sheet=book.getSheetByName(LEDGER_FILES);
++  if(!sheet)return [];
++  namedSheet_(LEDGER_FILES,LEDGER_FILE_HEADERS,false);
++  const seen=new Set();
++  return namedRows_(sheet,5).map((values,index)=>({values,index})).filter(e=>e.values.some(v=>v!=='' )).map(e=>{
++    const v=e.values,key=v[0]+':'+v[1];
++    assert_(['quote','order'].includes(v[0]) && /^\d{4}$/.test(String(v[1])) && !seen.has(key),'NOT_READY');
++    assert_(UUID_PATTERN.test(v[3]) && ['RESERVED','CREATING','READY'].includes(v[4]) && (v[4]!=='READY'||!!v[2]),'NOT_READY');
++    seen.add(key);return e;
++  });
++}
++function ledgerHeaders_(kind) { return kind==='quote'?RFQ_HEADERS.concat(RFQ_RECEIPT_HEADERS):SALE_HEADERS; }
++function ledgerEnsureYear_(kind,year) {
++  assert_(['quote','order'].includes(kind) && /^\d{4}$/.test(String(year)));
++  const table=namedSheet_(LEDGER_FILES,LEDGER_FILE_HEADERS,false);
++  let entry=ledgerFiles_().find(e=>e.values[0]===kind && String(e.values[1])===String(year));
++  if(!entry){
++    entry={values:[kind,String(year),'',Utilities.getUuid(),'RESERVED'],index:table.getLastRow()-1};
++    quoteWriteVerified_(table,entry.index+2,entry.values);
++  }
++  const v=entry.values;
++  if(!v[2]){
++    if(v[4]==='RESERVED'){
++      v[4]='CREATING';quoteWriteVerified_(table,entry.index+2,v);
++      const properties=Object.assign(quoteMonthFileProperties_(v[3]),{namufarmLedgerKind:kind,namufarmLedgerYear:String(year)});
++      const file=Drive.Files.create({name:'나무팜_'+(kind==='quote'?'견적':'주문')+'_'+year,mimeType:'application/vnd.google-apps.spreadsheet',appProperties:properties},null,{fields:'id'});
++      assert_(file && file.id,'NOT_READY');v[2]=file.id;quoteWriteVerified_(table,entry.index+2,v);
++    }else{
++      // An uncertain create must be recovered by its token, never repeated.
++      const file=quoteFindCreatedFile_(v[3]);assert_(file,'NOT_READY');
++      v[2]=file.id;quoteWriteVerified_(table,entry.index+2,v);
++    }
++  }
++  const book=SpreadsheetApp.openById(v[2]);
++  if(v[4]!=='READY'){
++    book.setSpreadsheetTimeZone('Asia/Seoul');
++    for(let m=1;m<=12;m++)quoteEnsureHeaderSheet_(book,String(m).padStart(2,'0')+'월',ledgerHeaders_(kind));
++    v[4]='READY';quoteWriteVerified_(table,entry.index+2,v);
++  }
++  return book;
++}
++function ledgerMonthSheet_(kind,month) {
++  assert_(/^\d{4}-(0[1-9]|1[0-2])$/.test(month));
++  const book=ledgerEnsureYear_(kind,month.slice(0,4));
++  const sheet=book.getSheetByName(month.slice(5)+'월');
++  // A deleted month is not an empty month: do not silently replace lost records.
++  assert_(sheet && canonical_(sheet.getRange(1,1,1,ledgerHeaders_(kind).length).getValues()[0])===canonical_(ledgerHeaders_(kind)),'NOT_READY');
++  return sheet;
++}
++function ledgerSheets_(kind) {
++  const sheets=[];
++  ledgerFiles_().filter(e=>e.values[0]===kind && e.values[4]==='READY').forEach(e=>{
++    const book=SpreadsheetApp.openById(e.values[2]);
++    for(let month=1;month<=12;month++){
++      const sheet=book.getSheetByName(String(month).padStart(2,'0')+'월'),headers=ledgerHeaders_(kind);
++      assert_(sheet && canonical_(sheet.getRange(1,1,1,headers.length).getValues()[0])===canonical_(headers),'NOT_READY');
++      sheets.push(sheet);
++    }
++  });
++  return sheets;
++}
++function saleStorageSheets_() { return [namedSheet_(SALE_SHEET,SALE_HEADERS,false)].concat(ledgerSheets_('order')); }
++function saleStorageRows_() {
++  const seen=new Set();
++  return saleStorageSheets_().flatMap(sheet=>namedRows_(sheet,20).filter(r=>r[0]!=='' )).map(row=>{
++    assert_(!seen.has(row[0]),'NOT_READY');seen.add(row[0]);return row;
++  });
++}
++function orderLocations_() {
++  const seen=new Set(),sources=new Set();
++  return namedRows_(namedSheet_(ORDER_LOCATIONS,ORDER_LOCATION_HEADERS,false),5)
++    .map((values,index)=>({values,index})).filter(e=>e.values.some(v=>v!=='' )).map(e=>{
++      const v=e.values;
++      assert_(typeof v[0]==='string' && v[0] && !seen.has(v[0]) && v[2] && Number.isSafeInteger(Number(v[3])) && Number(v[3])>=0,'NOT_READY');
++      assert_(Number.isSafeInteger(Number(v[4])) && Number(v[4])>=0 && (!v[1]||UUID_PATTERN.test(v[1])) && (!v[1]||!sources.has(v[1])),'NOT_READY');
++      seen.add(v[0]);if(v[1])sources.add(v[1]);return e;
++    });
++}
++function orderLocationSheet_(entry) {
++  const v=entry.values,book=SpreadsheetApp.openById(v[2]),sheet=book.getSheetById(Number(v[3]));
++  assert_(sheet && canonical_(sheet.getRange(1,1,1,20).getValues()[0])===canonical_(SALE_HEADERS),'NOT_READY');
++  return sheet;
++}
++function saleWriteSheet_(meta,sourceRequestId) {
++  if(!yearlyLedgersEnabled_())return namedSheet_(SALE_SHEET,SALE_HEADERS,false);
++  const locations=orderLocations_();
++  const expired=hash_(PropertiesService.getScriptProperties().getProperty('WEB_SECRET')+'expired-sale:'+meta.orderNumber);
++  const entry=locations.find(e=>e.values[0]===meta.orderNumber || e.values[0]===expired);
++  if(entry){
++    assert_(entry.values[0]===meta.orderNumber && entry.values[1]===sourceRequestId,'CONFLICT');
++    if(Number(entry.values[4])>0)assert_(Number(entry.values[4])===meta.paidAt,'CONFLICT');
++    return orderLocationSheet_(entry);
++  }
++  assert_(!sourceRequestId || !locations.some(e=>e.values[1]===sourceRequestId),'CONFLICT');
++  assert_(meta.revision===1 && meta.status==='입금확인' && meta.paidAt>0,'CONFLICT');
++  if(sourceRequestId)assert_(quoteRequestStatus_(sourceRequestId)==='견적발송완료','CONFLICT');
++  const sheet=ledgerMonthSheet_('order',seoulDay_(meta.paidAt).slice(0,7));
++  const table=namedSheet_(ORDER_LOCATIONS,ORDER_LOCATION_HEADERS,false);
++  // Reserve the immutable order/source/month together before writing the sale.
++  // A failed row write is retried in this same location, even across midnight.
++  quoteWriteVerified_(table,table.getLastRow()+1,[meta.orderNumber,sourceRequestId,sheet.getParent().getId(),sheet.getSheetId(),meta.paidAt]);
++  return sheet;
++}
++function archiveOrderLocation_(number,archivedNumber) {
++  const book=SpreadsheetApp.openById(PropertiesService.getScriptProperties().getProperty('SPREADSHEET_ID'));
++  if(!book.getSheetByName(ORDER_LOCATIONS))return;
++  const entry=orderLocations_().find(e=>e.values[0]===number);
++  if(entry){const v=entry.values.slice();v[0]=archivedNumber;v[1]='';v[4]=0;
++    quoteWriteVerified_(namedSheet_(ORDER_LOCATIONS,ORDER_LOCATION_HEADERS,false),entry.index+2,v);}
++}
++/** Re-enable the existing quote index after a prior single-sheet cutover.
++ * Keep the old monthly primary plus its single-sheet copy so normal disposal
++ * still reaches both. No customer row is deleted by this setup.
++ */
++function ledgerPrepareQuoteIndex_() {
++  const props=PropertiesService.getScriptProperties();
++  if(!quoteStorageConfigured_() && props.getProperty('QUOTE_ARCHIVE_PENDING')==='1'){
++    lock_(()=>{
++      const entries=quoteIndexEntries_();
++      quoteRows_(sheet_()).forEach(record=>{
++        const entry=entries.find(e=>e.values[QI.id]===record.row[0]);
++        if(!entry)return;
++        assert_(entry.values[QI.phase]==='COMMITTED','NOT_READY');quoteCheckIdentity_(entry,record.row);
++        assert_(Number(record.row[1])>=Number(entry.values[QI.seq]),'CONFLICT');
++        const target=quoteOpenSheet_(entry.values[QI.book],entry.values[QI.sheet]),original=quoteFindRow_(target,record.row[0]);
++        assert_(original,'NOT_READY');quoteCheckIdentity_(entry,original.row);
++        quoteWriteVerified_(target,original.index+2,record.row);
++        entry.values[QI.seq]=Number(record.row[1]);entry.values[QI.status]=record.row[9];
++        entry.values[QI.copy]=target.getParent().getId()!==sheet_().getParent().getId() || target.getSheetId()!==sheet_().getSheetId();
++        quoteSaveEntry_(entry);
++      });
++    });
++  }
++  setupMonthlyQuoteStorage();
++  props.deleteProperty('QUOTE_ARCHIVE_PENDING');
++}
++/** Run once in the Apps Script editor after deploying all .gs files.
++ * Existing requests/orders stay in place and remain readable. New writes use
++ * the yearly ledgers. Running this again neither moves nor duplicates data.
++ */
++function setupYearlyLedgers() {
++  setupQuoteRequests();ledgerPrepareQuoteIndex_();
++  return lock_(()=>{
++    namedSheet_(LEDGER_FILES,LEDGER_FILE_HEADERS,true);
++    namedSheet_(ORDER_LOCATIONS,ORDER_LOCATION_HEADERS,true);
++    const table=namedSheet_(ORDER_LOCATIONS,ORDER_LOCATION_HEADERS,false),entries=orderLocations_();
++    // Register old orders without moving their original rows or changing IDs.
++    saleStorageSheets_().forEach(sheet=>namedRows_(sheet,20).filter(row=>row[0]!=='' ).forEach(row=>{
++      const meta=JSON.parse(row[15]),stored=meta.archived?{}:JSON.parse(row[16]);
++      const source=stored.personalData?stored.personalData.order.sourceRequestId:'';
++      const existing=entries.find(e=>e.values[0]===row[0]);
++      if(existing){assert_(existing.values[2]===sheet.getParent().getId() && Number(existing.values[3])===sheet.getSheetId(),'CONFLICT');return;}
++      assert_(!source || !entries.some(e=>e.values[1]===source),'CONFLICT');
++      const values=[row[0],source,sheet.getParent().getId(),sheet.getSheetId(),meta.paidAt||0];
++      quoteWriteVerified_(table,table.getLastRow()+1,values);entries.push({values});
++    }));
++    const props=PropertiesService.getScriptProperties(),rows=saleStorageRows_();
++    props.setProperty('SALE_SEQUENCE',String(rows.reduce((n,r)=>Math.max(n,Number(r[1])||0),Number(props.getProperty('SALE_SEQUENCE'))||0)));
++    const year=seoulDay_(Date.now()).slice(0,4),quotes=ledgerEnsureYear_('quote',year),orders=ledgerEnsureYear_('order',year);
++    quoteAudit_();
++    props.setProperty('QUOTE_STORAGE_MODE','yearly-v1');props.setProperty('LEDGER_STORAGE_MODE','yearly-v1');
++    return {ready:true,writeMode:'yearly-v1',quoteFileId:quotes.getId(),orderFileId:orders.getId(),year};
++  });
++}
+diff --git a/server/quote-requests/tests/fixture.cjs b/server/quote-requests/tests/fixture.cjs
+index 24e04e0..b8b6735 100644
+--- a/server/quote-requests/tests/fixture.cjs
++++ b/server/quote-requests/tests/fixture.cjs
+@@ -60,7 +60,7 @@ function fixture({configure=true,now=Date.now(),monthly=false}={}) {
+  if(url.endsWith('/api/internal/encrypt')) {const request=context.validateRequest_({...payload.request,website:''});return{getResponseCode:()=>200,getContentText:()=>JSON.stringify({ok:true,encryptedRequest:seal(request,'quote',request.requestId),fingerprint:crypto.createHmac('sha256',properties.WEB_SECRET).update(JSON.stringify(request)).digest('hex')})}}
+  return{getResponseCode:()=>200,getContentText:()=> '{}'}}}
+  });
+- for(const file of ['Code.gs','SecureCommerce.gs','MonthlyStorage.gs','RecoverySetup.gs'])vm.runInContext(fs.readFileSync(require('node:path').join(__dirname,'..',file),'utf8'),context);
++ for(const file of ['Code.gs','SecureCommerce.gs','MonthlyStorage.gs','RecoverySetup.gs','YearlyLedgers.gs'])vm.runInContext(fs.readFileSync(require('node:path').join(__dirname,'..',file),'utf8'),context);
+  vm.runInContext('setupQuoteRequests()',context);
+  if(configure)properties.SELLER_PUBLIC_KEY=JSON.stringify({keyId,publicKey});
+  if(monthly){context.setupMonthlyQuoteStorage();context.enableMonthlyQuoteStorage()}
+@@ -68,7 +68,7 @@ function fixture({configure=true,now=Date.now(),monthly=false}={}) {
+  const post=body=>context.doPost({postData:{contents:JSON.stringify(body)}});
+  const submit=(req=request)=> {try{const checked=context.validateRequest_(req);return post({action:'submit_request',webSecret:properties.WEB_SECRET,rateKey:'b'.repeat(64),requestId:checked.requestId,fingerprint:crypto.createHmac('sha256',properties.WEB_SECRET).update(JSON.stringify(checked)).digest('hex'),protocolVersion:5,request:{...checked,website:''}})}catch(e){return{ok:false,code:e.code||'INVALID'}}};
+  const cells=book.get('웹견적요청').cells;
+- const requestRows=()=>[...books.values()].flatMap(b=>[...b.sheets.values()].filter(s=>s.getName()==='웹견적요청'||/^\d{4}-\d{2}-\d{2}$/.test(s.getName())).flatMap(s=>s.cells.slice(1).filter(r=>r&&r[0]).map(row=>({row,sheet:s,book:b}))));
++ const requestRows=()=>[...books.values()].flatMap(b=>[...b.sheets.values()].filter(s=>s.getName()==='웹견적요청'||/^\d{4}-\d{2}-\d{2}$/.test(s.getName())||b.getName().startsWith('나무팜_견적_')&&/^\d{2}월$/.test(s.getName())).flatMap(s=>s.cells.slice(1).filter(r=>r&&r[0]).map(row=>({row,sheet:s,book:b}))));
+  const saved=()=>{const r=requestRows()[0].row;const raw=JSON.parse(r[15]);return raw.request||open(raw.encryptedRequest,'quote',r[0])};
+  const readRequests=after=>{const page=context.listRequests_({afterSequence:after});return{...page,requests:page.requests.map(r=>r.expired||!r.encryptedRequest?r:{...r,...open(r.encryptedRequest,'quote',r.requestId)})}};
+  const seedEncrypted=(req=request)=>{const checked=context.validateRequest_(req);return context.commitQuoteRequest_({requestId:checked.requestId,fingerprint:crypto.createHmac('sha256',properties.WEB_SECRET).update(JSON.stringify(checked)).digest('hex')},{encryptedRequest:seal(checked,'quote',checked.requestId)})};
+diff --git a/server/quote-requests/tests/yearly-ledgers.test.cjs b/server/quote-requests/tests/yearly-ledgers.test.cjs
+new file mode 100644
+index 0000000..e440da6
+--- /dev/null
++++ b/server/quote-requests/tests/yearly-ledgers.test.cjs
+@@ -0,0 +1,115 @@
++const {test}=require('node:test');
++const assert=require('node:assert/strict');
++const crypto=require('node:crypto');
++const {fixture}=require('./fixture.cjs');
++const START=Date.parse('2026-10-31T14:59:00Z');
++function create(){const f=fixture({now:START});f.context.setupYearlyLedgers();return f;}
++function book(f,kind,year=2026){return [...f.books.values()].find(b=>b.getName()===`나무팜_${kind}_${year}`);}
++function sentQuote(f){const result=f.submit();assert.equal(result.ok,true);const id=f.request.requestId;
++ for(const status of ['견적확정','견적발송완료'])f.context.updateRequestStatus_({requestId:id,status});return id;}
++function sale(f,{number='ORDER_1',source='',time=f.context.Date.now(),...patch}={}){
++ const meta={orderNumber:number,orderDate:'2026-10-31 23:59',status:'입금확인',revision:1,totalQty:2,totalPrice:2000,isPrepaid:true,shippingFee:0,purchasedAt:time,paidAt:time,deliveredAt:0,completedAt:0,updatedAt:time,costTotal:1000,expenseTotal:0,costConfirmed:false,profitMode:'resale',commissionBps:0,taxAmount:0,items:[{species:'소나무',quantity:2,unitPrice:1000}],...patch};
++ const personalData={order:{...meta,customerName:'테스트',customerPhone:'01012345678',customerEmail:'',receiverName:'테스트',zipNo:'12345',roadAddress:'주소',detailAddress:'',note:'',itemSummary:'소나무|상묘|1년|2|1000|농원|500',sourceQuoteNumber:'NAMU-20261031-0001',sourceRequestId:source}};
++ return {eventId:crypto.randomUUID(),protocolVersion:5,metadata:meta,personalData,sourceRequestId:source,fingerprint:f.context.saleDigest_(meta,personalData,true)};
++}
++function next(f,body,patch={}){return sale(f,{number:body.metadata.orderNumber,source:body.sourceRequestId,...body.metadata,revision:body.metadata.revision+1,updatedAt:f.context.Date.now(),...patch});}
++function save(f,body){return f.context.saveSale_(body);}
++function orderRows(f){return f.context.saleStorageRows_();}
++
++test('setup creates two yearly books with twelve KST month tabs and is repeatable',()=>{
++ const f=create();assert.equal(f.files.size,2);
++ for(const kind of ['견적','주문']){const b=book(f,kind);assert.equal(b.timeZone,'Asia/Seoul');assert.equal(b.sheets.size,12);assert.ok(b.sheets.has('01월'));assert.ok(b.sheets.has('12월'));}
++ const setup=f.context.setupYearlyLedgers();assert.equal(setup.ready,true);assert.equal(f.files.size,2);
++ assert.equal(f.context.doGet().ledgerStorage,'yearly-v1');
++});
++test('quotes use receipt month while payment uses its own month; quote row is untouched',()=>{
++ const f=create(),source=sentQuote(f),quote=book(f,'견적').getSheetByName('10월').cells[1],before=JSON.stringify(quote);
++ f.setTime('2026-10-31T15:01:00Z');const body=sale(f,{source});save(f,body);
++ assert.equal(book(f,'주문').getSheetByName('11월').cells[1][0],body.metadata.orderNumber);
++ assert.equal(book(f,'주문').getSheetByName('10월').getLastRow(),1);
++ assert.equal(JSON.stringify(quote),before);assert.equal(quote[9],'견적발송완료');
++});
++test('delivery in another month updates the original order row without moving it',()=>{
++ const f=create(),body=sale(f);save(f,body);f.setTime('2026-12-02T00:00:00Z');const now=f.context.Date.now();
++ const completed=next(f,body,{status:'배송완료',deliveredAt:now,completedAt:now,costConfirmed:true});save(f,completed);
++ assert.equal(book(f,'주문').getSheetByName('10월').cells[1][2],'배송완료');
++ assert.equal(book(f,'주문').getSheetByName('12월').getLastRow(),1);assert.equal(orderRows(f).length,1);
++ const report=f.context.salesReport_({granularity:'month',from:'2026-01-01',to:'2026-12-31'});assert.equal(report.report.buckets[0].period,'2026-12');
++});
++test('year rollover uses paidAt in KST and older years remain in combined sync',()=>{
++ const f=create();save(f,sale(f));f.setTime('2026-12-31T15:01:00Z');save(f,sale(f,{number:'NEXT_YEAR'}));
++ assert.equal(book(f,'주문',2027).getSheetByName('01월').cells[1][0],'NEXT_YEAR');
++ assert.equal(f.context.listSales_({afterSequence:0}).sales.length,2);
++ f.submit({...f.request,requestId:crypto.randomUUID()});assert.equal(book(f,'견적',2027).getSheetByName('01월').getLastRow(),2);
++});
++test('retrying a payment or an acknowledgment never appends a second order',()=>{
++ const f=create(),body=sale(f);save(f,body);save(f,body);save(f,body);assert.equal(orderRows(f).length,1);
++ assert.equal(f.book.get('판매변경이력').getLastRow(),2);
++});
++test('one quote cannot become two different orders, including concurrent-device attempts',()=>{
++ const f=create(),source=sentQuote(f);save(f,sale(f,{source}));assert.throws(()=>save(f,sale(f,{source,number:'OTHER_DEVICE'})),e=>e.code==='CONFLICT');assert.equal(orderRows(f).length,1);
++});
++test('an unpaid or unsent quote cannot create an order ledger entry',()=>{
++ const f=create();f.submit();assert.throws(()=>save(f,sale(f,{source:f.request.requestId})),e=>e.code==='CONFLICT');
++ assert.throws(()=>save(f,sale(f,{status:'구매확정',paidAt:0})),e=>e.code==='CONFLICT');assert.equal(orderRows(f).length,0);
++ assert.equal(f.book.get('주문저장위치').getLastRow(),1);
++});
++test('row reordering and insertion do not change the order being updated',()=>{
++ const f=create(),one=sale(f),two=sale(f,{number:'ORDER_2'});save(f,one);save(f,two);
++ const sheet=book(f,'주문').getSheetByName('10월');[sheet.cells[1],sheet.cells[2]]=[sheet.cells[2],sheet.cells[1]];
++ save(f,next(f,one,{expenseTotal:100}));assert.equal(sheet.cells[2][0],'ORDER_1');assert.equal(sheet.cells[2][9],100);assert.equal(sheet.cells[1][9],0);
++});
++test('changed paidAt and stale revisions are rejected instead of moving or overwriting an order',()=>{
++ const f=create(),one=sale(f);save(f,one);const newer=next(f,one,{expenseTotal:10});save(f,newer);
++ assert.throws(()=>save(f,next(f,one,{expenseTotal:20})),e=>e.code==='CONFLICT');
++ assert.throws(()=>save(f,next(f,newer,{paidAt:one.metadata.paidAt+1,updatedAt:one.metadata.updatedAt+2})),e=>e.code==='CONFLICT');assert.equal(orderRows(f)[0][9],10);
++});
++test('a lost row-write response is recovered in the reserved month across midnight',()=>{
++ const f=create(),body=sale(f);f.failNextWrite(op=>op.sheetName==='10월' && op.values[0][0]==='ORDER_1',{after:true});
++ assert.throws(()=>save(f,body));f.setTime('2026-10-31T15:01:00Z');save(f,body);assert.equal(orderRows(f).length,1);assert.equal(book(f,'주문').getSheetByName('10월').cells[1][0],'ORDER_1');
++});
++test('a failed payment row keeps its source reservation and cannot be replayed under a new order ID',()=>{
++ const f=create(),source=sentQuote(f),body=sale(f,{source});f.failNextWrite(op=>op.sheetName==='10월' && op.values[0][0]==='ORDER_1');
++ assert.throws(()=>save(f,body));assert.throws(()=>save(f,sale(f,{source,number:'OTHER'})),e=>e.code==='CONFLICT');save(f,body);assert.equal(orderRows(f).length,1);
++});
++test('a missing event receipt is repaired before a newer revision; old retries do not roll it back',()=>{
++ const f=create(),body=sale(f);f.failReceipt();assert.throws(()=>save(f,body));save(f,next(f,body,{expenseTotal:100}));save(f,body);assert.equal(orderRows(f)[0][19],2);assert.equal(orderRows(f)[0][9],100);
++});
++test('lost yearly-file creation response is discovered by token instead of creating another file',()=>{
++ const f=create();f.setTime('2027-01-01T00:00:00Z');f.failCreate({after:true});const body=sale(f);
++ assert.throws(()=>save(f,body));assert.equal(f.files.size,3);save(f,body);assert.equal(f.files.size,3);assert.equal(orderRows(f).length,1);
++});
++test('uncertain file creation with no discoverable file stops safely without a second create',()=>{
++ const f=create();f.setTime('2027-01-01T00:00:00Z');f.failCreate();const body=sale(f);assert.throws(()=>save(f,body));assert.throws(()=>save(f,body),e=>e.code==='NOT_READY');assert.equal(f.files.size,2);
++});
++test('retention reaches yearly order data and erases the routing source without losing totals',()=>{
++ const f=create(),source=sentQuote(f),body=sale(f,{source});save(f,body);const now=f.context.Date.now();save(f,next(f,body,{status:'배송완료',deliveredAt:now,completedAt:now,costConfirmed:true}));
++ const row=book(f,'주문').getSheetByName('10월').cells[1];row[14]='2000-01-01T00:00:00Z';f.context.purgeExpiredCustomerData();
++ assert.equal(row[16],'');assert.equal(JSON.parse(row[15]).archived,true);assert.equal(f.book.get('주문저장위치').cells[1][1],'');
++ assert.throws(()=>save(f,body),e=>e.code==='CONFLICT');assert.equal(f.context.salesReport_({granularity:'year',from:'2026-01-01',to:'2026-12-31'}).report.buckets[0].orders,1);
++});
++test('existing single-sheet quotes and sales stay in place and remain readable after setup',()=>{
++ const f=fixture({now:START});const source=sentQuote(f),body=sale(f,{source});save(f,body);
++ const quote=JSON.stringify(f.cells),old=JSON.stringify(f.book.get('판매기록').cells);f.context.setupYearlyLedgers();
++ assert.equal(JSON.stringify(f.cells),quote);assert.equal(JSON.stringify(f.book.get('판매기록').cells),old);
++ save(f,next(f,body,{expenseTotal:200}));assert.equal(f.book.get('판매기록').cells[1][9],200);assert.equal(f.context.listSales_({afterSequence:0}).sales.length,1);
++});
++test('setup after a prior monthly-to-single cutover preserves current quote status and copies',()=>{
++ const f=fixture({now:START,monthly:true});f.submit();f.context.simplifyQuoteStorage();
++ for(const status of ['견적확정','견적발송완료'])f.context.updateRequestStatus_({requestId:f.request.requestId,status});
++ f.context.setupYearlyLedgers();assert.equal(f.context.quoteRequestStatus_(f.request.requestId),'견적발송완료');
++ f.context.closeRequest_({requestId:f.request.requestId});assert.ok(f.requestRows().every(r=>JSON.parse(r.row[15]).expired));
++});
++test('yearly quote rows participate in audit, snapshot, and normal 30-day disposal',()=>{
++ const f=create();f.submit();assert.equal(f.context.auditMonthlyQuoteStorage().committed,1);assert.equal(f.context.snapshotRequests_({afterSequence:0}).total,1);
++ f.setTime('2026-12-15T00:00:00Z');f.context.purgeExpiredCustomerData();assert.equal(book(f,'견적').getSheetByName('10월').cells[1][15],'{"expired":true}');
++});
++test('a deleted month tab fails closed rather than silently replacing its orders',()=>{
++ const f=create(),body=sale(f);save(f,body);book(f,'주문').sheets.delete('10월');
++ assert.throws(()=>f.context.listSales_({afterSequence:0}));assert.throws(()=>save(f,next(f,body)));assert.equal(book(f,'주문').sheets.has('10월'),false);
++});
++test('different yearly ledgers use globally increasing sequences for incremental synchronization',()=>{
++ const f=create();save(f,sale(f));const cursor=f.context.listSales_({afterSequence:0}).sales[0].sequence;
++ f.setTime('2027-02-01T00:00:00Z');save(f,sale(f,{number:'ORDER_NEXT'}));const next=f.context.listSales_({afterSequence:cursor});
++ assert.equal(next.sales.length,1);assert.equal(next.sales[0].metadata.orderNumber,'ORDER_NEXT');assert.ok(next.sales[0].sequence>cursor);
++});
