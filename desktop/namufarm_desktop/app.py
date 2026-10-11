@@ -234,7 +234,7 @@ class MainWindow(QMainWindow):
             elif isinstance(value, dict) and "requests" in value:
                 self.apply_view(value)
                 self.conflict = False
-                self.message.setText("SYNC OK  >  서버 동기화 완료 · " + timestamp(datetime.now(SEOUL).timestamp() * 1000))
+                self.message.setText("서버 동기화 완료 · " + timestamp(datetime.now(SEOUL).timestamp() * 1000))
         if isinstance(value, dict) and value.get("copyError"):
             self.message.setText(value["copyError"])
         self.update_controls()
@@ -290,7 +290,7 @@ class MainWindow(QMainWindow):
         self.apply_view(data)
         self.message.setStyleSheet("")
         self.message.setText(
-            "READY  >  연결 정보 복원됨 · ‘서버 동기화’를 눌러 최신 견적요청을 가져오세요."
+            "PC 연결 정보를 불러왔어요. 서버 동기화로 최신 견적을 확인하세요."
             if data["paired"] else
             "처음 한 번만 연결파일을 불러오면 다음 실행부터 연결 정보가 자동으로 복원됩니다."
         )

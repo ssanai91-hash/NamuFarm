@@ -83,31 +83,27 @@ QLabel#heroTitle{font-size:25px;font-weight:800;color:#1a482f;}
 QLabel#notice{background:#e8efe6;color:#365c42;border-radius:7px;padding:10px;}
 
 QFrame#serverLogFrame{
-    background:#070b08;
-    border:1px solid #31573a;
-    border-radius:0;
+    background:#ffffff;
+    border:1px solid #d9e5da;
+    border-radius:10px;
     min-height:44px;
 }
 QLabel#serverLogTitle{
-    background:#101812;
-    color:#72cf6e;
+    background:#edf4ed;
+    color:#3c6b50;
     border:0;
-    border-right:1px solid #31573a;
-    border-radius:0;
-    padding:0 10px;
-    font-family:'Consolas','Malgun Gothic',monospace;
-    font-size:10px;
-    font-weight:900;
+    border-right:1px solid #d9e5da;
+    padding:0 12px;
+    font-size:12px;
+    font-weight:800;
 }
 QLabel#serverLogText{
     background:transparent;
-    color:#a7ff8b;
+    color:#44604e;
     border:0;
-    border-radius:0;
     padding:0 12px;
-    font-family:'Consolas','Malgun Gothic',monospace;
     font-size:12px;
-    font-weight:800;
+    font-weight:700;
 }
 QPushButton#syncPrimary{
     min-height:42px;
@@ -441,14 +437,13 @@ QPushButton#pdfAction:pressed{
     padding:12px 20px 9px 20px;
 }
 QLabel#quoteFileName{
-    background:#101512;
-    color:#8fe3a8;
-    border:1px solid #29372f;
-    border-radius:6px;
-    font-family:'Consolas','Malgun Gothic',monospace;
-    font-size:12px;
+    background:#eff6f0;
+    color:#315d42;
+    border:1px solid #cddfcf;
+    border-radius:8px;
+    font-size:13px;
     font-weight:700;
-    padding:8px 11px;
+    padding:10px 12px;
 }
 
 QPushButton#closeAction{
@@ -568,12 +563,35 @@ QLabel#emailHelp{
     color:#6f8175;
     font-size:12px;
 }
-QLabel#emailSendStatus{
-    background:#edf4ea;
-    color:#47624e;
-    border:1px solid #d5e2d2;
-    border-radius:8px;
-    padding:9px 11px;
+QLabel#emailSendStatus,QLabel#smsSendStatus{
+    background:#f2f6f1;
+    color:#526b58;
+    border:1px solid #d9e5d9;
+    border-radius:11px;
+    padding:13px 16px;
+    font-size:15px;
+    font-weight:800;
+    min-height:26px;
+}
+QLabel#emailSendStatus[state="working"],QLabel#smsSendStatus[state="working"]{
+    background:#eaf2fa;
+    color:#315d86;
+    border:1px solid #c8dced;
+}
+QLabel#emailSendStatus[state="pending"],QLabel#smsSendStatus[state="pending"]{
+    background:#fff5e4;
+    color:#916723;
+    border:1px solid #ecd6ad;
+}
+QLabel#emailSendStatus[state="success"],QLabel#smsSendStatus[state="success"]{
+    background:#e7f3e8;
+    color:#24623e;
+    border:1px solid #b8d9bf;
+}
+QLabel#emailSendStatus[state="error"],QLabel#smsSendStatus[state="error"]{
+    background:#fff0ec;
+    color:#a14335;
+    border:1px solid #ecc4bb;
 }
 QPushButton#emailSendPrimary{
     background:#2f6597;
@@ -598,13 +616,6 @@ QPushButton#emailSendPrimary:pressed{
 QPushButton#emailSendPrimary:disabled{background:#aab8c6;border:1px solid #aab8c6;border-bottom:2px solid #95a5b4;color:#eef2f5;}
 
 QDialog#quoteSmsDialog{background:#f4f7f3;}
-QLabel#smsSendStatus{
-    background:#edf4ea;
-    color:#47624e;
-    border:1px solid #d5e2d2;
-    border-radius:8px;
-    padding:9px 11px;
-}
 QPushButton#smsSendPrimary{
     background:#3e7a50;
     color:#ffffff;
@@ -650,6 +661,15 @@ def button(text, callback=None, primary=False):
     if callback:
         widget.clicked.connect(callback)
     return widget
+
+
+def set_delivery_status(widget, message, state="ready", detail=""):
+    """Show a readable status and retain technical errors in the tooltip."""
+    widget.setText(message)
+    widget.setToolTip(str(detail or ""))
+    widget.setProperty("state", state)
+    widget.style().unpolish(widget)
+    widget.style().polish(widget)
 
 
 def card(title):
@@ -1643,7 +1663,8 @@ class QuoteSmsDialog(QDialog):
         self.message.setMinimumHeight(260)
         layout.addWidget(self.message, 1)
 
-        self.status = label("문자 발신 설정을 확인하고 있습니다.", "smsSendStatus", True)
+        self.status = label("문자 발송을 준비하고 있어요…", "smsSendStatus", True)
+        set_delivery_status(self.status, self.status.text(), "working")
         layout.addWidget(self.status)
 
         actions = QHBoxLayout()
@@ -1702,7 +1723,7 @@ class QuoteSmsDialog(QDialog):
     def load_profile(self):
         if not self.manager:
             self.sender_phone.setText("PC 연결 필요")
-            self.status.setText("문자 전송은 PC를 서버에 연결한 뒤 사용할 수 있습니다.")
+            set_delivery_status(self.status, "PC 연결 후 문자를 보낼 수 있어요.", "error")
             return
         self.send_button.setEnabled(False)
         task = Task(self.manager.sms_profile, None, self)
@@ -1719,12 +1740,12 @@ class QuoteSmsDialog(QDialog):
             task.deleteLater()
         if error:
             self.sender_phone.setText("확인 실패")
-            self.status.setText(error)
+            set_delivery_status(self.status, "문자 발신 설정을 확인하지 못했어요. 연결 상태를 확인해주세요.", "error", error)
             self.send_button.setEnabled(False)
             return
         if not isinstance(value, dict) or value.get("configured") is not True:
             self.sender_phone.setText("설정 필요")
-            self.status.setText("문자 발신 설정이 필요합니다. 관리자 설정을 확인해주세요.")
+            set_delivery_status(self.status, "문자 발신번호 설정이 필요해요. 연결·설정을 확인해주세요.", "error")
             self.send_button.setEnabled(False)
             return
 
@@ -1733,7 +1754,7 @@ class QuoteSmsDialog(QDialog):
         self.send_button.setEnabled(bool(self.recipient_phone.text().strip()) and bool(sender))
         # Opening the popup never replays an earlier result. Only the outcome
         # of a send initiated in this open window is shown as success/failure.
-        self.status.setText("문자 발신 준비 완료")
+        set_delivery_status(self.status, "문자 발송 준비 완료", "ready")
 
     def send_sms(self):
         message = self.message.toPlainText().strip()
@@ -1747,7 +1768,8 @@ class QuoteSmsDialog(QDialog):
         self.message.setEnabled(False)
         self.send_button.setEnabled(False)
         self.check_button.setEnabled(False)
-        self.status.setText("문자를 전송하고 있습니다…")
+        self.send_button.setText("문자 전송")
+        set_delivery_status(self.status, "문자를 보내는 중입니다…", "working")
         task = Task(lambda: self.manager.send_quote_sms(self.draft, message), None, self)
         self.send_task = task
         task.completed.connect(self.sms_sent)
@@ -1764,25 +1786,25 @@ class QuoteSmsDialog(QDialog):
             self.message.setEnabled(True)
             self.send_button.setEnabled(True)
             self.check_button.setEnabled(bool(self.delivery_state.get("smsMessageId")))
-            self.status.setText("문자전송 실패")
+            set_delivery_status(self.status, "발송 결과를 확인하지 못했어요. 중복 발송 전에 기록을 확인해주세요.", "error", error)
             return
         if not isinstance(value, dict):
             self.message.setEnabled(True)
             self.send_button.setEnabled(True)
-            self.status.setText("문자 전송 결과를 확인하지 못했습니다. 다시 시도해주세요.")
+            set_delivery_status(self.status, "발송 결과가 불확실해요. 중복 전송에 주의해주세요.", "error")
             return
 
         self.delivery_state = dict(value.get("delivery") or {})
         self.sender_phone.setText(str(value.get("senderPhone") or self.sender_phone.text()))
         self.check_button.setEnabled(True)
-        self.status.setText("문자전송 결과 확인중…")
+        set_delivery_status(self.status, "문자 발송 요청 완료 · 전송 결과 확인 중…", "pending")
         self.status_timer.start()
 
     def check_status(self, checked=False):
         if not self.manager or self.status_task or self.send_task:
             return
         if not self.delivery_state.get("smsMessageId"):
-            self.status.setText("확인할 문자 발송 기록이 없습니다.")
+            set_delivery_status(self.status, "확인할 문자 발송 기록이 없어요.", "ready")
             return
         self.check_button.setEnabled(False)
         task = Task(lambda: self.manager.refresh_quote_sms_status(self.draft["id"]), None, self)
@@ -1799,23 +1821,24 @@ class QuoteSmsDialog(QDialog):
             task.deleteLater()
         if error:
             self.check_button.setEnabled(True)
-            self.status.setText("문자전송 결과 확인중…")
+            set_delivery_status(self.status, "결과 확인이 지연되고 있어요. 결과 확인을 눌러주세요.", "pending", error)
             return
         if not isinstance(value, dict):
             self.check_button.setEnabled(True)
-            self.status.setText("문자전송 결과 확인중…")
+            set_delivery_status(self.status, "결과 확인이 지연되고 있어요. 결과 확인을 눌러주세요.", "pending", error)
             return
 
         self.delivery_state = dict(value)
         state = self.delivery_state.get("smsState", "")
         if state == "success":
             self.status_timer.stop()
-            self.status.setText("문자전송 성공")
+            set_delivery_status(self.status, "문자 전송 성공", "success")
             self.check_button.setEnabled(False)
             return
         if state == "failed":
             self.status_timer.stop()
-            self.status.setText("문자전송 실패")
+            set_delivery_status(self.status, "문자 전송에 실패했어요. 번호를 확인하고 다시 보내주세요.", "error", self.delivery_state.get("smsStatusMessage", ""))
+            self.send_button.setText("다시 보내기")
             self.message.setEnabled(True)
             self.send_button.setEnabled(True)
             self.check_button.setEnabled(True)
@@ -1824,14 +1847,14 @@ class QuoteSmsDialog(QDialog):
         self.poll_count += 1
         self.check_button.setEnabled(True)
         if self.poll_count < self.max_auto_polls:
-            self.status.setText("문자전송 결과 확인중…")
+            set_delivery_status(self.status, "문자 전송 결과 확인 중…", "pending")
             self.status_timer.start()
         else:
-            self.status.setText("문자전송 결과 확인중…")
+            set_delivery_status(self.status, "아직 결과를 확인하지 못했어요. 결과 확인을 눌러주세요.", "pending")
 
     def reject(self):
         if self.profile_task or self.send_task or self.status_task:
-            self.status.setText("현재 문자 처리가 끝난 뒤 창을 닫아주세요.")
+            set_delivery_status(self.status, "문자 처리가 끝나면 창을 닫을 수 있어요.", "pending")
             return
         self.status_timer.stop()
         super().reject()
@@ -1913,7 +1936,11 @@ class QuoteEmailDialog(QDialog):
             attachment_row = QHBoxLayout()
             attachment_row.setSpacing(12)
             attachment_row.addWidget(label("첨부파일", "emailSectionTitle"))
-            self.attachment_label = QLabel(self.attachment_path.name)
+            size_kb = (self.attachment_path.stat().st_size + 1023) // 1024 if self.attachment_path.is_file() else 0
+            self.attachment_label = QLabel(
+                f"PDF 첨부 예정 · {self.attachment_path.name}"
+                + (f" · {size_kb:,} KB" if size_kb else "")
+            )
             self.attachment_label.setObjectName("quoteFileName")
             attachment_row.addWidget(self.attachment_label, 1)
             layout.addLayout(attachment_row)
@@ -1924,7 +1951,8 @@ class QuoteEmailDialog(QDialog):
         self.message.setMinimumHeight(420)
         layout.addWidget(self.message, 1)
 
-        self.status = label("Apps Script 발신 계정을 확인하고 있습니다.", "emailSendStatus", True)
+        self.status = label("메일 발송을 준비하고 있어요…", "emailSendStatus", True)
+        set_delivery_status(self.status, self.status.text(), "working")
         layout.addWidget(self.status)
 
         actions = QHBoxLayout()
@@ -1990,7 +2018,7 @@ class QuoteEmailDialog(QDialog):
 
     def load_profile(self):
         if not self.manager:
-            self.status.setText("메일 전송은 PC를 서버에 연결한 뒤 사용할 수 있습니다.")
+            set_delivery_status(self.status, "PC 연결 후 메일을 보낼 수 있어요.", "error")
             return
         self.send_button.setEnabled(False)
         task = Task(self.manager.email_profile, None, self)
@@ -2008,18 +2036,22 @@ class QuoteEmailDialog(QDialog):
             self.profile_task = None
             task.deleteLater()
         if error:
-            self.status.setText(error)
+            set_delivery_status(self.status, "메일 발신 설정을 확인하지 못했어요. 연결 상태를 확인해주세요.", "error", error)
             self.send_button.setEnabled(False)
             return
         sender = str(value.get("senderEmail") or "")
         if sender.lower() != self.SENDER_EMAIL.lower():
-            self.status.setText(f"발신 계정을 확인해주세요. 현재 계정: {sender or '확인 불가'}")
+            set_delivery_status(self.status, "메일 발신 계정 설정을 확인해주세요.", "error", sender)
             self.send_button.setEnabled(False)
             return
         self.sender_name.setText(str(value.get("senderName") or self.sender_name.text()))
         self.sender_email.setText(self.SENDER_EMAIL)
         quota = int(value.get("remainingDailyQuota", 0) or 0)
-        self.status.setText(f"발신 계정 확인 완료 · 오늘 남은 메일 전송 한도 {quota:,}건")
+        if quota > 0:
+            file_note = " · 공식견적서 PDF 첨부 예정" if self.attachment_path else ""
+            set_delivery_status(self.status, "메일 발송 준비 완료" + file_note, "ready")
+        else:
+            set_delivery_status(self.status, "오늘 보낼 수 있는 메일이 없어요. 내일 다시 시도해주세요.", "error")
         self.send_button.setEnabled(bool(self.recipient_email.text().strip()) and quota > 0)
 
     def plain_body(self):
@@ -2046,7 +2078,8 @@ class QuoteEmailDialog(QDialog):
         self.message.setEnabled(False)
         self.send_button.setEnabled(False)
         self.cancel_button.setEnabled(False)
-        self.status.setText("고객에게 견적 메일을 전송하고 있습니다…")
+        self.send_button.setText("메일 전송")
+        set_delivery_status(self.status, "견적 메일을 보내는 중입니다…", "working")
         plain, html = self.plain_body(), self.html_body()
         task = Task(
             lambda: self.manager.send_quote_email(
@@ -2073,28 +2106,30 @@ class QuoteEmailDialog(QDialog):
             self.message.setEnabled(True)
             self.cancel_button.setEnabled(True)
             self.send_button.setEnabled(True)
-            self.status.setText(error)
+            self.send_button.setText("다시 보내기")
+            set_delivery_status(self.status, "발송 결과를 확인하지 못했어요. 발신함 확인 후 다시 시도해주세요.", "error", error)
             return
         if not isinstance(value, dict):
             self.subject.setEnabled(True)
             self.message.setEnabled(True)
             self.cancel_button.setEnabled(True)
             self.send_button.setEnabled(True)
-            self.status.setText("메일 전송 결과를 확인하지 못했습니다. 다시 시도해주세요.")
+            self.send_button.setText("다시 보내기")
+            set_delivery_status(self.status, "발송 결과가 불확실해요. 발신함 확인 후 다시 시도해주세요.", "error")
             return
         self.delivery_state = dict(value.get("delivery") or {})
         self.sender_email.setText(self.SENDER_EMAIL)
         attached = bool(value.get("attachmentName"))
-        self.status.setText("메일 전송완료" + (" · 공식견적서 첨부완료" if attached else ""))
-        detail = f"{self.recipient_email.text()} 주소로 견적 메일을 전송했습니다."
-        if attached:
-            detail += f"\n\n첨부파일: {value['attachmentName']}"
-        QMessageBox.information(self, "메일 전송완료", detail)
+        set_delivery_status(self.status, "메일 발송 요청 완료" + (" · PDF 첨부" if attached else " · 첨부 없음"), "success")
+        detail = f"{self.recipient_email.text()} 주소로 메일 발송을 요청했습니다."
+        detail += f"\n\n첨부파일: {value['attachmentName']}" if attached else "\n\n첨부파일: 없음"
+        detail += "\n\n실제 수신 여부는 고객 메일함에서 확인해주세요."
+        QMessageBox.information(self, "메일 발송 요청 완료", detail)
         self.accept()
 
     def reject(self):
         if self.profile_task or self.send_task:
-            self.status.setText("현재 메일 처리가 끝난 뒤 창을 닫아주세요.")
+            set_delivery_status(self.status, "메일 처리가 끝나면 창을 닫을 수 있어요.", "pending")
             return
         super().reject()
 
@@ -3238,7 +3273,7 @@ class SellerWindow(MainWindow):
         log_layout = QHBoxLayout(self.server_log_frame)
         log_layout.setContentsMargins(0, 0, 0, 0)
         log_layout.setSpacing(0)
-        log_title = QLabel("SERVER LOG")
+        log_title = QLabel("작업 상태")
         log_title.setObjectName("serverLogTitle")
         log_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         log_layout.addWidget(log_title)
@@ -3604,7 +3639,7 @@ class SellerWindow(MainWindow):
 
         if arrivals:
             count = len(arrivals)
-            self._request_arrival_notice = f"NEW RFQ  >  신규 견적요청 {count}건 도착"
+            self._request_arrival_notice = f"신규 견적 {count}건이 도착했어요."
             if self.tray_icon is not None:
                 self.tray_icon.showMessage(
                     "나무팜 · 신규 견적 요청",
