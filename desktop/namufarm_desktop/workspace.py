@@ -151,6 +151,28 @@ QTableWidget#deliveryItems QHeaderView::section{
     font-weight:800;
 }
 
+QFrame#deliveryShippingCard{
+    background:#f7faf6;
+    border:1px solid #d5e2d4;
+    border-radius:10px;
+}
+QLabel#deliveryShippingTitle{
+    color:#244f36;
+    font-size:15px;
+    font-weight:800;
+}
+QLabel#deliveryShippingStatus{
+    color:#607467;
+    font-size:12px;
+    font-weight:600;
+}
+QLineEdit#deliveryShippingFee{
+    min-width:110px;
+    max-width:150px;
+    font-weight:700;
+    text-align:right;
+}
+
 QFrame#quoteTotalBand{
     background:#e3eee0;
     border:1px solid #c4d8c1;
@@ -476,34 +498,13 @@ class QuoteDialog(QDialog):
                 reply = QLineEdit(channel)
                 reply.setReadOnly(True)
                 form.addRow("수신 방법", reply)
-            shipping_choice = QWidget()
-            shipping_row = QHBoxLayout(shipping_choice)
-            shipping_row.setContentsMargins(0, 0, 0, 0)
-            shipping_row.setSpacing(10)
-            self.shipping_cod = QRadioButton("후불")
-            self.shipping_prepaid = QRadioButton("선불")
-            self.shipping_prepaid.setChecked(bool(draft.get("isPrepaid")))
-            self.shipping_cod.setChecked(not bool(draft.get("isPrepaid")))
-            shipping_row.addWidget(self.shipping_cod)
-            shipping_row.addWidget(self.shipping_prepaid)
-            shipping_row.addStretch()
-            form.addRow("택배비용", shipping_choice)
-
-            self.shipping_fee = QLineEdit(str(int(draft.get("shippingFee") or 6000)))
-            self.shipping_fee.setValidator(QIntValidator(0, 2147483647, self.shipping_fee))
-            self.shipping_fee.setPlaceholderText("선불 시 택배비")
-            form.addRow("선불 금액 (원)", self.shipping_fee)
-
             self.note = QPlainTextEdit(draft.get("note", ""))
             self.note.setReadOnly(True)
             self.note.setMinimumHeight(82)
             self.note.setMaximumHeight(110)
-            form.addRow(label("고객이 요청한 품목·수량과 택배비를 확인하고 판매 단가를 입력하세요.", "muted", True))
+            form.addRow(label("고객이 요청한 품목과 수량을 확인하고 판매 단가를 입력하세요.", "muted", True))
             split.addWidget(info)
             self.cost = QCheckBox()
-            self.shipping_cod.toggled.connect(self.recalculate)
-            self.shipping_prepaid.toggled.connect(self.recalculate)
-            self.shipping_fee.textChanged.connect(self.recalculate)
         else:
             info = QWidget()
             form = QFormLayout(info)
@@ -640,12 +641,10 @@ class QuoteDialog(QDialog):
         if self.simple_request:
             item_state = [[self.items.item(r, 0).text(), self.items.item(r, 1).text(), self.unit_price_editor(r).text()]
                           for r in range(self.items.rowCount())]
-            shipping_state = ["선불" if self.shipping_prepaid.isChecked() else "후불", self.shipping_fee.text()]
         else:
             item_state = [[self.items.item(r, c).text() for c in range(5)] for r in range(self.items.rowCount())]
-            shipping_state = []
         return ([field.text() for field in self.fields.values()], self.note.toPlainText(), item_state,
-                shipping_state, copy.deepcopy(self.draft["issuer"]))
+                copy.deepcopy(self.draft["issuer"]))
 
     def reject(self):
         if hasattr(self, "initial") and self.raw_state() != self.initial:
@@ -656,10 +655,7 @@ class QuoteDialog(QDialog):
     def collect(self, validate=True):
         draft = copy.deepcopy(self.draft)
         if self.simple_request:
-            shipping_fee = self.shipping_fee.text().strip()
-            require(shipping_fee.isascii() and shipping_fee.isdigit(), "선불 시 택배비를 0 이상의 정수로 입력해주세요.")
-            draft.update(shippingFee=int(shipping_fee), isPrepaid=self.shipping_prepaid.isChecked(),
-                         taxAmount=0, costConfirmed=False, items=[])
+            draft.update(shippingFee=0, isPrepaid=False, taxAmount=0, costConfirmed=False, items=[])
             for row in range(self.items.rowCount()):
                 species = self.items.item(row, 0).text().strip()
                 quantity = self.items.item(row, 1).text().strip()
@@ -699,12 +695,8 @@ class QuoteDialog(QDialog):
             amount = draft_amounts(draft)
             self.total.setText(f"합계 {amount['total']:,}원")
             if self.simple_request:
-                item_total = sum(i["quantity"] * i["unitPrice"] for i in draft["items"])
-                shipping_text = (f"택배비 선불 {draft['shippingFee']:,}원 · 합계 포함"
-                                 if draft["isPrepaid"]
-                                 else f"택배비 후불 · 선불 시 {draft['shippingFee']:,}원")
                 self.amount_detail.setText(
-                    f"총 수량 {amount['quantity']:,}주 · 묘목 금액 {item_total:,}원 · {shipping_text}"
+                    f"총 수량 {amount['quantity']:,}주 · 묘목 금액 {amount['supply']:,}원"
                 )
             else:
                 self.amount_detail.setText(
@@ -986,6 +978,8 @@ class QuoteDeliveryDialog(QDialog):
         super().__init__(parent)
 
         self.draft = copy.deepcopy(draft)
+        if self.draft.get("sourceRequestId") and int(self.draft.get("shippingFee", 0) or 0) <= 0:
+            self.draft["shippingFee"] = 6000
         self.manager = manager
         self.delivery_state = dict(delivery_state or {})
         self.request_status = (
@@ -1208,6 +1202,39 @@ class QuoteDeliveryDialog(QDialog):
 
         items_layout.addWidget(self.items)
 
+        # Shipping decision belongs to the delivery stage, after item prices are confirmed.
+        shipping_card = QFrame()
+        shipping_card.setObjectName("deliveryShippingCard")
+        shipping_layout = QHBoxLayout(shipping_card)
+        shipping_layout.setContentsMargins(16, 10, 16, 10)
+        shipping_layout.setSpacing(12)
+
+        shipping_title = QLabel("택배비용")
+        shipping_title.setObjectName("deliveryShippingTitle")
+        shipping_layout.addWidget(shipping_title)
+
+        self.shipping_cod = QRadioButton("후불")
+        self.shipping_prepaid = QRadioButton("선불")
+        self.shipping_prepaid.setChecked(bool(self.draft.get("isPrepaid")))
+        self.shipping_cod.setChecked(not bool(self.draft.get("isPrepaid")))
+        shipping_layout.addWidget(self.shipping_cod)
+        shipping_layout.addWidget(self.shipping_prepaid)
+
+        shipping_layout.addSpacing(12)
+        shipping_layout.addWidget(QLabel("선불 금액"))
+
+        self.shipping_fee = QLineEdit(str(int(self.draft.get("shippingFee", 0) or 6000)))
+        self.shipping_fee.setObjectName("deliveryShippingFee")
+        self.shipping_fee.setValidator(QIntValidator(0, 2147483647, self.shipping_fee))
+        self.shipping_fee.setAlignment(Qt.AlignmentFlag.AlignRight)
+        shipping_layout.addWidget(self.shipping_fee)
+
+        self.shipping_status = QLabel()
+        self.shipping_status.setObjectName("deliveryShippingStatus")
+        shipping_layout.addWidget(self.shipping_status, 1)
+
+        items_layout.addWidget(shipping_card)
+
         # Total amount band
         total_band = QFrame()
         total_band.setObjectName("quoteTotalBand")
@@ -1215,21 +1242,22 @@ class QuoteDeliveryDialog(QDialog):
         total_layout = QHBoxLayout(total_band)
         total_layout.setContentsMargins(20, 12, 20, 12)
 
-        total_caption = QLabel("총 판매금액")
+        total_caption = QLabel("총금액")
         total_caption.setObjectName("quoteTotalCaption")
 
-        amounts = draft_amounts(self.draft)
-
-        total_value = QLabel(
-            f"{amounts['total']:,}원"
-        )
-        total_value.setObjectName("quoteTotalValue")
+        self.total_value = QLabel()
+        self.total_value.setObjectName("quoteTotalValue")
 
         total_layout.addWidget(total_caption)
         total_layout.addStretch()
-        total_layout.addWidget(total_value)
+        total_layout.addWidget(self.total_value)
 
         items_layout.addWidget(total_band)
+
+        self.shipping_cod.toggled.connect(self.recalculate_shipping)
+        self.shipping_prepaid.toggled.connect(self.recalculate_shipping)
+        self.shipping_fee.textChanged.connect(self.recalculate_shipping)
+        self.recalculate_shipping()
 
         layout.addWidget(items_card, 1)
 
@@ -1347,12 +1375,60 @@ class QuoteDeliveryDialog(QDialog):
             badge.style().unpolish(badge)
             badge.style().polish(badge)
 
+    def apply_shipping(self, validate=True):
+        text = self.shipping_fee.text().strip()
+        if validate:
+            require(text.isascii() and text.isdigit(), "선불 택배비를 0 이상의 정수로 입력해주세요.")
+        fee = int(text) if text.isascii() and text.isdigit() else 0
+        self.draft["shippingFee"] = fee
+        self.draft["isPrepaid"] = self.shipping_prepaid.isChecked()
+        return self.draft
+
+    def recalculate_shipping(self, *args):
+        if not hasattr(self, "total_value"):
+            return
+        try:
+            self.apply_shipping(False)
+            item_total = sum(int(item["quantity"]) * int(item["unitPrice"]) for item in self.draft.get("items", []))
+            amounts = draft_amounts(self.draft)
+            self.total_value.setText(f"{amounts['total']:,}원")
+            if self.draft["isPrepaid"]:
+                self.shipping_status.setText(
+                    f"선불 {self.draft['shippingFee']:,}원 · 묘목금액 {item_total:,}원에 포함"
+                )
+            else:
+                self.shipping_status.setText(
+                    f"후불 · 총금액 미포함 · 선불 시 {self.draft['shippingFee']:,}원"
+                )
+        except UserError:
+            self.total_value.setText("금액 확인 필요")
+            self.shipping_status.setText("택배비 금액을 확인해주세요.")
+
+    def persist_shipping(self):
+        try:
+            self.apply_shipping(True)
+            validate_draft(self.draft)
+            if self.manager:
+                self.manager.save_draft(self.draft)
+            return True
+        except UserError as error:
+            QMessageBox.warning(self, "택배비 확인", str(error))
+            return False
+
     def delivery_text(self):
+        if not self.persist_shipping():
+            return ""
         amount = draft_amounts(self.draft)["total"]
 
         items = ", ".join(
             f"{item['species']} {item['quantity']:,}주"
             for item in self.draft["items"]
+        )
+
+        shipping = (
+            f"택배비: 선불 {self.draft['shippingFee']:,}원 (총금액 포함)"
+            if self.draft["isPrepaid"]
+            else f"택배비: 후불 / 선불 시 {self.draft['shippingFee']:,}원"
         )
 
         return "\n".join(
@@ -1363,7 +1439,8 @@ class QuoteDeliveryDialog(QDialog):
                 "",
                 f"견적번호: {self.quote_number()}",
                 f"품목: {items}",
-                f"판매금액: {amount:,}원",
+                f"총금액: {amount:,}원",
+                shipping,
                 "",
                 "확인 후 문의사항이 있으시면 연락 부탁드립니다.",
             ]
@@ -1371,6 +1448,8 @@ class QuoteDeliveryDialog(QDialog):
 
     def open_sms(self):
         body = self.delivery_text()
+        if not body:
+            return
 
         uri = (
             f"sms:{self.draft['customerPhone']}"
@@ -1389,6 +1468,8 @@ class QuoteDeliveryDialog(QDialog):
             )
 
     def open_email(self):
+        if not self.persist_shipping():
+            return
         email = self.draft.get("customerEmail", "").strip()
         if not email:
             QMessageBox.information(self, "메일 주소 확인", "고객 이메일이 입력되지 않았습니다.")
@@ -1399,6 +1480,8 @@ class QuoteDeliveryDialog(QDialog):
             self.update_delivery_badges()
 
     def preview_pdf(self):
+        if not self.persist_shipping():
+            return
         print_document(
             self,
             quote_html(self.draft, True),
@@ -1407,6 +1490,8 @@ class QuoteDeliveryDialog(QDialog):
         )
 
     def mark_sent(self):
+        if not self.persist_shipping():
+            return
         answer = QMessageBox.question(
             self,
             "견적발송완료",
@@ -1426,6 +1511,11 @@ class QuoteDeliveryDialog(QDialog):
 
         self.mode = "sent"
         self.accept()
+
+    def reject(self):
+        if not self.persist_shipping():
+            return
+        super().reject()
 
 
 class ShippingExportDialog(QDialog):
@@ -1980,8 +2070,11 @@ class SellerWindow(MainWindow):
         result = dialog.exec()
         self.timer.start()
         if result == QDialog.DialogCode.Accepted and dialog.mode == "sent":
+            delivery_draft = copy.deepcopy(dialog.draft)
             self.run_job("견적발송완료 상태를 운영 시트에 저장 중…",
-                         lambda: self.manager.mark_quote_sent(draft), self.quote_sent)
+                         lambda: self.manager.mark_quote_sent(delivery_draft), self.quote_sent)
+        else:
+            self.apply_view(self.manager.view())
 
     def quote_sent(self, value):
         self.apply_view(value)

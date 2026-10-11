@@ -292,17 +292,12 @@ class SellerUiTest(QtTestCase):
         self.assertEqual(['묘목명', '수량', '판매 금액', '판매 단가'], headers)
         self.assertEqual('견적 확정', dialog.confirm_button.text())
         self.assertEqual('20,000', dialog.items.item(0, 2).text())
-        self.assertTrue(dialog.shipping_cod.isChecked())
-        self.assertFalse(dialog.shipping_prepaid.isChecked())
-        self.assertEqual('6000', dialog.shipping_fee.text())
-        self.assertEqual(6000, dialog.collect()['shippingFee'])
+        self.assertFalse(hasattr(dialog, 'shipping_cod'))
+        self.assertFalse(hasattr(dialog, 'shipping_prepaid'))
+        self.assertFalse(hasattr(dialog, 'shipping_fee'))
+        self.assertEqual(0, dialog.collect()['shippingFee'])
         self.assertFalse(dialog.collect()['isPrepaid'])
         self.assertGreaterEqual(dialog.note.width(), dialog.width() * 0.75)
-
-        dialog.shipping_prepaid.click()
-        self.app.processEvents()
-        self.assertTrue(dialog.shipping_prepaid.isChecked())
-        self.assertTrue(dialog.collect()['isPrepaid'])
 
         price = dialog.unit_price_editor(0)
         self.assertEqual('10000', price.text())
@@ -344,7 +339,30 @@ class SellerUiTest(QtTestCase):
         self.assertTrue(dialog.sent_button.isEnabled())
         self.assertEqual('문자 미전송', dialog.sms_status_badge.text())
         self.assertEqual('메일 전송완료', dialog.email_status_badge.text())
+        self.assertTrue(dialog.shipping_prepaid.isChecked())
+        self.assertEqual('3500', dialog.shipping_fee.text())
+        self.assertEqual('25,850원', dialog.total_value.text())
+        self.assertIn('선불 3,500원', dialog.shipping_status.text())
+
+        dialog.shipping_cod.click()
+        self.app.processEvents()
+        self.assertEqual('22,350원', dialog.total_value.text())
+        self.assertIn('후불', dialog.shipping_status.text())
         self.assertIn('NAMU-20261011-0001', dialog.delivery_text())
+        dialog.close()
+
+    def test_delivery_dialog_defaults_unset_web_quote_shipping_to_cod_6000(self):
+        draft = draft_for_test()
+        draft.update(sourceRequestId='123e4567-e89b-12d3-a456-426614174000',
+                     shippingFee=0, isPrepaid=False, taxAmount=0)
+        dialog = QuoteDeliveryDialog(draft, '견적확정')
+        self.assertTrue(dialog.shipping_cod.isChecked())
+        self.assertEqual('6000', dialog.shipping_fee.text())
+        self.assertEqual('20,000원', dialog.total_value.text())
+        dialog.shipping_prepaid.click()
+        self.app.processEvents()
+        self.assertEqual('26,000원', dialog.total_value.text())
+        self.assertTrue(dialog.draft['isPrepaid'])
         dialog.close()
 
     def test_quote_email_dialog_is_message_focused_and_uses_customer_name(self):
