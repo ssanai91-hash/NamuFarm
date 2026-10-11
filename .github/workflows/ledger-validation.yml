@@ -1,0 +1,26 @@
+name: Annual ledger validation
+
+on:
+  push:
+    branches: [feat/annual-quote-order-ledgers]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Archive exact validation sources
+        run: git archive --format=zip --output=namufarm-validation-source.zip HEAD
+      - uses: actions/upload-artifact@v4
+        with:
+          name: namufarm-validation-source
+          path: namufarm-validation-source.zip
+          retention-days: 3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Server regression tests
+        run: node --test server/quote-requests/tests/*.test.cjs
