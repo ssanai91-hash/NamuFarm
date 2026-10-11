@@ -224,14 +224,17 @@ class MainWindow(QMainWindow):
                 self.apply_view(value)
             self.conflict = conflict or self.conflict
             self.message.setText(error)
-            self.message.setStyleSheet("color:#a33827;font-weight:600")
+            if self.message.objectName() == "serverLogText":
+                self.message.setStyleSheet("")
+            else:
+                self.message.setStyleSheet("color:#a33827;font-weight:600")
         else:
             if on_success:
                 on_success(value)
             elif isinstance(value, dict) and "requests" in value:
                 self.apply_view(value)
                 self.conflict = False
-                self.message.setText("서버 동기화 완료 · " + timestamp(datetime.now(SEOUL).timestamp() * 1000))
+                self.message.setText("SYNC OK  >  서버 동기화 완료 · " + timestamp(datetime.now(SEOUL).timestamp() * 1000))
         if isinstance(value, dict) and value.get("copyError"):
             self.message.setText(value["copyError"])
         self.update_controls()
@@ -287,7 +290,7 @@ class MainWindow(QMainWindow):
         self.apply_view(data)
         self.message.setStyleSheet("")
         self.message.setText(
-            "연결 정보를 자동으로 불러왔습니다. ‘지금 동기화’를 눌러 최신 견적요청을 가져오세요."
+            "READY  >  연결 정보 복원됨 · ‘서버 동기화’를 눌러 최신 견적요청을 가져오세요."
             if data["paired"] else
             "처음 한 번만 연결파일을 불러오면 다음 실행부터 연결 정보가 자동으로 복원됩니다."
         )
@@ -324,11 +327,11 @@ class MainWindow(QMainWindow):
 
     def manual_sync(self):
         if self.manager and self.allow_discard():
-            self.run_job("구글시트와 동기화 중…", self.manager.sync)
+            self.run_job("SYNC  >  구글시트 서버 동기화 중…", self.manager.sync)
 
     def auto_sync(self):
         if self.manager and self.data["paired"] and self.auto_check.isChecked() and not self.task and not self.dirty and not self.conflict:
-            self.run_job("자동 동기화 중…", self.manager.sync)
+            self.run_job("AUTO SYNC  >  서버 동기화 중…", self.manager.sync)
 
     def apply_view(self, value):
         self.data = value

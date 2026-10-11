@@ -43,6 +43,62 @@ QFrame#hero{background:#e3eddf;border:1px solid #d5e2d0;border-radius:14px;}
 QFrame#hero QLabel{background:transparent;}
 QLabel#heroTitle{font-size:25px;font-weight:800;color:#1a482f;}
 QLabel#notice{background:#e8efe6;color:#365c42;border-radius:7px;padding:10px;}
+
+QFrame#serverLogFrame{
+    background:#070b08;
+    border:1px solid #31573a;
+    border-radius:0;
+    min-height:44px;
+}
+QLabel#serverLogTitle{
+    background:#101812;
+    color:#72cf6e;
+    border:0;
+    border-right:1px solid #31573a;
+    border-radius:0;
+    padding:0 10px;
+    font-family:'Consolas','Malgun Gothic',monospace;
+    font-size:10px;
+    font-weight:900;
+}
+QLabel#serverLogText{
+    background:transparent;
+    color:#a7ff8b;
+    border:0;
+    border-radius:0;
+    padding:0 12px;
+    font-family:'Consolas','Malgun Gothic',monospace;
+    font-size:12px;
+    font-weight:800;
+}
+QPushButton#syncPrimary{
+    min-height:42px;
+    background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #2d8054,stop:1 #1b633f);
+    color:#ffffff;
+    border:1px solid #155333;
+    border-bottom:4px solid #0b3b23;
+    border-radius:7px;
+    padding:8px 17px 9px 17px;
+    font-weight:900;
+}
+QPushButton#syncPrimary:hover{
+    background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #34915f,stop:1 #207149);
+    border-color:#174f33;
+    border-bottom-color:#082f1b;
+}
+QPushButton#syncPrimary:pressed{
+    background:#164f33;
+    border:1px solid #0f472b;
+    border-top:4px solid #082f1b;
+    border-bottom:1px solid #2d8054;
+    padding:11px 17px 6px 17px;
+}
+QPushButton#syncPrimary:disabled{
+    background:#a3b4a7;
+    color:#edf2ed;
+    border:1px solid #98aa9c;
+    border-bottom:2px solid #879a8b;
+}
 QPushButton{
     background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #ffffff,stop:1 #f4f8f3);
     border:1px solid #c9d6cb;
@@ -2913,15 +2969,36 @@ class SellerWindow(MainWindow):
         header.addWidget(label(datetime.now(SEOUL).strftime("%Y.%m.%d"), "muted"))
         self.global_search = QLineEdit()
         self.global_search.setPlaceholderText("고객 · 주문 검색   Ctrl+K")
-        self.global_search.setFixedWidth(280)
+        self.global_search.setFixedWidth(230)
         self.global_search.returnPressed.connect(self.search_all)
         header.addWidget(self.global_search)
+
+        self.sync_button.setText("↻  서버 동기화")
+        self.sync_button.setObjectName("syncPrimary")
+        self.sync_button.setMinimumWidth(138)
         header.addWidget(self.sync_button)
+
+        self.server_log_frame = QFrame()
+        self.server_log_frame.setObjectName("serverLogFrame")
+        self.server_log_frame.setMinimumWidth(330)
+        self.server_log_frame.setMaximumWidth(480)
+        log_layout = QHBoxLayout(self.server_log_frame)
+        log_layout.setContentsMargins(0, 0, 0, 0)
+        log_layout.setSpacing(0)
+        log_title = QLabel("SERVER LOG")
+        log_title.setObjectName("serverLogTitle")
+        log_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        log_layout.addWidget(log_title)
+        self.message.setObjectName("serverLogText")
+        self.message.setWordWrap(False)
+        self.message.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        self.message.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        log_layout.addWidget(self.message, 1)
+        header.addWidget(self.server_log_frame, 1)
+
         self.new_quote_button = button("+ 새 견적", self.edit_quote, True)
         header.addWidget(self.new_quote_button)
         content_layout.addLayout(header)
-        self.message.setObjectName("notice")
-        content_layout.addWidget(self.message)
         self.stack = QStackedWidget()
         self.stack.addWidget(self.build_dashboard())
         self.stack.addWidget(old_pages[0])

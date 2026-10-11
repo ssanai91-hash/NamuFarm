@@ -342,6 +342,9 @@ class SellerUiTest(QtTestCase):
         self.assertIn('QPushButton#sentAction:pressed', style)
         self.assertIn('QPushButton#smsAction:pressed', style)
         self.assertIn('QPushButton#mailAction:pressed', style)
+        self.assertIn('QFrame#serverLogFrame', style)
+        self.assertIn('QLabel#serverLogText', style)
+        self.assertIn('QPushButton#syncPrimary:pressed', style)
         window.close()
 
     def test_fhd_pages_readonly_demo(self):
@@ -355,6 +358,11 @@ class SellerUiTest(QtTestCase):
         self.assertFalse(window.connection_file_button.isEnabled())
         self.assertFalse(window.copy_button.isEnabled())
         self.assertFalse(hasattr(window, 'inbox_sync_button'))
+        self.assertEqual('↻  서버 동기화', window.sync_button.text())
+        self.assertEqual('syncPrimary', window.sync_button.objectName())
+        self.assertEqual('serverLogText', window.message.objectName())
+        self.assertEqual('serverLogFrame', window.server_log_frame.objectName())
+        self.assertIs(window.message.parentWidget(), window.server_log_frame)
         self.assertEqual('견적요청 삭제', window.delete_button.text())
         self.assertEqual('견적 작성', window.request_quote_button.text())
         draft_headers = [window.draft_table.horizontalHeaderItem(i).text() for i in range(window.draft_table.columnCount())]
