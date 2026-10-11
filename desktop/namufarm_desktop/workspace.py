@@ -3701,13 +3701,13 @@ class SellerWindow(MainWindow):
                 continue
             rows.append(row)
 
-        rows.sort(
-            key=lambda row: (
-                status_priority.get(customer_status_text(row["metadata"]["status"]), 9),
-                -int(row["metadata"].get("orderDate", 0) or 0),
-                row["metadata"]["orderNumber"],
-            )
-        )
+        # orderDate is a KST "YYYY-MM-DD HH:MM" string, not an integer.
+        # Stable sorts preserve the order-number tie-breaker and newest-first
+        # order within each business status.
+        rows.sort(key=lambda row: row["metadata"]["orderNumber"])
+        rows.sort(key=lambda row: row["metadata"]["orderDate"], reverse=True)
+        rows.sort(key=lambda row: status_priority.get(
+            customer_status_text(row["metadata"]["status"]), 9))
         self.sale_rows = rows
         table_rows = []
         for row in rows:

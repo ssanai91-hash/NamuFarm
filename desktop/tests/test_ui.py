@@ -162,13 +162,15 @@ class UiTest(QtTestCase):
         self.assertFalse(hasattr(self.window, "reset_connection_button"))
 
     def test_statistics_job_keeps_open_workspace(self):
+        # Reading a report must not clear the active quote inbox or lock sync.
+        requests_before = self.window.request_table.rowCount()
         self.window.fetch_report()
         self.wait_job()
         self.assertIn('총', self.window.report_summary.text())
         self.assertIsNotNone(self.window.manager)
-        self.assertEqual(0, self.window.request_table.rowCount())
+        self.assertEqual(requests_before, self.window.request_table.rowCount())
         self.assertEqual('', self.window.fields['customerName'].text())
-        self.assertFalse(self.window.sync_button.isEnabled())
+        self.assertTrue(self.window.sync_button.isEnabled())
 
 
 if __name__ == '__main__':
