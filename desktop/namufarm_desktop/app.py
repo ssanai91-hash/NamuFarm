@@ -124,7 +124,7 @@ class MainWindow(QMainWindow):
     def __init__(self, vault_path=None):
         super().__init__()
         self.setWindowTitle("나무팜 PC 관리 · 견적 요청과 판매")
-        self.resize(1360, 860)
+        self.resize(1360, 900)
         self.vault_path = Path(vault_path) if vault_path else Path(QStandardPaths.writableLocation(QStandardPaths.StandardLocation.AppLocalDataLocation)) / "namufarm-vault.db"
         self.manager = None
         self.task = None
@@ -314,12 +314,14 @@ class MainWindow(QMainWindow):
         split = QSplitter(Qt.Orientation.Vertical)
         # The shared table helper stretches the final section, so keep the longest field last.
         self.request_table = table(["접수번호", "접수일", "상태", "고객명", "전화번호", "메일주소", "지역", "견적서요청", "희망 묘목"])
+        self.request_table.setMinimumHeight(400)
         self.request_table.itemSelectionChanged.connect(self.select_request)
         split.addWidget(self.request_table)
         self.request_detail = QPlainTextEdit()
         self.request_detail.setReadOnly(True)
+        self.request_detail.setMinimumHeight(220)
         split.addWidget(self.request_detail)
-        split.setSizes([450, 170])
+        split.setSizes([470, 220])
         layout.addWidget(split)
         row = QHBoxLayout()
         row.addWidget(QLabel("접수번호는 홈페이지·휴대폰과 동일합니다. 수동 견적·문자·PDF 발송은 휴대폰에서 처리합니다."))

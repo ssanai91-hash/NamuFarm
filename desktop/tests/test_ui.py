@@ -55,6 +55,9 @@ class UiTest(QtTestCase):
             headers,
         )
         self.assertTrue(self.window.request_table.horizontalHeader().stretchLastSection())
+        self.assertGreaterEqual(self.window.height(), 900)
+        self.assertGreaterEqual(self.window.request_table.minimumHeight(), 400)
+        self.assertGreaterEqual(self.window.request_detail.minimumHeight(), 220)
         person = self.window.request_rows[0]['personal']
         self.assertEqual(person['customerPhone'], self.window.request_table.item(0, 4).text())
         self.assertEqual(person.get('customerEmail') or '—', self.window.request_table.item(0, 5).text())
