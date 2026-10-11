@@ -11,11 +11,11 @@ from unittest.mock import patch
 from PySide6.QtWidgets import QDialog, QLabel, QMessageBox, QTableWidgetItem
 from PySide6.QtGui import QTextDocument
 from PySide6.QtPrintSupport import QPrinter
-from namufarm_desktop.commerce import (new_draft, draft_amounts, order_from_draft, quote_document,
+from namufarm_desktop.commerce import (new_draft, new_manual_draft, draft_amounts, order_from_draft, quote_document,
     quote_html, official_quote_html, shipping_html, shipping_csv, parse_tracking_csv, tracking_fields, tracking_number, TRACKING_PREFIX)
 from namufarm_desktop.domain import metadata, now_ms
 from namufarm_desktop.errors import UserError, NetworkError
-from namufarm_desktop.workspace import (SellerWindow, QuoteDialog, QuoteDeliveryDialog, QuoteEmailDialog,
+from namufarm_desktop.workspace import (SellerWindow, ManualQuoteDialog, QuoteDialog, QuoteDeliveryDialog, QuoteEmailDialog,
     QuoteSmsDialog, CustomerOrderDialog, draft_quote_sort_key, render_official_quote_image, write_temporary_quote_pdf)
 from namufarm_desktop.demo import show_demo
 from support import Bridge, manager_at
@@ -47,6 +47,24 @@ class CommerceTest(unittest.TestCase):
         self.assertEqual(sum(x['quantity']*x['unitPrice'] for x in doc['lines']), doc['supplyAmount'])
         draft['isPrepaid'] = False
         self.assertEqual(20000, draft_amounts(draft)['supply'])
+
+    def test_manual_quote_number_uses_manual_prefix_and_uuid_identity(self):
+        draft = new_manual_draft()
+        self.assertTrue(draft['requestReceiptNumber'].startswith('M-'))
+        parts = draft['requestReceiptNumber'].split('-')
+        self.assertEqual(4, len(parts))
+        self.assertEqual(8, len(parts[1]))
+        self.assertEqual(6, len(parts[2]))
+        self.assertEqual(4, len(parts[3]))
+        self.assertEqual('견적확정', draft['manualStatus'])
+        self.assertEqual(36, len(draft['id']))
+        valid = draft_for_test()
+        valid.update(
+            id=draft['id'],
+            requestReceiptNumber=draft['requestReceiptNumber'],
+            manualStatus='견적확정',
+        )
+        self.assertEqual(draft['requestReceiptNumber'], quote_document(valid)['sourceQuoteNumber'])
 
     def test_official_quote_matches_paper_form_and_stays_render_only(self):
         draft = draft_for_test()
@@ -144,6 +162,23 @@ class WorkspaceServiceTest(unittest.TestCase):
     def tearDown(self):
         self.bridge.close()
         self.tmp.cleanup()
+
+    def test_manual_phone_quote_moves_through_sent_to_paid_sale(self):
+        draft = new_manual_draft()
+        draft.update(
+            customerName='전화 고객', customerPhone='01012345678', receiverName='전화 고객',
+            items=[dict(species='소나무', specification='', quantity=3, unitPrice=12000, unitCost=0)],
+        )
+        saved = self.manager.save_draft(draft)
+        self.assertEqual('견적확정', saved['drafts'][0]['manualStatus'])
+        sent = self.manager.mark_quote_sent(draft)
+        manual = next(d for d in sent['drafts'] if d['id'] == draft['id'])
+        self.assertEqual('견적발송완료', manual['manualStatus'])
+        sale_view = self.manager.confirm_draft(manual)
+        self.assertEqual(1, len(sale_view['sales']))
+        self.assertEqual('입금확인', sale_view['sales'][0]['metadata']['status'])
+        self.assertEqual(draft['requestReceiptNumber'],
+                         sale_view['sales'][0]['private']['order']['sourceQuoteNumber'])
 
     def test_draft_encrypted_survives_sync_and_expires(self):
         draft = draft_for_test()
@@ -368,6 +403,8 @@ class SellerUiTest(QtTestCase):
         self.assertFalse(window.request_nav_badge.isVisible())
         self.assertTrue(window.auto_check.isChecked())
         self.assertEqual('견적요청 삭제', window.delete_button.text())
+        self.assertEqual('전화 견적 추가', window.manual_quote_button.text())
+        self.assertEqual('+ 전화 견적', window.new_quote_button.text())
         self.assertEqual('견적 작성', window.request_quote_button.text())
         draft_headers = [window.draft_table.horizontalHeaderItem(i).text() for i in range(window.draft_table.columnCount())]
         self.assertEqual(['견적번호', '상태', '작성일', '고객명', '연락처', '메일', '공식견적서', '품목', '판매금액'], draft_headers)
@@ -378,6 +415,7 @@ class SellerUiTest(QtTestCase):
         )
         self.assertEqual(['입금확인', '입금확인', '입금확인'], [window.sale_table.item(i, 1).text() for i in range(3)])
         self.assertGreaterEqual(window.request_actions.indexOf(window.delete_button), 0)
+        self.assertGreaterEqual(window.request_actions.indexOf(window.manual_quote_button), 0)
         self.assertGreaterEqual(window.request_actions.indexOf(window.request_quote_button), 0)
         self.assertEqual(3, len(window.shipping_rows))
         for index in range(7):
@@ -483,6 +521,31 @@ class SellerUiTest(QtTestCase):
             dialog.cancel_order_button.click()
         self.assertEqual('cancel', dialog.mode)
         self.assertEqual(QDialog.DialogCode.Accepted, dialog.result())
+
+    def test_manual_quote_dialog_collects_customer_and_typed_seedlings(self):
+        dialog = ManualQuoteDialog(new_manual_draft())
+        dialog.show()
+        self.app.processEvents()
+        self.assertTrue(dialog.quote_number.text().startswith('M-'))
+        headers = [dialog.items.horizontalHeaderItem(i).text() for i in range(dialog.items.columnCount())]
+        self.assertEqual(['묘목명', '수량', '판매 단가', '판매 금액'], headers)
+        dialog.customer_name.setText('전화 고객')
+        dialog.customer_phone.setText('010-4446-0304')
+        dialog.customer_email.setText('phone@example.com')
+        dialog.region.setText('충북 옥천')
+        dialog.items.item(0, 0).setText('왕벚나무')
+        dialog.items.item(0, 1).setText('5')
+        dialog.items.item(0, 2).setText('18000')
+        self.app.processEvents()
+        draft = dialog.collect()
+        self.assertEqual('전화 고객', draft['customerName'])
+        self.assertEqual('01044460304', draft['customerPhone'])
+        self.assertEqual('phone@example.com', draft['customerEmail'])
+        self.assertEqual('충북 옥천', draft['requestRegion'])
+        self.assertEqual('견적확정', draft['manualStatus'])
+        self.assertEqual(90000, draft['items'][0]['quantity'] * draft['items'][0]['unitPrice'])
+        self.assertEqual('90,000', dialog.items.item(0, 3).text())
+        dialog.close()
 
     def test_request_quote_price_editor_steps_and_manual_input(self):
         draft = draft_for_test()

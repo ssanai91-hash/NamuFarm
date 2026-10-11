@@ -34,6 +34,15 @@ def new_draft(request=None):
             "issuer": copy.deepcopy(ISSUER), "paymentAccount": ""}
 
 
+def new_manual_draft():
+    """Create a phone/manual quote with a human-readable local quote number."""
+    draft = new_draft()
+    stamp = datetime.fromtimestamp(draft["createdAt"] / 1000, SEOUL)
+    draft["requestReceiptNumber"] = f"M-{stamp:%Y%m%d-%H%M%S}-{draft['id'][:4].upper()}"
+    draft["manualStatus"] = "견적확정"
+    return draft
+
+
 def draft_amounts(draft):
     items = draft.get("items", [])
     require(1 <= len(items) <= 100, "견적 품목을 1개 이상 입력해주세요.")
@@ -60,6 +69,12 @@ def draft_amounts(draft):
 def validate_draft(draft):
     require(isinstance(draft, dict) and valid_id(draft.get("id")), "견적 식별자를 확인해주세요.")
     require(draft.get("sourceRequestId") == "" or valid_id(draft.get("sourceRequestId")))
+    receipt = draft.get("requestReceiptNumber", "")
+    require(isinstance(receipt, str) and len(receipt) <= 120 and not any(ord(c) < 32 for c in receipt),
+            "견적번호를 확인해주세요.")
+    if draft.get("manualStatus") is not None:
+        require(draft.get("sourceRequestId") == "" and draft.get("manualStatus") in ("견적확정", "견적발송완료"),
+                "수기 견적 상태를 확인해주세요.")
     for name, limit in EDITABLE.items():
         value = draft.get(name, "")
         require(isinstance(value, str) and len(value) <= limit and not any(ord(c) < 32 and (name != "note" or c not in "\n\t") for c in value), "고객·배송 정보를 확인해주세요.")
@@ -101,7 +116,7 @@ def quote_document(draft):
     if draft["isPrepaid"]:
         lines.append({"name": "운반비", "specification": "선불", "quantity": 1, "unitPrice": draft["shippingFee"], "unit": "건"})
     return {"schemaVersion": 1, "id": draft["id"], "number": f"NQ-{date}-{draft['id'][:8].upper()}",
-            "sourceQuoteNumber": "PCQ_" + draft["id"], "issuedAt": stamp, "customerPhone": draft["customerPhone"],
+            "sourceQuoteNumber": (draft.get("requestReceiptNumber") if draft.get("manualStatus") else "PCQ_" + draft["id"]), "issuedAt": stamp, "customerPhone": draft["customerPhone"],
             "recipient": {"customerName": draft["customerName"], "customerEmail": draft["customerEmail"],
                           "recipientName": draft.get("quoteRecipientName") or draft["customerName"],
                           "replyChannel": draft.get("quoteReplyChannel", "sms"),
@@ -122,7 +137,8 @@ def order_from_draft(draft):
                  status="입금확인", revision=1, totalQty=amount["quantity"], totalPrice=amount["supply"], isPrepaid=draft["isPrepaid"], shippingFee=draft["shippingFee"],
                  purchasedAt=stamp, paidAt=stamp, deliveredAt=0, completedAt=0, updatedAt=stamp, costTotal=amount["cost"], expenseTotal=0,
                  costConfirmed=draft["costConfirmed"], profitMode="resale", commissionBps=3000, taxAmount=amount["tax"],
-                 sourceRequestId=draft["sourceRequestId"], sourceQuoteNumber="PCQ_" + draft["id"])
+                 sourceRequestId=draft["sourceRequestId"],
+                 sourceQuoteNumber=(draft.get("requestReceiptNumber") if draft.get("manualStatus") else "PCQ_" + draft["id"]))
     # Existing Android codec explicitly treats this farm label as non-stock-backed.
     order["itemSummary"] = "\n".join("|".join([i["species"].strip(), "", "", i["specification"], "", str(i["quantity"]), str(i["unitPrice"]), "수기견적", str(i["unitCost"])]) for i in draft["items"])
     metadata(order)

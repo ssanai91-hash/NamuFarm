@@ -142,6 +142,13 @@ class Manager:
     def mark_quote_sent(self, draft):
         validate_draft(draft)
         source = draft.get("sourceRequestId", "")
+        if not source:
+            require(draft.get("manualStatus") == "견적확정",
+                    "전화 견적은 견적확정 상태에서 발송완료로 변경해주세요.")
+            updated = copy.deepcopy(draft)
+            updated["manualStatus"] = "견적발송완료"
+            return self.save_draft(updated)
+
         require(valid_id(source), "홈페이지 견적 요청에서 작성한 견적만 견적발송완료로 처리할 수 있습니다.")
         request = next((r for r in self.vault.rows("requests") if r["requestId"] == source), None)
         require(request is not None, "견적 요청을 다시 동기화해주세요.")
@@ -357,6 +364,9 @@ class Manager:
                     "먼저 고객에게 견적을 발송하고 견적발송완료로 처리해주세요.")
             require(not any(r["private"]["order"].get("sourceRequestId") == source for r in snapshot["sales"]),
                     "이미 판매 · 고객 관리로 이동한 문의입니다.")
+        else:
+            require(draft.get("manualStatus") == "견적발송완료",
+                    "전화 견적도 고객에게 전달한 뒤 견적발송완료 상태에서 입금확인해주세요.")
 
         self.save_draft(draft)
         order = order_from_draft(draft)
