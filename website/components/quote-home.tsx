@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Sprout, Plus, Trash2, FileText, CheckCheck, MessageCircle, ShieldCheck, LoaderCircle, CircleCheck, X, Copy, Phone } from "lucide-react";
+import { Sprout, Plus, Minus, Search, Trash2, FileText, CheckCheck, MessageCircle, ShieldCheck, LoaderCircle, CircleCheck, X, Copy, Phone } from "lucide-react";
 import SpeciesBrowser from "@/components/species-browser";
+import SpeciesPickerDialog from "@/components/species-picker-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,6 +21,7 @@ import { toggleCatalogLine, emptyLine, isEmptyLine, quoteFieldProblems, type Fie
 export default function QuoteHome({ initialTestMode = false, initialConfigured = false }: { initialTestMode?: boolean; initialConfigured?: boolean }) {
   const [lines, setLines] = useState<Line[]>([emptyLine(0)]);
   const nextLine = useRef(1);
+  const [pickerLineId, setPickerLineId] = useState<number | null>(null);
   const [name, setName] = useState(""); const [phone, setPhone] = useState("");
   const [region, setRegion] = useState(""); const [message, setMessage] = useState("");
   const [email, setEmail] = useState(""); const [formalQuote, setFormalQuote] = useState(false);
@@ -116,6 +118,28 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
     clearProblem(`${key === "specification" ? "spec" : key}-${id}`);
     setLines(old => old.map(line => line.id === id ? { ...line, [key]: value } : line));
   };
+  function stepQuantity(id: number, step: -1 | 1) {
+    if (locked) return;
+    clearProblem("quantity-" + id);
+    setLines(old => old.map(line => {
+      if (line.id !== id) return line;
+      const parsed = Number(line.quantity);
+      const current = Number.isSafeInteger(parsed) && parsed >= 1 ? parsed : 0;
+      return { ...line, quantity: String(Math.min(1000000, Math.max(1, current + step))) };
+    }));
+  }
+  function choosePickedSpecies(species: string) {
+    if (pickerLineId === null || locked) return;
+    const id = pickerLineId;
+    setLines(old => old.map(line => line.id === id
+      ? { ...line, species, quantity: line.quantity || "1" }
+      : line));
+    setProblems(old => old.filter(problem => problem.id !== "species-" + id && problem.id !== "quantity-" + id));
+    setNotice(species + " · 묘목 이름을 선택했어요.");
+    setRemoved(null);
+    setSuccess(null);
+    setPickerLineId(null);
+  }
   function selectSpecies(species: string) {
     if (locked) return;
     const result = toggleCatalogLine(lines, species, nextLine.current++);
@@ -245,10 +269,33 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
             {removed && <div className="undo-notice"><span>{removed.label} · 목록에서 뺐어요.</span><Button type="button" variant="ghost" onClick={undoRemove} disabled={locked}>되돌리기</Button></div>}
             <fieldset className="quote-section-box" disabled={locked}><legend><span>1</span>견적 요청 묘목</legend><div className="line-list">{lines.map((line, index) => <div className="item-line" key={line.id}>
               <div className="item-number">품목 {index + 1}<Button type="button" variant="ghost" aria-label={`품목 ${index + 1} ${line.species} 빼기`} onClick={() => removeLine(line.id)}><Trash2 />빼기</Button></div>
-              <div className="item-fields"><div className="field species-field"><Label htmlFor={`species-${line.id}`}>묘목 이름 <small>필수</small></Label><Input id={`species-${line.id}`} required maxLength={80} placeholder="예: 감나무" value={line.species} onChange={e => updateLine(line.id, "species", e.target.value)} {...fieldAttrs(`species-${line.id}`)} />{fieldError(`species-${line.id}`)}</div>
-                <div className="field quantity-field"><Label htmlFor={`quantity-${line.id}`}>수량 <small>필수 · 주 단위</small></Label><div className="quantity-input"><Input id={`quantity-${line.id}`} required inputMode="numeric" type="number" min="1" max="1000000" step="1" placeholder="예: 10" value={line.quantity} onChange={e => updateLine(line.id, "quantity", e.target.value)} {...fieldAttrs(`quantity-${line.id}`)} /><span>주</span></div>{fieldError(`quantity-${line.id}`)}</div>
+              <div className="item-fields">
+                <div className="field species-field">
+                  <Label htmlFor={"species-" + line.id}>묘목 이름 <small>필수</small></Label>
+                  <div className="species-select-row">
+                    <Input id={"species-" + line.id} required maxLength={80} placeholder="예: 감나무" value={line.species} onChange={e => updateLine(line.id, "species", e.target.value)} {...fieldAttrs("species-" + line.id)} />
+                    <Button id={"choose-species-" + line.id} type="button" className="species-select-button" aria-haspopup="dialog" aria-label={"품목 " + (index + 1) + " 묘목 선택"} onClick={() => setPickerLineId(line.id)}>
+                      <Search aria-hidden="true" /> 묘목 선택
+                    </Button>
+                  </div>
+                  {fieldError("species-" + line.id)}
+                </div>
+                <div className="field quantity-field">
+                  <Label htmlFor={"quantity-" + line.id}>수량 <small>필수 · 주 단위</small></Label>
+                  <div className="quantity-stepper">
+                    <Button type="button" className="quantity-step-button" aria-label={"품목 " + (index + 1) + " 수량 줄이기"} disabled={!line.quantity || Number(line.quantity) <= 1} onClick={() => stepQuantity(line.id, -1)}>
+                      <Minus className="size-5" aria-hidden="true" />
+                    </Button>
+                    <Input id={"quantity-" + line.id} className="quantity-value" required inputMode="numeric" type="number" min="1" max="1000000" step="1" placeholder="수량" value={line.quantity} onChange={e => updateLine(line.id, "quantity", e.target.value)} {...fieldAttrs("quantity-" + line.id)} />
+                    <Button type="button" className="quantity-step-button" aria-label={"품목 " + (index + 1) + " 수량 늘리기"} disabled={Number(line.quantity) >= 1000000} onClick={() => stepQuantity(line.id, 1)}>
+                      <Plus className="size-5" aria-hidden="true" />
+                    </Button>
+                    <span className="quantity-unit">주</span>
+                  </div>
+                  {fieldError("quantity-" + line.id)}
+                </div>
               </div><div className="field spec-field"><Label htmlFor={`spec-${line.id}`}>희망 규격 <small>선택</small></Label><Input id={`spec-${line.id}`} maxLength={120} placeholder="예: 2년생, 키 1m" value={line.specification} onChange={e => updateLine(line.id, "specification", e.target.value)} {...fieldAttrs(`spec-${line.id}`, `spec-help-${line.id}`)} /><p id={`spec-help-${line.id}`} className="field-help">모르면 비워두세요. 상담하면서 확인합니다.</p>{fieldError(`spec-${line.id}`)}</div>
-            </div>)}</div><Button className="add-line" type="button" variant="outline" disabled={lines.length >= 20} onClick={() => { const id = nextLine.current++; setLines(old => [...old, emptyLine(id)]); setNotice(""); requestAnimationFrame(() => document.getElementById(`species-${id}`)?.focus()); }}><Plus />묘목 이름 직접 추가</Button><p className="field-help">한 번에 20종까지 요청할 수 있어요.</p></fieldset>
+            </div>)}</div><Button className="add-line" type="button" variant="outline" disabled={lines.length >= 20} onClick={() => { const id = nextLine.current++; setLines(old => [...old, emptyLine(id)]); setNotice(""); requestAnimationFrame(() => document.getElementById(`species-${id}`)?.focus()); }}><Plus />묘목 추가하기</Button><p className="field-help">한 번에 20종까지 요청할 수 있어요.</p></fieldset>
             <fieldset className="quote-section-box" disabled={locked}><legend><span>2</span>상담받을 분 · 연락처</legend><div className="contact-grid">
               <div className="field"><Label htmlFor="name">성함 <small>필수</small></Label><Input id="name" autoComplete="name" required minLength={2} maxLength={50} placeholder="성함을 적어주세요" value={name} onChange={e => { setName(e.target.value); clearProblem("name"); }} {...fieldAttrs("name")} />{fieldError("name")}</div>
               <div className="field"><Label htmlFor="phone">전화번호 <small>필수</small></Label><Input id="phone" type="tel" autoComplete="tel" inputMode="tel" required maxLength={20} placeholder="010-1234-5678" value={phone} onChange={e => { setPhone(e.target.value); clearProblem("phone"); }} {...fieldAttrs("phone")} />{fieldError("phone")}</div>
@@ -274,6 +321,7 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
     </main>
     <footer className="site-footer"><div className="wrap footer-inner"><div><div className="footer-brand-row"><a href="#home" className="brand"><Sprout /><span>나무팜<small>NAMUFARM</small></span></a><div className="footer-business"><span>{businessInfo.name} · 대표 {businessInfo.representative}</span><span>사업자등록번호 {businessInfo.number}</span></div></div><p>당신의 내일에, 푸르름을 더합니다.</p></div><div><a href="#quote">묘목 견적 상담</a><div className="footer-phone-row"><a href={`tel:${businessInfo.phone.replaceAll("-", "")}`}>전화 상담 {businessInfo.phone}</a><span aria-hidden="true">/</span><a href={`tel:${businessInfo.mobile.replaceAll("-", "")}`} aria-label={`휴대폰 전화 상담 ${businessInfo.mobile}`}>{businessInfo.mobile}</a></div><a href="/privacy">개인정보 처리방침</a><small>© {new Date().getFullYear()} NAMUFARM</small></div></div></footer>
     <div className={`mobile-cta ${atForm || reviewOpen || success ? "is-hidden" : ""}`}><span><strong>{count ? `담은 묘목 ${count}종` : "필요한 묘목을 알려주세요"}</strong><small>{count ? "계속 고르셔도 됩니다" : "결제 없이 견적 상담"}</small></span><Button asChild><a href="#quote">{count ? `수량 입력 (${count}종)` : "견적 바로 작성"}</a></Button></div>
+    <SpeciesPickerDialog open={pickerLineId !== null && !locked} onOpenChange={open => { if (!open) setPickerLineId(null); }} onChoose={choosePickedSpecies} />
     <Dialog open={reviewOpen && !!review} onOpenChange={open => { if (!open) closeReview(); }}><DialogContent className="review-dialog" onOpenAutoFocus={event => { event.preventDefault(); reviewTitleRef.current?.focus(); }} showCloseButton={false}>
       <DialogClose asChild><Button className="dialog-dismiss" type="button" variant="ghost" aria-label="접수 확인창 닫기"><X /></Button></DialogClose>
       <DialogHeader><DialogTitle ref={reviewTitleRef} tabIndex={-1}>{testMode ? "테스트 요청을 확인해주세요" : "견적 상담을 요청할까요?"}</DialogTitle><DialogDescription>{testMode ? testNotice : "품목·수량·연락처를 확인해주세요. 주문과 결제는 상담 후 결정합니다."}</DialogDescription></DialogHeader>

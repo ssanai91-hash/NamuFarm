@@ -1796,3 +1796,151 @@ section {
 .pending-confirm { display: flex; gap: .6rem; align-items: flex-start; margin: .8rem 0; }
 .pending-confirm input { margin-top: .4rem; width: 1.1rem; height: 1.1rem; flex-shrink: 0; }
 .review-dialog [data-slot=dialog-header] { padding-right: 2rem; }
+
+
+/* Compact seedling entry: existing names can be picked without typing. */
+.species-select-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: .5rem;
+}
+.species-select-row .species-select-button {
+  min-height: 3.5rem;
+  min-width: 7rem;
+  padding: .6rem .75rem;
+  border-radius: .65rem;
+  background: #205844;
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 700;
+}
+.species-select-row .species-select-button:hover,
+.quantity-stepper .quantity-step-button:hover { background: #164632; }
+.quantity-stepper {
+  display: grid;
+  grid-template-columns: 3.25rem minmax(0, 1fr) 3.25rem auto;
+  gap: .45rem;
+  align-items: stretch;
+}
+.quantity-stepper .quantity-step-button {
+  width: 100%;
+  min-height: 3.5rem;
+  height: auto;
+  padding: 0;
+  border-radius: .65rem;
+  background: #205844;
+  color: #fff;
+}
+.quantity-stepper .quantity-step-button:disabled {
+  background: #e9eee7;
+  color: #65766a;
+}
+.quantity-stepper .quantity-value {
+  width: 100%;
+  min-width: 0;
+  padding: .5rem .2rem;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  appearance: textfield;
+}
+.quantity-stepper .quantity-value::-webkit-inner-spin-button,
+.quantity-stepper .quantity-value::-webkit-outer-spin-button { appearance: none; margin: 0; }
+.quantity-unit { display: grid; place-items: center; color: #526350; font-weight: 650; }
+.add-line { min-height: 3.4rem; border-style: dashed; background: #f8fbf6; }
+
+/* Accessible picture-free modal; names use short multi-column buttons. */
+.species-picker-dialog {
+  display: flex;
+  flex-direction: column;
+  width: min(52rem, calc(100vw - 1.5rem));
+  max-width: 52rem;
+  max-height: calc(100dvh - 1.5rem);
+  padding: 1.5rem;
+  gap: .9rem;
+  overflow: hidden;
+}
+.species-picker-initials {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: .4rem;
+  flex-shrink: 0;
+}
+.species-picker-initials .species-picker-initial {
+  min-width: 0;
+  min-height: 3rem;
+  height: auto;
+  padding: .4rem .2rem;
+  font-size: 1.125rem;
+  font-weight: 700;
+  border-radius: .65rem;
+}
+.species-picker-results-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: .5rem;
+  color: #264735;
+  font-size: 1.05rem;
+}
+.species-picker-results-heading span { color: #607265; font-size: .95rem; }
+.species-picker-choices {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-content: start;
+  gap: .5rem;
+  min-height: 5rem;
+  max-height: min(45dvh, 24rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: .2rem;
+}
+.species-picker-choices .species-picker-choice {
+  min-width: 0;
+  min-height: 3.5rem;
+  height: auto;
+  white-space: normal;
+  text-align: center;
+  padding: .6rem .25rem;
+  font-size: 1rem;
+  font-weight: 650;
+  line-height: 1.35;
+  border: 1px solid #dae5d9;
+  border-radius: .7rem;
+  color: #263f2e;
+  background: #f6f9f4;
+}
+.species-picker-choices .species-picker-choice:hover { background: #e7f0e6; border-color: #7d9c81; }
+.species-picker-empty { grid-column: 1 / -1; text-align: center; color: #536957; padding: 1.5rem .5rem; }
+.species-picker-search { position: relative; flex-shrink: 0; }
+.species-picker-search > svg {
+  position: absolute;
+  top: 50%;
+  left: 1rem;
+  transform: translateY(-50%);
+  width: 1.3rem;
+  height: 1.3rem;
+  color: #536957;
+  pointer-events: none;
+}
+.species-picker-search input {
+  min-height: 3.4rem;
+  padding-left: 2.9rem;
+  font-size: 1rem;
+  border: 1px solid #9aaa9a;
+}
+.species-picker-help { color: #647767; font-size: .95rem; flex-shrink: 0; }
+@media(max-width:48rem) {
+  .species-picker-dialog {
+    width: calc(100vw - 1rem);
+    max-height: calc(100dvh - 1rem);
+    padding: 1rem;
+    gap: .7rem;
+  }
+  .species-picker-initials { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .species-picker-choices { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .4rem; max-height: 35dvh; }
+  .species-picker-choices .species-picker-choice { padding: .5rem .2rem; font-size: .95rem; }
+}
+@media(max-width:22rem) {
+  .species-select-row .species-select-button { min-width: 6.3rem; padding: .45rem; font-size: .9rem; }
+  .quantity-stepper { grid-template-columns: 3rem minmax(0, 1fr) 3rem auto; gap: .3rem; }
+}
