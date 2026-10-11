@@ -14,7 +14,7 @@ from PySide6.QtPrintSupport import QPrinter, QPrintDialog
 from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDialog, QDoubleSpinBox, QFileDialog, QFormLayout,
     QFrame, QGridLayout, QGroupBox, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QListWidget,
     QMessageBox, QPlainTextEdit, QPushButton, QRadioButton, QScrollArea, QSplitter, QStackedWidget,
-    QTableWidgetItem, QTextBrowser, QVBoxLayout, QWidget, QSpinBox)
+    QStyle, QSystemTrayIcon, QTableWidgetItem, QTextBrowser, QVBoxLayout, QWidget, QSpinBox)
 
 from . import __version__
 from .app import MainWindow, Task, table, fill_table, money, timestamp
@@ -33,6 +33,20 @@ QMainWindow,#workspace{background:#f3f5f1;}
 #sidebar QPushButton:checked{background:#2e604e;color:#fff;}
 #sidebar QPushButton:hover{background:#285442;color:#fff;}
 #sidebar QPushButton:pressed{background:#1d4939;color:#fff;padding:15px 17px 13px 19px;}
+#sidebar QWidget#navRow{background:transparent;}
+#sidebar QLabel#navBadge{
+    background:#9cf36f;
+    color:#12351e;
+    border:1px solid #c2ffa0;
+    border-radius:10px;
+    min-width:22px;
+    max-height:20px;
+    padding:1px 6px;
+    font-family:'Consolas','Malgun Gothic',monospace;
+    font-size:11px;
+    font-weight:900;
+    qproperty-alignment:AlignCenter;
+}
 #sidebar #navFoot{color:#a8c0b3;font-size:12px;}
 QLabel#pageTitle{font-size:26px;font-weight:800;color:#193d2e;}
 QLabel#muted{color:#76867c;} QLabel#eyebrow{color:#748a78;font-size:11px;font-weight:700;}
@@ -2917,6 +2931,10 @@ class SellerWindow(MainWindow):
 
     def __init__(self, vault_path=None):
         self.workspace_ready = False
+        self._request_arrival_notice = ""
+        self.request_unread_count = 0
+        self.request_nav_badge = None
+        self.tray_icon = None
         super().__init__(vault_path)
         self.setWindowTitle("나무팜 판매관리 | NamuFarm Seller")
         self.setMinimumSize(1240, 760)
@@ -2951,7 +2969,20 @@ class SellerWindow(MainWindow):
             widget = button(f"{index+1:02d}   {title}", lambda checked=False, i=index: self.navigate(i))
             widget.setCheckable(True)
             self.nav.append(widget)
-            side.addWidget(widget)
+            if index == 1:
+                nav_row = QWidget()
+                nav_row.setObjectName("navRow")
+                nav_layout = QHBoxLayout(nav_row)
+                nav_layout.setContentsMargins(0, 0, 0, 0)
+                nav_layout.setSpacing(6)
+                nav_layout.addWidget(widget, 1)
+                self.request_nav_badge = QLabel("")
+                self.request_nav_badge.setObjectName("navBadge")
+                self.request_nav_badge.hide()
+                nav_layout.addWidget(self.request_nav_badge, 0, Qt.AlignmentFlag.AlignVCenter)
+                side.addWidget(nav_row)
+            else:
+                side.addWidget(widget)
         side.addStretch()
         outer.addWidget(sidebar)
         content = QWidget()
@@ -3024,6 +3055,17 @@ class SellerWindow(MainWindow):
         # 판매·고객 관리는 목록 + 전용 팝업으로 동작합니다. 기존 내장 편집기는
         # MainWindow 호환을 위해 객체만 유지하고 실제 작업 화면에는 노출하지 않습니다.
         self.delete_button.setObjectName("danger")
+
+        if QSystemTrayIcon.isSystemTrayAvailable():
+            self.tray_icon = QSystemTrayIcon(self)
+            icon = self.windowIcon()
+            if icon.isNull():
+                icon = self.style().standardIcon(QStyle.StandardPixmap.SP_ComputerIcon)
+            self.tray_icon.setIcon(icon)
+            self.tray_icon.setToolTip("나무팜 판매관리")
+            self.tray_icon.messageClicked.connect(self.open_new_requests_from_notification)
+            self.tray_icon.show()
+
         self.workspace_ready = True
         self.navigate(0)
         QShortcut(QKeySequence("Ctrl+K"), self, activated=self.global_search.setFocus)
@@ -3230,6 +3272,120 @@ class SellerWindow(MainWindow):
         self.page_eyebrow.setText("NAMUFARM  /  " + self.PAGES[index][1])
         for i, widget in enumerate(self.nav):
             widget.setChecked(i == index)
+        if index == 1 and self.workspace_ready:
+            self.mark_requests_seen()
+
+    def request_sequence_max(self):
+        return max(
+            (int(row.get("sequence", 0) or 0) for row in self.data.get("requests", [])),
+            default=0,
+        )
+
+    def update_request_badge(self, state=None):
+        if self.request_nav_badge is None:
+            return
+        if state is None and self.manager and hasattr(self.manager, "request_notification_state"):
+            state = self.manager.request_notification_state()
+        seen = int((state or {}).get("seenSequence", 0) or 0)
+        count = sum(
+            row.get("status", "신규") == "신규"
+            and int(row.get("sequence", 0) or 0) > seen
+            for row in self.data.get("requests", [])
+        )
+        self.request_unread_count = count
+        if count:
+            self.request_nav_badge.setText("99+" if count > 99 else str(count))
+            self.request_nav_badge.setToolTip(f"마지막 확인 이후 신규 견적요청 {count}건")
+            self.request_nav_badge.show()
+        else:
+            self.request_nav_badge.clear()
+            self.request_nav_badge.setToolTip("")
+            self.request_nav_badge.hide()
+
+    def mark_requests_seen(self):
+        if (
+            getattr(self, "demo_mode", False)
+            or not self.manager
+            or not self.data.get("paired")
+            or not hasattr(self.manager, "request_notification_state")
+        ):
+            self.update_request_badge({"seenSequence": self.request_sequence_max()})
+            return
+        state = self.manager.request_notification_state()
+        current = self.request_sequence_max()
+        if state is None:
+            state = self.manager.save_request_notification_state(current, current)
+        else:
+            state = self.manager.save_request_notification_state(
+                max(int(state.get("seenSequence", 0) or 0), current),
+                max(int(state.get("notifiedSequence", 0) or 0), current),
+            )
+        self.update_request_badge(state)
+
+    def refresh_request_notifications(self):
+        if (
+            getattr(self, "demo_mode", False)
+            or not self.workspace_ready
+            or not self.manager
+            or not self.data.get("paired")
+            or not hasattr(self.manager, "request_notification_state")
+        ):
+            self.update_request_badge({"seenSequence": self.request_sequence_max()})
+            return
+
+        current = self.request_sequence_max()
+        state = self.manager.request_notification_state()
+        if state is None:
+            # First run on an already paired PC: use the existing local snapshot as
+            # the baseline so old requests are not announced as newly arrived.
+            state = self.manager.save_request_notification_state(current, current)
+            self.update_request_badge(state)
+            return
+
+        notified = int(state.get("notifiedSequence", 0) or 0)
+        arrivals = [
+            row for row in self.data.get("requests", [])
+            if row.get("status", "신규") == "신규"
+            and int(row.get("sequence", 0) or 0) > notified
+        ]
+        if current > notified:
+            state = self.manager.save_request_notification_state(
+                int(state.get("seenSequence", 0) or 0),
+                current,
+            )
+
+        if arrivals:
+            count = len(arrivals)
+            self._request_arrival_notice = f"NEW RFQ  >  신규 견적요청 {count}건 도착"
+            if self.tray_icon is not None:
+                self.tray_icon.showMessage(
+                    "나무팜 · 신규 견적 요청",
+                    f"새 견적 요청 {count}건이 들어왔습니다.",
+                    QSystemTrayIcon.MessageIcon.Information,
+                    6000,
+                )
+            if not self.isActiveWindow():
+                QApplication.alert(self, 5000)
+
+        if self.stack.currentIndex() == 1:
+            self.mark_requests_seen()
+        else:
+            self.update_request_badge(state)
+
+    def open_new_requests_from_notification(self):
+        self.showNormal()
+        self.raise_()
+        self.activateWindow()
+        self.navigate(1)
+
+    def job_finished(self, task, value, error, conflict, on_success):
+        super().job_finished(task, value, error, conflict, on_success)
+        if self._request_arrival_notice:
+            current = self.message.text().strip()
+            self.message.setText(
+                self._request_arrival_notice + ("  |  " + current if current else "")
+            )
+            self._request_arrival_notice = ""
 
     def search_all(self):
         if not self.allow_discard():
@@ -3269,6 +3425,7 @@ class SellerWindow(MainWindow):
         super().apply_view(value)
         if self.workspace_ready:
             self.refresh_workspace()
+            self.refresh_request_notifications()
 
     def refresh_workspace(self):
         sales = self.data["sales"]

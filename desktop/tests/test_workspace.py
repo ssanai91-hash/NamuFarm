@@ -363,6 +363,10 @@ class SellerUiTest(QtTestCase):
         self.assertEqual('serverLogText', window.message.objectName())
         self.assertEqual('serverLogFrame', window.server_log_frame.objectName())
         self.assertIs(window.message.parentWidget(), window.server_log_frame)
+        self.assertIsNotNone(window.request_nav_badge)
+        self.assertEqual('navBadge', window.request_nav_badge.objectName())
+        self.assertFalse(window.request_nav_badge.isVisible())
+        self.assertTrue(window.auto_check.isChecked())
         self.assertEqual('견적요청 삭제', window.delete_button.text())
         self.assertEqual('견적 작성', window.request_quote_button.text())
         draft_headers = [window.draft_table.horizontalHeaderItem(i).text() for i in range(window.draft_table.columnCount())]
@@ -382,6 +386,43 @@ class SellerUiTest(QtTestCase):
             self.assertEqual(index, window.stack.currentIndex())
             self.assertLessEqual(window.stack.geometry().right(), window.width())
         window.demo_mode = False
+        window.close()
+
+    def test_new_request_badge_counts_since_last_view_and_clears_on_open(self):
+        class FakeNotificationManager:
+            def __init__(self):
+                self.state = {'seenSequence': 4, 'notifiedSequence': 4}
+            def request_notification_state(self):
+                return copy.deepcopy(self.state)
+            def save_request_notification_state(self, seen_sequence, notified_sequence):
+                self.state = {
+                    'seenSequence': seen_sequence,
+                    'notifiedSequence': max(seen_sequence, notified_sequence),
+                }
+                return copy.deepcopy(self.state)
+
+        window = SellerWindow()
+        show_demo(window)
+        window.demo_mode = False
+        window.manager = FakeNotificationManager()
+        window.data['paired'] = True
+        window.data['requests'] = [
+            {'requestId':'00000000-0000-4000-8000-000000000005','sequence':5,'status':'신규','personal':{}},
+            {'requestId':'00000000-0000-4000-8000-000000000006','sequence':6,'status':'신규','personal':{}},
+            {'requestId':'00000000-0000-4000-8000-000000000007','sequence':7,'status':'견적확정','personal':{}},
+        ]
+        window.stack.setCurrentIndex(0)
+        window.refresh_request_notifications()
+        self.assertEqual(2, window.request_unread_count)
+        self.assertTrue(window.request_nav_badge.isVisible())
+        self.assertEqual('2', window.request_nav_badge.text())
+        self.assertEqual(7, window.manager.state['notifiedSequence'])
+        self.assertIn('신규 견적요청 2건 도착', window._request_arrival_notice)
+
+        window.navigate(1)
+        self.assertEqual(0, window.request_unread_count)
+        self.assertFalse(window.request_nav_badge.isVisible())
+        self.assertEqual(7, window.manager.state['seenSequence'])
         window.close()
 
     def test_quote_workbench_is_stably_sorted_by_quote_number_and_header_toggles(self):

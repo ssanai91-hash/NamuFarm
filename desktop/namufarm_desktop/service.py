@@ -303,6 +303,26 @@ class Manager:
                 "attachmentName": result.get("attachmentName", ""),
                 "sentAt": result.get("sentAt", ""), "remainingDailyQuota": result.get("remainingDailyQuota", 0)}
 
+    def request_notification_state(self):
+        state = self.vault.preference("request_notifications")
+        if not isinstance(state, dict):
+            return None
+        seen = state.get("seenSequence", 0)
+        notified = state.get("notifiedSequence", 0)
+        if not isinstance(seen, int) or seen < 0 or not isinstance(notified, int) or notified < 0:
+            return None
+        return {"seenSequence": seen, "notifiedSequence": notified}
+
+    def save_request_notification_state(self, seen_sequence, notified_sequence):
+        require(isinstance(seen_sequence, int) and seen_sequence >= 0)
+        require(isinstance(notified_sequence, int) and notified_sequence >= 0)
+        state = {
+            "seenSequence": seen_sequence,
+            "notifiedSequence": max(seen_sequence, notified_sequence),
+        }
+        self.vault.save_preference("request_notifications", state)
+        return state
+
     def shipping_export_preferences(self):
         return self.vault.preference("shipping_export", {"sender": {}, "history": {}})
 

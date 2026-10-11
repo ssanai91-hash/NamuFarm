@@ -657,7 +657,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.advanced_connection)
         self.advanced_connection.hide()
         self.auto_check = QCheckBox("60초마다 자동 동기화 · 수정 중에는 입력내용을 유지합니다")
-        self.auto_check.setChecked(False)
+        self.auto_check.setChecked(True)
         layout.addWidget(self.auto_check)
         self.pending_status = QLabel("전송 대기 없음")
         layout.addWidget(self.pending_status)
