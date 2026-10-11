@@ -322,20 +322,26 @@ class Manager:
         self.vault.save_preference("drafts", [d for d in self.view()["drafts"] if d["id"] != identifier])
         return self.view()
 
-    def confirm_draft(self, draft):
+    def _draft_to_sale(self, draft, initial_status):
         validate_draft(draft)
-        # Read cloud state before purchase confirmation; never replay a new order under a new ID.
+        require(initial_status in ("입금확인", "구매취소"))
+        # Read cloud state before conversion; never replay a new order under a new ID.
         snapshot = self.sync()
         number = "PC_" + draft["id"]
-        require(not any(r["metadata"]["orderNumber"] == number for r in snapshot["sales"]), "이미 구매 확정된 견적입니다. 판매 관리에서 확인해주세요.")
+        require(not any(r["metadata"]["orderNumber"] == number for r in snapshot["sales"]),
+                "이미 판매 · 고객 관리로 이동한 견적입니다.")
         source = draft["sourceRequestId"]
         if source:
             request = next((r for r in snapshot["requests"] if r["requestId"] == source), None)
             require(request is not None, "접수된 문의가 삭제·만료되었습니다.")
-            require(request.get("status", "신규") == "견적발송완료", "먼저 고객에게 견적을 발송하고 견적발송완료로 처리해주세요.")
-            require(not any(r["private"]["order"].get("sourceRequestId") == source for r in snapshot["sales"]), "이미 판매로 등록된 문의입니다.")
+            require(request.get("status", "신규") == "견적발송완료",
+                    "먼저 고객에게 견적을 발송하고 견적발송완료로 처리해주세요.")
+            require(not any(r["private"]["order"].get("sourceRequestId") == source for r in snapshot["sales"]),
+                    "이미 판매 · 고객 관리로 이동한 문의입니다.")
+
         self.save_draft(draft)
         order = order_from_draft(draft)
+        order["status"] = initial_status
         private = {"order": order, "quoteDocumentJson": canonical(quote_document(draft))}
         meta, event_id = metadata(order), str(uuid.uuid4())
         payload = {"eventId": event_id, "metadata": meta, "personalData": private,
@@ -344,6 +350,12 @@ class Manager:
         self.vault.queue({"id": event_id, "action": "save_sale", "payload": payload},
                          {**payload, "sequence": 0, "expired": False})
         return self.sync()
+
+    def confirm_draft(self, draft):
+        return self._draft_to_sale(draft, "입금확인")
+
+    def cancel_draft_purchase(self, draft):
+        return self._draft_to_sale(draft, "구매취소")
 
     def register_tracking(self, number, expected_revision, tracking):
         value = normalize_tracking(tracking)

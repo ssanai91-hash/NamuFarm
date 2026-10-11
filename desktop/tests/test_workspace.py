@@ -286,6 +286,23 @@ class WorkspaceServiceTest(unittest.TestCase):
             self.manager.confirm_draft(draft)
         self.assertEqual(1, len(self.manager.view()['sales']))
 
+    def test_sent_quote_can_move_to_customer_management_as_purchase_cancel(self):
+        self.bridge.send(control='submit')
+        view = self.manager.sync()
+        draft = draft_for_test()
+        draft['sourceRequestId'] = view['requests'][0]['requestId']
+        self.manager.confirm_quote(draft)
+        self.manager.mark_quote_sent(draft)
+        view = self.manager.cancel_draft_purchase(draft)
+        self.assertEqual([], view['requests'])
+        self.assertEqual([], view['drafts'])
+        self.assertEqual(1, len(view['sales']))
+        self.assertEqual('구매취소', view['sales'][0]['metadata']['status'])
+        self.assertEqual(draft['sourceRequestId'], view['sales'][0]['private']['order']['sourceRequestId'])
+        with self.assertRaises(UserError):
+            self.manager.cancel_draft_purchase(draft)
+        self.assertEqual(1, len(self.manager.view()['sales']))
+
     def test_lost_new_order_ack_reuses_event_and_never_duplicates(self):
         draft = draft_for_test()
         self.manager.api.lose_ack = True
@@ -462,6 +479,8 @@ class SellerUiTest(QtTestCase):
         self.assertTrue(dialog.sms_button.isEnabled())
         self.assertTrue(dialog.email_button.isEnabled())
         self.assertTrue(dialog.sent_button.isEnabled())
+        self.assertFalse(dialog.payment_button.isVisible())
+        self.assertFalse(dialog.cancel_purchase_button.isVisible())
         self.assertEqual('공식견적서 생성', dialog.generate_quote_button.text())
         self.assertFalse(dialog.preview_quote_button.isEnabled())
         self.assertEqual('문자 미전송', dialog.sms_status_badge.text())
@@ -481,6 +500,32 @@ class SellerUiTest(QtTestCase):
         self.assertIn('후불', dialog.shipping_status.text())
         self.assertIn('NAMU-20261011-0001', dialog.delivery_text())
         dialog.close()
+
+    def test_sent_quote_dialog_exposes_payment_and_purchase_cancel_actions(self):
+        draft = draft_for_test()
+        draft.update(sourceRequestId='123e4567-e89b-12d3-a456-426614174000',
+                     requestReceiptNumber='NAMU-20261011-0001', shippingFee=6000,
+                     isPrepaid=False, taxAmount=0)
+        dialog = QuoteDeliveryDialog(draft, '견적발송완료')
+        dialog.show()
+        self.app.processEvents()
+        self.assertFalse(dialog.sent_button.isVisible())
+        self.assertTrue(dialog.payment_button.isVisible())
+        self.assertTrue(dialog.payment_button.isEnabled())
+        self.assertTrue(dialog.cancel_purchase_button.isVisible())
+        self.assertTrue(dialog.cancel_purchase_button.isEnabled())
+        with patch('namufarm_desktop.workspace.QMessageBox.question',
+                   return_value=QMessageBox.StandardButton.Yes):
+            dialog.confirm_payment()
+        self.assertEqual('paid', dialog.mode)
+        self.assertEqual(QDialog.DialogCode.Accepted, dialog.result())
+
+        dialog = QuoteDeliveryDialog(draft, '견적발송완료')
+        with patch('namufarm_desktop.workspace.QMessageBox.question',
+                   return_value=QMessageBox.StandardButton.Yes):
+            dialog.cancel_purchase()
+        self.assertEqual('cancel', dialog.mode)
+        self.assertEqual(QDialog.DialogCode.Accepted, dialog.result())
 
     def test_delivery_dialog_defaults_unset_web_quote_shipping_to_cod_6000(self):
         draft = draft_for_test()
