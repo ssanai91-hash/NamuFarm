@@ -311,6 +311,43 @@ function updateRequestStatus_(body) {
     return {updated:true,requestId:body.requestId,status:body.status};
   });
 }
+function quoteRequestStatus_(id) {
+  assert_(UUID_PATTERN.test(id));
+  if(quoteStorageConfigured_()){
+    const entries=quoteIndexEntries_(),cache={},entry=entries.find(e=>e.values[QI.id]===id);
+    assert_(entry && entry.values[QI.phase]==='COMMITTED','INVALID');
+    const record=quoteRecord_(entry,cache,false);
+    assert_(JSON.parse(record.row[15]).expired!==true,'INVALID');
+    return String(record.row[9]||'신규');
+  }
+  const record=quoteFindRow_(sheet_(),id);
+  assert_(record && JSON.parse(record.row[15]).expired!==true,'INVALID');
+  return String(record.row[9]||'신규');
+}
+function quoteEmailProfile_() {
+  const senderEmail=String(Session.getEffectiveUser().getEmail()||'').trim();
+  assert_(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(senderEmail),'NOT_READY');
+  return {senderName:'나무팜농원',senderEmail:senderEmail,remainingDailyQuota:MailApp.getRemainingDailyQuota()};
+}
+function sendQuoteEmail_(body) {
+  assert_(body && typeof body==='object');
+  const requestId=String(body.requestId||'');
+  if(requestId)assert_(['견적확정','견적발송완료'].includes(quoteRequestStatus_(requestId)),'CONFLICT');
+  const recipient=text_(body.recipientEmail,254,3);
+  assert_(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient));
+  const senderName=text_(body.senderName||'나무팜농원',50,1);
+  const quoteNumber=text_(body.quoteNumber||'',120,1);
+  const subject=text_(body.subject,160,1);
+  const plainBody=text_(body.bodyText,12000,1);
+  const htmlBody=text_(body.bodyHtml,24000,1);
+  assert_(!/<\s*(script|iframe|object|embed|form)\b/i.test(htmlBody));
+  const profile=quoteEmailProfile_();
+  assert_(profile.remainingDailyQuota>0,'NOT_READY');
+  MailApp.sendEmail({to:recipient,subject:subject,body:plainBody,htmlBody:htmlBody,name:senderName});
+  return {sent:true,quoteNumber:quoteNumber,recipientEmail:recipient,senderEmail:profile.senderEmail,
+    sentAt:new Date().toISOString(),remainingDailyQuota:MailApp.getRemainingDailyQuota()};
+}
+
 function listSales_(body) {
   assert_(Number.isSafeInteger(body.afterSequence) && body.afterSequence>=0);
   const rows=namedRows_(namedSheet_(SALE_SHEET,SALE_HEADERS,false),20).filter(r=>Number(r[1])>body.afterSequence).sort((a,b)=>Number(a[1])-Number(b[1]));

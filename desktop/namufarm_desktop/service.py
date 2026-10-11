@@ -152,6 +152,62 @@ class Manager:
                 and response.get("status") == "견적발송완료", "견적발송완료 상태 저장을 확인하지 못했습니다.")
         return self.sync_requests()
 
+    def quote_delivery_state(self, identifier):
+        require(valid_id(identifier), "견적 식별자를 확인해주세요.")
+        states = self.vault.preference("quote_delivery", {})
+        value = states.get(identifier, {}) if isinstance(states, dict) else {}
+        return {"smsSentAt": int(value.get("smsSentAt", 0) or 0),
+                "emailSentAt": int(value.get("emailSentAt", 0) or 0),
+                "emailTo": str(value.get("emailTo", "") or ""),
+                "senderEmail": str(value.get("senderEmail", "") or "")}
+
+    def _mark_quote_channel_sent(self, identifier, channel, **extra):
+        require(valid_id(identifier) and channel in ("sms", "email"))
+        states = self.vault.preference("quote_delivery", {})
+        states = copy.deepcopy(states) if isinstance(states, dict) else {}
+        state = dict(states.get(identifier, {}))
+        state[channel + "SentAt"] = now_ms()
+        state.update(extra)
+        states[identifier] = state
+        if len(states) > 1000:
+            states = dict(list(states.items())[-1000:])
+        self.vault.save_preference("quote_delivery", states)
+        return self.quote_delivery_state(identifier)
+
+    def email_profile(self):
+        require(self.credentials.get("paired") is True, "PC를 먼저 연결해주세요.")
+        self.verify_server()
+        result = self.api.call("email_profile")
+        email = result.get("senderEmail", "")
+        require(isinstance(email, str) and "@" in email and "." in email, "메일 발신 계정을 확인하지 못했습니다.")
+        return {"senderName": result.get("senderName") or "나무팜농원",
+                "senderEmail": email,
+                "remainingDailyQuota": int(result.get("remainingDailyQuota", 0) or 0)}
+
+    def send_quote_email(self, draft, subject, body_text, body_html):
+        validate_draft(draft)
+        recipient = draft.get("customerEmail", "").strip()
+        require(recipient, "고객 이메일이 입력되지 않았습니다.")
+        require(isinstance(subject, str) and 1 <= len(subject.strip()) <= 160, "메일 제목을 확인해주세요.")
+        require(isinstance(body_text, str) and 1 <= len(body_text.strip()) <= 12000, "메일 내용을 확인해주세요.")
+        require(isinstance(body_html, str) and 1 <= len(body_html.strip()) <= 24000, "메일 내용을 확인해주세요.")
+        source = draft.get("sourceRequestId", "")
+        if source:
+            request = next((r for r in self.vault.rows("requests") if r["requestId"] == source), None)
+            require(request is not None, "견적 요청을 다시 동기화해주세요.")
+            require(request.get("status", "신규") in ("견적확정", "견적발송완료"),
+                    "견적확정 이후에 메일을 전송해주세요.")
+        result = self.api.call("send_quote_email", requestId=source, recipientEmail=recipient,
+                               senderName=draft.get("issuer", {}).get("businessName") or "나무팜농원",
+                               quoteNumber=draft.get("requestReceiptNumber") or ("PCQ_" + draft["id"][:8]),
+                               subject=subject.strip(), bodyText=body_text.strip(), bodyHtml=body_html.strip())
+        require(result.get("sent") is True and result.get("recipientEmail") == recipient,
+                "메일 전송 완료를 확인하지 못했습니다.")
+        delivery = self._mark_quote_channel_sent(draft["id"], "email", emailTo=recipient,
+                                                 senderEmail=result.get("senderEmail", ""))
+        return {"delivery": delivery, "senderEmail": result.get("senderEmail", ""),
+                "sentAt": result.get("sentAt", ""), "remainingDailyQuota": result.get("remainingDailyQuota", 0)}
+
     def shipping_export_preferences(self):
         return self.vault.preference("shipping_export", {"sender": {}, "history": {}})
 

@@ -82,3 +82,27 @@ test('request status flows through 견적확정 and 견적발송완료 while rem
   assert.equal(f.readRequests(0).requests[0].status,'견적발송완료');
   assert.equal(f.context.requestStatusTransitionAllowed_('견적발송완료','입금확인'),true);
 });
+
+test('authenticated quote email profile and send use Apps Script mail account',()=>{
+  const f=fixture();f.submit();
+  f.context.updateRequestStatus_({requestId:f.request.requestId,status:'견적확정'});
+  const profile=f.context.quoteEmailProfile_();
+  assert.equal(profile.senderEmail,'seller@namufarm.test');
+  const sent=f.context.sendQuoteEmail_({
+    requestId:f.request.requestId,recipientEmail:'buyer@example.com',senderName:'나무팜농원',
+    quoteNumber:'NAMU-20261011-0001',subject:'[나무팜] 견적 안내',
+    bodyText:'안녕하세요. 견적 안내입니다.',
+    bodyHtml:'<p>안녕하세요. 견적 안내입니다.</p><table><tr><td>감나무 10주</td></tr></table>'
+  });
+  assert.equal(sent.sent,true);assert.equal(sent.recipientEmail,'buyer@example.com');
+  assert.equal(f.mail.length,1);assert.equal(f.mail[0].to,'buyer@example.com');
+  assert.equal(f.mail[0].name,'나무팜농원');
+});
+test('quote email cannot send before quote confirmation',()=>{
+  const f=fixture();f.submit();
+  assert.throws(()=>f.context.sendQuoteEmail_({
+    requestId:f.request.requestId,recipientEmail:'buyer@example.com',senderName:'나무팜농원',
+    quoteNumber:'NAMU-20261011-0001',subject:'견적 안내',
+    bodyText:'견적 안내입니다.',bodyHtml:'<p>견적 안내입니다.</p>'
+  }));
+});

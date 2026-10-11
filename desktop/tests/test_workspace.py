@@ -15,7 +15,7 @@ from namufarm_desktop.commerce import (new_draft, draft_amounts, order_from_draf
     quote_html, shipping_html, shipping_csv, parse_tracking_csv, tracking_fields, tracking_number, TRACKING_PREFIX)
 from namufarm_desktop.domain import metadata, now_ms
 from namufarm_desktop.errors import UserError, NetworkError
-from namufarm_desktop.workspace import SellerWindow, QuoteDialog, QuoteDeliveryDialog
+from namufarm_desktop.workspace import SellerWindow, QuoteDialog, QuoteDeliveryDialog, QuoteEmailDialog
 from namufarm_desktop.demo import show_demo
 from support import Bridge, manager_at
 from qt_support import QtTestCase
@@ -161,6 +161,24 @@ class WorkspaceServiceTest(unittest.TestCase):
             self.manager.confirm_quote(other)
             self.manager.confirm_draft(other)
 
+    def test_quote_email_sends_through_server_and_records_delivery_state(self):
+        self.bridge.send(control='submit')
+        view = self.manager.sync()
+        draft = draft_for_test()
+        draft['sourceRequestId'] = view['requests'][0]['requestId']
+        draft['customerEmail'] = 'buyer@example.com'
+        self.manager.confirm_quote(draft)
+        profile = self.manager.email_profile()
+        self.assertEqual('seller@namufarm.test', profile['senderEmail'])
+        result = self.manager.send_quote_email(
+            draft, '[나무팜] 견적 안내', '견적 안내입니다.',
+            '<p>견적 안내입니다.</p><table><tr><td>소나무 2주</td></tr></table>'
+        )
+        self.assertTrue(result['delivery']['emailSentAt'] > 0)
+        self.assertEqual('buyer@example.com', result['delivery']['emailTo'])
+        self.assertEqual('seller@namufarm.test', result['delivery']['senderEmail'])
+        self.assertEqual(result['delivery'], self.manager.quote_delivery_state(draft['id']))
+
     def test_shipping_export_preferences_are_encrypted_and_do_not_advance_sale(self):
         row = self.manager.confirm_draft(draft_for_test())['sales'][0]
         before = self.manager.view()['sales']
@@ -305,7 +323,7 @@ class SellerUiTest(QtTestCase):
             quoteRecipientName='테스트 고객',
             quoteReplyChannel='both',
         )
-        dialog = QuoteDeliveryDialog(draft, '견적확정')
+        dialog = QuoteDeliveryDialog(draft, '견적확정', delivery_state={'emailSentAt': 123456789})
         dialog.show()
         self.app.processEvents()
         headers = [dialog.items.horizontalHeaderItem(i).text() for i in range(dialog.items.columnCount())]
@@ -313,7 +331,23 @@ class SellerUiTest(QtTestCase):
         self.assertTrue(dialog.sms_button.isEnabled())
         self.assertTrue(dialog.email_button.isEnabled())
         self.assertTrue(dialog.sent_button.isEnabled())
+        self.assertEqual('문자 미전송', dialog.sms_status_badge.text())
+        self.assertEqual('메일 전송완료', dialog.email_status_badge.text())
         self.assertIn('NAMU-20261011-0001', dialog.delivery_text())
+        dialog.close()
+
+    def test_quote_email_dialog_contains_editable_message_and_item_table(self):
+        draft = draft_for_test()
+        draft.update(customerEmail='buyer@example.com', requestReceiptNumber='NAMU-20261011-0001',
+                     quoteRecipientName='테스트 고객')
+        dialog = QuoteEmailDialog(draft)
+        dialog.show()
+        self.app.processEvents()
+        self.assertEqual('buyer@example.com', dialog.recipient_email.text())
+        self.assertIn('견적을 요청해 주셔서 감사합니다', dialog.message.toPlainText())
+        self.assertEqual(1, dialog.items.rowCount())
+        self.assertIn('소나무', dialog.plain_body())
+        self.assertIn('<table', dialog.html_body())
         dialog.close()
 
     def test_quote_editor_calculates_and_prints_pdf(self):

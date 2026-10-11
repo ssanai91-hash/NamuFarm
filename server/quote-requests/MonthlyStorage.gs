@@ -40,7 +40,7 @@ function quoteIndexEntries_() {
     assert_(v[QI.day]===receiptTime_(v[QI.created]).slice(0,10) && v[QI.seoul]===receiptTime_(v[QI.created]),'NOT_READY');
     const receipt=RFQ_RECEIPT_PATTERN.exec(v[QI.receipt]);
     assert_(receipt && receipt[1]===v[QI.day].replace(/-/g,'') && Number.isSafeInteger(Number(receipt[2])) && Number(receipt[2])>0 && !receipts.has(v[QI.receipt]),'NOT_READY');receipts.add(v[QI.receipt]);
-    assert_(/^[a-f0-9]{64}$/.test(v[QI.hash]) && ['신규','견적완료','입금확인','배송완료','구매취소','보관종료'].includes(v[QI.status]) && typeof v[QI.copy]==='boolean','NOT_READY');
+    assert_(/^[a-f0-9]{64}$/.test(v[QI.hash]) && ['신규','견적확정','견적발송완료','입금확인','배송완료','구매취소','보관종료'].includes(v[QI.status]) && typeof v[QI.copy]==='boolean','NOT_READY');
     assert_(['PREPARED','COMMITTING','COMMITTED','DISPOSING','MIGRATING'].includes(v[QI.phase]),'NOT_READY');
     assert_(Number.isSafeInteger(Number(v[QI.seq])) && Number(v[QI.seq])>=0,'NOT_READY');
     assert_(v[QI.phase]==='PREPARED' ? Number(v[QI.seq])===0 : Number(v[QI.seq])>0,'NOT_READY');

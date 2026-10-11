@@ -3,9 +3,10 @@ import copy
 import json
 from datetime import datetime
 from pathlib import Path
+from html import escape as html_escape
 from urllib.parse import quote as url_quote
 
-from PySide6.QtCore import Qt, QUrl, QSaveFile, QIODevice, Signal
+from PySide6.QtCore import Qt, QUrl, QSaveFile, QIODevice, QTimer, Signal
 from PySide6.QtGui import QColor, QDesktopServices, QFont, QIntValidator, QKeySequence, QShortcut, QTextDocument, QPageSize
 from PySide6.QtPrintSupport import QPrinter, QPrintDialog
 from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDialog, QFileDialog, QFormLayout,
@@ -14,7 +15,7 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDialog, QFil
     QTableWidgetItem, QTextBrowser, QVBoxLayout, QWidget, QSpinBox)
 
 from . import __version__
-from .app import MainWindow, table, fill_table, money, timestamp
+from .app import MainWindow, Task, table, fill_table, money, timestamp
 from .commerce import (ISSUER, new_draft, draft_amounts, validate_draft, quote_html, quote_document_html, shipping_html,
                        shipping_problem, parse_tracking_csv, tracking_number)
 from .domain import SEOUL, profit, require
@@ -248,6 +249,57 @@ QPushButton#sentAction:disabled{
     color:#edf2ed;
     border-color:#a9baad;
 }
+
+QLabel#channelStatusBadge{
+    border-radius:7px;
+    padding:3px 6px;
+    font-size:10px;
+    font-weight:700;
+    qproperty-alignment:AlignCenter;
+}
+QLabel#channelStatusBadge[done="false"]{
+    background:#eef1ed;
+    color:#859087;
+    border:1px solid #d8dfd8;
+}
+QLabel#channelStatusBadge[done="true"]{
+    background:#dcebdd;
+    color:#23603b;
+    border:1px solid #b8d2bd;
+}
+
+QDialog#quoteEmailDialog{background:#f4f7f3;}
+QFrame#emailAddressCard{
+    background:#ffffff;
+    border:1px solid #d9e4da;
+    border-radius:11px;
+}
+QLabel#emailSectionTitle{
+    color:#173f2f;
+    font-size:17px;
+    font-weight:800;
+}
+QLabel#emailHelp{
+    color:#6f8175;
+    font-size:12px;
+}
+QLabel#emailSendStatus{
+    background:#edf4ea;
+    color:#47624e;
+    border:1px solid #d5e2d2;
+    border-radius:8px;
+    padding:9px 11px;
+}
+QPushButton#emailSendPrimary{
+    background:#2f6597;
+    color:#ffffff;
+    border:1px solid #2f6597;
+    border-radius:8px;
+    padding:11px 24px;
+    font-weight:800;
+}
+QPushButton#emailSendPrimary:hover{background:#275680;border-color:#275680;}
+QPushButton#emailSendPrimary:disabled{background:#aab8c6;border-color:#aab8c6;color:#eef2f5;}
 """
 
 
@@ -658,13 +710,237 @@ class QuoteDialog(QDialog):
             QMessageBox.warning(self, "견적 입력 확인", str(error))
 
 
+class QuoteEmailDialog(QDialog):
+    """Compose and send a real quote email through the authenticated Apps Script account."""
+
+    def __init__(self, draft, manager=None, parent=None):
+        super().__init__(parent)
+        self.draft = copy.deepcopy(draft)
+        self.manager = manager
+        self.delivery_state = {}
+        self.profile_task = None
+        self.send_task = None
+        self.setObjectName("quoteEmailDialog")
+        self.setWindowTitle("견적 메일 보내기")
+        self.resize(980, 790)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(26, 22, 26, 22)
+        layout.setSpacing(14)
+
+        title = label("견적 메일 보내기", "deliveryTitle")
+        layout.addWidget(title)
+        layout.addWidget(label("받는 사람과 기본 문장을 확인하고 필요한 내용을 수정한 뒤 실제 메일을 전송합니다.", "deliverySubtitle", True))
+
+        address_card = QFrame()
+        address_card.setObjectName("emailAddressCard")
+        address = QGridLayout(address_card)
+        address.setContentsMargins(18, 14, 18, 14)
+        address.setHorizontalSpacing(14)
+        address.setVerticalSpacing(9)
+
+        recipient_name = self.draft.get("quoteRecipientName") or self.draft.get("customerName", "")
+        self.recipient_name = QLineEdit(recipient_name)
+        self.recipient_name.setReadOnly(True)
+        self.recipient_email = QLineEdit(self.draft.get("customerEmail", ""))
+        self.recipient_email.setReadOnly(True)
+        self.sender_name = QLineEdit(self.draft.get("issuer", {}).get("businessName") or "나무팜농원")
+        self.sender_name.setReadOnly(True)
+        self.sender_email = QLineEdit("발신 계정 확인 중…")
+        self.sender_email.setReadOnly(True)
+
+        address.addWidget(label("받는 사람"), 0, 0)
+        address.addWidget(self.recipient_name, 0, 1)
+        address.addWidget(label("수신 이메일"), 0, 2)
+        address.addWidget(self.recipient_email, 0, 3)
+        address.addWidget(label("보내는 사람"), 1, 0)
+        address.addWidget(self.sender_name, 1, 1)
+        address.addWidget(label("발신 이메일"), 1, 2)
+        address.addWidget(self.sender_email, 1, 3)
+        address.setColumnStretch(1, 1)
+        address.setColumnStretch(3, 2)
+        layout.addWidget(address_card)
+
+        layout.addWidget(label("메일 제목", "emailSectionTitle"))
+        self.subject = QLineEdit(f"[나무팜] {self.quote_number()} 묘목 견적 안내")
+        self.subject.setMaxLength(160)
+        layout.addWidget(self.subject)
+
+        layout.addWidget(label("메일 기본 문장", "emailSectionTitle"))
+        layout.addWidget(label("아래 문장은 전송 전에 자유롭게 수정할 수 있습니다. 견적 품목 표와 총 판매금액은 자동으로 메일 본문에 포함됩니다.", "emailHelp", True))
+        recipient = recipient_name or self.draft.get("customerName", "고객")
+        self.message = QPlainTextEdit(
+            f"{recipient}님, 안녕하세요.\n"
+            "나무팜에 견적을 요청해 주셔서 감사합니다.\n"
+            "요청하신 묘목 견적을 아래와 같이 안내드립니다.\n\n"
+            "아래 견적 품목과 판매금액을 확인 부탁드립니다.\n"
+            "추가 문의사항이 있으시면 편하게 연락 부탁드립니다.\n"
+            "감사합니다."
+        )
+        self.message.setMaximumHeight(150)
+        layout.addWidget(self.message)
+
+        layout.addWidget(label("견적 품목", "emailSectionTitle"))
+        self.items = table(["묘목명", "수량", "판매 단가", "판매 금액"])
+        self.items.setObjectName("deliveryItems")
+        rows = []
+        for item in self.draft.get("items", []):
+            qty, price = int(item["quantity"]), int(item["unitPrice"])
+            rows.append((item["species"], f"{qty:,}주", f"{price:,}원", f"{qty * price:,}원"))
+        fill_table(self.items, rows)
+        self.items.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.items.verticalHeader().setDefaultSectionSize(44)
+        center_table_columns(self.items, (1, 2, 3))
+        layout.addWidget(self.items, 1)
+
+        amounts = draft_amounts(self.draft)
+        total = QFrame()
+        total.setObjectName("quoteTotalBand")
+        total_row = QHBoxLayout(total)
+        total_row.setContentsMargins(18, 9, 18, 9)
+        total_row.addWidget(label("총 판매금액", "quoteTotalCaption"))
+        total_row.addStretch()
+        total_row.addWidget(label(f"{amounts['total']:,}원", "quoteTotalValue"))
+        layout.addWidget(total)
+
+        self.status = label("Apps Script의 발신 Gmail 계정을 확인하고 있습니다.", "emailSendStatus", True)
+        layout.addWidget(self.status)
+
+        actions = QHBoxLayout()
+        self.cancel_button = button("취소", self.reject)
+        self.send_button = QPushButton("메일 전송")
+        self.send_button.setObjectName("emailSendPrimary")
+        self.send_button.setEnabled(False)
+        self.send_button.clicked.connect(self.send_email)
+        actions.addStretch()
+        actions.addWidget(self.cancel_button)
+        actions.addWidget(self.send_button)
+        layout.addLayout(actions)
+
+        QTimer.singleShot(0, self.load_profile)
+
+    def quote_number(self):
+        return self.draft.get("requestReceiptNumber") or ("PCQ_" + self.draft["id"][:8])
+
+    def load_profile(self):
+        if not self.manager:
+            self.sender_email.setText("PC 연결 필요")
+            self.status.setText("메일을 보내려면 PC를 서버에 연결해주세요.")
+            return
+        self.send_button.setEnabled(False)
+        task = Task(self.manager.email_profile, None, self)
+        self.profile_task = task
+        task.completed.connect(lambda value, error, conflict: self.profile_loaded(task, value, error))
+        task.start()
+
+    def profile_loaded(self, task, value, error):
+        task.wait()
+        if self.profile_task is task:
+            self.profile_task = None
+        task.deleteLater()
+        if error:
+            self.sender_email.setText("확인 실패")
+            self.status.setText(error)
+            self.send_button.setEnabled(False)
+            return
+        self.sender_name.setText(str(value.get("senderName") or self.sender_name.text()))
+        self.sender_email.setText(str(value.get("senderEmail") or ""))
+        quota = int(value.get("remainingDailyQuota", 0) or 0)
+        self.status.setText(f"발신 계정 확인 완료 · 오늘 남은 메일 전송 한도 {quota:,}건")
+        self.send_button.setEnabled(bool(self.recipient_email.text().strip()) and quota > 0)
+
+    def plain_body(self):
+        lines = [self.message.toPlainText().strip(), "", "[견적 품목]"]
+        for item in self.draft.get("items", []):
+            qty, price = int(item["quantity"]), int(item["unitPrice"])
+            lines.append(f"- {item['species']} / {qty:,}주 / 단가 {price:,}원 / 금액 {qty * price:,}원")
+        lines.extend(["", f"총 판매금액: {draft_amounts(self.draft)['total']:,}원",
+                      "", f"{self.sender_name.text()} / {self.draft.get('issuer', {}).get('phone', '')}"])
+        return "\n".join(lines)
+
+    def html_body(self):
+        message = html_escape(self.message.toPlainText().strip()).replace("\n", "<br>")
+        rows = []
+        for item in self.draft.get("items", []):
+            qty, price = int(item["quantity"]), int(item["unitPrice"])
+            rows.append(
+                "<tr>"
+                f"<td style='padding:9px;border-bottom:1px solid #dfe7df'>{html_escape(item['species'])}</td>"
+                f"<td style='padding:9px;text-align:center;border-bottom:1px solid #dfe7df'>{qty:,}주</td>"
+                f"<td style='padding:9px;text-align:right;border-bottom:1px solid #dfe7df'>{price:,}원</td>"
+                f"<td style='padding:9px;text-align:right;border-bottom:1px solid #dfe7df'>{qty * price:,}원</td>"
+                "</tr>"
+            )
+        total = draft_amounts(self.draft)["total"]
+        sender = html_escape(self.sender_name.text())
+        phone = html_escape(self.draft.get("issuer", {}).get("phone", ""))
+        return (
+            "<div style='font-family:Arial,Malgun Gothic,sans-serif;color:#263e35;line-height:1.7'>"
+            f"<div style='margin-bottom:18px'>{message}</div>"
+            f"<p><b>견적번호:</b> {html_escape(self.quote_number())}</p>"
+            "<table style='width:100%;border-collapse:collapse;margin:12px 0 16px'>"
+            "<thead><tr style='background:#2f6842;color:#fff'>"
+            "<th style='padding:9px;text-align:left'>묘목명</th><th style='padding:9px'>수량</th>"
+            "<th style='padding:9px;text-align:right'>판매 단가</th><th style='padding:9px;text-align:right'>판매 금액</th>"
+            "</tr></thead><tbody>" + "".join(rows) + "</tbody></table>"
+            f"<div style='background:#e3eee0;padding:14px 18px;text-align:right;font-size:20px;font-weight:700'>총 판매금액&nbsp;&nbsp;{total:,}원</div>"
+            f"<p style='margin-top:20px;color:#5d6e63'>{sender}<br>{phone}</p>"
+            "</div>"
+        )
+
+    def send_email(self):
+        subject = self.subject.text().strip()
+        message = self.message.toPlainText().strip()
+        if not subject or not message:
+            QMessageBox.warning(self, "메일 확인", "메일 제목과 기본 문장을 입력해주세요.")
+            return
+        if not self.manager or self.send_task:
+            return
+        self.subject.setEnabled(False)
+        self.message.setEnabled(False)
+        self.send_button.setEnabled(False)
+        self.cancel_button.setEnabled(False)
+        self.status.setText("고객에게 견적 메일을 전송하고 있습니다…")
+        plain, html = self.plain_body(), self.html_body()
+        task = Task(lambda: self.manager.send_quote_email(self.draft, subject, plain, html), None, self)
+        self.send_task = task
+        task.completed.connect(lambda value, error, conflict: self.email_sent(task, value, error))
+        task.start()
+
+    def email_sent(self, task, value, error):
+        task.wait()
+        if self.send_task is task:
+            self.send_task = None
+        task.deleteLater()
+        if error:
+            self.subject.setEnabled(True)
+            self.message.setEnabled(True)
+            self.cancel_button.setEnabled(True)
+            self.send_button.setEnabled(True)
+            self.status.setText(error)
+            return
+        self.delivery_state = dict(value.get("delivery") or {})
+        self.sender_email.setText(str(value.get("senderEmail") or self.sender_email.text()))
+        self.status.setText("메일 전송완료 · 고객 메일함으로 실제 전송했습니다.")
+        QMessageBox.information(self, "메일 전송완료", f"{self.recipient_email.text()} 주소로 견적 메일을 전송했습니다.")
+        self.accept()
+
+    def reject(self):
+        if self.profile_task or self.send_task:
+            self.status.setText("현재 메일 처리가 끝난 뒤 창을 닫아주세요.")
+            return
+        super().reject()
+
+
 class QuoteDeliveryDialog(QDialog):
     """확정된 견적의 고객 전달만 담당하는 전용 팝업."""
 
-    def __init__(self, draft, request_status, parent=None):
+    def __init__(self, draft, request_status, manager=None, delivery_state=None, parent=None):
         super().__init__(parent)
 
         self.draft = copy.deepcopy(draft)
+        self.manager = manager
+        self.delivery_state = dict(delivery_state or {})
         self.request_status = (
             request_status
             or ("수기견적" if not draft.get("sourceRequestId") else "상태확인")
@@ -702,9 +978,22 @@ class QuoteDeliveryDialog(QDialog):
         head.addLayout(title_box)
         head.addStretch()
 
+        delivery_badges = QVBoxLayout()
+        delivery_badges.setSpacing(4)
+        self.sms_status_badge = QLabel()
+        self.email_status_badge = QLabel()
+        for badge in (self.sms_status_badge, self.email_status_badge):
+            badge.setObjectName("channelStatusBadge")
+            badge.setFixedSize(94, 24)
+            badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            delivery_badges.addWidget(badge)
+        self.update_delivery_badges()
+        head.addLayout(delivery_badges)
+
         status = QLabel(self.request_status)
         status.setObjectName("quoteStatusBadge")
         status.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        status.setFixedSize(150, 52)
 
         head.addWidget(status)
         layout.addLayout(head)
@@ -1000,6 +1289,17 @@ class QuoteDeliveryDialog(QDialog):
             or ("PCQ_" + self.draft["id"][:8])
         )
 
+    def update_delivery_badges(self):
+        states = (
+            (self.sms_status_badge, bool(self.delivery_state.get("smsSentAt")), "문자 전송완료", "문자 미전송"),
+            (self.email_status_badge, bool(self.delivery_state.get("emailSentAt")), "메일 전송완료", "메일 미전송"),
+        )
+        for badge, done, done_text, pending_text in states:
+            badge.setText(done_text if done else pending_text)
+            badge.setProperty("done", done)
+            badge.style().unpolish(badge)
+            badge.style().polish(badge)
+
     def delivery_text(self):
         amount = draft_amounts(self.draft)["total"]
 
@@ -1042,42 +1342,14 @@ class QuoteDeliveryDialog(QDialog):
             )
 
     def open_email(self):
-        email = self.draft.get(
-            "customerEmail",
-            "",
-        ).strip()
-
+        email = self.draft.get("customerEmail", "").strip()
         if not email:
-            QMessageBox.information(
-                self,
-                "메일 주소 확인",
-                "고객 이메일이 입력되지 않았습니다.",
-            )
+            QMessageBox.information(self, "메일 주소 확인", "고객 이메일이 입력되지 않았습니다.")
             return
-
-        body = self.delivery_text()
-
-        subject = (
-            f"[나무팜] "
-            f"{self.quote_number()} 견적 안내"
-        )
-
-        uri = (
-            f"mailto:{url_quote(email, safe='@.+')}"
-            f"?subject={url_quote(subject)}"
-            f"&body={url_quote(body)}"
-        )
-
-        if not QDesktopServices.openUrl(
-            QUrl.fromEncoded(uri.encode("utf-8"))
-        ):
-            QApplication.clipboard().setText(body)
-
-            QMessageBox.information(
-                self,
-                "메일 작성",
-                "메일 앱을 열 수 없어 견적 내용을 클립보드에 복사했습니다.",
-            )
+        dialog = QuoteEmailDialog(self.draft, self.manager, self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self.delivery_state = dict(dialog.delivery_state or self.delivery_state)
+            self.update_delivery_badges()
 
     def preview_pdf(self):
         print_document(
@@ -1655,7 +1927,8 @@ class SellerWindow(MainWindow):
     def open_delivery_quote(self, draft, status):
         if getattr(self, "demo_mode", False) or not self.manager or self.task:
             return
-        dialog = QuoteDeliveryDialog(draft, status, self)
+        delivery_state = self.manager.quote_delivery_state(draft["id"])
+        dialog = QuoteDeliveryDialog(draft, status, manager=self.manager, delivery_state=delivery_state, parent=self)
         self.timer.stop()
         result = dialog.exec()
         self.timer.start()

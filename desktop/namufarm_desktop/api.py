@@ -15,7 +15,8 @@ MAX_RESPONSE = 8 * 1024 * 1024
 # urllib applies this to blocking I/O, not the entire redirect/request chain.
 REQUEST_TIMEOUT = 75
 ACTION_LABELS = {"pair_device": "PC 연결", "close_request": "문의 삭제", "save_sale": "판매 저장",
-                 "update_request_status": "견적 발송 상태 저장", "list_requests": "문의 목록 조회",
+                 "update_request_status": "견적 발송 상태 저장", "email_profile": "메일 발신 계정 확인",
+                 "send_quote_email": "견적 메일 전송", "list_requests": "문의 목록 조회",
                  "list_sales": "판매 목록 조회", "sales_report": "판매 통계 조회"}
 
 
