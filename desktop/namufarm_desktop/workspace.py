@@ -51,7 +51,31 @@ QMainWindow,#workspace{background:#f3f5f1;}
 QLabel#pageTitle{font-size:26px;font-weight:800;color:#193d2e;}
 QLabel#muted{color:#76867c;} QLabel#eyebrow{color:#748a78;font-size:11px;font-weight:700;}
 QLabel#sectionTitle{font-size:18px;font-weight:700;}
-QLabel#metricValue{font-size:30px;font-weight:800;color:#194d3a;}
+QPushButton#dashboardCard {
+    background:#ffffff;
+    border:1px solid #d9e5da;
+    border-bottom:3px solid #c5d7c8;
+    border-radius:15px;
+    min-height:205px;
+    text-align:left;
+}
+QPushButton#dashboardCard:hover {
+    background:#f6faf5;
+    border:2px solid #8eaf98;
+    border-bottom:3px solid #70a081;
+}
+QPushButton#dashboardCard:pressed {
+    background:#eaf2e8;
+    border:2px solid #5f9073;
+    border-top:3px solid #4b7a5d;
+    border-bottom:1px solid #8eaf98;
+}
+QPushButton#dashboardCard:focus {border:2px solid #397a58;}
+QPushButton#dashboardCard QLabel {background:transparent;}
+QLabel#dashboardCardTitle {font-size:20px;font-weight:800;color:#2b493a;}
+QLabel#dashboardCount {font-size:48px;font-weight:900;}
+QLabel#dashboardCardNote {font-size:14px;color:#6a7d70;}
+QLabel#dashboardArrow {font-size:22px;color:#6e8c78;font-weight:800;}
 QFrame#card{background:#fff;border:1px solid #dfe7df;border-radius:12px;}
 QFrame#hero{background:#e3eddf;border:1px solid #d5e2d0;border-radius:14px;}
 QFrame#hero QLabel{background:transparent;}
@@ -3279,53 +3303,77 @@ class SellerWindow(MainWindow):
         layout = QVBoxLayout(page)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(20)
+
         hero = QFrame()
         hero.setObjectName("hero")
-        row = QHBoxLayout(hero)
-        row.setContentsMargins(26, 23, 26, 23)
-        left = QVBoxLayout()
-        left.addWidget(label("좋은 나무, 빈틈없는 판매 관리", "heroTitle"))
-        self.hero_subtitle = label("새 견적부터 마지막 출고까지, 오늘 처리할 일을 확인하세요.", "muted")
-        left.addWidget(self.hero_subtitle)
-        row.addLayout(left)
-        row.addStretch()
-        row.addWidget(button("출고 대기 확인 →", lambda: self.navigate(4), True))
+        hero_row = QHBoxLayout(hero)
+        hero_row.setContentsMargins(26, 22, 26, 22)
+        hero_text = QVBoxLayout()
+        hero_text.addWidget(label("오늘 할 일을 한눈에", "heroTitle"))
+        hero_text.addWidget(label("큰 건수 카드를 누르면 해당 업무로 이동합니다.", "muted"))
+        hero_row.addLayout(hero_text)
+        hero_row.addStretch()
         layout.addWidget(hero)
-        metrics = QHBoxLayout()
-        metrics.setSpacing(16)
+
+        grid = QGridLayout()
+        grid.setHorizontalSpacing(18)
+        grid.setVerticalSpacing(18)
         self.metrics = []
-        for title, subtitle, target in (("새 견적 요청", "온라인 접수함", 1), ("견적 작업대", "확정 · 발송 관리", 2), ("출고 대기", "입금확인 · 배송완료 전", 4), ("이번 달 배송완료 매출", "공급가 기준 · 한국 시간", 5)):
-            frame, box = card(title)
-            value = label("—", "metricValue")
+        cards = (
+            ("신규 견적", "새로 들어온 견적", "new", "#246a48"),
+            ("견적 발송 대기", "고객에게 발송할 견적", "send", "#386c97"),
+            ("입금확인 대기", "발송 후 입금을 기다리는 견적", "payment", "#a5672a"),
+            ("배송 진행", "입금확인 · 배송 처리 필요", "shipping", "#58766b"),
+        )
+        for index, (title, subtitle, category, count_color) in enumerate(cards):
+            card_button = QPushButton()
+            card_button.setObjectName("dashboardCard")
+            card_button.setAccessibleName(title + " 목록으로 이동")
+            card_button.setCursor(Qt.CursorShape.PointingHandCursor)
+            card_button.setMinimumHeight(205)
+            card_button.clicked.connect(
+                lambda checked=False, key=category: self.open_dashboard_category(key)
+            )
+            card_layout = QVBoxLayout(card_button)
+            card_layout.setContentsMargins(24, 20, 24, 20)
+            card_layout.setSpacing(6)
+            header = QHBoxLayout()
+            header.addWidget(label(title, "dashboardCardTitle"))
+            header.addStretch()
+            header.addWidget(label("→", "dashboardArrow"))
+            card_layout.addLayout(header)
+            value = label("0건", "dashboardCount")
+            value.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            value.setStyleSheet(f"color:{count_color};")
             self.metrics.append(value)
-            box.addWidget(value)
-            box.addWidget(label(subtitle, "muted"))
-            link = button("자세히 보기  →", lambda checked=False, i=target: self.navigate(i))
-            box.addWidget(link)
-            metrics.addWidget(frame, 1)
-        layout.addLayout(metrics)
-        bottom = QHBoxLayout()
-        bottom.setSpacing(20)
-        frame, box = card("먼저 처리할 주문")
-        box.addWidget(label("입금 · 주소 · 송장 준비 상태를 확인하고 다음 업무로 이동하세요.", "muted"))
-        self.work_table = table(["고객 / 주문", "품목", "결제금액", "다음 할 일"])
-        self.work_table.itemDoubleClicked.connect(self.open_work_order)
-        box.addWidget(self.work_table)
-        box.addWidget(button("전체 주문 보기 →", lambda: self.navigate(3)), 0, Qt.AlignmentFlag.AlignRight)
-        bottom.addWidget(frame, 3)
-        frame, box = card("판매 업무 흐름")
-        for n, title, description in (("01", "견적 작성", "접수 요청을 더블클릭해 수량·단가를 확정하세요."),
-                                       ("02", "견적확정", "확정된 견적의 문자·메일·PDF 전달과 고객 회신을 관리하세요."),
-                                       ("03", "입금확인 · 출고", "입금을 확인한 주문의 로젠 송장과 배송을 준비하세요."),
-                                       ("04", "배송완료 / 구매취소", "최종 상태를 확정해 매출과 업무를 정리하세요.")):
-            box.addWidget(label(n + "   " + title, "sectionTitle"))
-            box.addWidget(label(description, "muted", True))
-        box.addStretch()
-        self.health = label("보관함을 열면 운영 기록이 표시됩니다.", "notice", True)
-        box.addWidget(self.health)
-        bottom.addWidget(frame, 1)
-        layout.addLayout(bottom, 1)
+            card_layout.addWidget(value, 1)
+            caption = label(subtitle, "dashboardCardNote")
+            caption.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            card_layout.addWidget(caption)
+            grid.addWidget(card_button, index // 2, index % 2)
+        layout.addLayout(grid)
+
+        self.health = label("보관함을 열면 업무 건수가 표시됩니다.", "notice", True)
+        layout.addWidget(self.health)
+        layout.addStretch(1)
         return page
+
+    def open_dashboard_category(self, category):
+        if category == "new":
+            self.request_search.clear()
+            self.navigate(1)
+        elif category in ("send", "payment"):
+            self.navigate(2)
+            wanted = "견적확정" if category == "send" else "견적발송완료"
+            index = next((i for i, status in enumerate(self.draft_statuses)
+                          if status == wanted), None)
+            if index is not None:
+                self.draft_table.selectRow(index)
+                self.draft_table.scrollToItem(self.draft_table.item(index, 0))
+        elif category == "shipping":
+            self.shipping_search.clear()
+            self.shipping_filter.setCurrentIndex(0)
+            self.navigate(4)
 
     def build_drafts(self):
         page = QWidget()
@@ -3629,20 +3677,6 @@ class SellerWindow(MainWindow):
             self.refresh_request_notifications()
 
     def refresh_workspace(self):
-        sales = self.data["sales"]
-        self.metrics[0].setText(f"{sum(r.get('status','신규') == '신규' for r in self.data['requests']):,}건")
-        self.metrics[1].setText(f"{sum(r.get('status') in ('견적확정','견적발송완료') for r in self.data['requests']):,}건")
-        self.metrics[2].setText(f"{sum(r['metadata']['status'] in ('입금확인','구매확정') for r in sales):,}건")
-        month = datetime.now(SEOUL).strftime("%Y-%m")
-        completed = [r for r in sales if r["metadata"]["status"] in ("배송완료","판매완료") and timestamp(r["metadata"]["completedAt"]).startswith(month)]
-        self.metrics[3].setText(money(sum(r["metadata"]["totalPrice"] for r in completed)))
-        self.work_rows = [r for r in sales if r["metadata"]["status"] in ("구매확정", "입금확인")][:12]
-        rows = []
-        for r in self.work_rows:
-            order = r["private"]["order"]
-            step = shipping_problem(order) or ("로젠 송장 등록" if not tracking_number(order) else "출고 · 배송 확인")
-            rows.append((order.get("customerName") or order["orderNumber"], ", ".join(i["species"] for i in r["metadata"]["items"]), money(order["totalPrice"] + order["taxAmount"]), step))
-        fill_table(self.work_table, rows)
         request_status = {r["requestId"]: r.get("status", "신규") for r in self.data["requests"]}
         draft_pairs = []
         for draft in self.data.get("drafts", []):
@@ -3657,7 +3691,14 @@ class SellerWindow(MainWindow):
         )
         self.draft_rows = [draft for draft, _status in draft_pairs]
         self.draft_statuses = [status for _draft, status in draft_pairs]
-        self.metrics[1].setText(f"{len(draft_pairs):,}건")
+        counts = (
+            sum(r.get("status", "신규") == "신규" for r in self.data["requests"]),
+            sum(status == "견적확정" for _, status in draft_pairs),
+            sum(status == "견적발송완료" for _, status in draft_pairs),
+            sum(r["metadata"]["status"] == "입금확인" for r in self.data["sales"]),
+        )
+        for value, count in zip(self.metrics, counts):
+            value.setText(f"{count:,}건")
         fill_table(self.draft_table, [(
             draft_quote_number(d),
             status,
@@ -3671,7 +3712,13 @@ class SellerWindow(MainWindow):
         ) for d, status in draft_pairs])
         center_table_columns(self.draft_table, (0, 1, 2, 3, 4, 6, 8))
         pending = len(self.data["pending"])
-        self.health.setText(f"전송 대기 {pending}건\n동기화하여 저장 여부를 확인하세요." if pending else "운영 시트 연결됨\n수정 중에는 자동 새로고침을 멈춥니다." if self.data["paired"] else "연결 · 설정에서 보관함을 열고\nPC를 연결해주세요.")
+        self.health.setText(
+            f"전송 대기 {pending}건 · 서버 동기화로 저장 상태를 확인해주세요."
+            if pending else
+            "큰 카드를 눌러 업무를 시작하세요. 최신 자료는 서버 동기화로 가져옵니다."
+            if self.data["paired"] else
+            "연결 · 설정에서 PC를 연결하면 업무 건수가 표시됩니다."
+        )
         self.refresh_sales()
         self.refresh_shipping()
 
@@ -3995,9 +4042,6 @@ class SellerWindow(MainWindow):
         if QMessageBox.question(self, "견적 삭제", "선택한 PC 견적을 삭제할까요?", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No) == QMessageBox.StandardButton.Yes:
             identifier = self.draft_rows[index]["id"]
             self.run_job("견적 삭제 중…", lambda: self.manager.delete_draft(identifier), self.draft_deleted)
-
-    def open_work_order(self, item):
-        self.show_order(self.work_rows[item.row()]["metadata"]["orderNumber"])
 
     def show_order(self, number):
         if not self.allow_discard():
