@@ -87,7 +87,7 @@ test('authenticated quote email profile and send use Apps Script mail account',(
   const f=fixture();f.submit();
   f.context.updateRequestStatus_({requestId:f.request.requestId,status:'견적확정'});
   const profile=f.context.quoteEmailProfile_();
-  assert.equal(profile.senderEmail,'seller@namufarm.test');
+  assert.equal(profile.senderEmail,'ssanai91@gmail.com');
   const sent=f.context.sendQuoteEmail_({
     requestId:f.request.requestId,recipientEmail:'buyer@example.com',senderName:'나무팜농원',
     quoteNumber:'NAMU-20261011-0001',subject:'[나무팜] 견적 안내',

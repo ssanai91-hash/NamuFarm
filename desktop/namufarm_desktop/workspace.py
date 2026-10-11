@@ -711,7 +711,9 @@ class QuoteDialog(QDialog):
 
 
 class QuoteEmailDialog(QDialog):
-    """Compose and send a real quote email through the authenticated Apps Script account."""
+    """메일 내용 확인과 실제 전송에 집중한 간결한 견적 메일 창."""
+
+    SENDER_EMAIL = "ssanai91@gmail.com"
 
     def __init__(self, draft, manager=None, parent=None):
         super().__init__(parent)
@@ -722,31 +724,41 @@ class QuoteEmailDialog(QDialog):
         self.send_task = None
         self.setObjectName("quoteEmailDialog")
         self.setWindowTitle("견적 메일 보내기")
-        self.resize(980, 790)
+        self.setSizeGripEnabled(True)
+
+        screen = parent.screen() if parent is not None and hasattr(parent, "screen") else QApplication.primaryScreen()
+        available = screen.availableGeometry() if screen else None
+        if available:
+            width = min(900, max(680, int(available.width() * 0.72)))
+            height = min(700, max(520, int(available.height() * 0.78)))
+            width = min(width, max(560, available.width() - 40))
+            height = min(height, max(460, available.height() - 60))
+            self.resize(width, height)
+        else:
+            self.resize(880, 660)
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(26, 22, 26, 22)
-        layout.setSpacing(14)
+        layout.setContentsMargins(24, 20, 24, 20)
+        layout.setSpacing(12)
 
-        title = label("견적 메일 보내기", "deliveryTitle")
-        layout.addWidget(title)
-        layout.addWidget(label("받는 사람과 기본 문장을 확인하고 필요한 내용을 수정한 뒤 실제 메일을 전송합니다.", "deliverySubtitle", True))
+        layout.addWidget(label("견적 메일 보내기", "deliveryTitle"))
+        layout.addWidget(label("받는 사람과 메일 내용을 확인하고 필요한 부분을 수정한 뒤 실제 메일을 전송합니다.", "deliverySubtitle", True))
 
         address_card = QFrame()
         address_card.setObjectName("emailAddressCard")
         address = QGridLayout(address_card)
-        address.setContentsMargins(18, 14, 18, 14)
-        address.setHorizontalSpacing(14)
-        address.setVerticalSpacing(9)
+        address.setContentsMargins(16, 12, 16, 12)
+        address.setHorizontalSpacing(12)
+        address.setVerticalSpacing(8)
 
-        recipient_name = self.draft.get("quoteRecipientName") or self.draft.get("customerName", "")
-        self.recipient_name = QLineEdit(recipient_name)
+        # 메일 수신인은 고객명을 기본으로 사용합니다.
+        self.recipient_name = QLineEdit(self.draft.get("customerName", ""))
         self.recipient_name.setReadOnly(True)
         self.recipient_email = QLineEdit(self.draft.get("customerEmail", ""))
         self.recipient_email.setReadOnly(True)
         self.sender_name = QLineEdit(self.draft.get("issuer", {}).get("businessName") or "나무팜농원")
         self.sender_name.setReadOnly(True)
-        self.sender_email = QLineEdit("발신 계정 확인 중…")
+        self.sender_email = QLineEdit(self.SENDER_EMAIL)
         self.sender_email.setReadOnly(True)
 
         address.addWidget(label("받는 사람"), 0, 0)
@@ -762,48 +774,18 @@ class QuoteEmailDialog(QDialog):
         layout.addWidget(address_card)
 
         layout.addWidget(label("메일 제목", "emailSectionTitle"))
-        self.subject = QLineEdit(f"[나무팜] {self.quote_number()} 묘목 견적 안내")
+        self.subject = QLineEdit("묘목 견적 안내")
         self.subject.setMaxLength(160)
         layout.addWidget(self.subject)
 
-        layout.addWidget(label("메일 기본 문장", "emailSectionTitle"))
-        layout.addWidget(label("아래 문장은 전송 전에 자유롭게 수정할 수 있습니다. 견적 품목 표와 총 판매금액은 자동으로 메일 본문에 포함됩니다.", "emailHelp", True))
-        recipient = recipient_name or self.draft.get("customerName", "고객")
-        self.message = QPlainTextEdit(
-            f"{recipient}님, 안녕하세요.\n"
-            "나무팜에 견적을 요청해 주셔서 감사합니다.\n"
-            "요청하신 묘목 견적을 아래와 같이 안내드립니다.\n\n"
-            "아래 견적 품목과 판매금액을 확인 부탁드립니다.\n"
-            "추가 문의사항이 있으시면 편하게 연락 부탁드립니다.\n"
-            "감사합니다."
-        )
-        self.message.setMaximumHeight(150)
-        layout.addWidget(self.message)
+        layout.addWidget(label("메일 내용", "emailSectionTitle"))
+        layout.addWidget(label("문자 안내 형식처럼 간결하게 구성했습니다. 아래 내용을 전송 전에 자유롭게 수정할 수 있습니다.", "emailHelp", True))
 
-        layout.addWidget(label("견적 품목", "emailSectionTitle"))
-        self.items = table(["묘목명", "수량", "판매 단가", "판매 금액"])
-        self.items.setObjectName("deliveryItems")
-        rows = []
-        for item in self.draft.get("items", []):
-            qty, price = int(item["quantity"]), int(item["unitPrice"])
-            rows.append((item["species"], f"{qty:,}주", f"{price:,}원", f"{qty * price:,}원"))
-        fill_table(self.items, rows)
-        self.items.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        self.items.verticalHeader().setDefaultSectionSize(44)
-        center_table_columns(self.items, (1, 2, 3))
-        layout.addWidget(self.items, 1)
+        self.message = QPlainTextEdit(self.default_message())
+        self.message.setMinimumHeight(260)
+        layout.addWidget(self.message, 1)
 
-        amounts = draft_amounts(self.draft)
-        total = QFrame()
-        total.setObjectName("quoteTotalBand")
-        total_row = QHBoxLayout(total)
-        total_row.setContentsMargins(18, 9, 18, 9)
-        total_row.addWidget(label("총 판매금액", "quoteTotalCaption"))
-        total_row.addStretch()
-        total_row.addWidget(label(f"{amounts['total']:,}원", "quoteTotalValue"))
-        layout.addWidget(total)
-
-        self.status = label("Apps Script의 발신 Gmail 계정을 확인하고 있습니다.", "emailSendStatus", True)
+        self.status = label("Apps Script 발신 계정을 확인하고 있습니다.", "emailSendStatus", True)
         layout.addWidget(self.status)
 
         actions = QHBoxLayout()
@@ -822,10 +804,33 @@ class QuoteEmailDialog(QDialog):
     def quote_number(self):
         return self.draft.get("requestReceiptNumber") or ("PCQ_" + self.draft["id"][:8])
 
+    def default_message(self):
+        customer = self.draft.get("customerName") or "고객"
+        items = ", ".join(
+            f"{item['species']} {int(item['quantity']):,}주"
+            for item in self.draft.get("items", [])
+        )
+        amount = draft_amounts(self.draft)["total"]
+        sender = self.draft.get("issuer", {}).get("businessName") or "나무팜농원"
+        phone = self.draft.get("issuer", {}).get("phone", "")
+        return "\n".join([
+            "[나무팜 견적 안내]",
+            "",
+            f"{customer}님, 요청하신 묘목 견적을 안내드립니다.",
+            f"견적번호: {self.quote_number()}",
+            f"품목: {items}",
+            f"판매금액: {amount:,}원",
+            "",
+            "확인 후 문의사항이 있으시면 편하게 연락 부탁드립니다.",
+            "감사합니다.",
+            "",
+            sender,
+            phone,
+        ]).strip()
+
     def load_profile(self):
         if not self.manager:
-            self.sender_email.setText("PC 연결 필요")
-            self.status.setText("메일을 보내려면 PC를 서버에 연결해주세요.")
+            self.status.setText("메일 전송은 PC를 서버에 연결한 뒤 사용할 수 있습니다.")
             return
         self.send_button.setEnabled(False)
         task = Task(self.manager.email_profile, None, self)
@@ -839,52 +844,29 @@ class QuoteEmailDialog(QDialog):
             self.profile_task = None
         task.deleteLater()
         if error:
-            self.sender_email.setText("확인 실패")
             self.status.setText(error)
             self.send_button.setEnabled(False)
             return
+        sender = str(value.get("senderEmail") or "")
+        if sender.lower() != self.SENDER_EMAIL.lower():
+            self.status.setText(f"발신 계정을 확인해주세요. 현재 계정: {sender or '확인 불가'}")
+            self.send_button.setEnabled(False)
+            return
         self.sender_name.setText(str(value.get("senderName") or self.sender_name.text()))
-        self.sender_email.setText(str(value.get("senderEmail") or ""))
+        self.sender_email.setText(self.SENDER_EMAIL)
         quota = int(value.get("remainingDailyQuota", 0) or 0)
         self.status.setText(f"발신 계정 확인 완료 · 오늘 남은 메일 전송 한도 {quota:,}건")
         self.send_button.setEnabled(bool(self.recipient_email.text().strip()) and quota > 0)
 
     def plain_body(self):
-        lines = [self.message.toPlainText().strip(), "", "[견적 품목]"]
-        for item in self.draft.get("items", []):
-            qty, price = int(item["quantity"]), int(item["unitPrice"])
-            lines.append(f"- {item['species']} / {qty:,}주 / 단가 {price:,}원 / 금액 {qty * price:,}원")
-        lines.extend(["", f"총 판매금액: {draft_amounts(self.draft)['total']:,}원",
-                      "", f"{self.sender_name.text()} / {self.draft.get('issuer', {}).get('phone', '')}"])
-        return "\n".join(lines)
+        return self.message.toPlainText().strip()
 
     def html_body(self):
-        message = html_escape(self.message.toPlainText().strip()).replace("\n", "<br>")
-        rows = []
-        for item in self.draft.get("items", []):
-            qty, price = int(item["quantity"]), int(item["unitPrice"])
-            rows.append(
-                "<tr>"
-                f"<td style='padding:9px;border-bottom:1px solid #dfe7df'>{html_escape(item['species'])}</td>"
-                f"<td style='padding:9px;text-align:center;border-bottom:1px solid #dfe7df'>{qty:,}주</td>"
-                f"<td style='padding:9px;text-align:right;border-bottom:1px solid #dfe7df'>{price:,}원</td>"
-                f"<td style='padding:9px;text-align:right;border-bottom:1px solid #dfe7df'>{qty * price:,}원</td>"
-                "</tr>"
-            )
-        total = draft_amounts(self.draft)["total"]
-        sender = html_escape(self.sender_name.text())
-        phone = html_escape(self.draft.get("issuer", {}).get("phone", ""))
+        message = html_escape(self.plain_body()).replace("\n", "<br>")
         return (
-            "<div style='font-family:Arial,Malgun Gothic,sans-serif;color:#263e35;line-height:1.7'>"
-            f"<div style='margin-bottom:18px'>{message}</div>"
-            f"<p><b>견적번호:</b> {html_escape(self.quote_number())}</p>"
-            "<table style='width:100%;border-collapse:collapse;margin:12px 0 16px'>"
-            "<thead><tr style='background:#2f6842;color:#fff'>"
-            "<th style='padding:9px;text-align:left'>묘목명</th><th style='padding:9px'>수량</th>"
-            "<th style='padding:9px;text-align:right'>판매 단가</th><th style='padding:9px;text-align:right'>판매 금액</th>"
-            "</tr></thead><tbody>" + "".join(rows) + "</tbody></table>"
-            f"<div style='background:#e3eee0;padding:14px 18px;text-align:right;font-size:20px;font-weight:700'>총 판매금액&nbsp;&nbsp;{total:,}원</div>"
-            f"<p style='margin-top:20px;color:#5d6e63'>{sender}<br>{phone}</p>"
+            "<div style='font-family:Arial,Malgun Gothic,sans-serif;color:#263e35;"
+            "font-size:14px;line-height:1.75'>"
+            f"{message}"
             "</div>"
         )
 
@@ -892,7 +874,7 @@ class QuoteEmailDialog(QDialog):
         subject = self.subject.text().strip()
         message = self.message.toPlainText().strip()
         if not subject or not message:
-            QMessageBox.warning(self, "메일 확인", "메일 제목과 기본 문장을 입력해주세요.")
+            QMessageBox.warning(self, "메일 확인", "메일 제목과 내용을 입력해주세요.")
             return
         if not self.manager or self.send_task:
             return
@@ -920,7 +902,7 @@ class QuoteEmailDialog(QDialog):
             self.status.setText(error)
             return
         self.delivery_state = dict(value.get("delivery") or {})
-        self.sender_email.setText(str(value.get("senderEmail") or self.sender_email.text()))
+        self.sender_email.setText(self.SENDER_EMAIL)
         self.status.setText("메일 전송완료 · 고객 메일함으로 실제 전송했습니다.")
         QMessageBox.information(self, "메일 전송완료", f"{self.recipient_email.text()} 주소로 견적 메일을 전송했습니다.")
         self.accept()
@@ -930,7 +912,6 @@ class QuoteEmailDialog(QDialog):
             self.status.setText("현재 메일 처리가 끝난 뒤 창을 닫아주세요.")
             return
         super().reject()
-
 
 class QuoteDeliveryDialog(QDialog):
     """확정된 견적의 고객 전달만 담당하는 전용 팝업."""

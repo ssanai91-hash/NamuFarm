@@ -169,14 +169,14 @@ class WorkspaceServiceTest(unittest.TestCase):
         draft['customerEmail'] = 'buyer@example.com'
         self.manager.confirm_quote(draft)
         profile = self.manager.email_profile()
-        self.assertEqual('seller@namufarm.test', profile['senderEmail'])
+        self.assertEqual('ssanai91@gmail.com', profile['senderEmail'])
         result = self.manager.send_quote_email(
             draft, '[나무팜] 견적 안내', '견적 안내입니다.',
             '<p>견적 안내입니다.</p><table><tr><td>소나무 2주</td></tr></table>'
         )
         self.assertTrue(result['delivery']['emailSentAt'] > 0)
         self.assertEqual('buyer@example.com', result['delivery']['emailTo'])
-        self.assertEqual('seller@namufarm.test', result['delivery']['senderEmail'])
+        self.assertEqual('ssanai91@gmail.com', result['delivery']['senderEmail'])
         self.assertEqual(result['delivery'], self.manager.quote_delivery_state(draft['id']))
 
     def test_shipping_export_preferences_are_encrypted_and_do_not_advance_sale(self):
@@ -336,18 +336,21 @@ class SellerUiTest(QtTestCase):
         self.assertIn('NAMU-20261011-0001', dialog.delivery_text())
         dialog.close()
 
-    def test_quote_email_dialog_contains_editable_message_and_item_table(self):
+    def test_quote_email_dialog_is_message_focused_and_uses_customer_name(self):
         draft = draft_for_test()
         draft.update(customerEmail='buyer@example.com', requestReceiptNumber='NAMU-20261011-0001',
-                     quoteRecipientName='테스트 고객')
+                     customerName='테스트 고객', quoteRecipientName='다른 수신인')
         dialog = QuoteEmailDialog(draft)
         dialog.show()
         self.app.processEvents()
+        self.assertEqual('테스트 고객', dialog.recipient_name.text())
         self.assertEqual('buyer@example.com', dialog.recipient_email.text())
-        self.assertIn('견적을 요청해 주셔서 감사합니다', dialog.message.toPlainText())
-        self.assertEqual(1, dialog.items.rowCount())
-        self.assertIn('소나무', dialog.plain_body())
-        self.assertIn('<table', dialog.html_body())
+        self.assertEqual('ssanai91@gmail.com', dialog.sender_email.text())
+        self.assertEqual('묘목 견적 안내', dialog.subject.text())
+        self.assertIn('[나무팜 견적 안내]', dialog.message.toPlainText())
+        self.assertIn('소나무 2주', dialog.message.toPlainText())
+        self.assertFalse(hasattr(dialog, 'items'))
+        self.assertNotIn('<table', dialog.html_body())
         dialog.close()
 
     def test_quote_editor_calculates_and_prints_pdf(self):

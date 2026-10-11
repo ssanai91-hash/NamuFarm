@@ -5,6 +5,7 @@ const SALE_EVENT_SHEET = '판매변경이력';
 const SALE_EVENT_HEADERS = ['변경번호','주문번호','revision','내용해시','처리시각(UTC)'];
 const UUID_PATTERN = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 const QUOTE_RETENTION_MS = 30*86400000;
+const QUOTE_SENDER_EMAIL = 'ssanai91@gmail.com';
 function sellerKey_() {
   const raw = PropertiesService.getScriptProperties().getProperty('SELLER_PUBLIC_KEY');
   return raw ? JSON.parse(raw) : null;
@@ -325,9 +326,9 @@ function quoteRequestStatus_(id) {
   return String(record.row[9]||'신규');
 }
 function quoteEmailProfile_() {
-  const senderEmail=String(Session.getEffectiveUser().getEmail()||'').trim();
-  assert_(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(senderEmail),'NOT_READY');
-  return {senderName:'나무팜농원',senderEmail:senderEmail,remainingDailyQuota:MailApp.getRemainingDailyQuota()};
+  const senderEmail=String(Session.getEffectiveUser().getEmail()||'').trim().toLowerCase();
+  assert_(senderEmail===QUOTE_SENDER_EMAIL,'NOT_READY');
+  return {senderName:'나무팜농원',senderEmail:QUOTE_SENDER_EMAIL,remainingDailyQuota:MailApp.getRemainingDailyQuota()};
 }
 function sendQuoteEmail_(body) {
   assert_(body && typeof body==='object');
