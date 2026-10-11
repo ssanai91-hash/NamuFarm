@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDialog, QFil
 
 from . import __version__
 from .app import MainWindow, Task, table, fill_table, money, timestamp
-from .commerce import (ISSUER, new_draft, draft_amounts, validate_draft, quote_html, quote_document_html, shipping_html,
+from .commerce import (ISSUER, new_draft, draft_amounts, validate_draft, quote_html, quote_document_html, official_quote_html, shipping_html,
                        shipping_problem, parse_tracking_csv, tracking_number)
 from .domain import SEOUL, profit, require
 from .errors import UserError
@@ -441,6 +441,39 @@ def center_table_columns(widget, columns=None):
             item = widget.item(row, column)
             if item is not None:
                 item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+
+
+def preview_temporary_document(parent, html):
+    """Preview/print an in-memory official quote without saving a local document."""
+    dialog = QDialog(parent)
+    dialog.setWindowTitle("공식 견적서 미리보기")
+    screen = parent.screen() if parent is not None and hasattr(parent, "screen") else QApplication.primaryScreen()
+    available = screen.availableGeometry() if screen else None
+    if available:
+        dialog.resize(min(1120, available.width() - 50), min(960, available.height() - 50))
+    else:
+        dialog.resize(1050, 900)
+    layout = QVBoxLayout(dialog)
+    view = QTextBrowser()
+    view.setHtml(html)
+    layout.addWidget(view, 1)
+    row = QHBoxLayout()
+    row.addWidget(label("임시 생성 문서 · 별도 파일로 저장하지 않습니다.", "muted"))
+    row.addStretch()
+
+    def print_only():
+        printer = QPrinter(QPrinter.PrinterMode.HighResolution)
+        printer.setPageSize(QPageSize(QPageSize.PageSizeId.A4))
+        if QPrintDialog(printer, dialog).exec() != QDialog.DialogCode.Accepted:
+            return
+        document = QTextDocument()
+        document.setHtml(html)
+        document.print_(printer)
+
+    row.addWidget(button("프린터 출력", print_only))
+    row.addWidget(button("닫기", dialog.accept, True))
+    layout.addLayout(row)
+    dialog.exec()
 
 
 def print_document(parent, html, filename):
@@ -1221,6 +1254,7 @@ class QuoteDeliveryDialog(QDialog):
             self.draft["shippingFee"] = 6000
         self.manager = manager
         self.delivery_state = dict(delivery_state or {})
+        self.generated_quote_html = ""
         self.request_status = (
             request_status
             or ("수기견적" if not draft.get("sourceRequestId") else "상태확인")
@@ -1580,13 +1614,14 @@ class QuoteDeliveryDialog(QDialog):
             bool(self.draft.get("customerEmail"))
         )
 
-        self.pdf_button = QPushButton(
-            "공식 견적서 PDF / 출력"
-            if self.draft.get("formalQuoteRequested")
-            else "견적서 PDF / 출력"
-        )
-        self.pdf_button.setObjectName("pdfAction")
-        self.pdf_button.clicked.connect(self.preview_pdf)
+        self.generate_quote_button = QPushButton("공식견적서 생성")
+        self.generate_quote_button.setObjectName("pdfAction")
+        self.generate_quote_button.clicked.connect(self.generate_official_quote)
+
+        self.preview_quote_button = QPushButton("미리보기")
+        self.preview_quote_button.setObjectName("pdfAction")
+        self.preview_quote_button.setEnabled(False)
+        self.preview_quote_button.clicked.connect(self.preview_official_quote)
 
         close_button = QPushButton("닫기")
         close_button.setObjectName("closeAction")
@@ -1602,7 +1637,8 @@ class QuoteDeliveryDialog(QDialog):
 
         actions.addWidget(self.sms_button)
         actions.addWidget(self.email_button)
-        actions.addWidget(self.pdf_button)
+        actions.addWidget(self.generate_quote_button)
+        actions.addWidget(self.preview_quote_button)
 
         actions.addStretch()
 
@@ -1640,6 +1676,10 @@ class QuoteDeliveryDialog(QDialog):
     def recalculate_shipping(self, *args):
         if not hasattr(self, "total_value"):
             return
+        if hasattr(self, "preview_quote_button") and self.generated_quote_html:
+            self.generated_quote_html = ""
+            self.preview_quote_button.setEnabled(False)
+            self.generate_quote_button.setText("공식견적서 생성")
         prepaid = self.shipping_prepaid.isChecked()
         self.shipping_fee.setEnabled(prepaid)
         self.shipping_fee_label.setEnabled(prepaid)
@@ -1722,15 +1762,19 @@ class QuoteDeliveryDialog(QDialog):
             self.delivery_state = dict(dialog.delivery_state or self.delivery_state)
             self.update_delivery_badges()
 
-    def preview_pdf(self):
+    def generate_official_quote(self):
         if not self.persist_shipping():
             return
-        print_document(
-            self,
-            quote_html(self.draft, True),
-            "나무팜_견적서_"
-            + self.quote_number().replace("/", "_"),
-        )
+        self.generated_quote_html = official_quote_html(self.draft)
+        self.preview_quote_button.setEnabled(True)
+        self.generate_quote_button.setText("공식견적서 재생성")
+        self.shipping_status.setText(self.shipping_status.text() + " · 공식견적서 임시 생성됨")
+
+    def preview_official_quote(self):
+        if not self.generated_quote_html:
+            QMessageBox.information(self, "공식견적서", "먼저 공식견적서를 생성해주세요.")
+            return
+        preview_temporary_document(self, self.generated_quote_html)
 
     def mark_sent(self):
         if not self.persist_shipping():

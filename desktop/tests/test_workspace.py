@@ -12,7 +12,7 @@ from PySide6.QtWidgets import QDialog, QTableWidgetItem
 from PySide6.QtGui import QTextDocument
 from PySide6.QtPrintSupport import QPrinter
 from namufarm_desktop.commerce import (new_draft, draft_amounts, order_from_draft, quote_document,
-    quote_html, shipping_html, shipping_csv, parse_tracking_csv, tracking_fields, tracking_number, TRACKING_PREFIX)
+    quote_html, official_quote_html, shipping_html, shipping_csv, parse_tracking_csv, tracking_fields, tracking_number, TRACKING_PREFIX)
 from namufarm_desktop.domain import metadata, now_ms
 from namufarm_desktop.errors import UserError, NetworkError
 from namufarm_desktop.workspace import SellerWindow, QuoteDialog, QuoteDeliveryDialog, QuoteEmailDialog, QuoteSmsDialog
@@ -46,6 +46,24 @@ class CommerceTest(unittest.TestCase):
         self.assertEqual(sum(x['quantity']*x['unitPrice'] for x in doc['lines']), doc['supplyAmount'])
         draft['isPrepaid'] = False
         self.assertEqual(20000, draft_amounts(draft)['supply'])
+
+    def test_official_quote_matches_paper_form_and_stays_render_only(self):
+        draft = draft_for_test()
+        draft.update(requestReceiptNumber='NAMU-20261011-0003', customerName='오진웅',
+                     customerPhone='01044460304', taxAmount=0, isPrepaid=False, shippingFee=6000)
+        html = official_quote_html(draft)
+        self.assertIn('견 적 서', html)
+        self.assertIn('NO. NAMU-20261011-0003', html)
+        self.assertIn('합계금액(공급가액+세액)', html)
+        self.assertIn('품명', html)
+        self.assertIn('규격', html)
+        self.assertIn('공급가액', html)
+        self.assertIn('세액', html)
+        self.assertIn('중요사항', html)
+        self.assertIn('나무팜농원', html)
+        self.assertIn('213-94-24363', html)
+        self.assertIn('택배비 후불', html)
+        self.assertGreaterEqual(html.count('<tr>'), 18)
 
     def test_invalid_amount_overflow_and_pipe_are_rejected(self):
         for key, value in [('quantity', 0), ('quantity', True), ('unitPrice', -1), ('unitPrice', 2147483647), ('species', 'a|b')]:
@@ -354,6 +372,8 @@ class SellerUiTest(QtTestCase):
         self.assertTrue(dialog.sms_button.isEnabled())
         self.assertTrue(dialog.email_button.isEnabled())
         self.assertTrue(dialog.sent_button.isEnabled())
+        self.assertEqual('공식견적서 생성', dialog.generate_quote_button.text())
+        self.assertFalse(dialog.preview_quote_button.isEnabled())
         self.assertEqual('문자 미전송', dialog.sms_status_badge.text())
         self.assertEqual('메일 전송완료', dialog.email_status_badge.text())
         self.assertTrue(dialog.shipping_prepaid.isChecked())
@@ -386,6 +406,23 @@ class SellerUiTest(QtTestCase):
         self.assertTrue(dialog.shipping_fee.isEnabled())
         self.assertEqual('26,000원', dialog.total_value.text())
         self.assertTrue(dialog.draft['isPrepaid'])
+        dialog.close()
+
+    def test_official_quote_generation_is_temporary_and_enables_preview(self):
+        draft = draft_for_test()
+        draft.update(sourceRequestId='123e4567-e89b-12d3-a456-426614174000',
+                     requestReceiptNumber='NAMU-20261011-0001', shippingFee=6000,
+                     isPrepaid=False, taxAmount=0)
+        dialog = QuoteDeliveryDialog(draft, '견적확정')
+        self.assertEqual('', dialog.generated_quote_html)
+        dialog.generate_official_quote()
+        self.assertIn('견 적 서', dialog.generated_quote_html)
+        self.assertTrue(dialog.preview_quote_button.isEnabled())
+        self.assertEqual('공식견적서 재생성', dialog.generate_quote_button.text())
+        dialog.shipping_prepaid.click()
+        self.app.processEvents()
+        self.assertEqual('', dialog.generated_quote_html)
+        self.assertFalse(dialog.preview_quote_button.isEnabled())
         dialog.close()
 
     def test_delivery_dialog_expands_item_area_for_multiple_rows(self):

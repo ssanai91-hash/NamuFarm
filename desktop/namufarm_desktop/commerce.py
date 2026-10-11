@@ -242,6 +242,165 @@ def quote_html(draft, final=False):
     return quote_document_html(doc, final)
 
 
+def official_quote_html(draft):
+    """Render a temporary A4 official quotation modeled after the farm's paper form."""
+    validate_draft(draft)
+    e = lambda value: escape(str(value))
+    issuer = draft["issuer"]
+    amount = draft_amounts(draft)
+    quote_number = draft.get("requestReceiptNumber") or ("PCQ_" + draft["id"][:8])
+    issued = datetime.now(SEOUL)
+    issued_text = f"{issued.year}년 {issued.month}월 {issued.day}일"
+    business_type = issuer.get("businessType") or "농업,도소매"
+    category = issuer.get("category") or "묘목,화훼"
+
+    lines = []
+    for item in draft.get("items", []):
+        quantity = int(item["quantity"])
+        unit_price = int(item["unitPrice"])
+        lines.append({
+            "name": item["species"].strip(),
+            "specification": item.get("specification", ""),
+            "quantity": quantity,
+            "unitPrice": unit_price,
+            "amount": quantity * unit_price,
+            "note": "",
+        })
+    if draft.get("isPrepaid") and int(draft.get("shippingFee", 0) or 0) > 0:
+        fee = int(draft["shippingFee"])
+        lines.append({
+            "name": "택배비",
+            "specification": "선불",
+            "quantity": 1,
+            "unitPrice": fee,
+            "amount": fee,
+            "note": "선불",
+        })
+
+    row_count = max(14, len(lines))
+    item_rows = []
+    for index in range(row_count):
+        if index < len(lines):
+            line = lines[index]
+            item_rows.append(
+                "<tr>"
+                f"<td>{e(line['name'])}</td>"
+                f"<td>{e(line['specification'])}</td>"
+                f"<td class='num'>{line['quantity']:,}</td>"
+                f"<td class='num'>{line['unitPrice']:,}</td>"
+                f"<td class='num'>{line['amount']:,}</td>"
+                "<td class='num'></td>"
+                f"<td>{e(line['note'])}</td>"
+                "</tr>"
+            )
+        else:
+            item_rows.append("<tr><td>&nbsp;</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>")
+
+    if draft.get("isPrepaid"):
+        shipping_note = f"택배비 선불 {int(draft.get('shippingFee', 0) or 0):,}원 · 합계 포함"
+    else:
+        shipping_note = f"택배비 후불 · 선불 시 {int(draft.get('shippingFee', 0) or 0):,}원"
+
+    payment = draft.get("paymentAccount", "").strip() or "입금계좌 : 별도 안내"
+    note = draft.get("note", "").strip()
+    note_line = f"<div>4. 요청사항 : {e(note)}</div>" if note else "<div>4. 요청사항 : 별도 없음</div>"
+
+    return f"""<html>
+<head>
+<meta charset="utf-8">
+<style>
+@page {{ size:A4 portrait; margin:8mm; }}
+body {{ font-family:"Malgun Gothic","NanumGothic",sans-serif; color:#111; font-size:9.5pt; margin:0; }}
+.official {{ width:100%; }}
+.topline {{ width:100%; border-collapse:collapse; margin-bottom:2mm; }}
+.topline td {{ border:0; padding:0; }}
+.no {{ width:35%; border-bottom:1px solid #333 !important; font-size:9pt; }}
+.title {{ text-align:center; font-size:25pt; font-weight:700; letter-spacing:10px; padding:0 0 2mm 0; }}
+.title-line {{ width:34%; border-top:2px solid #555; margin:0 auto 5mm auto; }}
+.party {{ width:100%; border-collapse:collapse; margin-bottom:3mm; }}
+.party td {{ vertical-align:top; }}
+.customer {{ width:42%; padding:2mm 4mm 0 2mm; }}
+.customer-line {{ border-bottom:1px solid #555; padding:1.2mm 2mm; font-size:10pt; }}
+.supplier {{ width:58%; border:1px solid #222; border-collapse:collapse; }}
+.supplier td {{ border:1px solid #555; padding:1.2mm 1.8mm; font-size:8.8pt; }}
+.supplier .key {{ width:18%; text-align:center; font-weight:700; background:#fafafa; }}
+.supplier .value {{ width:32%; }}
+.stamp {{ color:#a71919; font-weight:700; border:1px solid #a71919; padding:1px 3px; }}
+.intro {{ margin:1.5mm 0 2mm 1mm; }}
+.total-box {{ border:1.5px solid #222; padding:2.2mm 3mm; font-size:15pt; font-weight:700; margin-bottom:0; }}
+.items {{ width:100%; border-collapse:collapse; table-layout:fixed; }}
+.items th,.items td {{ border:1px solid #333; padding:1.5mm 1mm; height:7mm; }}
+.items th {{ text-align:center; font-size:9.2pt; background:#fff; }}
+.items td {{ font-size:9pt; }}
+.items .c-name {{ width:23%; }} .items .c-spec {{ width:12%; }} .items .c-qty {{ width:8%; }}
+.items .c-unit {{ width:14%; }} .items .c-supply {{ width:16%; }} .items .c-tax {{ width:11%; }} .items .c-note {{ width:16%; }}
+.num {{ text-align:right; }}
+.sum-row td {{ font-weight:700; height:8mm; }}
+.notes {{ border:1px solid #333; border-top:0; width:100%; border-collapse:collapse; }}
+.notes td {{ border-right:1px solid #333; padding:2mm; vertical-align:top; }}
+.notes .label {{ width:20%; text-align:center; font-size:12pt; font-weight:700; vertical-align:middle; }}
+.notes .body {{ line-height:1.85; font-size:9pt; }}
+.muted {{ color:#444; }}
+</style>
+</head>
+<body>
+<div class="official">
+<table class="topline">
+<tr><td class="no">NO. {e(quote_number)}</td><td></td></tr>
+</table>
+<div class="title">견 적 서</div>
+<div class="title-line"></div>
+
+<table class="party">
+<tr>
+<td class="customer">
+  <div class="customer-line">{e(issued_text)}</div>
+  <div class="customer-line">{e(draft['customerName'])} 귀하</div>
+  <div class="customer-line">{e(draft['customerPhone'])}</div>
+</td>
+<td>
+  <table class="supplier">
+    <tr><td class="key">공급자</td><td class="key">등록번호</td><td colspan="3">{e(issuer['businessNumber'])}</td></tr>
+    <tr><td class="key" rowspan="4">공<br>급<br>자</td><td class="key">상호</td><td class="value">{e(issuer['businessName'])}</td><td class="key">성명</td><td>{e(issuer['representative'])} <span class="stamp">인</span></td></tr>
+    <tr><td class="key">사업장주소</td><td colspan="3">{e(issuer['address'])}</td></tr>
+    <tr><td class="key">업태</td><td>{e(business_type)}</td><td class="key">종목</td><td>{e(category)}</td></tr>
+    <tr><td class="key">연락처</td><td colspan="3">{e(issuer['phone'])}</td></tr>
+  </table>
+</td>
+</tr>
+</table>
+
+<div class="intro">아래와 같이 견적합니다.</div>
+<div class="total-box">합계금액(공급가액+세액)&nbsp;&nbsp;&nbsp; ₩{amount['total']:,}원</div>
+
+<table class="items">
+<tr>
+  <th class="c-name">품명</th><th class="c-spec">규격</th><th class="c-qty">수량</th>
+  <th class="c-unit">단가</th><th class="c-supply">공급가액</th><th class="c-tax">세액</th><th class="c-note">비고</th>
+</tr>
+{''.join(item_rows)}
+<tr class="sum-row">
+  <td>계</td><td></td><td></td><td></td><td class="num">{amount['supply']:,}</td>
+  <td class="num">{amount['tax']:,}</td><td></td>
+</tr>
+</table>
+
+<table class="notes">
+<tr>
+<td class="label">중요사항</td>
+<td class="body">
+  <div>1. {e(payment)}</div>
+  <div>2. 견적 유효기간 : {e(draft['validUntil'])} · 유효기간 이후 금액이 변동될 수 있습니다.</div>
+  <div>3. {e(shipping_note)}</div>
+  {note_line}
+</td>
+</tr>
+</table>
+</div>
+</body>
+</html>"""
+
+
 def quote_document_html(doc, final=True):
     e = lambda value: escape(str(value))
     issuer = doc["issuer"]
