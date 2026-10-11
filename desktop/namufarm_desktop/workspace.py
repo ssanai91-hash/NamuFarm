@@ -256,10 +256,14 @@ QPushButton#pdfAction:hover{
     background:#edf3eb;
 }
 QLabel#quoteFileName{
-    color:#2f6842;
+    background:#101512;
+    color:#8fe3a8;
+    border:1px solid #29372f;
+    border-radius:6px;
+    font-family:'Consolas','Malgun Gothic',monospace;
     font-size:12px;
     font-weight:700;
-    padding:0 4px;
+    padding:8px 11px;
 }
 
 QPushButton#closeAction{
@@ -363,14 +367,6 @@ QLabel#smsSendStatus{
     border:1px solid #d5e2d2;
     border-radius:8px;
     padding:9px 11px;
-}
-QTextBrowser#smsLog{
-    min-height:105px;
-    max-height:145px;
-    background:#ffffff;
-    border:1px solid #d9e4da;
-    border-radius:8px;
-    padding:8px 10px;
 }
 QPushButton#smsSendPrimary{
     background:#3e7a50;
@@ -1205,12 +1201,6 @@ class QuoteSmsDialog(QDialog):
         self.message.setMinimumHeight(260)
         layout.addWidget(self.message, 1)
 
-        layout.addWidget(label("발송 로그", "emailSectionTitle"))
-        self.log_view = QTextBrowser()
-        self.log_view.setObjectName("smsLog")
-        layout.addWidget(self.log_view)
-        self.refresh_log()
-
         self.status = label("문자 발신 설정을 확인하고 있습니다.", "smsSendStatus", True)
         layout.addWidget(self.status)
 
@@ -1267,20 +1257,6 @@ class QuoteSmsDialog(QDialog):
         ])
         return "\n".join(lines).strip()
 
-    def refresh_log(self):
-        entries = self.delivery_state.get("smsLogs", []) if isinstance(self.delivery_state, dict) else []
-        if not entries:
-            self.log_view.setPlainText("아직 문자 발송 기록이 없습니다.")
-            return
-        lines = []
-        for entry in entries[-10:]:
-            clock = int(entry.get("at", 0) or 0)
-            when = datetime.fromtimestamp(clock / 1000, SEOUL).strftime("%m-%d %H:%M:%S") if clock else "--"
-            state = entry.get("state", "")
-            prefix = {"success": "성공", "failed": "실패", "pending": "접수"}.get(state, "확인")
-            lines.append(f"{when}  {prefix} · {entry.get('message', '')}")
-        self.log_view.setPlainText("\n".join(lines))
-
     def load_profile(self):
         if not self.manager:
             self.sender_phone.setText("PC 연결 필요")
@@ -1315,11 +1291,11 @@ class QuoteSmsDialog(QDialog):
         self.send_button.setEnabled(bool(self.recipient_phone.text().strip()) and bool(sender))
         state = self.delivery_state.get("smsState", "")
         if state == "success":
-            self.status.setText("최근 문자 전송 성공")
+            self.status.setText("문자전송 성공")
         elif state == "failed":
-            self.status.setText("최근 문자 전송 실패 · " + (self.delivery_state.get("smsStatusMessage") or "전송에 실패했습니다."))
+            self.status.setText("문자전송 실패")
         elif self.delivery_state.get("smsMessageId"):
-            self.status.setText("이전 문자 발송 결과를 확인하고 있습니다…")
+            self.status.setText("문자전송 결과 확인중…")
             QTimer.singleShot(200, self.check_status)
         else:
             self.status.setText("문자 발신 준비 완료")
@@ -1353,7 +1329,7 @@ class QuoteSmsDialog(QDialog):
             self.message.setEnabled(True)
             self.send_button.setEnabled(True)
             self.check_button.setEnabled(bool(self.delivery_state.get("smsMessageId")))
-            self.status.setText("문자 전송 실패 · " + error)
+            self.status.setText("문자전송 실패")
             return
         if not isinstance(value, dict):
             self.message.setEnabled(True)
@@ -1363,9 +1339,8 @@ class QuoteSmsDialog(QDialog):
 
         self.delivery_state = dict(value.get("delivery") or {})
         self.sender_phone.setText(str(value.get("senderPhone") or self.sender_phone.text()))
-        self.refresh_log()
         self.check_button.setEnabled(True)
-        self.status.setText("문자 발송 접수됨 · 최종 결과 확인 중…")
+        self.status.setText("문자전송 결과 확인중…")
         self.status_timer.start()
 
     def check_status(self, checked=False):
@@ -1389,39 +1364,35 @@ class QuoteSmsDialog(QDialog):
             task.deleteLater()
         if error:
             self.check_button.setEnabled(True)
-            self.status.setText("문자 발송 결과 확인 실패 · 잠시 후 다시 확인해주세요.")
+            self.status.setText("문자전송 결과 확인중…")
             return
         if not isinstance(value, dict):
             self.check_button.setEnabled(True)
-            self.status.setText("문자 발송 결과를 확인하지 못했습니다.")
+            self.status.setText("문자전송 결과 확인중…")
             return
 
         self.delivery_state = dict(value)
-        self.refresh_log()
         state = self.delivery_state.get("smsState", "")
-        message = self.delivery_state.get("smsStatusMessage", "")
         if state == "success":
             self.status_timer.stop()
-            self.status.setText("문자 전송 성공")
-            QMessageBox.information(self, "문자 전송 성공", "고객 휴대폰으로 문자 전송이 완료되었습니다.")
-            self.accept()
+            self.status.setText("문자전송 성공")
+            self.check_button.setEnabled(False)
             return
         if state == "failed":
             self.status_timer.stop()
-            self.status.setText("문자 전송 실패 · " + (message or "전송에 실패했습니다."))
+            self.status.setText("문자전송 실패")
             self.message.setEnabled(True)
             self.send_button.setEnabled(True)
             self.check_button.setEnabled(True)
-            QMessageBox.warning(self, "문자 전송 실패", message or "문자 전송에 실패했습니다.")
             return
 
         self.poll_count += 1
         self.check_button.setEnabled(True)
         if self.poll_count < self.max_auto_polls:
-            self.status.setText("문자 발송 중 · 최종 결과 확인 중…")
+            self.status.setText("문자전송 결과 확인중…")
             self.status_timer.start()
         else:
-            self.status.setText("문자 발송 결과를 아직 확인 중입니다. 잠시 후 '결과 확인'을 눌러주세요.")
+            self.status.setText("문자전송 결과 확인중…")
 
     def reject(self):
         if self.profile_task or self.send_task or self.status_task:
@@ -2053,7 +2024,7 @@ class QuoteDeliveryDialog(QDialog):
         self.preview_quote_button.setEnabled(False)
         self.preview_quote_button.clicked.connect(self.preview_official_quote)
 
-        self.quote_file_label = QLabel("미생성")
+        self.quote_file_label = QLabel("공식 견적서 미생성")
         self.quote_file_label.setObjectName("quoteFileName")
 
         close_button = QPushButton("닫기")
@@ -2127,7 +2098,7 @@ class QuoteDeliveryDialog(QDialog):
             self.cleanup_generated_quote()
             self.preview_quote_button.setEnabled(False)
             self.generate_quote_button.setText("공식견적서 생성")
-            self.quote_file_label.setText("미생성")
+            self.quote_file_label.setText("공식 견적서 미생성")
         prepaid = self.shipping_prepaid.isChecked()
         self.shipping_fee.setEnabled(prepaid)
         self.shipping_fee_label.setEnabled(prepaid)
@@ -2236,12 +2207,11 @@ class QuoteDeliveryDialog(QDialog):
             self.generated_quote_path = path
             self.preview_quote_button.setEnabled(True)
             self.generate_quote_button.setText("공식견적서 재생성")
-            self.quote_file_label.setText(filename)
-            self.shipping_status.setText(self.shipping_status.text() + " · 공식견적서 임시 생성됨")
+            self.quote_file_label.setText(f"공식 견적서 생성완료 : {filename}")
         except (UserError, OSError) as error:
             self.cleanup_generated_quote()
             self.preview_quote_button.setEnabled(False)
-            self.quote_file_label.setText("생성 실패")
+            self.quote_file_label.setText("공식 견적서 생성실패")
             QMessageBox.warning(self, "공식견적서 생성", str(error))
 
     def preview_official_quote(self):

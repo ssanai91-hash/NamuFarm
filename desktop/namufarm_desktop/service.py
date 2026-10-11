@@ -162,19 +162,6 @@ class Manager:
             # Older builds marked 2000 (accepted) as sent. Treat those records as
             # needing a final result check instead of assuming delivery success.
             sms_state = "pending"
-        logs = value.get("smsLogs", [])
-        logs = logs if isinstance(logs, list) else []
-        normalized_logs = []
-        for entry in logs[-20:]:
-            if not isinstance(entry, dict):
-                continue
-            normalized_logs.append({
-                "at": int(entry.get("at", 0) or 0),
-                "state": str(entry.get("state", "") or ""),
-                "message": str(entry.get("message", "") or ""),
-                "statusCode": str(entry.get("statusCode", "") or ""),
-                "messageId": str(entry.get("messageId", "") or ""),
-            })
         return {"smsSentAt": int(value.get("smsSentAt", 0) or 0),
                 "emailSentAt": int(value.get("emailSentAt", 0) or 0),
                 "smsTo": str(value.get("smsTo", "") or ""),
@@ -184,7 +171,6 @@ class Manager:
                 "smsStatusCode": str(value.get("smsStatusCode", "") or ""),
                 "smsStatusMessage": str(value.get("smsStatusMessage", "") or ""),
                 "smsUpdatedAt": int(value.get("smsUpdatedAt", 0) or 0),
-                "smsLogs": normalized_logs,
                 "emailTo": str(value.get("emailTo", "") or ""),
                 "senderEmail": str(value.get("senderEmail", "") or "")}
 
@@ -197,16 +183,6 @@ class Manager:
             states = dict(list(states.items())[-1000:])
         self.vault.save_preference("quote_delivery", states)
         return self.quote_delivery_state(identifier)
-
-    @staticmethod
-    def _append_sms_log(state, sms_state, message, status_code="", message_id=""):
-        logs = state.get("smsLogs", [])
-        logs = copy.deepcopy(logs) if isinstance(logs, list) else []
-        entry = {"at": now_ms(), "state": sms_state, "message": str(message or ""),
-                 "statusCode": str(status_code or ""), "messageId": str(message_id or "")}
-        if not logs or any(logs[-1].get(k) != entry[k] for k in ("state", "message", "statusCode", "messageId")):
-            logs.append(entry)
-        state["smsLogs"] = logs[-20:]
 
     def _mark_quote_channel_sent(self, identifier, channel, **extra):
         require(valid_id(identifier) and channel in ("sms", "email"))
@@ -248,8 +224,6 @@ class Manager:
                       "smsStatusCode": str(result.get("statusCode", "") or "2000"),
                       "smsStatusMessage": str(result.get("statusMessage", "") or "문자 발송을 접수했습니다."),
                       "smsUpdatedAt": now_ms()})
-        self._append_sms_log(state, "pending", state["smsStatusMessage"],
-                             state["smsStatusCode"], state["smsMessageId"])
         delivery = self._save_quote_delivery_state(draft["id"], state)
         return {"delivery": delivery, "senderPhone": result.get("senderPhone", ""),
                 "messageId": result.get("messageId", ""), "statusCode": result.get("statusCode", ""),
@@ -265,8 +239,6 @@ class Manager:
         sms_state = str(result.get("state") or "pending")
         status_code = str(result.get("statusCode") or "")
         status_message = str(result.get("statusMessage") or "문자 발송 결과를 확인하고 있습니다.")
-        changed = (sms_state != state.get("smsState") or status_code != state.get("smsStatusCode")
-                   or status_message != state.get("smsStatusMessage"))
         state.update({"smsState": sms_state, "smsStatusCode": status_code,
                       "smsStatusMessage": status_message, "smsUpdatedAt": now_ms()})
         if sms_state == "success":
@@ -274,8 +246,6 @@ class Manager:
                 state["smsSentAt"] = now_ms()
         elif sms_state == "failed":
             state["smsSentAt"] = 0
-        if changed:
-            self._append_sms_log(state, sms_state, status_message, status_code, message_id)
         return self._save_quote_delivery_state(identifier, state)
 
     def email_profile(self):

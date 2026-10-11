@@ -217,7 +217,6 @@ class WorkspaceServiceTest(unittest.TestCase):
         self.assertEqual('01012345678', result['delivery']['smsTo'])
         self.assertEqual('01044460304', result['delivery']['senderPhone'])
         self.assertEqual('M4V_TEST', result['delivery']['smsMessageId'])
-        self.assertEqual('접수', {'pending':'접수'}[result['delivery']['smsLogs'][-1]['state']])
         final = self.manager.refresh_quote_sms_status(draft['id'])
         self.assertEqual('success', final['smsState'])
         self.assertTrue(final['smsSentAt'] > 0)
@@ -237,7 +236,7 @@ class WorkspaceServiceTest(unittest.TestCase):
         self.assertEqual('failed', final['smsState'])
         self.assertEqual(0, final['smsSentAt'])
         self.assertIn('전원이 꺼져', final['smsStatusMessage'])
-        self.assertEqual('failed', final['smsLogs'][-1]['state'])
+        self.assertEqual('3043', final['smsStatusCode'])
 
     def test_shipping_export_preferences_are_encrypted_and_do_not_advance_sale(self):
         row = self.manager.confirm_draft(draft_for_test())['sales'][0]
@@ -440,13 +439,14 @@ class SellerUiTest(QtTestCase):
                      isPrepaid=False, taxAmount=0)
         dialog = QuoteDeliveryDialog(draft, '견적확정')
         self.assertIsNone(dialog.generated_quote_image)
-        self.assertEqual('미생성', dialog.quote_file_label.text())
+        self.assertEqual('공식 견적서 미생성', dialog.quote_file_label.text())
         dialog.generate_official_quote()
         self.assertIsNotNone(dialog.generated_quote_image)
         self.assertEqual((955, 1342), (dialog.generated_quote_image.width(), dialog.generated_quote_image.height()))
         self.assertTrue(dialog.preview_quote_button.isEnabled())
         self.assertEqual('공식견적서 재생성', dialog.generate_quote_button.text())
-        self.assertEqual('NAMU-20261011-0001_공식견적서.pdf', dialog.quote_file_label.text())
+        self.assertEqual('공식 견적서 생성완료 : NAMU-20261011-0001_공식견적서.pdf',
+                         dialog.quote_file_label.text())
         first_path = dialog.generated_quote_path
         self.assertTrue(first_path.is_file())
         dialog.generate_official_quote()
@@ -457,7 +457,7 @@ class SellerUiTest(QtTestCase):
         self.assertIsNone(dialog.generated_quote_image)
         self.assertIsNone(dialog.generated_quote_path)
         self.assertFalse(first_path.exists())
-        self.assertEqual('미생성', dialog.quote_file_label.text())
+        self.assertEqual('공식 견적서 미생성', dialog.quote_file_label.text())
         self.assertFalse(dialog.preview_quote_button.isEnabled())
         dialog.close()
 
@@ -522,10 +522,10 @@ class SellerUiTest(QtTestCase):
         self.assertIn('품목1 : 소나무 2주', dialog.message.toPlainText())
         dialog.close()
 
-    def test_quote_sms_success_logs_final_result_and_closes_cleanly(self):
+    def test_quote_sms_success_uses_single_status_line(self):
         class FakeSmsManager:
             def __init__(self):
-                self.state = {'smsSentAt': 0, 'smsState': '', 'smsMessageId': '', 'smsLogs': []}
+                self.state = {'smsSentAt': 0, 'smsState': '', 'smsMessageId': ''}
 
             def quote_delivery_state(self, identifier):
                 return copy.deepcopy(self.state)
@@ -537,9 +537,7 @@ class SellerUiTest(QtTestCase):
                 self.state = {
                     'smsSentAt': 0, 'smsState': 'pending', 'smsMessageId': 'M4V_TEST',
                     'smsTo': draft['customerPhone'], 'senderPhone': '01044460304',
-                    'smsStatusCode': '2000', 'smsStatusMessage': '문자 발송을 접수했습니다.',
-                    'smsLogs': [{'at': now_ms(), 'state': 'pending', 'message': '문자 발송을 접수했습니다.',
-                                'statusCode': '2000', 'messageId': 'M4V_TEST'}]
+                    'smsStatusCode': '2000', 'smsStatusMessage': '문자 발송을 접수했습니다.'
                 }
                 return {'delivery': copy.deepcopy(self.state), 'senderPhone': '01044460304',
                         'messageId': 'M4V_TEST', 'statusCode': '2000'}
@@ -548,10 +546,6 @@ class SellerUiTest(QtTestCase):
                 self.state.update({
                     'smsSentAt': now_ms(), 'smsState': 'success', 'smsStatusCode': '4000',
                     'smsStatusMessage': '문자 전송에 성공했습니다.'
-                })
-                self.state['smsLogs'].append({
-                    'at': now_ms(), 'state': 'success', 'message': '문자 전송에 성공했습니다.',
-                    'statusCode': '4000', 'messageId': 'M4V_TEST'
                 })
                 return copy.deepcopy(self.state)
 
@@ -566,7 +560,7 @@ class SellerUiTest(QtTestCase):
             self.assertTrue(dialog.profile_task.wait(10000))
             self.app.processEvents()
         self.assertTrue(dialog.send_button.isEnabled())
-        self.assertNotIn('SOLAPI', dialog.status.text())
+        self.assertFalse(hasattr(dialog, 'log_view'))
 
         dialog.send_sms()
         task = dialog.send_task
@@ -574,20 +568,19 @@ class SellerUiTest(QtTestCase):
         self.assertTrue(task.wait(10000))
         self.app.processEvents()
         self.assertEqual('pending', dialog.delivery_state['smsState'])
-        self.assertIn('접수', dialog.log_view.toPlainText())
+        self.assertEqual('문자전송 결과 확인중…', dialog.status.text())
 
-        with patch('namufarm_desktop.workspace.QMessageBox.information') as notice:
-            dialog.check_status()
-            task = dialog.status_task
-            self.assertIsNotNone(task)
-            self.assertTrue(task.wait(10000))
-            self.app.processEvents()
+        dialog.check_status()
+        task = dialog.status_task
+        self.assertIsNotNone(task)
+        self.assertTrue(task.wait(10000))
+        self.app.processEvents()
 
         self.assertIsNone(dialog.status_task)
-        self.assertEqual(QDialog.DialogCode.Accepted, dialog.result())
         self.assertEqual('success', dialog.delivery_state['smsState'])
-        self.assertIn('성공', dialog.log_view.toPlainText())
-        notice.assert_called_once()
+        self.assertEqual('문자전송 성공', dialog.status.text())
+        self.assertEqual(QDialog.DialogCode.Rejected, dialog.result())
+        dialog.close()
 
     def test_quote_email_dialog_is_message_focused_and_uses_customer_name(self):
         draft = draft_for_test()
