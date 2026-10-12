@@ -101,6 +101,8 @@ class MainActivity : ComponentActivity() {
                             onWebSettings = { showWebInbox = true },
                             webRequests = webState.requests, webBusy = webState.busy,
                             onRequest = { request -> if (!uiState.isSavingQuote) { viewModel.useWebRequestForQuote(request); webInbox.read(request.requestId) } },
+                            onQuoteConfirmed = webInbox::confirm,
+                            onQuoteSentStatus = webInbox::markSentNow,
                             webUnread = webState.unread
                         )
                     }

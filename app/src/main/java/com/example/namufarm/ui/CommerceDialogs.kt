@@ -201,7 +201,14 @@ internal fun QuoteDetailsDialog(quote: QuoteEntity, confirming: Boolean, snackba
     )
     NamuDialog("견적 상세", quote.saveDate, onDismiss, snackbar, actions = {
         if (ordered) Button(onClick = onOrder, modifier = Modifier.fillMaxWidth()) { Text("등록한 주문 보기") }
-        else Button(onClick = { confirm = true }, enabled = !confirming, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) { Text(if (confirming) "입금 처리 중…" else "입금 완료 · 주문 등록") }
+        else {
+            Button(onClick = { confirm = true }, enabled = !confirming && quote.sentAt > 0L,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) {
+                Text(if (confirming) "입금 처리 중…" else "입금확인 · 판매 관리로 이동")
+            }
+            if (quote.sentAt == 0L) Text("견적을 고객에게 발송하고 발송완료로 기록한 뒤 입금확인할 수 있어요.",
+                style = MaterialTheme.typography.bodySmall)
+        }
         sentAction()
 
         OutlinedButton(onClick = onDocument, enabled = !confirming, modifier = Modifier.fillMaxWidth()) { Text("공식 견적서 · PDF / 이미지") }

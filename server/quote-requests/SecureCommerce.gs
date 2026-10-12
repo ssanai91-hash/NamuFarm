@@ -256,7 +256,9 @@ function saveSale_(body) {
         assert_(!previous.archived && meta.revision===previous.revision+1,'CONFLICT');
         assert_(!['배송완료','구매취소','판매완료','주문취소'].includes(previous.status),'CONFLICT');
         const next={'입금확인':'배송완료','구매확정':'배송완료','배송확인':'배송완료'};
-        assert_(meta.status===previous.status || meta.status===next[previous.status] || (meta.status==='구매취소' && ['입금확인','구매확정'].includes(previous.status)),'CONFLICT');
+        assert_(meta.status===previous.status || meta.status===next[previous.status] ||
+          (previous.status==='구매확정' && meta.status==='입금확인') ||
+          (meta.status==='구매취소' && ['입금확인','구매확정'].includes(previous.status)),'CONFLICT');
         ['orderNumber','orderDate','totalQty','totalPrice','isPrepaid','shippingFee','purchasedAt','taxAmount','items'].forEach(k=>assert_(canonical_(meta[k])===canonical_(previous[k]),'CONFLICT'));
         assert_(meta.updatedAt>=previous.updatedAt,'CONFLICT');
         ['paidAt','deliveredAt','completedAt'].forEach(k=>{if(previous[k]>0)assert_(previous[k]===meta[k],'CONFLICT');});
@@ -284,6 +286,11 @@ function requestStatusTransitionAllowed_(from,status) {
 }
 function updateLinkedRequestStatus_(id,status) {
   if(!id)return;
+  // The Android legacy 'purchase confirmed' stage means payment confirmed.
+  // The quote register must never expose it as a separate business state.
+  if(status==='구매확정')status='입금확인';
+  if(status==='배송확인' || status==='판매완료')status='배송완료';
+  if(status==='주문취소')status='구매취소';
   assert_(['견적확정','견적발송완료','입금확인','배송완료','구매취소'].includes(status),'INVALID');
   if(quoteStorageConfigured_()){
     const entries=quoteIndexEntries_(),cache={};quoteRepairTransitions_(entries,cache);

@@ -24,7 +24,8 @@ import kotlinx.coroutines.withContext
 /** One saved quote can be retried or sent through both channels, without saving another quote. */
 @Composable
 internal fun QuoteDeliveryDialog(viewModel: ManagementViewModel, number: String, initialAction: QuoteDelivery,
-    onDocument: () -> Unit, onDetails: () -> Unit, onDismiss: () -> Unit) {
+    onDocument: () -> Unit, onDetails: () -> Unit, onDismiss: () -> Unit,
+    onQuoteSent: suspend () -> Unit = {}) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var quote by remember(number) { mutableStateOf<QuoteEntity?>(null) }
@@ -77,7 +78,7 @@ internal fun QuoteDeliveryDialog(viewModel: ManagementViewModel, number: String,
             OutlinedButton(onClick = { scope.launch { send(QuoteDelivery.SMS) } }, enabled = !busy && !loading && quote != null, modifier = Modifier.weight(1f).heightIn(min = 52.dp)) { Text("문자 보내기") }
             Button(onClick = { scope.launch { send(QuoteDelivery.EMAIL) } }, enabled = !busy && !loading && quote != null, modifier = Modifier.weight(1f).heightIn(min = 52.dp)) { Text(if (busy) "준비 중…" else "메일 보내기") }
         }
-        if (!loading && quote != null) QuoteSentAction(viewModel, number)
+        if (!loading && quote != null) QuoteSentAction(viewModel, number, onQuoteSent)
         TextButton(onClick = onDetails, enabled = !busy && !loading && quote != null, modifier = Modifier.fillMaxWidth()) { Text("견적 상세 · 입금 확인") }
     }) {
         Column(Modifier.verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {

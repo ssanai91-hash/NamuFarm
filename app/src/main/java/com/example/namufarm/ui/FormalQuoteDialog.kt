@@ -24,7 +24,8 @@ import kotlinx.coroutines.withContext
 import java.util.Locale
 
 @Composable
-internal fun FormalQuoteDialog(viewModel: ManagementViewModel, quoteNumber: String, onDismiss: () -> Unit) {
+internal fun FormalQuoteDialog(viewModel: ManagementViewModel, quoteNumber: String, onDismiss: () -> Unit,
+    onQuoteSent: suspend () -> Unit = {}) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val settings = remember { QuoteIssuerSettings(context) }
@@ -95,7 +96,7 @@ internal fun FormalQuoteDialog(viewModel: ManagementViewModel, quoteNumber: Stri
                 OutlinedButton(onClick = { reply("view") }, enabled = !busy, modifier = Modifier.weight(1f)) { Text("PDF 보기") }
                 OutlinedButton(onClick = { reply("share") }, enabled = !busy, modifier = Modifier.weight(1f)) { Text("PDF 공유") }
             }
-            QuoteSentAction(viewModel, quoteNumber)
+            QuoteSentAction(viewModel, quoteNumber, onQuoteSent)
         }
     }) {
         LazyColumn(contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -172,7 +173,8 @@ internal fun QuoteDocumentHistoryDialog(documents: List<QuoteDocumentEntity>, on
 
 /** Opening another app does not prove delivery. The seller records the actual send once. */
 @Composable
-internal fun QuoteSentAction(viewModel: ManagementViewModel, number: String) {
+internal fun QuoteSentAction(viewModel: ManagementViewModel, number: String,
+    onQuoteSent: suspend () -> Unit = {}) {
     val state by viewModel.uiState.collectAsState()
     val scope = rememberCoroutineScope()
     val quote = state.allQuotes.firstOrNull { it.quoteNumber == number }
@@ -187,7 +189,10 @@ internal fun QuoteSentAction(viewModel: ManagementViewModel, number: String) {
         confirmButton = { TextButton(onClick = {
             confirm = false; busy = true
             scope.launch {
-                try { viewModel.markQuoteSent(number) }
+                try {
+                    onQuoteSent()
+                    viewModel.markQuoteSent(number)
+                }
                 catch (e: CancellationException) { throw e }
                 catch (e: Exception) { error = e.message ?: "발송 기록 저장에 실패했습니다." }
                 finally { busy = false }

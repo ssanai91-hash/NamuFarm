@@ -11,6 +11,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.atomic.AtomicBoolean
 
 data class WebInboxState(
@@ -24,6 +27,7 @@ class WebInboxViewModel(private val connection: WebRequestConnection) : ViewMode
     private val mutableState = MutableStateFlow(WebInboxState(configured = connection.configured, paired = connection.paired, pushConfigured = connection.pushConfigured))
     val state = mutableState.asStateFlow()
     private val working = AtomicBoolean(false)
+    private val statusMutex = Mutex()
     init { viewModelScope.launch(Dispatchers.IO) { reloadLocal() } }
     private fun reloadLocal() { mutableState.update { it.copy(configured = connection.configured, requests = connection.localRequests(), paired = connection.paired, deferredCount = connection.deferredCount) } }
     fun refresh() = operate {
@@ -67,11 +71,29 @@ class WebInboxViewModel(private val connection: WebRequestConnection) : ViewMode
         reloadLocal()
         showMessage(if (restored > 0) "이전 요청 ${restored}건을 불러왔어요." else "이 백업으로 새로 열 수 있는 이전 요청이 없습니다. 새 견적은 계속 사용할 수 있어요.")
     }
-    fun confirm(id: String) = operate {
-        connection.confirmQuote(id)
-        connection.refresh()
-        reloadLocal()
-        showMessage("견적확정으로 표시했어요.")
+    fun confirm(id: String) {
+        // A status update must not be discarded just because a download is running.
+        viewModelScope.launch(Dispatchers.IO) {
+            statusMutex.withLock {
+                try {
+                    connection.confirmQuote(id)
+                    connection.refresh()
+                    reloadLocal()
+                    showMessage("견적확정 상태를 구글시트에 반영했어요.")
+                } catch (e: CancellationException) { throw e }
+                catch (e: Exception) {
+                    showMessage("견적은 휴대폰에 저장됐지만 시트 상태 반영은 실패했어요: ${e.message}")
+                }
+            }
+        }
+    }
+    suspend fun markSentNow(id: String) = withContext(Dispatchers.IO) {
+        statusMutex.withLock {
+            // Wait for any earlier quote confirmation before publishing sent status.
+            connection.markQuoteSent(id)
+            connection.refresh()
+            reloadLocal()
+        }
     }
     fun close(id: String) = operate { connection.close(id);reloadLocal();showMessage("상담을 종료하고 고객 문의와 연결된 견적 사본을 삭제했어요.") }
     fun read(id: String) { viewModelScope.launch(Dispatchers.IO) { connection.read(id); reloadLocal() } }

@@ -136,7 +136,8 @@ internal fun buildSpecText(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: () -> Unit, onCallAssist: () -> Unit = {}, onWebInbox: () -> Unit = {}, webUnread: Int = 0, webRequests: List<com.example.namufarm.data.WebQuoteRequestEntity> = emptyList(), webBusy: Boolean = false, onWebSettings: () -> Unit = {}, onRequest: (com.example.namufarm.data.WebQuoteRequestEntity) -> Unit = {}) {
+fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: () -> Unit, onCallAssist: () -> Unit = {}, onWebInbox: () -> Unit = {}, webUnread: Int = 0, webRequests: List<com.example.namufarm.data.WebQuoteRequestEntity> = emptyList(), webBusy: Boolean = false, onWebSettings: () -> Unit = {}, onRequest: (com.example.namufarm.data.WebQuoteRequestEntity) -> Unit = {},
+    onQuoteConfirmed: (String) -> Unit = {}, onQuoteSentStatus: suspend (String) -> Unit = {}) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
@@ -155,6 +156,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
     var showTodayOrdersDialog by remember { mutableStateOf(false) }
     var showQuoteDetailDialog by remember { mutableStateOf(false) }
     var showQuickQuoteDialog by rememberSaveable { mutableStateOf(false) }
+    var workbenchSignal by rememberSaveable { mutableIntStateOf(0) }
     var editSavedNumber by rememberSaveable { mutableStateOf<String?>(null) }
     var deliveryNumber by rememberSaveable { mutableStateOf<String?>(null) }
     var deliveryAction by rememberSaveable { mutableStateOf(QuoteDelivery.SAVE.name) }
@@ -208,6 +210,12 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
     fun sendQuoteSms(phone: String, body: String) {
         openSmsComposer(context, phone, body)?.let(viewModel::showMessage)
     }
+    suspend fun markLinkedQuoteSent(number: String) {
+        val id = uiState.quotesByRequest.entries.firstOrNull {
+            it.value.quoteNumber == number
+        }?.key
+        if (id != null) onQuoteSentStatus(id)
+    }
 
     SellingHome(
         state = uiState,
@@ -225,6 +233,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
         onAddToCart = viewModel::addToCart,
         onCallAssist = onCallAssist,
         onWebInbox = onWebInbox, webUnread = webUnread, webRequests = webRequests, webBusy = webBusy, onRequest = onRequest,
+        workbenchSignal = workbenchSignal,
         onSavedQuote = { quote ->
             val manual = runCatching { com.example.namufarm.domain.order.OrderSummaryCodec.parseStrict(quote.itemSummary).all { it.source == com.example.namufarm.domain.order.OrderLineSource.MANUAL } }.getOrDefault(false)
             if (manual && quote.sentAt == 0L && uiState.quoteDocuments.none { it.quoteNumber == quote.quoteNumber } && uiState.allOrders.none { it.sourceQuoteNumber == quote.quoteNumber }) editSavedNumber = quote.quoteNumber
@@ -374,7 +383,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
             onDelete = { quoteToDelete = quote; showDeleteQuoteConfirm = true },
             onDismiss = { showQuoteDetailDialog = false },
             onDocument = { documentQuoteNumber = quote.quoteNumber },
-            sentAction = { QuoteSentAction(viewModel, quote.quoteNumber) },
+            sentAction = { QuoteSentAction(viewModel, quote.quoteNumber) { markLinkedQuoteSent(quote.quoteNumber) } },
             ordered = uiState.allOrders.any { it.sourceQuoteNumber == quote.quoteNumber },
             onOrder = { selectedOrder = uiState.allOrders.first { it.sourceQuoteNumber == quote.quoteNumber }; showQuoteDetailDialog = false; showOrderDetailDialog = true }
         )
@@ -389,9 +398,13 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
         QuoteDeliveryDialog(viewModel, number, QuoteDelivery.valueOf(deliveryAction),
             onDocument = { documentQuoteNumber = number; deliveryNumber = null },
             onDetails = { selectedQuote = uiState.allQuotes.firstOrNull { it.quoteNumber == number }; deliveryNumber = null; showQuoteDetailDialog = selectedQuote != null },
-            onDismiss = { deliveryNumber = null })
+            onDismiss = { deliveryNumber = null },
+            onQuoteSent = { markLinkedQuoteSent(number) })
     }
-    documentQuoteNumber?.let { number -> FormalQuoteDialog(viewModel, number) { documentQuoteNumber = null } }
+    documentQuoteNumber?.let { number ->
+        FormalQuoteDialog(viewModel, number, onDismiss = { documentQuoteNumber = null },
+            onQuoteSent = { markLinkedQuoteSent(number) })
+    }
     if (showDocumentHistory) QuoteDocumentHistoryDialog(uiState.quoteDocuments, onSelect = { documentQuoteNumber = it.quoteNumber }, onDismiss = { showDocumentHistory = false })
     if (showOrderDetailDialog) selectedOrder?.let { selected ->
         val order = uiState.allOrders.firstOrNull { it.orderNumber == selected.orderNumber } ?: selected
@@ -658,12 +671,16 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
         ManualQuoteEditor(uiState.editingRequest, uiState.isSavingQuote, uiState.message,
             onDismiss = { showQuickQuoteDialog = false; viewModel.dismissManualQuote() },
             onSave = { draft, action ->
+                val sourceId = uiState.editingRequest?.requestId
                 viewModel.saveManualQuote(draft.validate(action), draft.phone, draft.recipient, draft.prepaid, draft.shipping(),
                     issueOptions = draft.options.takeIf { draft.recipient.formalQuoteRequested }) { saved ->
                     showQuickQuoteDialog = false; viewModel.dismissManualQuote()
                     if (draft.recipient.formalQuoteRequested) runCatching { QuoteIssuerSettings(context).save(draft.options.issuer) }
-                    selectedQuote = saved
-                    deliveryAction = action.name; deliveryNumber = saved.quoteNumber
+                    workbenchSignal++
+                    if (sourceId != null) onQuoteConfirmed(sourceId)
+                    else if (action != QuoteDelivery.SAVE) {
+                        deliveryAction = action.name; deliveryNumber = saved.quoteNumber
+                    }
                 }
             })
     }

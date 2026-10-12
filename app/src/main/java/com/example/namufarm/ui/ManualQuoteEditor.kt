@@ -29,6 +29,7 @@ private val draftSaver = Saver<SellerQuoteDraft, String>(
 internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean, message: String?,
     onDismiss: () -> Unit, onSave: (SellerQuoteDraft, QuoteDelivery) -> Unit, initialDraft: SellerQuoteDraft? = null, draftKey: String? = request?.requestId) {
     val context = LocalContext.current
+    val firstRequest = request != null && initialDraft == null
     var draft by rememberSaveable(draftKey, stateSaver = draftSaver) {
         mutableStateOf(initialDraft ?: SellerQuoteDraft.from(request, QuoteIssuerSettings(context).load()))
     }
@@ -51,7 +52,9 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
                 Text("최종 견적 금액", style = MaterialTheme.typography.labelMedium)
                 Text(amount?.let(::money) ?: "단가를 입력해주세요", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
             }
-            TextButton(onClick = { submit(QuoteDelivery.SAVE) }, enabled = !saving) { Text("저장만") }
+            if (!firstRequest) TextButton(onClick = { submit(QuoteDelivery.SAVE) }, enabled = !saving) {
+                Text("저장만")
+            }
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Checkbox(draft.recipient.formalQuoteRequested, { draft = draft.copy(recipient = draft.recipient.copy(formalQuoteRequested = it)) }, enabled = !saving)
@@ -60,7 +63,12 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
                 Text(if (draft.recipient.formalQuoteRequested) "문자: 이미지 · 메일: PDF" else "견적 내용을 텍스트로 보냅니다", style = MaterialTheme.typography.bodySmall)
             }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (firstRequest) {
+            Button(onClick = { submit(QuoteDelivery.SAVE) }, enabled = !saving,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 54.dp)) {
+                Text(if (saving) "견적 저장 중…" else "견적확정 · 작업대로 이동")
+            }
+        } else Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = { submit(QuoteDelivery.SMS) }, enabled = !saving, modifier = Modifier.weight(1f).heightIn(min = 52.dp)) {
                 Icon(Icons.Outlined.Sms, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("문자 보내기")
             }
@@ -134,7 +142,9 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
                 else Text("배송비는 견적 합계에 포함되지 않습니다", style = MaterialTheme.typography.bodySmall)
             }
             if (draft.recipient.formalQuoteRequested) QuoteIssueFields(draft.options, saving) { draft = draft.copy(options = it) }
-            Text("저장 후 문자·메일 앱에서 최종 발송해주세요.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(if (firstRequest) "견적확정 후 작업대에서 택배비와 공식견적서, 문자·메일을 처리해요."
+                else "실제 문자·메일 발송은 해당 앱에서 확인해주세요.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
     if (discard) AlertDialog(onDismissRequest = { discard = false }, title = { Text("작성을 마칠까요?") }, text = { Text("입력한 내용이 아직 저장되지 않았습니다.") },
