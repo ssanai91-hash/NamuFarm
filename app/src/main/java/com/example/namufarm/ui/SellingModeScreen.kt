@@ -216,7 +216,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
         onManage = onWebSettings,
         onQuickQuote = { viewModel.resetInput(); showQuickQuoteDialog = true },
         onTodayQuotes = { viewModel.loadTodayData(); showTodayQuotesDialog = true },
-        onTodayOrders = { viewModel.loadTodayData(); showTodayOrdersDialog = true },
+        onSalesManagement = { viewModel.loadTodayData(); showSales = true },
         onCart = { showCartDialog = true },
         onClearCart = { showClearCartConfirm = true },
         onAddToCart = viewModel::addToCart,
@@ -401,7 +401,13 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
         )
     }
 
-    if(showSales) SalesDashboardDialog(uiState,onReport=viewModel::loadSalesReport,onSelect={selectedOrder=it;showSales=false;showOrderDetailDialog=true},onDismiss={showSales=false})
+    if(showSales) SalesDashboardDialog(
+        uiState, onReport = viewModel::loadSalesReport,
+        onSelect = { selectedOrder = it; showSales = false; showOrderDetailDialog = true },
+        onDismiss = { showSales = false },
+        onSync = viewModel::syncDataWithGoogleSheet,
+        onTodayOrders = { viewModel.loadTodayData(); showSales = false; showTodayOrdersDialog = true }
+    )
     financeOrder?.let { selected ->
         val current=uiState.allOrders.find { it.orderNumber==selected.orderNumber } ?: selected
         SaleFinanceDialog(current,onSave={cost,expense,mode,bps,confirmed -> viewModel.updateSaleCosts(current,cost,expense,mode,bps,confirmed);financeOrder=null},onDismiss={financeOrder=null})
