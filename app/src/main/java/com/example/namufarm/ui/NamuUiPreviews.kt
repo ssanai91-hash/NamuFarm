@@ -16,8 +16,11 @@ private fun SellingHomePreview() {
     val pine = SellingDisplayRow(1, 1, "이원농원", "소나무", "상묘", "3년생", "1.2m", "실생", 320, 7000, 12000, "ㅅ")
     NamuFarmTheme {
         SellingHome(
-            ManagementUiState(allSellingInventory = listOf(pine), estimateCart = listOf(CartItem(pine, 10))),
-            SnackbarHostState(), {}, {}, {}, {}, {}, {}, {}, { _, _ -> }
+            state = ManagementUiState(allSellingInventory = listOf(pine), estimateCart = listOf(CartItem(pine, 10))),
+            snackbarHostState = SnackbarHostState(),
+            onSync = {}, onManage = {}, onQuickQuote = {}, onTodayQuotes = {},
+            onSalesManagement = {}, onSyncOrders = {}, onTodayOrders = {}, onOrder = { _ -> },
+            onCart = {}, onClearCart = {}, onAddToCart = { _, _ -> }
         )
     }
 }

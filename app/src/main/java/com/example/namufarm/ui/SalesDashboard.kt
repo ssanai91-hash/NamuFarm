@@ -69,7 +69,7 @@ internal fun SalesDashboardDialog(
     val rows = state.allOrders.filter { filter == "전체" || it.status in setOf("구매확정", "입금확인") }
         .sortedByDescending { it.orderDate }
 
-    NamuDialog("판매 관리함", "입금확인 이후 · 주문 및 배송 관리", onDismiss) {
+    NamuDialog("매출 · 이익 분석", "판매 통계와 전체 주문 조회", onDismiss) {
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(20.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)) {
             item {
