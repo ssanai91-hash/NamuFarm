@@ -274,7 +274,7 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
             {!ready && <div className="service-notice">온라인 접수를 준비하고 있어요. 지금은 양식을 살펴볼 수 있으며 요청은 전송되지 않습니다.</div>}
             {removed && <div className="undo-notice"><span>{removed.label} · 목록에서 뺐어요.</span><Button type="button" variant="ghost" onClick={undoRemove} disabled={locked}>되돌리기</Button></div>}
             <fieldset className="quote-section-box" disabled={locked}><legend><span>1</span>견적 요청 묘목</legend><div className="line-list">{lines.map((line, index) => <div className="item-line" key={line.id}>
-              <div className="item-number">품목 {index + 1}<Button type="button" variant="ghost" aria-label={`품목 ${index + 1} ${line.species} 빼기`} onClick={() => removeLine(line.id)}><Trash2 />빼기</Button></div>
+              <div className="item-number">품목 {index + 1}{lines.length > 1 && <Button type="button" variant="ghost" aria-label={`품목 ${index + 1} ${line.species} 빼기`} onClick={() => removeLine(line.id)}><Trash2 />빼기</Button>}</div>
               <div className="item-fields">
                 <div className="field species-field">
                   <Label htmlFor={"species-" + line.id}>묘목 이름 <small>필수</small></Label>

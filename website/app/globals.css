@@ -2184,3 +2184,80 @@ body { background:#fafbf7; }
   .hero-highlights span { width:100%; }
   .journey-strip>span { font-size:.9rem; gap:.25rem; }
 }
+
+/* Mobile-only refinement: less scrolling without shrinking tap targets. */
+@media(max-width:48rem) {
+  /* The bottom quick action already leads to the quote form. */
+  .header-quote,
+  .hero-direct { display:none; }
+  .menu-button { margin-left:auto; }
+
+  .hero-inner {
+    min-height:auto;
+    padding:1.9rem 0 2.3rem;
+  }
+  .hero h1 {
+    font-size:clamp(2rem,6.2vw,2.55rem);
+    line-height:1.2;
+    margin:.85rem 0 .7rem;
+  }
+  .hero p {
+    font-size:1.06rem;
+    line-height:1.65;
+  }
+  .hero-actions {
+    margin-top:1.15rem;
+    gap:.75rem;
+  }
+  .hero-cta {
+    min-height:3.25rem!important;
+    padding:.7rem 1.2rem!important;
+  }
+  .hero-highlights {
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:.5rem .7rem;
+    margin-top:1.05rem;
+    font-size:.87rem;
+  }
+  .hero-highlights span {
+    width:auto;
+    min-width:0;
+    gap:.3rem;
+    white-space:nowrap;
+  }
+  .hero-highlights span:last-child { grid-column:1 / -1; }
+  .hero-highlights span::before {
+    width:1rem;
+    height:1rem;
+    font-size:.72rem;
+  }
+  .journey-strip {
+    margin-top:-.6rem;
+    padding:.8rem .45rem;
+  }
+
+  .form-title { margin-bottom:1.1rem; }
+  .form-title>span { margin-top:.2rem; }
+  .quote-form>.quote-section-box {
+    padding:13px 10px;
+    margin-bottom:1.2rem;
+  }
+  .line-list { gap:.75rem; }
+  .item-line { padding:10px; }
+  .item-number { margin-bottom:.3rem; }
+  .item-fields { gap:.65rem; }
+  .field { gap:.35rem; }
+  .spec-field { margin-top:.65rem; }
+  .field input { min-height:3.2rem; padding:.65rem .8rem; }
+  .field textarea { padding:.65rem .8rem; }
+  .species-select-row .species-select-button,
+  .quantity-stepper .quantity-step-button {
+    min-height:3.2rem;
+  }
+  .add-line { margin-top:.75rem; }
+}
+@media(max-width:22rem) {
+  .hero-highlights { grid-template-columns:1fr; }
+  .hero-highlights span:last-child { grid-column:auto; }
+}
