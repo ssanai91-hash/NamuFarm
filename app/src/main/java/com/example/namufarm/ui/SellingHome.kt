@@ -12,7 +12,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ReceiptLong
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.activity.compose.BackHandler
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -161,21 +160,53 @@ internal fun SellingHome(
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             if (section == "home") {
-                item(key = "main-cards") {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        ManagementCard("견적 관리함", totalQuotes,
-                            "신규 ${newQuotes} · 발송대기 ${toSend} · 입금대기 ${awaitingPayment}",
-                            Icons.Outlined.Description, Modifier.weight(1f)) { section = "quotes" }
-                        ManagementCard("판매 관리함", state.allOrders.size,
-                            "배송대기 ${deliveryPending} · 배송완료 ${completedOrders}",
-                            Icons.AutoMirrored.Outlined.ReceiptLong, Modifier.weight(1f)) { section = "sales" }
+                item(key = "quote-primary") {
+                    Surface(
+                        shape = MaterialTheme.shapes.extraLarge,
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                    ) {
+                        Column(Modifier.fillMaxWidth().padding(20.dp),
+                            verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Outlined.Description, null,
+                                    Modifier.size(28.dp), tint = MaterialTheme.colorScheme.primary)
+                                Spacer(Modifier.width(10.dp))
+                                Text("견적 요청 · 발송", style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.Bold)
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("${totalQuotes}건", style = MaterialTheme.typography.displaySmall,
+                                    fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                Spacer(Modifier.width(14.dp))
+                                Text("신규 ${newQuotes} · 발송대기 ${toSend}\n입금대기 ${awaitingPayment}",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer)
+                            }
+                            Text("견적 요청을 가져와 바로 작성하고 발송하세요.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer)
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Button(onClick = { onSync(); section = "quotes" }, enabled = !webBusy,
+                                    modifier = Modifier.fillMaxWidth().heightIn(min = 54.dp)) {
+                                    Icon(Icons.Outlined.CloudSync, null, Modifier.size(20.dp))
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(if (webBusy) "가져오는 중…" else "요청 가져와 견적 작업")
+                                }
+                                OutlinedButton(onClick = { section = "quotes" },
+                                    modifier = Modifier.fillMaxWidth().heightIn(min = 50.dp)) {
+                                    Text("기존 견적 확인")
+                                }
+                            }
+                        }
                     }
                 }
                 item(key = "quick-actions") {
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        HomeAction("빠른 견적", "수기 작성", Icons.Outlined.EditNote, Modifier.weight(1f), onQuickQuote)
-                        HomeAction("견적 동기화", if (webBusy) "가져오는 중…" else "구글시트",
-                            Icons.Outlined.CloudSync, Modifier.weight(1f), onSync)
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        HomeAction("판매 관리함", "${state.allOrders.size}건 · 배송대기 ${deliveryPending}",
+                            Icons.AutoMirrored.Outlined.ReceiptLong, Modifier.weight(1f)) { section = "sales" }
+                        HomeAction("빠른 견적", "수기 작성", Icons.Outlined.EditNote,
+                            Modifier.weight(1f), onQuickQuote)
                     }
                 }
             } else if (section == "quotes") {
@@ -338,39 +369,18 @@ private fun WorkCount(title: String, count: Int, modifier: Modifier) {
 }
 
 @Composable
-private fun ManagementCard(
-    title: String, count: Int, detail: String, icon: ImageVector, modifier: Modifier,
-    selected: Boolean = false, onClick: () -> Unit
-) {
-    Surface(
-        onClick = onClick,
-        modifier = modifier,
-        shape = MaterialTheme.shapes.extraLarge,
-        color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant)
-    ) {
-        Column(Modifier.padding(horizontal = 14.dp, vertical = 18.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-            Icon(icon, null, modifier = Modifier.size(30.dp), tint = MaterialTheme.colorScheme.primary)
-            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            Text("${count}건", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary)
-            Text(detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-    }
-}
-
-@Composable
 private fun HomeAction(title: String, value: String, icon: ImageVector, modifier: Modifier, onClick: () -> Unit) {
     Surface(
         onClick = onClick,
-        modifier = modifier,
-        shape = MaterialTheme.shapes.large,
+        modifier = modifier.height(150.dp),
+        shape = MaterialTheme.shapes.extraLarge,
         color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
-        Column(Modifier.padding(horizontal = 12.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Icon(icon, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
-            Text(title, style = MaterialTheme.typography.labelLarge)
+        Column(Modifier.fillMaxSize().padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Icon(icon, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(28.dp))
+            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Text(value, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
