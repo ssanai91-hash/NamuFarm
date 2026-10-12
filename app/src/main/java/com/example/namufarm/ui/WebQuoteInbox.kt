@@ -42,7 +42,6 @@ internal fun WebQuoteInboxDialog(
     // Keep the selected customer stable if another notification arrives while composing.
     var selectedId by rememberSaveable { mutableStateOf(initialRequestId) }
     var invite by remember { mutableStateOf("") } // Credentials never enter saved-state backups.
-    var connecting by rememberSaveable { mutableStateOf(false) }
     var showLegacyConnection by remember { mutableStateOf(false) }
     val connectionFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let(onConnectFile) }
     var showSecurity by remember { mutableStateOf(false) }
@@ -52,7 +51,7 @@ internal fun WebQuoteInboxDialog(
     val context = LocalContext.current
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
     LaunchedEffect(selected?.requestId) { selected?.let { onRead(it.requestId) } }
-    LaunchedEffect(state.paired) { if (state.paired) { invite = ""; connecting = false } }
+    LaunchedEffect(state.paired) { if (state.paired) invite = "" }
     LaunchedEffect(state.message) { state.message?.let { snackbar.showSnackbar(it); onMessageConsumed() } }
     if(showSecurity) LegacyRestoreDialog(state,onRestore) { showSecurity=false }
     if(closeConfirm && selected!=null) AlertDialog(onDismissRequest={closeConfirm=false},title={Text("상담을 종료할까요?")},text={Text("구매하지 않은 고객 문의와 연결된 견적 사본을 삭제합니다. 실제 구매 기록은 따로 보관합니다.")},
@@ -86,7 +85,7 @@ internal fun WebQuoteInboxDialog(
                 if (selectedId != null) item {
                     Text("선택한 요청을 아직 가져오지 못했어요. 연결 상태를 확인하고 다시 가져와주세요.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                if (!state.paired || connecting) item {
+                if (!state.paired) item {
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text("PC와 같은 연결파일을 한 번 불러오세요. 이후 ‘지금 동기화’로 시트 자료를 내려받습니다.")
                         Button(onClick = { connectionFile.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) }, enabled = !state.busy, modifier = Modifier.fillMaxWidth()) { Text("연결파일 불러오기") }
@@ -112,7 +111,7 @@ internal fun WebQuoteInboxDialog(
                             else context.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName))
                         }) { Icon(Icons.Outlined.Notifications, null); Spacer(Modifier.width(8.dp)); Text("새 요청 알림 허용") }
                         else Text("푸시 설정 전에는 ‘지금 동기화’로 확인해주세요.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        TextButton(onClick = { connecting = !connecting }) { Text("연결파일 다시 불러오기") }
+                        TextButton(onClick = { connectionFile.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) }) { Text("연결파일 다시 불러오기") }
                     }
                 }
                 if (state.requests.isEmpty() && state.paired && !state.busy) item {

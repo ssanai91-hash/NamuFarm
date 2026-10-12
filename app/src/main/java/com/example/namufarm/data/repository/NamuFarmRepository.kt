@@ -696,12 +696,12 @@ class NamuFarmRepository(
                 if (it == 0 && response.ok == false && response.code == "INVALID_ACTION") return@serializedSync null
                 val page = WebQuoteValidator.checkedPage(response, cursor, decrypt)
                 val token = checkNotNull(response.snapshotId)
-                check(Regex("[a-f0-9]{64}").matches(token))
-                check(response.total != null && response.total in 0..10000 && response.watermark != null && response.watermark in 0..9_007_199_254_740_991L)
+                check(Regex("[a-f0-9]{64}").matches(token)) { "견적 동기화 응답 식별자가 올바르지 않습니다." }
+                check(response.total != null && response.total in 0..10000 && response.watermark != null && response.watermark in 0..9_007_199_254_740_991L) { "구글시트 견적 목록의 전체 건수 또는 순번이 올바르지 않습니다." }
                 if (snapshot == null) { snapshot = token; total = response.total; watermark = response.watermark }
                 check(token == snapshot && total == response.total && watermark == response.watermark) { "시트가 변경되었습니다. 다시 동기화해주세요." }
                 response.requests.orEmpty().forEach { check(ids.add(checkNotNull(it?.requestId))) { "요청이 중복되어 기존 자료를 유지합니다." } }
-                check(ids.size <= total)
+                check(ids.size <= total) { "받은 견적 건수가 구글시트 응답과 맞지 않습니다." }
                 rows += page.rows; deferred += page.deferred; expired += page.expiredIds; cursor = page.cursor
                 if (response.hasMore == false) {
                     check(ids.size == total && cursor <= watermark) { "시트 자료를 전부 받지 못해 기존 기록을 유지합니다." }

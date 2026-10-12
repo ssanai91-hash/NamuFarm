@@ -39,7 +39,17 @@ class WebInboxViewModel(private val connection: WebRequestConnection) : ViewMode
     fun connectFile(uri: android.net.Uri) = operate {
         connection.connectFile(uri)
         reloadLocal()
-        connection.refresh()
+        try {
+            connection.refresh()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // A valid connection file may succeed even when the next snapshot
+            // contains an unreadable row. Keep the connection and local data.
+            throw IllegalStateException(
+                "서버 연결은 완료됐지만 견적 내려받기에 실패했어요: ${e.message ?: "서버 응답을 확인해주세요."}", e
+            )
+        }
         reloadLocal()
         showMessage("연결과 내려받기를 마쳤어요. 저장된 자료는 오프라인에서도 볼 수 있어요.")
     }

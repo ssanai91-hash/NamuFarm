@@ -88,8 +88,6 @@ object WebQuoteValidator {
         val deferred = mutableListOf<com.example.namufarm.data.DeferredWebRequestEntity>()
         val checked = rows.mapNotNull { nullable ->
             val outer = checkNotNull(nullable)
-            val requestStatus = outer.status ?: "신규"
-            check(requestStatus in setOf("신규", "견적확정", "견적발송완료", "입금확인", "배송완료", "구매취소"))
             var row = outer
             val id = checkNotNull(row.requestId)
             check(validId(id) && seen.add(id)) { "요청번호를 확인해주세요." }
@@ -97,47 +95,53 @@ object WebQuoteValidator {
             check(sequence > previous && sequence <= 9_007_199_254_740_991L) { "요청 순번이 올바르지 않습니다." }
             previous = sequence
             val created = checkNotNull(row.createdAt)
-            check(Regex("\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z").matches(created))
+            check(Regex("\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z").matches(created)) { "견적 접수시각 형식을 확인해주세요." }
             SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC"); isLenient = false }.parse(created)
+            // Archived rows use status="보관종료" and expired=true. They must be
+            // removed from the local inbox, not rejected as an unknown active status.
             if (outer.expired == true) { expiredIds += id; return@mapNotNull null }
+            val requestStatus = outer.status ?: "신규"
+            check(requestStatus in setOf("신규", "견적확정", "견적발송완료", "입금확인", "배송완료", "구매취소")) {
+                "견적 처리 상태가 맞지 않아 가져오지 못했습니다."
+            }
             if (decrypt != null) {
                 try {
                     row = decrypt(outer)
                 } catch (_: LegacyRequestKeyUnavailable) {
                     val envelope = checkNotNull(outer.encryptedRequest)
-                    check(envelope.version == 1 && envelope.algorithm == "RSA-OAEP-256+A256GCM")
-                    check(Regex("[a-f0-9]{64}").matches(envelope.keyId))
-                    check(com.example.namufarm.privacy.HybridCrypto.decode(envelope.wrappedKey).size == 384)
-                    check(com.example.namufarm.privacy.HybridCrypto.decode(envelope.iv).size == 12)
-                    check(com.example.namufarm.privacy.HybridCrypto.decode(envelope.ciphertext).size in 17..30016)
+                    check(envelope.version == 1 && envelope.algorithm == "RSA-OAEP-256+A256GCM") { "이전 견적의 암호화 형식이 맞지 않습니다." }
+                    check(Regex("[a-f0-9]{64}").matches(envelope.keyId)) { "이전 견적의 보안키 형식이 맞지 않습니다." }
+                    check(com.example.namufarm.privacy.HybridCrypto.decode(envelope.wrappedKey).size == 384) { "이전 견적의 보안 정보가 올바르지 않습니다." }
+                    check(com.example.namufarm.privacy.HybridCrypto.decode(envelope.iv).size == 12) { "이전 견적의 보안 정보가 올바르지 않습니다." }
+                    check(com.example.namufarm.privacy.HybridCrypto.decode(envelope.ciphertext).size in 17..30016) { "이전 견적의 암호화 자료가 올바르지 않습니다." }
                     deferred += com.example.namufarm.data.DeferredWebRequestEntity(id, sequence, created, Gson().toJson(outer))
                     return@mapNotNull null
                 }
                 check(row.requestId == id) { "복호화한 고객 요청번호가 다릅니다." }
             }
             val phone = text(row.customerPhone, 11, 9)
-            check(Regex("0[0-9]{8,10}").matches(phone))
+            check(Regex("0[0-9]{8,10}").matches(phone)) { "견적에 저장된 전화번호 형식을 확인해주세요." }
             val items = checkNotNull(row.items)
-            check(items.size in 1..20)
+            check(items.size in 1..20) { "견적 묘목 품목 수를 확인해주세요." }
             val checkedItems = items.map { item ->
                 checkNotNull(item)
                 val quantity = checkNotNull(item.quantity)
-                check(quantity in 1..1_000_000)
+                check(quantity in 1..1_000_000) { "견적 묘목 수량을 확인해주세요." }
                 WebQuoteItem(text(item.species, 80, 1), text(item.specification, 120, 0), quantity)
             }
             val email = text(row.customerEmail ?: "", 254, 0)
             val channel = row.replyChannel ?: "sms"
-            check(com.example.namufarm.quotation.validQuoteEmail(email) && channel in listOf("sms", "email", "both"))
-            check(channel == "sms" || email.isNotEmpty())
+            check(com.example.namufarm.quotation.validQuoteEmail(email) && channel in listOf("sms", "email", "both")) { "견적 메일 주소 또는 회신 방식을 확인해주세요." }
+            check(channel == "sms" || email.isNotEmpty()) { "메일 견적 요청에 이메일 주소가 없습니다." }
             val recipient = text(row.recipientName ?: "", 100, 0)
-            check(recipient.none { it.code < 32 })
+            check(recipient.none { it.code < 32 }) { "견적서 수신인 형식을 확인해주세요." }
             WebQuoteRequestEntity(id, sequence, created, text(row.customerName, 50, 2), phone,
                 text(row.region, 100, 2), Gson().toJson(checkedItems), text(row.message, 1000, 0), customerEmail = email,
                 formalQuoteRequested = row.formalQuoteRequested ?: false, recipientName = recipient, replyChannel = channel, status = requestStatus)
         }
         return Page(checked, previous, expiredIds, deferred)
     }
-    private fun text(value: String?, max: Int, min: Int): String = checkNotNull(value).also { check(it.length in min..max && it == it.trim()) }
+    private fun text(value: String?, max: Int, min: Int): String = checkNotNull(value).also { check(it.length in min..max && it == it.trim()) { "견적에 저장된 글자 형식을 확인해주세요." } }
 }
 
 
