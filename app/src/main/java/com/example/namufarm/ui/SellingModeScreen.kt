@@ -212,7 +212,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
     SellingHome(
         state = uiState,
         snackbarHostState = snackbarHostState,
-        onSync = { onWebInbox(); viewModel.syncDataWithGoogleSheet() },
+        onSync = onWebInbox,
         onManage = onWebSettings,
         onQuickQuote = { viewModel.resetInput(); showQuickQuoteDialog = true },
         onTodayQuotes = { viewModel.loadTodayData(); showTodayQuotesDialog = true },

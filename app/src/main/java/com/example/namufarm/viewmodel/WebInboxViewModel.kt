@@ -25,12 +25,16 @@ class WebInboxViewModel(private val connection: WebRequestConnection) : ViewMode
     val state = mutableState.asStateFlow()
     private val working = AtomicBoolean(false)
     init { viewModelScope.launch(Dispatchers.IO) { reloadLocal() } }
-    private fun reloadLocal() { mutableState.update { it.copy(configured = connection.configured, requests = connection.localRequests().filter { request -> request.status == "신규" }, paired = connection.paired, deferredCount = connection.deferredCount) } }
+    private fun reloadLocal() { mutableState.update { it.copy(configured = connection.configured, requests = connection.localRequests(), paired = connection.paired, deferredCount = connection.deferredCount) } }
     fun refresh() = operate {
         reloadLocal()
         val count = connection.refresh()
         reloadLocal()
-        mutableState.update { it.copy(message = inboxRefreshMessage(count, it.deferredCount)) }
+        mutableState.update {
+            it.copy(message = if (it.requests.isEmpty() && it.deferredCount == 0)
+                "현재 받아온 견적이 없어요. 홈페이지와 같은 구글시트 서버에 연결됐는지 설정을 확인해주세요."
+                else inboxRefreshMessage(count, it.deferredCount))
+        }
     }
     fun connectFile(uri: android.net.Uri) = operate {
         connection.connectFile(uri)
