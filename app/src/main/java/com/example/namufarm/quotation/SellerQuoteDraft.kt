@@ -69,6 +69,7 @@ data class SellerQuoteDraft(
                 SellerQuoteRow(row.species, row.specification, row.quantity.toString())
             } } ?: listOf(SellerQuoteRow()),
             phone = request?.customerPhone.orEmpty(), recipient = request?.let(QuoteRecipient::from) ?: QuoteRecipient(),
+            prepaid = request != null, fee = if (request != null) "6000" else "0",
             options = QuoteIssueOptions(issuer = issuer)
         )
     }
