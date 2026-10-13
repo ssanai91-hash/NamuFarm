@@ -53,6 +53,7 @@ data class ManagementUiState(
     val todayQuotes: List<QuoteEntity> = emptyList(),
     val todayOrders: List<OrderEntity> = emptyList(),
     val allOrders: List<OrderEntity> = emptyList(),
+    val hiddenOrderNumbers: Set<String> = emptySet(),
     val salesReport: com.example.namufarm.sales.SalesReport? = null, val salesBusy: Boolean = false,
     val isSavingQuote: Boolean = false,
     val confirmingQuoteNumber: String? = null,
@@ -154,7 +155,9 @@ class ManagementViewModel(
                     checkChosung(it.speciesName, it.chosung, activeChosung)
                 },
                 allQuotes = repository.getAllQuotes(), quotesByRequest = repository.quotesByRequest(), todayQuotes = quotes,
-                todayOrders = orders, allOrders=repository.getAllOrders(), quoteDocuments = repository.getQuoteDocuments(),
+                todayOrders = orders, allOrders=repository.getAllOrders(),
+                hiddenOrderNumbers = repository.hiddenSaleNumbers(),
+                quoteDocuments = repository.getQuoteDocuments(),
                 selectedFarm = farms.find { it.farmId == current.selectedFarm?.farmId },
                 selectedSpecies = allSpecies.find { it.speciesId == current.selectedSpecies?.speciesId }
             )
@@ -598,7 +601,14 @@ class ManagementViewModel(
         launchOperation {
             repository.deleteQuote(quote)
             refreshLocalState()
-            _uiState.update { it.copy(message = "🗑️ 견적서가 삭제되었습니다.") }
+            _uiState.update { it.copy(message = "견적을 삭제했습니다. 수기 견적은 앱에만 저장됩니다.") }
+        }
+    }
+    fun hideSaleFromWorklist(order: OrderEntity) {
+        launchOperation {
+            repository.hideSaleFromWorklist(order.orderNumber)
+            refreshLocalState()
+            _uiState.update { it.copy(message = "판매 목록에서 삭제했습니다. 구글시트 원장은 보존됩니다.") }
         }
     }
 

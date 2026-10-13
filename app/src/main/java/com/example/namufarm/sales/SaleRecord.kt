@@ -22,7 +22,8 @@ data class SalePrivateData(val order: OrderEntity, val quoteDocumentJson: String
 data class PendingSaleSyncPayload(val eventId: String, val metadata: SaleMetadata, val encryptedPersonal: PrivacyEnvelope?,
     val fingerprint: String, val sourceRequestId: String = "", val personalData: SalePrivateData? = null)
 data class SaleRemote(val sequence: Long, val eventId: String, val metadata: SaleMetadata?, val encryptedPersonal: PrivacyEnvelope?,
-    val fingerprint: String?, val expired: Boolean = false, val personalData: SalePrivateData? = null)
+    val fingerprint: String?, val expired: Boolean = false, val personalData: SalePrivateData? = null,
+    val hidden: Boolean = false)
 data class SalesBucket(val period: String, val orders: Long, val quantity: Long, val sales: Long, val tax: Long,
     val cost: Long, val expenses: Long, val knownProfit: Long, val unknownProfitOrders: Long)
 data class SalesReport(val granularity: String, val from: String, val to: String, val buckets: List<SalesBucket>)

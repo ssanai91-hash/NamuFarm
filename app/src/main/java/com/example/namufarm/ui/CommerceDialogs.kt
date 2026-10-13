@@ -215,7 +215,7 @@ internal fun QuoteDetailsDialog(quote: QuoteEntity, confirming: Boolean, snackba
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             TextButton(onClick = onSms, enabled = !confirming) { Text("문자 보내기") }
             TextButton(onClick = onEmail, enabled = !confirming) { Text("메일 보내기") }
-            TextButton(onClick = onDelete, enabled = !confirming && !ordered && quote.sentAt == 0L, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) { Text("견적 삭제") }
+            TextButton(onClick = onDelete, enabled = !confirming && !ordered, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) { Text("견적 삭제") }
         }
     }) {
         CommerceDetailBody(quote.customerPhone, "", quote.quoteNumber, quote.itemSummary, quote.totalQty, quote.totalPrice, quote.isPrepaid, quote.shippingFee, taxAmount = taxAmount)

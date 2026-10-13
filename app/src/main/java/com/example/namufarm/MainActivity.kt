@@ -103,6 +103,7 @@ class MainActivity : ComponentActivity() {
                             onRequest = { request -> if (!uiState.isSavingQuote) { viewModel.useWebRequestForQuote(request); webInbox.read(request.requestId) } },
                             onQuoteConfirmed = webInbox::confirm,
                             onQuoteSentStatus = webInbox::markSentNow,
+                            onDeleteRequest = webInbox::close,
                             webUnread = webState.unread
                         )
                     }

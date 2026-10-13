@@ -137,7 +137,8 @@ internal fun buildSpecText(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: () -> Unit, onCallAssist: () -> Unit = {}, onWebInbox: () -> Unit = {}, webUnread: Int = 0, webRequests: List<com.example.namufarm.data.WebQuoteRequestEntity> = emptyList(), webBusy: Boolean = false, onWebSettings: () -> Unit = {}, onRequest: (com.example.namufarm.data.WebQuoteRequestEntity) -> Unit = {},
-    onQuoteConfirmed: (String) -> Unit = {}, onQuoteSentStatus: suspend (String) -> Unit = {}) {
+    onQuoteConfirmed: (String) -> Unit = {}, onQuoteSentStatus: suspend (String) -> Unit = {},
+    onDeleteRequest: (String) -> Unit = {}) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
@@ -234,6 +235,15 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
         onCallAssist = onCallAssist,
         onWebInbox = onWebInbox, webUnread = webUnread, webRequests = webRequests, webBusy = webBusy, onRequest = onRequest,
         workbenchSignal = workbenchSignal,
+        onDeleteRequest = onDeleteRequest,
+        onDeleteQuote = { quote ->
+            val linkedId = uiState.quotesByRequest.entries.firstOrNull {
+                it.value.quoteNumber == quote.quoteNumber
+            }?.key
+            if (linkedId != null) onDeleteRequest(linkedId)
+            else viewModel.deleteQuote(quote)
+        },
+        onHideSale = viewModel::hideSaleFromWorklist,
         onSavedQuote = { quote ->
             val manual = runCatching { com.example.namufarm.domain.order.OrderSummaryCodec.parseStrict(quote.itemSummary).all { it.source == com.example.namufarm.domain.order.OrderLineSource.MANUAL } }.getOrDefault(false)
             if (manual && quote.sentAt == 0L && uiState.quoteDocuments.none { it.quoteNumber == quote.quoteNumber } && uiState.allOrders.none { it.sourceQuoteNumber == quote.quoteNumber }) editSavedNumber = quote.quoteNumber
@@ -360,7 +370,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
         onDocuments = { viewModel.loadTodayData(); showDocumentHistory = true }
     )
     if (showTodayOrdersDialog) TodayOrdersDialog(
-        uiState.todayOrders,
+        uiState.todayOrders.filter { it.orderNumber !in uiState.hiddenOrderNumbers },
         onSelect = { selectedOrder = it; showOrderDetailDialog = true },
         onDismiss = { showTodayOrdersDialog = false },
         onSales={viewModel.loadTodayData();showSales=true}
@@ -475,7 +485,11 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                 Button(
                     onClick = {
                         quoteToDelete?.let { quote ->
-                            viewModel.deleteQuote(quote)
+                            val linkedId = uiState.quotesByRequest.entries.firstOrNull {
+                                it.value.quoteNumber == quote.quoteNumber
+                            }?.key
+                            if (linkedId != null) onDeleteRequest(linkedId)
+                            else viewModel.deleteQuote(quote)
                         }
 
                         showDeleteQuoteConfirm = false

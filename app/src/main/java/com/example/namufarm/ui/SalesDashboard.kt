@@ -65,8 +65,9 @@ internal fun SalesDashboardDialog(
     var from by remember { mutableStateOf(today.take(7) + "-01") }
     var to by remember { mutableStateOf(today) }
     var filter by remember { mutableStateOf("배송 대기") }
-    val pendingOrders = state.allOrders.count { it.status in setOf("구매확정", "입금확인") }
-    val rows = state.allOrders.filter { filter == "전체" || it.status in setOf("구매확정", "입금확인") }
+    val workOrders = state.allOrders.filter { it.orderNumber !in state.hiddenOrderNumbers }
+    val pendingOrders = workOrders.count { it.status in setOf("구매확정", "입금확인") }
+    val rows = workOrders.filter { filter == "전체" || it.status in setOf("구매확정", "입금확인") }
         .sortedByDescending { it.orderDate }
 
     NamuDialog("매출 · 이익 분석", "판매 통계와 전체 주문 조회", onDismiss) {
@@ -75,7 +76,7 @@ internal fun SalesDashboardDialog(
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("주문 · 배송 관리", style = MaterialTheme.typography.titleLarge)
-                    Text("입금확인된 주문 ${state.allOrders.size}건 · 배송 대기 ${pendingOrders}건",
+                    Text("입금확인된 주문 ${workOrders.size}건 · 배송 대기 ${pendingOrders}건",
                         style = MaterialTheme.typography.bodyMedium)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(onClick = onSync, modifier = Modifier.weight(1f)) { Text("주문 동기화") }

@@ -17,6 +17,8 @@ interface SalesGateway {
     suspend fun save(payload: PendingSaleSyncPayload): Boolean
     fun issuedDocuments(): List<com.example.namufarm.data.QuoteDocumentEntity> = emptyList()
     suspend fun orders(): List<OrderEntity>
+    fun hiddenOrderNumbers(): Set<String> = emptySet()
+    suspend fun hideSale(number: String, revision: Long) { error("판매기록 숨김을 지원하지 않는 서버입니다.") }
     suspend fun report(granularity: String, from: String, to: String): SalesReport
 }
 
@@ -60,11 +62,24 @@ class DeviceSalesGateway(private val settings: WebRequestSettings, private val k
             && response.fingerprint == payload.fingerprint) { "판매 기록 저장을 확인하지 못했습니다. 전송 대기 기록을 유지합니다." }
         return true
     }
+    override fun hiddenOrderNumbers(): Set<String> = settings.hiddenOrderNumbers
+    override suspend fun hideSale(number: String, revision: Long) {
+        val response = api.request(url ?: settings.url, mapOf(
+            "action" to "hide_sale", "deviceToken" to token(),
+            "orderNumber" to number, "revision" to revision
+        ))
+        WebQuoteValidator.checkResponse(response)
+        check(response.hidden == true && response.orderNumber == number && response.revision == revision) {
+            "판매기록 삭제 결과를 서버에서 확인하지 못했습니다."
+        }
+        settings.markHiddenOrder(number)
+    }
     private var documents: List<com.example.namufarm.data.QuoteDocumentEntity> = emptyList()
     override fun issuedDocuments() = documents
     override suspend fun orders(): List<OrderEntity> {
         val docs=linkedMapOf<String,com.example.namufarm.data.QuoteDocumentEntity>()
-        val result = mutableListOf<OrderEntity>(); val numbers = mutableSetOf<String>(); var cursor = 0L
+        val result = mutableListOf<OrderEntity>(); val numbers = mutableSetOf<String>()
+        val hidden = mutableSetOf<String>(); var cursor = 0L
         repeat(100) {
             val response = api.request(url ?: settings.url, mapOf("action" to "list_sales", "deviceToken" to token(), "afterSequence" to cursor))
             WebQuoteValidator.checkResponse(response)
@@ -76,6 +91,7 @@ class DeviceSalesGateway(private val settings: WebRequestSettings, private val k
                     val meta = checkNotNull(row.metadata)
                     val plain = SaleWire.decode(row, keys)
                     check(numbers.add(meta.orderNumber))
+                    if (row.hidden) hidden.add(meta.orderNumber)
                     check(PrivacyWire.canonical(SalePolicy.metadata(plain.order)) == PrivacyWire.canonical(meta)) { "판매 기록과 고객정보가 일치하지 않습니다." }
                     plain.quoteDocumentJson?.let { json ->
                         val document=PrivacyWire.gson.fromJson(json,com.example.namufarm.quotation.QuoteDocument::class.java).validate()
@@ -86,7 +102,11 @@ class DeviceSalesGateway(private val settings: WebRequestSettings, private val k
                     result.add(plain.order)
                 }
             }
-            if (response.hasMore == false) { documents=docs.values.toList();return result }
+            if (response.hasMore == false) {
+                settings.replaceHiddenOrderNumbers(hidden)
+                documents=docs.values.toList()
+                return result
+            }
         }
         error("판매 기록이 많아 나누어 확인해야 합니다. 기존 기록은 유지됩니다.")
     }

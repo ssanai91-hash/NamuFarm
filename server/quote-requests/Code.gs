@@ -38,6 +38,7 @@ function doPost(e) {
       else if (body.action === 'register_push') value = registerPush_(body, device);
       else if (body.action === 'save_sale') value = saveSale_(body);
       else if (body.action === 'list_sales') value = listSales_(body);
+      else if (body.action === 'hide_sale') value = hideSale_(body);
       else if (body.action === 'sales_report') value = salesReport_(body);
       else if (body.action === 'close_request') value = closeRequest_(body);
       else fail_('INVALID_ACTION');

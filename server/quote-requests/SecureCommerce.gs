@@ -2,6 +2,8 @@
 const SALE_SHEET = '판매기록';
 const SALE_HEADERS = ['주문번호','변경순번','상태','구매시각(UTC)','판매완료(UTC)','수량','매출(세액제외)','세액','원가','비용','원가확인','수익방식','수수료비율(bp)','매출이익','보관기한(UTC)','공개판매JSON','고객정보JSON','내용해시','최종변경번호','revision'];
 const SALE_EVENT_SHEET = '판매변경이력';
+const SALE_HIDDEN_SHEET = '판매목록숨김';
+const SALE_HIDDEN_HEADERS = ['주문번호','숨김처리시각(UTC)'];
 const SALE_EVENT_HEADERS = ['변경번호','주문번호','revision','내용해시','처리시각(UTC)'];
 const UUID_PATTERN = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 const QUOTE_RETENTION_MS = 30*86400000;
@@ -479,15 +481,48 @@ function quoteSmsStatus_(body) {
     statusCode:code,statusMessage:quoteSmsReason_(code),updatedAt:new Date().toISOString()};
 }
 
+/** A sale can leave the seller's work list without erasing the financial ledger. */
+function hideSale_(body) {
+  assert_(body && /^[A-Za-z0-9_-]{1,120}$/.test(body.orderNumber) &&
+      Number.isSafeInteger(body.revision) && body.revision>0,'INVALID');
+  return lock_(()=>{
+    const records=namedRows_(namedSheet_(SALE_SHEET,SALE_HEADERS,false),20);
+    const matches=records.filter(row=>row[0]===body.orderNumber);
+    assert_(matches.length===1,'INVALID');
+    const meta=JSON.parse(matches[0][15]);
+    assert_(!meta.archived,'INVALID');
+    assert_(Number(meta.revision)===body.revision,'CONFLICT');
+    const hidden=namedSheet_(SALE_HIDDEN_SHEET,SALE_HIDDEN_HEADERS,true);
+    const existing=namedRows_(hidden,2).filter(row=>row[0]===body.orderNumber);
+    assert_(existing.length<=1,'NOT_READY');
+    if(!existing.length){
+      hidden.getRange(hidden.getLastRow()+1,1,1,2).setValues([[body.orderNumber,new Date().toISOString()]]);
+      SpreadsheetApp.flush();
+    }
+    return {hidden:true,orderNumber:body.orderNumber,revision:body.revision};
+  });
+}
+function hiddenSaleNumbers_() {
+  const props=PropertiesService.getScriptProperties();
+  const book=SpreadsheetApp.openById(props.getProperty('SPREADSHEET_ID'));
+  const sheet=book.getSheetByName(SALE_HIDDEN_SHEET);
+  if(!sheet)return new Set();
+  assert_(JSON.stringify(sheet.getRange(1,1,1,2).getValues()[0])===JSON.stringify(SALE_HIDDEN_HEADERS),'NOT_READY');
+  const rows=namedRows_(sheet,2);
+  const numbers=rows.map(r=>String(r[0]));
+  assert_(numbers.length===new Set(numbers).size,'NOT_READY');
+  return new Set(numbers);
+}
 function listSales_(body) {
   assert_(Number.isSafeInteger(body.afterSequence) && body.afterSequence>=0);
+  const hidden=hiddenSaleNumbers_();
   const rows=namedRows_(namedSheet_(SALE_SHEET,SALE_HEADERS,false),20).filter(r=>Number(r[1])>body.afterSequence).sort((a,b)=>Number(a[1])-Number(b[1]));
   const page=rows.slice(0,100).map(r=>{
     const meta=JSON.parse(r[15]); if(meta.archived)return {sequence:Number(r[1]),expired:true};
     const stored=JSON.parse(r[16]),plain=stored.personalData!==undefined;
     const personal=plain?salePersonal_(stored.personalData,meta):envelope_(stored,sellerKey_());
     assert_(saleDigest_(meta,personal,plain)===r[17],'NOT_READY');
-    return Object.assign({sequence:Number(r[1]),eventId:r[18],metadata:saleMetadata_(meta),fingerprint:r[17],expired:false},plain?{personalData:personal}:{encryptedPersonal:personal});
+    return Object.assign({sequence:Number(r[1]),eventId:r[18],metadata:saleMetadata_(meta),fingerprint:r[17],expired:false,hidden:hidden.has(String(r[0]))},plain?{personalData:personal}:{encryptedPersonal:personal});
   }); return {sales:page,hasMore:rows.length>page.length};
 }
 function seoulDay_(time) { return new Date(time+9*3600000).toISOString().slice(0,10); }

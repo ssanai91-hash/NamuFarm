@@ -50,12 +50,16 @@ internal fun SellingHome(
     webBusy: Boolean = false,
     onRequest: (com.example.namufarm.data.WebQuoteRequestEntity) -> Unit = {},
     onSavedQuote: (com.example.namufarm.data.QuoteEntity) -> Unit = {},
+    onDeleteRequest: (String) -> Unit = {},
+    onDeleteQuote: (com.example.namufarm.data.QuoteEntity) -> Unit = {},
+    onHideSale: (OrderEntity) -> Unit = {},
     workbenchSignal: Int = 0
 ) {
     val listState = rememberLazyListState()
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     var query by rememberSaveable { mutableStateOf("") }
     var salesFilter by rememberSaveable { mutableStateOf("배송 대기") }
+    var deletion by remember { mutableStateOf<WorkDeleteTarget?>(null) }
     LaunchedEffect(workbenchSignal) {
         if (workbenchSignal > 0) selectedTab = 1
     }
@@ -77,9 +81,10 @@ internal fun SellingHome(
         it.quoteNumber !in linkedNumbers && it.quoteNumber !in paidQuoteNumbers
     }
     val workCount = workRequests.size + localQuotes.size
-    val pendingSales = state.allOrders.count { it.status in setOf("구매확정", "입금확인") }
-    val completedSales = state.allOrders.count { it.status in setOf("배송확인", "배송완료", "판매완료") }
-    val rowsSales = state.allOrders.filter {
+    val visibleSales = state.allOrders.filter { it.orderNumber !in state.hiddenOrderNumbers }
+    val pendingSales = visibleSales.count { it.status in setOf("구매확정", "입금확인") }
+    val completedSales = visibleSales.count { it.status in setOf("배송확인", "배송완료", "판매완료") }
+    val rowsSales = visibleSales.filter {
         when (salesFilter) {
             "배송 대기" -> it.status in setOf("구매확정", "입금확인")
             "배송완료" -> it.status in setOf("배송확인", "배송완료", "판매완료")
@@ -158,7 +163,7 @@ internal fun SellingHome(
                     listOf(
                         Triple("신규 요청", newRequests.size, Icons.Outlined.Inbox),
                         Triple("견적 작업대", workCount, Icons.Outlined.Description),
-                        Triple("판매 관리", state.allOrders.size, Icons.Outlined.LocalShipping)
+                        Triple("판매 관리", visibleSales.size, Icons.Outlined.LocalShipping)
                     ).forEachIndexed { index, (title, count, icon) ->
                         Surface(
                             onClick = { selectedTab = index; query = "" },
@@ -201,7 +206,9 @@ internal fun SellingHome(
                     NamuEmptyState("새 견적 요청이 없어요", "위 동기화 버튼으로 홈페이지 요청을 가져오세요.")
                 }
                 items(visible, key = { "new-${it.requestId}" }) { request ->
-                    RequestWorkCard(request, "신규", "가격 입력 · 견적확정") { onRequest(request) }
+                    RequestWorkCard(request, "신규", "가격 입력 · 견적확정",
+                        onDelete = { deletion = WorkDeleteTarget("request", request.requestId, request.customerName) }
+                    ) { onRequest(request) }
                 }
             } else if (selectedTab == 1) {
                 item(key = "work-header") {
@@ -218,10 +225,11 @@ internal fun SellingHome(
                 }
                 items(visibleRequests, key = { "work-${it.requestId}" }) { request ->
                     val quote = state.quotesByRequest[request.requestId]
-                    val status = if ((quote?.sentAt ?: 0L) > 0L || request.status == "견적발송완료")
-                        "발송완료 · 입금대기" else "견적확정"
+                    val status = "견적확정" // Sending is an action, not another work stage.
                     RequestWorkCard(request, status,
-                        if (quote == null) "가격 확인 · 견적 작성" else "견적 확인 · 발송 · 입금확인") {
+                        if (quote == null) "가격 확인 · 견적 작성" else "견적 확인 · 발송 · 입금확인",
+                        onDelete = { deletion = WorkDeleteTarget("request", request.requestId, request.customerName) }
+                    ) {
                         if (quote == null) onRequest(request) else onSavedQuote(quote)
                     }
                 }
@@ -232,11 +240,16 @@ internal fun SellingHome(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(quote.customerPhone, modifier = Modifier.weight(1f),
                                     style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                                NamuBadge(if (quote.sentAt > 0L) "발송완료 · 입금대기" else "견적확정")
+                                NamuBadge("견적확정")
                             }
                             Text("${quote.totalQty}주 · ${money(quote.totalPrice.toLong() + state.quoteTax(quote.quoteNumber))}")
-                            Text("견적 확인 · 발송 · 입금확인", color = MaterialTheme.colorScheme.primary,
-                                style = MaterialTheme.typography.labelLarge)
+                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                Text("견적 확인 · 발송 · 입금확인", color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.weight(1f), style = MaterialTheme.typography.labelLarge)
+                                TextButton(onClick = {
+                                    deletion = WorkDeleteTarget("quote", quote.quoteNumber, quote.customerPhone, quote = quote)
+                                }) { Text("삭제", color = MaterialTheme.colorScheme.error) }
+                            }
                         }
                     }
                 }
@@ -271,19 +284,58 @@ internal fun SellingHome(
                             Text("${order.customerPhone} · ${order.orderDate}",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            TextButton(onClick = {
+                                deletion = WorkDeleteTarget("sale", order.orderNumber,
+                                    order.customerName.ifBlank { order.customerPhone }, order = order)
+                            }, modifier = Modifier.align(Alignment.End)) {
+                                Text("삭제", color = MaterialTheme.colorScheme.error)
+                            }
                         }
                     }
                 }
             }
         }
     }
+    deletion?.let { target ->
+        val sale = target.kind == "sale"
+        AlertDialog(
+            onDismissRequest = { deletion = null },
+            title = { Text(if (sale) "판매 목록에서 삭제할까요?" else "견적을 삭제할까요?") },
+            text = {
+                Text(if (sale)
+                    "${target.label} 판매 기록을 목록에서 숨깁니다. 구글시트에 숨김 표시를 동기화하며 매출 원장은 보존합니다."
+                else if (target.kind == "request")
+                    "${target.label}님의 견적을 삭제 처리합니다. 온라인 요청은 구글시트에도 종료 처리되고 연결된 미주문 견적은 함께 제거됩니다."
+                else "${target.label} 견적을 앱에서 삭제합니다. 로컬 수기 견적은 구글시트에 저장되지 않습니다.")
+            },
+            confirmButton = {
+                Button(onClick = {
+                    when (target.kind) {
+                        "request" -> onDeleteRequest(target.id)
+                        "quote" -> target.quote?.let(onDeleteQuote)
+                        "sale" -> target.order?.let(onHideSale)
+                    }
+                    deletion = null
+                }) { Text(if (sale) "삭제 · 원장 보존" else "삭제하기") }
+            },
+            dismissButton = {
+                TextButton(onClick = { deletion = null }) { Text("취소") }
+            }
+        )
+    }
 }
+
+private data class WorkDeleteTarget(
+    val kind: String, val id: String, val label: String,
+    val quote: com.example.namufarm.data.QuoteEntity? = null, val order: OrderEntity? = null
+)
 
 @Composable
 private fun RequestWorkCard(
     request: com.example.namufarm.data.WebQuoteRequestEntity,
     status: String,
     action: String,
+    onDelete: () -> Unit,
     onClick: () -> Unit
 ) {
     OutlinedCard(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
@@ -312,6 +364,9 @@ private fun RequestWorkCard(
                     modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
                 Text(action, style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.primary)
+            }
+            TextButton(onClick = onDelete, modifier = Modifier.align(Alignment.End)) {
+                Text("삭제", color = MaterialTheme.colorScheme.error)
             }
         }
     }

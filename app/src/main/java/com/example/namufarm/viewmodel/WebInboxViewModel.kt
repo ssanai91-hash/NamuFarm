@@ -95,7 +95,20 @@ class WebInboxViewModel(private val connection: WebRequestConnection) : ViewMode
             reloadLocal()
         }
     }
-    fun close(id: String) = operate { connection.close(id);reloadLocal();showMessage("상담을 종료하고 고객 문의와 연결된 견적 사본을 삭제했어요.") }
+    fun close(id: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            statusMutex.withLock {
+                try {
+                    connection.close(id)
+                    reloadLocal()
+                    showMessage("견적 요청을 구글시트에도 삭제 처리했어요.")
+                } catch (e: CancellationException) { throw e }
+                catch (e: Exception) {
+                    showMessage("삭제하지 못했습니다. 기존 자료는 유지됩니다: ${e.message}")
+                }
+            }
+        }
+    }
     fun read(id: String) { viewModelScope.launch(Dispatchers.IO) { connection.read(id); reloadLocal() } }
     fun clearMessage() { mutableState.update { it.copy(message = null) } }
     fun showMessage(message: String) { mutableState.update { it.copy(message = message) } }

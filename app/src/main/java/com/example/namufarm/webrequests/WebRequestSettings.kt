@@ -64,6 +64,16 @@ class WebRequestSettings(context: Context, private val deviceKeyProvider: (() ->
         update { it.put("profileEndpoint", url); it.put("endpoint", url); it.put("paired", true) }
     }
     fun saveFcmToken(value: String) = update { it.put("fcm", value) }
+    // An order hidden by the seller remains in the financial ledger.
+    val hiddenOrderNumbers: Set<String> get() = synchronized(LOCK) {
+        prefs.getStringSet("hiddenSaleNumbers", emptySet()).orEmpty().toSet()
+    }
+    fun replaceHiddenOrderNumbers(numbers: Set<String>) = synchronized(LOCK) {
+        check(prefs.edit().putStringSet("hiddenSaleNumbers", numbers.toSet()).commit()) {
+            "숨김 주문 목록을 저장하지 못했습니다."
+        }
+    }
+    fun markHiddenOrder(number: String) = replaceHiddenOrderNumbers(hiddenOrderNumbers + number)
     companion object {
         private val LOCK = Any()
         private const val KEY_ALIAS = "namufarm_web_request_key_v1"

@@ -26,7 +26,7 @@ data class WebQuoteEnvelope(
     val saved: Boolean? = null, val orderNumber: String? = null, val revision: Long? = null, val fingerprint: String? = null,
     val sales: List<com.example.namufarm.sales.SaleRemote>? = null, val report: com.example.namufarm.sales.SalesReport? = null,
     val keyRegistered: Boolean? = null, val keyId: String? = null, val encryptionReady: Boolean? = null,
-    val closed: Boolean? = null, val updated: Boolean? = null,
+    val closed: Boolean? = null, val updated: Boolean? = null, val hidden: Boolean? = null,
     val requestId: String? = null, val status: String? = null,
     val snapshotId: String? = null, val total: Int? = null, val watermark: Long? = null
 )
