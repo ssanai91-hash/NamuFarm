@@ -37,7 +37,8 @@ data class WebQuoteRemote(
     val customerEmail: String? = null, val formalQuoteRequested: Boolean? = null,
     val recipientName: String? = null, val replyChannel: String? = null,
     val encryptedRequest: com.example.namufarm.privacy.PrivacyEnvelope? = null,
-    val expired: Boolean? = null, val expiresAt: Long? = null, val status: String? = null
+    val expired: Boolean? = null, val expiresAt: Long? = null, val status: String? = null,
+    val receiptNumber: String? = null
 )
 data class WebQuoteItemRemote(val species: String? = null, val specification: String? = null, val quantity: Int? = null)
 
@@ -137,7 +138,10 @@ object WebQuoteValidator {
             check(recipient.none { it.code < 32 }) { "견적서 수신인 형식을 확인해주세요." }
             WebQuoteRequestEntity(id, sequence, created, text(row.customerName, 50, 2), phone,
                 text(row.region, 100, 2), Gson().toJson(checkedItems), text(row.message, 1000, 0), customerEmail = email,
-                formalQuoteRequested = row.formalQuoteRequested ?: false, recipientName = recipient, replyChannel = channel, status = requestStatus)
+                formalQuoteRequested = row.formalQuoteRequested ?: false, recipientName = recipient, replyChannel = channel, status = requestStatus,
+                receiptNumber = row.receiptNumber?.also {
+                    check(Regex("(NAMU|NFQ)-[0-9]{8}-[0-9]{4,16}").matches(it)) { "견적접수번호를 확인해주세요." }
+                }.orEmpty())
         }
         return Page(checked, previous, expiredIds, deferred)
     }

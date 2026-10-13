@@ -143,8 +143,25 @@ class LocalDataSource(
             dao.getDeferredWebRequest(incoming.requestId)?.let { check(it.sequence == incoming.sequence && it.createdAt == incoming.createdAt) { "이전 요청의 번호나 접수시각이 변경되었습니다." } }
             val existing = dao.getWebRequest(incoming.requestId)?.let { webRow(it, false) }
             if (existing == null) { dao.insertWebRequest(webRow(incoming, true)); inserted++ }
-            else check(existing.copy(readAt = null) == incoming.copy(readAt = null)) {
-                "이미 받은 요청의 내용이 변경되었습니다. 관리자 확인이 필요합니다."
+            else {
+                // The official receipt was not stored by older APKs. Enrich
+                // that one field without resetting any existing local data.
+                // Only the seller-controlled status/sequence and new receipt
+                // number may change; customer-submitted identity stays immutable.
+                check(incoming.sequence >= existing.sequence &&
+                    existing.copy(readAt = null, sequence = incoming.sequence,
+                        status = incoming.status, receiptNumber = incoming.receiptNumber) ==
+                    incoming.copy(readAt = null)) {
+                    "이미 받은 요청의 고객정보가 변경되었습니다. 관리자 확인이 필요합니다."
+                }
+                if (existing.sequence != incoming.sequence ||
+                    existing.status != incoming.status ||
+                    existing.receiptNumber != incoming.receiptNumber) {
+                    check(dao.getWebRequestAtSequence(incoming.sequence)?.let {
+                        it.requestId == incoming.requestId
+                    } != false) { "요청 순번이 다른 기록과 겹칩니다." }
+                    dao.replaceWebRequest(webRow(incoming.copy(readAt = existing.readAt), true))
+                }
             }
             dao.deleteDeferredWebRequest(incoming.requestId)
         }

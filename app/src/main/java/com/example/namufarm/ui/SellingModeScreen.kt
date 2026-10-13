@@ -139,8 +139,15 @@ internal fun buildSpecText(
 fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: () -> Unit, onCallAssist: () -> Unit = {}, onWebInbox: () -> Unit = {}, webUnread: Int = 0, webRequests: List<com.example.namufarm.data.WebQuoteRequestEntity> = emptyList(), webBusy: Boolean = false, onWebSettings: () -> Unit = {}, onRequest: (com.example.namufarm.data.WebQuoteRequestEntity) -> Unit = {},
     onQuoteConfirmed: (String, com.example.namufarm.quotation.SellerQuoteDraft) -> Unit = { _, _ -> },
     onQuoteSentStatus: suspend (String) -> Unit = {},
-    onDeleteRequest: (String) -> Unit = {}) {
+    onDeleteRequest: (String) -> Unit = {},
+    deleteFeedback: com.example.namufarm.viewmodel.RequestDeleteFeedback? = null) {
     val uiState by viewModel.uiState.collectAsState()
+    LaunchedEffect(deleteFeedback?.phase, deleteFeedback?.requestId) {
+        if (deleteFeedback?.phase == "success" &&
+            uiState.editingRequest?.requestId == deleteFeedback.requestId) {
+            viewModel.dismissManualQuote()
+        }
+    }
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -160,6 +167,12 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
     var showQuickQuoteDialog by rememberSaveable { mutableStateOf(false) }
     var workbenchSignal by rememberSaveable { mutableIntStateOf(0) }
     var editSavedNumber by rememberSaveable { mutableStateOf<String?>(null) }
+    LaunchedEffect(deleteFeedback?.phase, deleteFeedback?.requestId) {
+        if (deleteFeedback?.phase == "success" && editSavedNumber != null &&
+            uiState.quotesByRequest[deleteFeedback.requestId]?.quoteNumber == editSavedNumber) {
+            editSavedNumber = null
+        }
+    }
     var deliveryNumber by rememberSaveable { mutableStateOf<String?>(null) }
     var deliveryAction by rememberSaveable { mutableStateOf(QuoteDelivery.SAVE.name) }
 
@@ -233,15 +246,6 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
         onCallAssist = onCallAssist,
         onWebInbox = onWebInbox, webUnread = webUnread, webRequests = webRequests, webBusy = webBusy, onRequest = onRequest,
         workbenchSignal = workbenchSignal,
-        onDeleteRequest = onDeleteRequest,
-        onDeleteQuote = { quote ->
-            val linkedId = uiState.quotesByRequest.entries.firstOrNull {
-                it.value.quoteNumber == quote.quoteNumber
-            }?.key
-            if (linkedId != null) onDeleteRequest(linkedId)
-            else viewModel.deleteQuote(quote)
-        },
-        onHideSale = viewModel::hideSaleFromWorklist,
         onSavedQuote = { quote ->
             val manual = runCatching { com.example.namufarm.domain.order.OrderSummaryCodec.parseStrict(quote.itemSummary).all { it.source == com.example.namufarm.domain.order.OrderLineSource.MANUAL } }.getOrDefault(false)
             if (manual && quote.sentAt == 0L && uiState.quoteDocuments.none { it.quoteNumber == quote.quoteNumber } && uiState.allOrders.none { it.sourceQuoteNumber == quote.quoteNumber }) editSavedNumber = quote.quoteNumber
@@ -398,7 +402,8 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
         val requestId = uiState.quotesByRequest.entries.firstOrNull { it.value.quoteNumber == number }?.key
         SavedQuoteEditor(viewModel, number, webRequests.firstOrNull { it.requestId == requestId },
             onSaved = { savedNumber, action -> editSavedNumber = null; deliveryAction = action.name; deliveryNumber = savedNumber },
-            onDismiss = { if (!uiState.isSavingQuote) editSavedNumber = null })
+            onDismiss = { if (!uiState.isSavingQuote) editSavedNumber = null },
+            onDeleteRequest = onDeleteRequest)
     }
     deliveryNumber?.let { number ->
         QuoteDeliveryDialog(viewModel, number, QuoteDelivery.valueOf(deliveryAction),
@@ -673,6 +678,9 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
     if (showQuickQuoteDialog || uiState.editingRequest != null) {
         ManualQuoteEditor(uiState.editingRequest, uiState.isSavingQuote, uiState.message,
             onDismiss = { showQuickQuoteDialog = false; viewModel.dismissManualQuote() },
+            onDeleteRequest = uiState.editingRequest?.let { request ->
+                { onDeleteRequest(request.requestId) }
+            },
             onSave = { draft, action ->
                 val sourceId = uiState.editingRequest?.requestId
                 viewModel.saveManualQuote(draft.validate(action), draft.phone, draft.recipient, draft.prepaid, draft.shipping(),

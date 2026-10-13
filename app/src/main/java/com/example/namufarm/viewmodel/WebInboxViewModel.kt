@@ -16,11 +16,15 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.atomic.AtomicBoolean
 
+/** UI-only feedback. A record is only 'complete' after the server confirms it. */
+data class RequestDeleteFeedback(val requestId: String, val phase: String, val error: String? = null)
+
 data class WebInboxState(
     val requests: List<WebQuoteRequestEntity> = emptyList(), val busy: Boolean = false,
     val configured: Boolean = false, val paired: Boolean = false,
     val pushConfigured: Boolean = false, val message: String? = null,
-    val deferredCount: Int = 0
+    val deferredCount: Int = 0,
+    val deleteFeedback: RequestDeleteFeedback? = null
 ) { val unread: Int get() = requests.count { it.readAt == null } }
 
 class WebInboxViewModel(private val connection: WebRequestConnection) : ViewModel() {
@@ -96,18 +100,27 @@ class WebInboxViewModel(private val connection: WebRequestConnection) : ViewMode
         }
     }
     fun close(id: String) {
+        if (mutableState.value.deleteFeedback?.phase == "deleting") return
+        // Show progress immediately, before any network/lock delay.
+        mutableState.update { it.copy(deleteFeedback = RequestDeleteFeedback(id, "deleting")) }
         viewModelScope.launch(Dispatchers.IO) {
             statusMutex.withLock {
                 try {
                     connection.close(id)
                     reloadLocal()
-                    showMessage("견적 요청을 구글시트에도 삭제 처리했어요.")
+                    mutableState.update { it.copy(deleteFeedback = RequestDeleteFeedback(id, "success")) }
                 } catch (e: CancellationException) { throw e }
                 catch (e: Exception) {
-                    showMessage("삭제하지 못했습니다. 기존 자료는 유지됩니다: ${e.message}")
+                    mutableState.update {
+                        it.copy(deleteFeedback = RequestDeleteFeedback(id, "error",
+                            e.message ?: "서버 응답을 확인하지 못했습니다."))
+                    }
                 }
             }
         }
+    }
+    fun acknowledgeDelete() {
+        mutableState.update { it.copy(deleteFeedback = null) }
     }
     fun read(id: String) { viewModelScope.launch(Dispatchers.IO) { connection.read(id); reloadLocal() } }
     fun clearMessage() { mutableState.update { it.copy(message = null) } }

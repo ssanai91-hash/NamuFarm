@@ -27,7 +27,8 @@ private val draftSaver = Saver<SellerQuoteDraft, String>(
 
 @Composable
 internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean, message: String?,
-    onDismiss: () -> Unit, onSave: (SellerQuoteDraft, QuoteDelivery) -> Unit, initialDraft: SellerQuoteDraft? = null, draftKey: String? = request?.requestId) {
+    onDismiss: () -> Unit, onSave: (SellerQuoteDraft, QuoteDelivery) -> Unit, initialDraft: SellerQuoteDraft? = null,
+    draftKey: String? = request?.requestId, onDeleteRequest: (() -> Unit)? = null) {
     val context = LocalContext.current
     val firstRequest = request != null && initialDraft == null
     var draft by rememberSaveable(draftKey, stateSaver = draftSaver) {
@@ -37,6 +38,7 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
     var step by rememberSaveable { mutableIntStateOf(1000) }
     var error by rememberSaveable { mutableStateOf<String?>(null) }
     var discard by remember { mutableStateOf(false) }
+    var deleteConfirm by remember { mutableStateOf(false) }
     val initial = remember(draftKey) { initialDraft ?: SellerQuoteDraft.from(request, QuoteIssuerSettings(context).load()) }
     fun close() { if (!saving) { if (draft != initial) discard = true else onDismiss() } }
     fun submit(action: QuoteDelivery) {
@@ -61,6 +63,13 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
         if (draft.recipient.formalQuoteRequested)
             Text("고객이 요청한 공식 견적서는 나피 PC에서 별도 처리합니다.",
                 style = MaterialTheme.typography.bodySmall)
+        if (onDeleteRequest != null) {
+            TextButton(onClick = { deleteConfirm = true }, enabled = !saving,
+                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                modifier = Modifier.fillMaxWidth()) {
+                Text("견적 요청 삭제")
+            }
+        }
         if (firstRequest) {
             Button(onClick = { submit(QuoteDelivery.SAVE) }, enabled = !saving,
                 modifier = Modifier.fillMaxWidth().heightIn(min = 54.dp)) {
@@ -144,6 +153,20 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
+    if (deleteConfirm) AlertDialog(
+        onDismissRequest = { deleteConfirm = false },
+        title = { Text("견적 요청을 삭제할까요?") },
+        text = { Text("선택한 견적 요청을 서버와 휴대폰에서 삭제합니다. 삭제 후 되돌릴 수 없습니다.") },
+        confirmButton = {
+            Button(onClick = {
+                deleteConfirm = false
+                onDeleteRequest?.invoke()
+            }, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) {
+                Text("삭제하기")
+            }
+        },
+        dismissButton = { TextButton(onClick = { deleteConfirm = false }) { Text("취소") } }
+    )
     if (discard) AlertDialog(onDismissRequest = { discard = false }, title = { Text("작성을 마칠까요?") }, text = { Text("입력한 내용이 아직 저장되지 않았습니다.") },
         confirmButton = { TextButton(onClick = onDismiss) { Text("저장하지 않고 닫기") } }, dismissButton = { TextButton(onClick = { discard = false }) { Text("계속 작성") } })
 }

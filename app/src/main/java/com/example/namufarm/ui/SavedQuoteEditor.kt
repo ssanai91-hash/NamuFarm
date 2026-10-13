@@ -11,7 +11,8 @@ import kotlinx.coroutines.CancellationException
 
 @Composable
 internal fun SavedQuoteEditor(viewModel: ManagementViewModel, number: String, request: WebQuoteRequestEntity?,
-    onSaved: (String, QuoteDelivery) -> Unit, onDismiss: () -> Unit) {
+    onSaved: (String, QuoteDelivery) -> Unit, onDismiss: () -> Unit,
+    onDeleteRequest: (String) -> Unit = {}) {
     val state by viewModel.uiState.collectAsState()
     val context = LocalContext.current
     var initial by remember(number) { mutableStateOf<SellerQuoteDraft?>(null) }
@@ -30,6 +31,7 @@ internal fun SavedQuoteEditor(viewModel: ManagementViewModel, number: String, re
                 issueOptions = null, existingQuoteNumber = number) {
                 onSaved(number, action)
             }
-        }, initialDraft = draft, draftKey = number)
+        }, initialDraft = draft, draftKey = number,
+            onDeleteRequest = request?.let { { onDeleteRequest(it.requestId) } })
     } ?: NamuDialog("저장한 견적 이어 쓰기", "기존 가격과 고객 정보를 불러옵니다", onDismiss) { Text(error ?: "불러오는 중…") }
 }

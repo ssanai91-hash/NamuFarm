@@ -14,6 +14,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.*
@@ -88,6 +91,7 @@ class MainActivity : ComponentActivity() {
             NamuFarmTheme {
                 val navController = rememberNavController()
                 var showWebInbox by rememberSaveable { mutableStateOf(false) }
+                var connectionOnly by rememberSaveable { mutableStateOf(false) }
                 val webState by webInbox.state.collectAsState()
                 val notificationPermission = rememberLauncherForActivityResult(
                     ActivityResultContracts.RequestPermission()
@@ -130,13 +134,17 @@ class MainActivity : ComponentActivity() {
                             viewModel = viewModel,
                             onNavigateToManagement = { navController.navigate("management") },
                             onCallAssist = { showCallAssist = true },
-                            onWebInbox = { if (webState.paired) webInbox.refresh() else showWebInbox = true },
-                            onWebSettings = { showWebInbox = true },
+                            onWebInbox = {
+                                if (webState.paired) webInbox.refresh()
+                                else { connectionOnly = true; showWebInbox = true }
+                            },
+                            onWebSettings = { connectionOnly = true; showWebInbox = true },
                             webRequests = webState.requests, webBusy = webState.busy,
                             onRequest = { request -> if (!uiState.isSavingQuote) { viewModel.useWebRequestForQuote(request); webInbox.read(request.requestId) } },
                             onQuoteConfirmed = webInbox::confirm,
                             onQuoteSentStatus = webInbox::markSentNow,
                             onDeleteRequest = webInbox::close,
+                            deleteFeedback = webState.deleteFeedback,
                             webUnread = webState.unread
                         )
                     }
@@ -153,6 +161,9 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 LaunchedEffect(webState.busy) { if (!webState.busy) viewModel.loadTodayData() }
+                LaunchedEffect(webState.deleteFeedback?.phase) {
+                    if (webState.deleteFeedback?.phase == "success") viewModel.loadTodayData()
+                }
                 if (showWebInbox || webRequestId != null) {
                     WebQuoteInboxDialog(webState, webRequestId, uiState.customerPhone, uiState.estimateCart.size,
                         onRefresh = webInbox::refresh, onPair = webInbox::pair, onRead = webInbox::read,
@@ -175,7 +186,8 @@ class MainActivity : ComponentActivity() {
                                 showWebInbox = false; webRequestId = null
                             }
                         }, onMessageConsumed = webInbox::clearMessage,
-                        onDismiss = { showWebInbox = false; webRequestId = null })
+                        onDismiss = { showWebInbox = false; webRequestId = null; connectionOnly = false },
+                        connectionOnly = connectionOnly && webRequestId == null)
                 } else if (showCallAssist || callAssistRequest != null) {
                     IncomingCallAssistDialog(
                         request = callAssistRequest,
@@ -192,6 +204,38 @@ class MainActivity : ComponentActivity() {
                             callAssistRequest = null
                         },
                         onDismiss = { showCallAssist = false; callAssistRequest = null }
+                    )
+                }
+                // Keep this dialog visible until the sheet server and local
+                // deletion both complete; never show success before ACK.
+                webState.deleteFeedback?.let { feedback ->
+                    AlertDialog(
+                        onDismissRequest = {
+                            if (feedback.phase != "deleting") webInbox.acknowledgeDelete()
+                        },
+                        title = {
+                            Text(when (feedback.phase) {
+                                "deleting" -> "삭제 중…"
+                                "success" -> "삭제 완료"
+                                else -> "삭제 실패"
+                            })
+                        },
+                        text = {
+                            if (feedback.phase == "deleting") {
+                                Row(verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    CircularProgressIndicator(modifier = Modifier.size(32.dp))
+                                    Text("구글시트와 휴대폰의 견적 요청을 삭제하고 있습니다.")
+                                }
+                            } else Text(if (feedback.phase == "success")
+                                "견적 요청 삭제가 완료됐습니다."
+                                else "삭제 완료를 확인하지 못했습니다. 견적 요청 가져오기로 상태를 확인해주세요. ${feedback.error.orEmpty()}")
+                        },
+                        confirmButton = {
+                            if (feedback.phase != "deleting") TextButton(onClick = webInbox::acknowledgeDelete) {
+                                Text("확인")
+                            }
+                        }
                     )
                 }
             }

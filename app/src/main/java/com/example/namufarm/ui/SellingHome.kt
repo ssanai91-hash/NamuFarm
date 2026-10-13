@@ -19,6 +19,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.namufarm.data.SellingDisplayRow
 import com.example.namufarm.data.OrderEntity
@@ -50,15 +51,10 @@ internal fun SellingHome(
     webBusy: Boolean = false,
     onRequest: (com.example.namufarm.data.WebQuoteRequestEntity) -> Unit = {},
     onSavedQuote: (com.example.namufarm.data.QuoteEntity) -> Unit = {},
-    onDeleteRequest: (String) -> Unit = {},
-    onDeleteQuote: (com.example.namufarm.data.QuoteEntity) -> Unit = {},
-    onHideSale: (OrderEntity) -> Unit = {},
     workbenchSignal: Int = 0
 ) {
     val listState = rememberLazyListState()
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
-    var query by rememberSaveable { mutableStateOf("") }
-    var deletion by remember { mutableStateOf<WorkDeleteTarget?>(null) }
     LaunchedEffect(workbenchSignal) {
         if (workbenchSignal > 0) selectedTab = 1
     }
@@ -82,7 +78,6 @@ internal fun SellingHome(
     val linkedNumbers = webRequests.mapNotNull { state.quotesByRequest[it.requestId]?.quoteNumber }.toSet()
     val localQuotes = state.allQuotes.filter { it.quoteNumber !in linkedNumbers && it.quoteNumber !in paidQuoteNumbers }
     val workCount = workRequests.size + localQuotes.size
-    fun matches(value: String) = query.isBlank() || value.contains(query.trim(), ignoreCase = true)
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -94,7 +89,7 @@ internal fun SellingHome(
                         Icon(Icons.Outlined.Park, null, Modifier.size(28.dp))
                         Column {
                             Text("나무팜", style = MaterialTheme.typography.titleLarge)
-                            Text("견적 · 판매 관리", style = MaterialTheme.typography.labelSmall)
+                            Text("묘목 견적 관리", style = MaterialTheme.typography.labelSmall)
                         }
                     }
                 },
@@ -104,12 +99,11 @@ internal fun SellingHome(
                     actionIconContentColor = MaterialTheme.colorScheme.onPrimary
                 ),
                 actions = {
-                    IconButton(onClick = onCallAssist) { Icon(Icons.Outlined.PhoneInTalk, "전화 고객 연결") }
                     TextButton(onClick = onManage,
                         colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onPrimary)) {
-                        Icon(Icons.Outlined.Tune, null, Modifier.size(18.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text("설정")
+                        Icon(Icons.Outlined.Settings, "기기 연결", Modifier.size(23.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("기기 연결", style = MaterialTheme.typography.labelLarge)
                     }
                 }
             )
@@ -145,7 +139,7 @@ internal fun SellingHome(
                     modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
                     Icon(Icons.Outlined.CloudSync, null)
                     Spacer(Modifier.width(9.dp))
-                    Text(if (webBusy) "견적 요청 가져오는 중…" else "견적 요청 동기화",
+                    Text(if (webBusy) "견적 요청 가져오는 중…" else "견적 요청 가져오기",
                         style = MaterialTheme.typography.titleMedium)
                 }
             }
@@ -153,11 +147,11 @@ internal fun SellingHome(
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                     listOf(
                         Triple("신규 요청", newRequests.size, Icons.Outlined.Inbox),
-                        Triple("견적 작업대", workCount, Icons.Outlined.Description)
+                        Triple("견적확정", workCount, Icons.Outlined.Description)
                     ).forEachIndexed { index, (title, count, icon) ->
                         Surface(
-                            onClick = { selectedTab = index; query = "" },
-                            modifier = Modifier.weight(1f).heightIn(min = 91.dp),
+                            onClick = { selectedTab = index },
+                            modifier = Modifier.weight(1f).heightIn(min = 104.dp),
                             shape = MaterialTheme.shapes.large,
                             color = if (selectedTab == index) MaterialTheme.colorScheme.primaryContainer
                                 else MaterialTheme.colorScheme.surface,
@@ -170,162 +164,103 @@ internal fun SellingHome(
                                 verticalArrangement = Arrangement.spacedBy(5.dp)) {
                                 Row(verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    Text(title, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-                                    if (index == 0 && count > 0) Badge { Text(count.toString()) }
+                                    Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                    if (index == 0 && count > 0) Badge(modifier = Modifier.sizeIn(minWidth = 30.dp, minHeight = 30.dp)) {
+                                        Text(count.toString(), style = MaterialTheme.typography.titleSmall)
+                                    }
                                 }
-                                Text("${count}건", style = MaterialTheme.typography.headlineSmall,
+                                Text("${count}건", style = MaterialTheme.typography.headlineLarge,
                                     fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                             }
                         }
                     }
                 }
             }
-            if (selectedTab != 2) {
-                item(key = "quote-search") {
-                    OutlinedTextField(query, { query = it }, singleLine = true,
-                        placeholder = { Text("고객명 · 전화번호 · 묘목 검색") },
-                        leadingIcon = { Icon(Icons.Outlined.Search, null) },
-                        modifier = Modifier.fillMaxWidth())
-                }
-            }
             if (selectedTab == 0) {
                 item(key = "new-header") {
-                    NamuSectionTitle("신규 견적 요청", "목록을 누르면 품목별 단가를 입력할 수 있어요.",
-                        trailing = { TextButton(onClick = onQuickQuote) { Text("+ 직접 견적") } })
+                    NamuSectionTitle("신규 견적 요청", "총 ${newRequests.size}건 · 목록을 눌러 견적을 작성하세요.")
                 }
-                val visible = newRequests.filter {
-                    matches(it.customerName) || matches(it.customerPhone) || matches(it.itemsJson)
-                }
+                val visible = newRequests
+                if (visible.isNotEmpty()) item(key = "new-columns") { QuoteRowHeader() }
                 if (visible.isEmpty()) item {
-                    NamuEmptyState("새 견적 요청이 없어요", "위 동기화 버튼으로 홈페이지 요청을 가져오세요.")
+                    NamuEmptyState("새 견적 요청이 없어요", "견적 요청 가져오기를 눌러 확인하세요.")
                 }
                 items(visible, key = { "new-${it.requestId}" }) { request ->
-                    RequestWorkCard(request, "신규", "가격 입력 · 견적확정",
-                        onDelete = { deletion = WorkDeleteTarget("request", request.requestId, request.customerName) }
-                    ) {
+                    RequestWorkCard(request) {
                         state.quotesByRequest[request.requestId]?.let(onSavedQuote)
                             ?: onRequest(request)
                     }
                 }
             } else if (selectedTab == 1) {
                 item(key = "work-header") {
-                    NamuSectionTitle("견적 작업대", "확정한 견적 확인 · 판매 및 배송은 나피 PC에서 처리")
+                    NamuSectionTitle("견적확정", "총 ${workCount}건 · 문자·메일은 상세 화면에서 보냅니다.")
                 }
-                val visibleRequests = workRequests.filter {
-                    matches(it.customerName) || matches(it.customerPhone) || matches(it.itemsJson)
-                }
-                val visibleQuotes = localQuotes.filter {
-                    matches(it.customerPhone) || matches(it.itemSummary)
-                }.sortedByDescending { it.saveDate }
+                val visibleRequests = workRequests
+                val visibleQuotes = localQuotes.sortedByDescending { it.saveDate }
+                if (visibleRequests.isNotEmpty() || visibleQuotes.isNotEmpty())
+                    item(key = "confirmed-columns") { QuoteRowHeader() }
                 if (visibleRequests.isEmpty() && visibleQuotes.isEmpty()) item {
                     NamuEmptyState("작업할 견적이 없어요", "신규 요청에서 단가를 입력하고 견적확정해 주세요.")
                 }
                 items(visibleRequests, key = { "work-${it.requestId}" }) { request ->
                     val quote = state.quotesByRequest[request.requestId]
-                    val status = "견적확정" // Sending is an action, not another work stage.
-                    RequestWorkCard(request, status,
-                        if (quote == null) "견적 가격 확인" else "견적 확인",
-                        onDelete = { deletion = WorkDeleteTarget("request", request.requestId, request.customerName) }
-                    ) {
+                    RequestWorkCard(request) {
                         if (quote == null) onRequest(request) else onSavedQuote(quote)
                     }
                 }
                 items(visibleQuotes, key = { "quote-${it.quoteNumber}" }) { quote ->
                     OutlinedCard(onClick = { onSavedQuote(quote) }, modifier = Modifier.fillMaxWidth()) {
-                        Column(Modifier.fillMaxWidth().padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(quote.customerPhone, modifier = Modifier.weight(1f),
-                                    style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                                NamuBadge("견적확정")
-                            }
-                            Text("${quote.totalQty}주 · ${money(quote.totalPrice.toLong() + state.quoteTax(quote.quoteNumber))}")
-                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                                Text("견적 확인", color = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.weight(1f), style = MaterialTheme.typography.labelLarge)
-                                TextButton(onClick = {
-                                    deletion = WorkDeleteTarget("quote", quote.quoteNumber, quote.customerPhone, quote = quote)
-                                }) { Text("삭제", color = MaterialTheme.colorScheme.error) }
-                            }
+                        Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(quote.quoteNumber.takeLast(9), modifier = Modifier.weight(0.34f),
+                                maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
+                            Text("수기 견적", modifier = Modifier.weight(0.24f),
+                                maxLines = 1, style = MaterialTheme.typography.bodySmall)
+                            Text(quote.customerPhone, modifier = Modifier.weight(0.42f),
+                                maxLines = 1, style = MaterialTheme.typography.bodySmall)
                         }
                     }
                 }
-
             }
         }
     }
-    deletion?.let { target ->
-        val sale = target.kind == "sale"
-        AlertDialog(
-            onDismissRequest = { deletion = null },
-            title = { Text(if (sale) "판매 목록에서 삭제할까요?" else "견적을 삭제할까요?") },
-            text = {
-                Text(if (sale)
-                    "${target.label} 판매 기록을 목록에서 숨깁니다. 구글시트에 숨김 표시를 동기화하며 매출 원장은 보존합니다."
-                else if (target.kind == "request")
-                    "${target.label}님의 견적을 삭제 처리합니다. 온라인 요청은 구글시트에도 종료 처리되고 연결된 미주문 견적은 함께 제거됩니다."
-                else "${target.label} 견적을 앱에서 삭제합니다. 로컬 수기 견적은 구글시트에 저장되지 않습니다.")
-            },
-            confirmButton = {
-                Button(onClick = {
-                    when (target.kind) {
-                        "request" -> onDeleteRequest(target.id)
-                        "quote" -> target.quote?.let(onDeleteQuote)
-                        "sale" -> target.order?.let(onHideSale)
-                    }
-                    deletion = null
-                }) { Text(if (sale) "삭제 · 원장 보존" else "삭제하기") }
-            },
-            dismissButton = {
-                TextButton(onClick = { deletion = null }) { Text("취소") }
-            }
-        )
+}
+ 
+@Composable
+private fun QuoteRowHeader() {
+    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 2.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("견적번호", modifier = Modifier.weight(0.34f),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("이름", modifier = Modifier.weight(0.24f),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("전화번호", modifier = Modifier.weight(0.42f),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
-
-private data class WorkDeleteTarget(
-    val kind: String, val id: String, val label: String,
-    val quote: com.example.namufarm.data.QuoteEntity? = null, val order: OrderEntity? = null
-)
 
 @Composable
 private fun RequestWorkCard(
     request: com.example.namufarm.data.WebQuoteRequestEntity,
-    status: String,
-    action: String,
-    onDelete: () -> Unit,
     onClick: () -> Unit
 ) {
     OutlinedCard(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(request.customerName, style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                NamuBadge(status, manual = status == "신규")
-            }
-            val items = remember(request.itemsJson) {
-                runCatching {
-                    com.google.gson.Gson().fromJson(
-                        request.itemsJson, Array<com.example.namufarm.data.WebQuoteItem>::class.java
-                    ).toList()
-                }.getOrDefault(emptyList())
-            }
-            items.take(2).forEach { row ->
-                Text("${row.species} · ${row.specification.ifBlank { "규격 상담" }} · ${row.quantity}주",
-                    style = MaterialTheme.typography.bodyMedium)
-            }
-            if (items.size > 2) Text("외 ${items.size - 2}개 품목",
+        Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(request.receiptNumber.takeLast(9).ifBlank { "번호 확인" },
+                modifier = Modifier.weight(0.34f),
+                maxLines = 1, overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
+            Text(request.customerName, modifier = Modifier.weight(0.24f),
+                maxLines = 1, overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+            Text(request.customerPhone, modifier = Modifier.weight(0.42f),
+                maxLines = 1, overflow = TextOverflow.Ellipsis,
                 style = MaterialTheme.typography.bodySmall)
-            HorizontalDivider()
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("${request.customerPhone} · ${requestDateLabel(request.createdAt)}",
-                    modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
-                Text(action, style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary)
-            }
-            TextButton(onClick = onDelete, modifier = Modifier.align(Alignment.End)) {
-                Text("삭제", color = MaterialTheme.colorScheme.error)
-            }
         }
     }
 }

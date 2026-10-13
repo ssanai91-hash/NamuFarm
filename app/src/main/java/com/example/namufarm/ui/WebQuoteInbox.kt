@@ -37,7 +37,8 @@ internal fun WebQuoteInboxDialog(
     onUseRequest: (WebQuoteRequestEntity) -> Unit, onConfirm: (String) -> Unit,
     onMessageConsumed: () -> Unit, onDismiss: () -> Unit,
     onRestore: (android.net.Uri, CharArray) -> Unit = {_,_->}, onClose: (String) -> Unit = {},
-    onConnectFile: (android.net.Uri) -> Unit = {}
+    onConnectFile: (android.net.Uri) -> Unit = {},
+    connectionOnly: Boolean = false
 ) {
     // Keep the selected customer stable if another notification arrives while composing.
     var selectedId by rememberSaveable { mutableStateOf(initialRequestId) }
@@ -52,10 +53,33 @@ internal fun WebQuoteInboxDialog(
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
     LaunchedEffect(selected?.requestId) { selected?.let { onRead(it.requestId) } }
     LaunchedEffect(state.paired) { if (state.paired) invite = "" }
+    LaunchedEffect(state.deleteFeedback?.phase, state.deleteFeedback?.requestId) {
+        if (state.deleteFeedback?.phase == "success" &&
+            selectedId == state.deleteFeedback.requestId) selectedId = null
+    }
     LaunchedEffect(state.message) { state.message?.let { snackbar.showSnackbar(it); onMessageConsumed() } }
+    if (connectionOnly) {
+        NamuDialog("기기 연결", "나무팜-연결.json을 한 번 선택하면 됩니다.", onDismiss) {
+            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+                Text(if (state.paired) "서버 연결됨" else "서버 연결 필요",
+                    color = if (state.paired) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.titleMedium)
+                Text("PC와 동일한 나무팜-연결.json 파일을 선택해주세요.",
+                    style = MaterialTheme.typography.bodyLarge)
+                Button(
+                    onClick = { connectionFile.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) },
+                    enabled = !state.busy, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
+                    Text(if (state.busy) "기기 연결 중…" else "연결파일 불러오기")
+                }
+                if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
+            }
+        }
+        return
+    }
     if(showSecurity) LegacyRestoreDialog(state,onRestore) { showSecurity=false }
     if(closeConfirm && selected!=null) AlertDialog(onDismissRequest={closeConfirm=false},title={Text("상담을 종료할까요?")},text={Text("구매하지 않은 고객 문의와 연결된 견적 사본을 삭제합니다. 실제 구매 기록은 따로 보관합니다.")},
-        confirmButton={TextButton(onClick={closeConfirm=false;onClose(selected.requestId);selectedId=null}) {Text("상담 종료 · 삭제")}},dismissButton={TextButton(onClick={closeConfirm=false}) {Text("돌아가기")}})
+        confirmButton={TextButton(onClick={closeConfirm=false;onClose(selected.requestId)}) {Text("견적 요청 삭제")}},dismissButton={TextButton(onClick={closeConfirm=false}) {Text("돌아가기")}})
     NamuDialog(
         title = if (selected == null) "온라인 견적 요청함" else "견적 요청 상세",
         subtitle = "고객 요청 → 수동 견적 → 발송 → 입금 확인",

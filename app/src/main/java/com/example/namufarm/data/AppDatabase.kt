@@ -20,7 +20,7 @@ import kotlinx.coroutines.sync.Mutex
         DeferredWebRequestEntity::class,
         QuoteContactEntity::class, QuoteDocumentEntity::class, PrivacySyncEntity::class
     ],
-    version = 18, // 웹 견적 요청 상태를 PC와 Android에서 함께 표시
+    version = 19, // 홈페이지 공식 견적접수번호를 로컬 요청 목록에 보존
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -668,11 +668,16 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE web_quote_request ADD COLUMN status TEXT NOT NULL DEFAULT '신규'")
             }
         }
+        private val MIGRATION_18_19 = object : Migration(18, 19) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE web_quote_request ADD COLUMN receiptNumber TEXT NOT NULL DEFAULT ''")
+            }
+        }
         internal val ALL_MIGRATIONS = arrayOf(
             MIGRATION_1_7, MIGRATION_2_7, MIGRATION_3_7,
             MIGRATION_4_7, MIGRATION_5_7, MIGRATION_6_7,
             MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10,
-            MIGRATION_10_12, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18
+            MIGRATION_10_12, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19
         )
 
         fun getDatabase(context: Context): AppDatabase {
