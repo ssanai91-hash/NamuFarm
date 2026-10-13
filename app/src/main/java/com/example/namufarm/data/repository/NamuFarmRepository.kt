@@ -29,6 +29,7 @@ import com.example.namufarm.data.remote.SheetOrderItemDto
 import com.example.namufarm.domain.order.OrderSummaryCodec
 import com.google.gson.Gson
 import com.example.namufarm.domain.order.OrderLineSource
+import com.example.namufarm.domain.order.OrderLine
 import com.example.namufarm.domain.order.OrderAmounts
 import kotlinx.coroutines.CancellationException
 
