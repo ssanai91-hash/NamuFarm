@@ -137,7 +137,7 @@ internal fun buildSpecText(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: () -> Unit, onCallAssist: () -> Unit = {}, onWebInbox: () -> Unit = {}, webUnread: Int = 0, webRequests: List<com.example.namufarm.data.WebQuoteRequestEntity> = emptyList(), webBusy: Boolean = false, onWebSettings: () -> Unit = {}, onRequest: (com.example.namufarm.data.WebQuoteRequestEntity) -> Unit = {},
-    onQuoteConfirmed: (String, com.example.namufarm.quotation.SellerQuoteDraft) -> Unit = {},
+    onQuoteConfirmed: (String, com.example.namufarm.quotation.SellerQuoteDraft) -> Unit = { _, _ -> },
     onQuoteSentStatus: suspend (String) -> Unit = {},
     onDeleteRequest: (String) -> Unit = {}) {
     val uiState by viewModel.uiState.collectAsState()
