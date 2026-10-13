@@ -40,6 +40,36 @@ private val editorGreen = Color(0xFF2F5D3F)
 private val editorMuted = Color(0xFF7A8680)
 private val editorBorder = Color(0xFFE3E9E5)
 
+
+private fun displayEditorPhone(raw: String): String {
+    val digits = raw.filter(Char::isDigit)
+    return when {
+        digits.length == 11 && digits.startsWith("01") ->
+            digits.substring(0, 3) + "-" + digits.substring(3, 7) + "-" + digits.substring(7)
+        digits.length == 10 && digits.startsWith("01") ->
+            digits.substring(0, 3) + "-" + digits.substring(3, 6) + "-" + digits.substring(6)
+        else -> raw.ifBlank { "전화번호 필요" }
+    }
+}
+
+@Composable
+private fun EditorInfoRow(label: String, content: @Composable RowScope.() -> Unit) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(label, modifier = Modifier.width(84.dp), color = editorMuted, fontSize = 15.sp)
+        Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp), content = content)
+    }
+}
+
+@Composable
+private fun EditorChannelChip(label: String, selectedColor: Color, textColor: Color) {
+    Surface(shape = RoundedCornerShape(50), color = selectedColor) {
+        Text(label, Modifier.padding(horizontal = 15.dp, vertical = 8.dp),
+            color = textColor, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+    }
+}
+
 /** Fullscreen quote editor with the same layout as the delivery screen. */
 @Composable
 private fun EditorDialog(
@@ -174,45 +204,35 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
 
             Surface(shape = RoundedCornerShape(16.dp),
-                border = BorderStroke(0.5.dp, editorBorder),
-                color = Color.White) {
-                Column(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 9.dp),
-                    verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                border = BorderStroke(0.5.dp, editorBorder), color = Color.White) {
+                Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 18.dp),
+                    verticalArrangement = Arrangement.spacedBy(18.dp)) {
+                    EditorInfoRow("주문번호") {
+                        Text(subtitle, fontSize = 16.sp, color = Color(0xFF1B2A22),
+                            maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                    EditorInfoRow("고객명") {
                         Text(draft.recipient.customerName.ifBlank { "고객" },
-                            modifier = Modifier.weight(0.25f),
-                            maxLines = 1, overflow = TextOverflow.Ellipsis,
-                            fontWeight = FontWeight.Bold,
-                            style = MaterialTheme.typography.bodyMedium)
-                        Text(draft.phone.ifBlank { "전화번호 필요" },
-                            modifier = Modifier.weight(0.43f),
-                            maxLines = 1, overflow = TextOverflow.Ellipsis,
-                            fontWeight = FontWeight.Bold,
-                            style = MaterialTheme.typography.bodyMedium)
-                        Surface(shape = RoundedCornerShape(5.dp),
-                            color = if (draft.recipient.formalQuoteRequested)
-                                Color(0xFFDBE9FF) else Color(0xFFECEDEE)) {
-                            Text(if (draft.recipient.formalQuoteRequested) "공식견적서 요청" else "미요청",
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 5.dp),
-                                maxLines = 1, fontWeight = FontWeight.SemiBold,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = if (draft.recipient.formalQuoteRequested)
-                                    Color(0xFF2457A2) else Color(0xFF6D747B))
+                            fontSize = 17.sp, color = Color(0xFF1B2A22),
+                            fontWeight = FontWeight.Medium, maxLines = 1)
+                    }
+                    EditorInfoRow("연락처") {
+                        Text(displayEditorPhone(draft.phone), fontSize = 17.sp,
+                            color = Color(0xFF1B2A22), maxLines = 1)
+                    }
+                    EditorInfoRow("수신방법") {
+                        if (draft.recipient.replyChannel != "email") {
+                            EditorChannelChip("문자", Color(0xFFE3EEE6), editorGreen)
+                        }
+                        if (draft.recipient.replyChannel != "sms") {
+                            EditorChannelChip("메일", Color(0xFFE4ECF8), Color(0xFF2B5287))
                         }
                     }
-                    if (draft.recipient.customerEmail.isNotBlank()) {
-                        Text(draft.recipient.customerEmail, maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color(0xFF53695B))
-                    }
-                    if (request?.message?.isNotBlank() == true) {
-                        Text("요청사항 · ${request.message}",
-                            modifier = Modifier.clickable { messageExpanded = true },
-                            maxLines = 1, overflow = TextOverflow.Ellipsis,
-                            color = Color(0xFF53695B),
-                            style = MaterialTheme.typography.labelMedium)
+                    if (draft.recipient.formalQuoteRequested) {
+                        EditorInfoRow("견적서") {
+                            EditorChannelChip("공식견적 요청",
+                                Color(0xFFE4ECF8), Color(0xFF2B5287))
+                        }
                     }
                     if (manualEntry) {
                         TextButton(onClick = { manualContactExpanded = !manualContactExpanded },
@@ -370,53 +390,52 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
                     modifier = Modifier.align(Alignment.End)) { Text("+ 품목 추가") }
             }
 
-            // Shipping is one compact line. The 500-won adjustment is separate
-            // from the selected per-tree unit-price step.
+            // Preserve 500-won delivery adjustments independently of the item-price step.
             Surface(shape = RoundedCornerShape(16.dp),
                 border = BorderStroke(0.5.dp, editorBorder), color = Color.White) {
-                Row(Modifier.fillMaxWidth().padding(horizontal = 7.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(3.dp),
-                    verticalAlignment = Alignment.CenterVertically) {
-                    Text("배송비", style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold)
+                Row(Modifier.fillMaxWidth().padding(horizontal = 11.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    Text("배송비", color = Color(0xFF1B2A22), fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold, maxLines = 1)
                     Spacer(Modifier.weight(1f))
-                    listOf(false to "후불", true to "선불").forEach { (value, label) ->
-                        Surface(onClick = { draft = draft.copy(prepaid = value) },
-                            enabled = !saving, shape = RoundedCornerShape(5.dp),
-                            color = if (draft.prepaid == value)
-                                editorGreen else Color(0xFFF1F2F0)) {
-                            Text(label, Modifier.padding(horizontal = 7.dp, vertical = 8.dp),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = if (draft.prepaid == value)
-                                    Color.White else Color(0xFF68736A))
+                    Row(Modifier.background(Color(0xFFEEF1EF), RoundedCornerShape(10.dp))
+                        .padding(3.dp), horizontalArrangement = Arrangement.spacedBy(1.dp)) {
+                        listOf(false to "후불", true to "선불").forEach { (value, label) ->
+                            Surface(onClick = { draft = draft.copy(prepaid = value) },
+                                enabled = !saving, shape = RoundedCornerShape(8.dp),
+                                color = if (draft.prepaid == value) editorGreen else Color.Transparent) {
+                                Text(label, Modifier.padding(horizontal = 9.dp, vertical = 10.dp),
+                                    color = if (draft.prepaid == value) Color.White else editorMuted,
+                                    fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                            }
                         }
                     }
                     if (draft.prepaid) {
                         Surface(onClick = {
                             draft = draft.copy(fee = adjustedQuotePrice(draft.fee, -500))
-                        }, enabled = !saving, shape = RoundedCornerShape(5.dp),
-                            color = Color(0xFFE6F1E8)) {
-                            Box(Modifier.size(34.dp), contentAlignment = Alignment.Center) {
+                        }, enabled = !saving, shape = androidx.compose.foundation.shape.CircleShape,
+                            color = Color(0xFFE3EEE6)) {
+                            Box(Modifier.size(37.dp), contentAlignment = Alignment.Center) {
                                 Icon(Icons.Outlined.Remove, "배송비 500원 내리기",
-                                    tint = Color(0xFF205943), modifier = Modifier.size(18.dp))
+                                    tint = editorGreen, modifier = Modifier.size(22.dp))
                             }
                         }
-                        Text("${money(draft.shipping().toLong())}",
-                            modifier = Modifier.widthIn(min = 54.dp),
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold, color = Color(0xFF205943),
-                            textAlign = TextAlign.Center, maxLines = 1)
+                        Text(money(draft.shipping().toLong()),
+                            color = Color(0xFF1B2A22), fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold, maxLines = 1)
                         Surface(onClick = {
                             draft = draft.copy(fee = adjustedQuotePrice(draft.fee, 500))
-                        }, enabled = !saving, shape = RoundedCornerShape(5.dp),
-                            color = Color(0xFFE6F1E8)) {
-                            Box(Modifier.size(34.dp), contentAlignment = Alignment.Center) {
+                        }, enabled = !saving, shape = androidx.compose.foundation.shape.CircleShape,
+                            color = Color(0xFFE3EEE6)) {
+                            Box(Modifier.size(37.dp), contentAlignment = Alignment.Center) {
                                 Icon(Icons.Outlined.Add, "배송비 500원 올리기",
-                                    tint = Color(0xFF205943), modifier = Modifier.size(18.dp))
+                                    tint = editorGreen, modifier = Modifier.size(22.dp))
                             }
                         }
-                    } else Text("배송비 후불(착불)", color = editorMuted,
-                        style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                    } else {
+                        Text("착불", color = editorMuted, fontSize = 14.sp)
+                    }
                 }
             }
             Surface(shape = RoundedCornerShape(16.dp),

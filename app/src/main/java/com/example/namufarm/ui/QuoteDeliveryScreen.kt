@@ -192,35 +192,30 @@ fun QuoteDeliveryScreen(
             } }
             item {
                 DeliveryCard {
-                    Row(
-                        Modifier.fillMaxWidth().padding(14.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Box(Modifier.size(52.dp).background(paleGreen, CircleShape),
-                            contentAlignment = Alignment.Center) {
-                            Text(state.customer.name.take(1).ifBlank { "고" },
-                                fontSize = 21.sp, color = green, fontWeight = FontWeight.Medium)
+                    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 18.dp),
+                        verticalArrangement = Arrangement.spacedBy(18.dp)) {
+                        DeliveryInfoRow("주문번호") {
+                            Text(state.orderNumber, color = textPrimary, fontSize = 16.sp,
+                                maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                                Text(state.customer.name, fontSize = 16.sp, color = textPrimary,
-                                    fontWeight = FontWeight.Medium, maxLines = 1)
-                                if (state.customer.formalQuoteRequested)
-                                    DeliveryPill("공식견적서 요청", paleBlue, chipBlue)
-                            }
-                            Text(state.customer.phone, fontSize = 14.sp, color = textPrimary)
-                            if (!state.customer.email.isNullOrBlank())
-                                Text(state.customer.email, fontSize = 12.sp, color = textSecondary,
-                                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        DeliveryInfoRow("고객명") {
+                            Text(state.customer.name, color = textPrimary, fontSize = 17.sp,
+                                fontWeight = FontWeight.Medium, maxLines = 1,
+                                overflow = TextOverflow.Ellipsis)
                         }
-                        Column(horizontalAlignment = Alignment.End,
-                            verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                            Text("수신방법", fontSize = 11.sp, color = textSecondary)
-                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                if (state.customer.smsRequested) DeliveryPill("문자", paleGreen, green)
-                                if (state.customer.emailRequested) DeliveryPill("메일", paleBlue, chipBlue)
+                        DeliveryInfoRow("연락처") {
+                            Text(displayDeliveryPhone(state.customer.phone),
+                                color = textPrimary, fontSize = 17.sp, maxLines = 1)
+                        }
+                        DeliveryInfoRow("수신방법") {
+                            if (state.customer.smsRequested)
+                                DeliveryChannelChip("문자", paleGreen, green)
+                            if (state.customer.emailRequested)
+                                DeliveryChannelChip("메일", paleBlue, chipBlue)
+                        }
+                        if (state.customer.formalQuoteRequested) {
+                            DeliveryInfoRow("견적서") {
+                                DeliveryChannelChip("공식견적 요청", paleBlue, chipBlue)
                             }
                         }
                     }
@@ -279,26 +274,38 @@ fun QuoteDeliveryScreen(
             }
             item {
                 DeliveryCard {
-                    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 12.dp),
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 11.dp, vertical = 14.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                        Text("배송비", color = textPrimary, fontSize = 15.sp,
-                            fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
-                        Row(Modifier.background(Color(0xFFEEF1EF), RoundedCornerShape(8.dp)).padding(3.dp),
-                            horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text("배송비", color = textPrimary, fontSize = 16.sp,
+                            fontWeight = FontWeight.SemiBold, maxLines = 1)
+                        Spacer(Modifier.weight(1f))
+                        Row(Modifier.background(Color(0xFFEEF1EF), RoundedCornerShape(10.dp))
+                            .padding(3.dp), horizontalArrangement = Arrangement.spacedBy(1.dp)) {
                             DeliveryMode("후불", selected = !state.prepaid, enabled = canEdit) { onPrepaidChange(false) }
                             DeliveryMode("선불", selected = state.prepaid, enabled = canEdit) { onPrepaidChange(true) }
                         }
                         if (state.prepaid) {
-                            DeliveryStepButton(false, enabled = canEdit) {
+                            Surface(onClick = {
                                 onShippingFeeChange(nextPrice(state.shippingFee, -state.priceStep))
+                            }, enabled = canEdit, modifier = Modifier.size(37.dp),
+                                shape = CircleShape, color = paleGreen) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text("−", color = green, fontSize = 22.sp)
+                                }
                             }
-                            DeliveryPrice(won(state.shippingFee.toLong()), minWidth = 66.dp)
-                            DeliveryStepButton(true, enabled = canEdit) {
+                            Text(won(state.shippingFee.toLong()), color = textPrimary,
+                                fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                            Surface(onClick = {
                                 onShippingFeeChange(nextPrice(state.shippingFee, state.priceStep))
+                            }, enabled = canEdit, modifier = Modifier.size(37.dp),
+                                shape = CircleShape, color = paleGreen) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text("+", color = green, fontSize = 22.sp)
+                                }
                             }
                         } else {
-                            Text("착불", color = textSecondary, fontSize = 13.sp)
+                            Text("착불", color = textSecondary, fontSize = 14.sp)
                         }
                     }
                 }
@@ -365,6 +372,36 @@ fun QuoteDeliveryScreen(
 private fun DeliveryCard(content: @Composable () -> Unit) {
     Surface(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp),
         color = white, border = BorderStroke(0.5.dp, border), content = content)
+}
+
+
+private fun displayDeliveryPhone(raw: String): String {
+    val digits = raw.filter(Char::isDigit)
+    return when {
+        digits.length == 11 && digits.startsWith("01") ->
+            digits.substring(0, 3) + "-" + digits.substring(3, 7) + "-" + digits.substring(7)
+        digits.length == 10 && digits.startsWith("01") ->
+            digits.substring(0, 3) + "-" + digits.substring(3, 6) + "-" + digits.substring(6)
+        else -> raw
+    }
+}
+
+@Composable
+private fun DeliveryInfoRow(label: String, content: @Composable RowScope.() -> Unit) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(label, modifier = Modifier.width(84.dp), color = textSecondary, fontSize = 15.sp)
+        Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp), content = content)
+    }
+}
+
+@Composable
+private fun DeliveryChannelChip(label: String, fill: Color, ink: Color) {
+    Surface(shape = RoundedCornerShape(50), color = fill) {
+        Text(label, color = ink, fontSize = 14.sp, fontWeight = FontWeight.Medium,
+            modifier = Modifier.padding(horizontal = 15.dp, vertical = 8.dp))
+    }
 }
 
 @Composable
@@ -440,8 +477,8 @@ private fun DeliveryMode(label: String, selected: Boolean, enabled: Boolean, onC
     Surface(onClick = onClick, enabled = enabled, shape = RoundedCornerShape(8.dp),
         color = if (selected) green else Color.Transparent) {
         Text(label, color = if (selected) white else textSecondary,
-            fontSize = 12.sp, fontWeight = FontWeight.Medium,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp))
+            fontSize = 13.sp, fontWeight = FontWeight.Medium,
+            modifier = Modifier.padding(horizontal = 9.dp, vertical = 10.dp))
     }
 }
 
