@@ -1,6 +1,7 @@
 package com.example.namufarm.ui
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -15,6 +16,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.example.namufarm.data.WebQuoteRequestEntity
@@ -34,123 +38,257 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
     var draft by rememberSaveable(draftKey, stateSaver = draftSaver) {
         mutableStateOf(initialDraft ?: SellerQuoteDraft.from(request, QuoteIssuerSettings(context).load()))
     }
-    var contactExpanded by rememberSaveable { mutableStateOf(request == null) }
+    var contactExpanded by rememberSaveable(draftKey) { mutableStateOf(request == null) }
+    var shippingExpanded by rememberSaveable(draftKey) { mutableStateOf(false) }
     var step by rememberSaveable { mutableIntStateOf(1000) }
     var error by rememberSaveable { mutableStateOf<String?>(null) }
     var discard by remember { mutableStateOf(false) }
     var deleteConfirm by remember { mutableStateOf(false) }
-    val initial = remember(draftKey) { initialDraft ?: SellerQuoteDraft.from(request, QuoteIssuerSettings(context).load()) }
-    fun close() { if (!saving) { if (draft != initial) discard = true else onDismiss() } }
-    fun submit(action: QuoteDelivery) {
-        try { draft.validate(action); error = null; onSave(draft, action) }
-        catch (e: Exception) { error = if (e is ArithmeticException) "견적 수량이나 금액이 너무 큽니다." else e.message }
+    val initial = remember(draftKey) {
+        initialDraft ?: SellerQuoteDraft.from(request, QuoteIssuerSettings(context).load())
     }
-    val amount = runCatching { com.example.namufarm.domain.order.OrderAmounts.calculate(draft.rows.map { it.line() }, draft.prepaid, draft.shipping()).price.toLong() +
-        if (draft.recipient.formalQuoteRequested) draft.options.taxAmount() else 0L }.getOrNull()
-    NamuDialog("견적 작성", request?.let { "${it.customerName} · ${it.region}" } ?: "빠른 견적 · 고객과 품목 직접 입력", onDismiss = ::close, actions = {
-        (error ?: message?.takeIf { it.startsWith("❌") })?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text("최종 견적 금액", style = MaterialTheme.typography.labelMedium)
-                Text(amount?.let(::money) ?: "단가를 입력해주세요", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
-            }
-            if (!firstRequest) TextButton(onClick = { submit(QuoteDelivery.SAVE) }, enabled = !saving) {
-                Text("저장만")
-            }
+
+    fun close() {
+        if (!saving) {
+            if (draft != initial) discard = true else onDismiss()
         }
-        Text("문자·메일은 PDF 첨부 없이 견적 내용을 텍스트로 보냅니다.",
-            style = MaterialTheme.typography.bodySmall)
-        if (draft.recipient.formalQuoteRequested)
-            Text("고객이 요청한 공식 견적서는 나피 PC에서 별도 처리합니다.",
+    }
+    fun submit(action: QuoteDelivery) {
+        try {
+            draft.validate(action)
+            error = null
+            onSave(draft, action)
+        } catch (e: Exception) {
+            error = if (e is ArithmeticException) "견적 수량이나 금액이 너무 큽니다." else e.message
+        }
+    }
+    val amount = runCatching {
+        com.example.namufarm.domain.order.OrderAmounts.calculate(
+            draft.rows.map { it.line() }, draft.prepaid, draft.shipping()
+        ).price.toLong() + if (draft.recipient.formalQuoteRequested) draft.options.taxAmount() else 0L
+    }.getOrNull()
+    val subtitle = request?.receiptNumber?.takeIf { it.isNotBlank() }
+        ?: request?.let { "${it.customerName} · ${it.region}" }
+        ?: "빠른 견적"
+
+    // NamuDialog keeps actions fixed below the scrollable content, including
+    // when the numeric keyboard is visible.
+    NamuDialog("견적 작성", subtitle, onDismiss = ::close, actions = {
+        (error ?: message?.takeIf { it.startsWith("❌") })?.let {
+            Text(it, color = MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodySmall)
+        }
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween) {
+            Text("최종 견적 금액", style = MaterialTheme.typography.titleMedium)
+            Text(amount?.let(::money) ?: "단가 입력 필요",
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+        }
+        if (firstRequest) {
+            Button(onClick = { submit(QuoteDelivery.SAVE) },
+                enabled = !saving, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
+                Text(if (saving) "견적확정 중…" else "견적확정",
+                    style = MaterialTheme.typography.titleMedium)
+            }
+        } else {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                OutlinedButton(onClick = { submit(QuoteDelivery.SMS) }, enabled = !saving,
+                    modifier = Modifier.weight(1f).heightIn(min = 52.dp)) {
+                    Text("문자 보내기")
+                }
+                Button(onClick = { submit(QuoteDelivery.EMAIL) }, enabled = !saving,
+                    modifier = Modifier.weight(1f).heightIn(min = 52.dp)) {
+                    Text("메일 보내기")
+                }
+            }
+            TextButton(onClick = { submit(QuoteDelivery.SAVE) }, enabled = !saving,
+                modifier = Modifier.align(Alignment.End)) { Text("저장만") }
+        }
         if (onDeleteRequest != null) {
             TextButton(onClick = { deleteConfirm = true }, enabled = !saving,
-                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                modifier = Modifier.fillMaxWidth()) {
+                modifier = Modifier.align(Alignment.CenterHorizontally),
+                colors = ButtonDefaults.textButtonColors(
+                    contentColor = MaterialTheme.colorScheme.error)) {
                 Text("견적 요청 삭제")
             }
         }
-        if (firstRequest) {
-            Button(onClick = { submit(QuoteDelivery.SAVE) }, enabled = !saving,
-                modifier = Modifier.fillMaxWidth().heightIn(min = 54.dp)) {
-                Text(if (saving) "견적 저장 중…" else "견적확정 · 작업대로 이동")
-            }
-        } else Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { submit(QuoteDelivery.SMS) }, enabled = !saving, modifier = Modifier.weight(1f).heightIn(min = 52.dp)) {
-                Icon(Icons.Outlined.Sms, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("문자 보내기")
-            }
-            Button(onClick = { submit(QuoteDelivery.EMAIL) }, enabled = !saving, modifier = Modifier.weight(1f).heightIn(min = 52.dp)) {
-                Icon(Icons.Outlined.MailOutline, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text(if (saving) "저장 중…" else "메일 보내기")
-            }
-        }
     }) {
-        Column(Modifier.verticalScroll(rememberScrollState()).testTag("quote_editor_body").padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            QuoteBox("받는 사람 · 연락처") {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text(draft.recipient.customerName.ifBlank { "고객 정보 입력" }, style = MaterialTheme.typography.titleMedium)
-                        Text(draft.phone.ifBlank { "전화번호를 입력해주세요" }, style = MaterialTheme.typography.bodyMedium)
-                        if (draft.recipient.customerEmail.isNotBlank()) Text(draft.recipient.customerEmail, style = MaterialTheme.typography.bodySmall)
-                    }
-                    TextButton(onClick = { contactExpanded = !contactExpanded }, enabled = !saving) { Text(if (contactExpanded) "접기" else "수정") }
-                }
-                if (contactExpanded) {
-                    ManualField("고객 성함", draft.recipient.customerName, { draft = draft.copy(recipient = draft.recipient.copy(customerName = it)) }, saving, limit = 50)
-                    ManualField("전화번호 *", draft.phone, { draft = draft.copy(phone = it) }, saving, KeyboardType.Phone)
-                    ManualField("견적 수신인·회사명", draft.recipient.recipientName, { draft = draft.copy(recipient = draft.recipient.copy(recipientName = it)) }, saving, limit = 100)
-                    ManualField("이메일", draft.recipient.customerEmail, { draft = draft.copy(recipient = draft.recipient.copy(customerEmail = it)) }, saving, KeyboardType.Email)
-                }
-                request?.let {
-                    if (it.message.isNotBlank()) Text("요청사항 · ${it.message}", style = MaterialTheme.typography.bodySmall)
-                    Text("희망 회신 · ${when (it.replyChannel) { "email" -> "메일"; "both" -> "문자 + 메일"; else -> "문자" }}${if (it.formalQuoteRequested) " · 공식 견적서" else ""}", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium)
+        Column(Modifier.verticalScroll(rememberScrollState()).testTag("quote_editor_body")
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)) {
+
+            // Contact and reply preference occupy just two lines normally.
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(draft.recipient.customerName.ifBlank { "고객" },
+                    modifier = Modifier.weight(0.35f),
+                    maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(draft.phone.ifBlank { "전화번호 필요" },
+                    modifier = Modifier.weight(0.51f), maxLines = 1,
+                    style = MaterialTheme.typography.bodyMedium)
+                IconButton(onClick = { contactExpanded = !contactExpanded },
+                    modifier = Modifier.size(44.dp), enabled = !saving) {
+                    Icon(Icons.Outlined.Edit, "고객 정보 수정")
                 }
             }
-            Column {
-                NamuSectionTitle("품목별 판매 단가", "버튼으로 조정하거나 금액을 직접 입력하세요")
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf(100, 1000, 10000).forEach { value -> FilterChip(step == value, { step = value }, { Text(money(value.toLong())) }, enabled = !saving) }
+            Text(buildString {
+                append("회신 · ")
+                append(when (request?.replyChannel) {
+                    "email" -> "메일"
+                    "both" -> "문자 + 메일"
+                    else -> "문자"
+                })
+                append(" · ")
+                append(if (draft.recipient.customerEmail.isBlank()) "이메일 미등록" else "이메일 등록됨")
+                if (request?.formalQuoteRequested == true) append(" · 공식 견적서 요청")
+            }, style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary)
+            if (contactExpanded) {
+                Surface(shape = MaterialTheme.shapes.medium,
+                    color = MaterialTheme.colorScheme.surfaceVariant) {
+                    Column(Modifier.fillMaxWidth().padding(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        ManualField("고객 성함", draft.recipient.customerName, {
+                            draft = draft.copy(recipient = draft.recipient.copy(customerName = it))
+                        }, saving, limit = 50)
+                        ManualField("전화번호 *", draft.phone, {
+                            draft = draft.copy(phone = it)
+                        }, saving, KeyboardType.Phone)
+                        ManualField("견적 수신인·회사명", draft.recipient.recipientName, {
+                            draft = draft.copy(recipient = draft.recipient.copy(recipientName = it))
+                        }, saving, limit = 100)
+                        ManualField("이메일", draft.recipient.customerEmail, {
+                            draft = draft.copy(recipient = draft.recipient.copy(customerEmail = it))
+                        }, saving, KeyboardType.Email)
+                        if (request?.message?.isNotBlank() == true) {
+                            Text("요청사항 · ${request.message}",
+                                style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
+            }
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("품목별 판매 단가", style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f), fontWeight = FontWeight.Bold)
+                Text("${draft.rows.size}품목", style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("단가 증감", style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.width(8.dp))
+                Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    listOf(100, 1000, 10000).forEach { value ->
+                        FilterChip(selected = step == value, onClick = { step = value },
+                            label = { Text(money(value.toLong()),
+                                style = MaterialTheme.typography.labelMedium) },
+                            enabled = !saving)
+                    }
                 }
             }
             draft.rows.forEachIndexed { index, row ->
                 key(index) {
                     var details by rememberSaveable { mutableStateOf(row.name.isBlank()) }
-                    fun update(value: SellerQuoteRow) { draft = draft.copy(rows = draft.rows.toMutableList().also { it[index] = value }) }
-                    QuoteBox("${index + 1}. ${row.name.ifBlank { "새 품목" }}") {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("${row.spec.ifBlank { "규격 미지정" }} · ${row.quantity.ifBlank { "0" }}주", Modifier.weight(1f))
-                            TextButton(onClick = { details = !details }, enabled = !saving) { Text(if (details) "접기" else "품목 수정") }
-                        }
-                        if (details) {
-                            ManualField("묘목명 *", row.name, { update(row.copy(name = it)) }, saving, limit = 200)
-                            ManualField("규격", row.spec, { update(row.copy(spec = it)) }, saving, limit = 200)
-                            ManualField("수량 (주) *", row.quantity, { update(row.copy(quantity = it)) }, saving, KeyboardType.Number)
-                        }
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            FilledTonalIconButton(onClick = { update(row.copy(price = adjustedQuotePrice(row.price, -step))) }, enabled = !saving, modifier = Modifier.size(48.dp)) { Icon(Icons.Outlined.Remove, "${index + 1}번 단가 내리기") }
-                            OutlinedTextField(row.price, { if (it.all(Char::isDigit) && it.length <= 10) update(row.copy(price = it)) }, label = { Text("판매 단가 (원)") }, singleLine = true, enabled = !saving,
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.weight(1f).testTag("unit_price_$index"))
-                            FilledTonalIconButton(onClick = { update(row.copy(price = adjustedQuotePrice(row.price, step))) }, enabled = !saving, modifier = Modifier.size(48.dp)) { Icon(Icons.Outlined.Add, "${index + 1}번 단가 올리기") }
-                        }
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            val subtotal = (row.quantity.toIntOrNull()?.toLong() ?: 0) * (row.price.toIntOrNull()?.toLong() ?: 0)
-                            Text("품목 합계  ${money(subtotal)}", Modifier.weight(1f), style = MaterialTheme.typography.labelLarge)
-                            if (details && draft.rows.size > 1) TextButton(onClick = { draft = draft.copy(rows = draft.rows.filterIndexed { i, _ -> i != index }) }, enabled = !saving) { Text("삭제") }
+                    fun update(value: SellerQuoteRow) {
+                        draft = draft.copy(rows = draft.rows.toMutableList().also { it[index] = value })
+                    }
+                    Surface(shape = MaterialTheme.shapes.large,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                        color = MaterialTheme.colorScheme.surface) {
+                        Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                Text("${index + 1}. ${row.name.ifBlank { "새 품목" }}",
+                                    modifier = Modifier.weight(0.44f),
+                                    maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                    style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                Text("${row.spec.ifBlank { "규격 미정" }} · ${row.quantity.ifBlank { "0" }}주",
+                                    modifier = Modifier.weight(0.56f),
+                                    maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                IconButton(onClick = { details = !details },
+                                    modifier = Modifier.size(44.dp), enabled = !saving) {
+                                    Icon(Icons.Outlined.Edit, "${index + 1}번 품목 수정")
+                                }
+                            }
+                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                                FilledTonalIconButton(onClick = {
+                                    update(row.copy(price = adjustedQuotePrice(row.price, -step)))
+                                }, enabled = !saving, modifier = Modifier.size(48.dp)) {
+                                    Icon(Icons.Outlined.Remove, "${index + 1}번 단가 내리기")
+                                }
+                                OutlinedTextField(row.price,
+                                    { if (it.all(Char::isDigit) && it.length <= 10) update(row.copy(price = it)) },
+                                    placeholder = { Text("판매 단가 (원)",
+                                        style = MaterialTheme.typography.bodySmall, maxLines = 1) },
+                                    singleLine = true, enabled = !saving,
+                                    textStyle = MaterialTheme.typography.titleMedium.copy(
+                                        textAlign = TextAlign.Center),
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    modifier = Modifier.weight(1f).testTag("unit_price_$index"))
+                                FilledTonalIconButton(onClick = {
+                                    update(row.copy(price = adjustedQuotePrice(row.price, step)))
+                                }, enabled = !saving, modifier = Modifier.size(48.dp)) {
+                                    Icon(Icons.Outlined.Add, "${index + 1}번 단가 올리기")
+                                }
+                            }
+                            if (details) {
+                                ManualField("묘목명 *", row.name, { update(row.copy(name = it)) },
+                                    saving, limit = 200)
+                                ManualField("규격", row.spec, { update(row.copy(spec = it)) },
+                                    saving, limit = 200)
+                                ManualField("수량 (주) *", row.quantity, { update(row.copy(quantity = it)) },
+                                    saving, KeyboardType.Number)
+                                if (draft.rows.size > 1) {
+                                    TextButton(onClick = {
+                                        draft = draft.copy(rows = draft.rows.filterIndexed { i, _ -> i != index })
+                                    }, enabled = !saving) { Text("이 품목 삭제") }
+                                }
+                            }
                         }
                     }
                 }
             }
-            OutlinedButton(onClick = { draft = draft.copy(rows = draft.rows + SellerQuoteRow()) }, enabled = !saving && draft.rows.size < 50, modifier = Modifier.fillMaxWidth()) { Text("+ 품목 추가") }
-            QuoteBox("배송 조건") {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(!draft.prepaid, { draft = draft.copy(prepaid = false) }, { Text("착불") }, enabled = !saving)
-                    FilterChip(draft.prepaid, { draft = draft.copy(prepaid = true) }, { Text("선불") }, enabled = !saving)
+            TextButton(onClick = { draft = draft.copy(rows = draft.rows + SellerQuoteRow()) },
+                enabled = !saving && draft.rows.size < 50,
+                modifier = Modifier.align(Alignment.End)) { Text("+ 품목 추가") }
+
+            OutlinedCard(onClick = { shippingExpanded = !shippingExpanded },
+                enabled = !saving, modifier = Modifier.fillMaxWidth()) {
+                Row(Modifier.fillMaxWidth().heightIn(min = 52.dp)
+                    .padding(horizontal = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Text("배송비", style = MaterialTheme.typography.titleSmall,
+                        modifier = Modifier.weight(1f))
+                    Text(if (draft.prepaid) "선불 · ${money(draft.shipping().toLong())}"
+                        else "착불 · 합계 제외",
+                        style = MaterialTheme.typography.bodyMedium)
+                    Spacer(Modifier.width(5.dp))
+                    Icon(Icons.Outlined.ChevronRight, "배송 조건 수정")
                 }
-                if (draft.prepaid) ManualField("선불 배송비 (원)", draft.fee, { draft = draft.copy(fee = it) }, saving, KeyboardType.Number)
-                else Text("배송비는 견적 합계에 포함되지 않습니다", style = MaterialTheme.typography.bodySmall)
             }
-            Text(if (firstRequest) "견적확정 후 바로 문자 또는 메일을 보낼 수 있어요."
-                else "실제 문자·메일 발송은 해당 앱에서 확인해주세요.",
-                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (shippingExpanded) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(selected = !draft.prepaid,
+                        onClick = { draft = draft.copy(prepaid = false) },
+                        label = { Text("착불") }, enabled = !saving)
+                    FilterChip(selected = draft.prepaid,
+                        onClick = { draft = draft.copy(prepaid = true) },
+                        label = { Text("선불") }, enabled = !saving)
+                }
+                if (draft.prepaid) ManualField("선불 배송비 (원)", draft.fee, {
+                    draft = draft.copy(fee = it)
+                }, saving, KeyboardType.Number)
+                else Text("착불 배송비는 견적 합계에 포함되지 않습니다.",
+                    style = MaterialTheme.typography.bodySmall)
+            }
         }
     }
     if (deleteConfirm) AlertDialog(
