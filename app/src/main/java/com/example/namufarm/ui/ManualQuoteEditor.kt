@@ -252,10 +252,16 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
                 Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                     listOf(500, 1000, 10000).forEach { value ->
-                        FilterChip(selected = step == value,
-                            onClick = { step = value }, enabled = !saving,
-                            label = { Text(money(value.toLong()),
-                                style = MaterialTheme.typography.labelMedium) })
+                        Surface(onClick = { step = value }, enabled = !saving,
+                            shape = RoundedCornerShape(22.dp),
+                            color = if (step == value) editorGreen else Color.White,
+                            border = BorderStroke(0.5.dp,
+                                if (step == value) editorGreen else editorBorder)) {
+                            Text(if (value == 10000) "1만원" else money(value.toLong()),
+                                Modifier.padding(horizontal = 9.dp, vertical = 9.dp),
+                                color = if (step == value) Color.White else editorMuted,
+                                fontSize = 12.sp)
+                        }
                     }
                 }
             }
@@ -269,30 +275,32 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
                         border = BorderStroke(0.5.dp, editorBorder),
                         color = Color.White) {
                         Column(Modifier.fillMaxWidth()
-                            .padding(horizontal = 10.dp, vertical = 7.dp),
-                            verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Text("${index+1}. ${row.name.ifBlank { "새 품목" }}",
-                                    modifier = Modifier.weight(0.42f), maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold)
-                                Text("${row.quantity.ifBlank { "0" }}주",
-                                    color = Color(0xFF205943), fontWeight = FontWeight.SemiBold,
-                                    style = MaterialTheme.typography.bodyMedium)
+                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Text("${index+1}. ${row.name.ifBlank { "새 품목" }}",
+                                        modifier = Modifier.weight(1f), maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis, fontSize = 17.sp,
+                                        fontWeight = FontWeight.SemiBold)
+                                    Surface(shape = RoundedCornerShape(50),
+                                        color = Color(0xFFE3EEE6)) {
+                                        Text("${row.quantity.ifBlank { "0" }}주",
+                                            Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                            color = editorGreen, fontSize = 13.sp)
+                                    }
+                                    if (manualEntry) {
+                                        TextButton(onClick = {
+                                            expandedRow = if (expandedRow == index) -1 else index
+                                        }, enabled = !saving) { Text("수정") }
+                                    }
+                                }
                                 if (row.spec.isNotBlank()) {
                                     Text("희망규격: ${row.spec}",
-                                        modifier = Modifier.weight(0.58f)
-                                            .clickable { specDetails = row },
-                                        maxLines = 1, overflow = TextOverflow.Ellipsis,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = Color(0xFF53695B))
-                                } else Spacer(Modifier.weight(0.58f))
-                                if (manualEntry) {
-                                    TextButton(onClick = {
-                                        expandedRow = if (expandedRow == index) -1 else index
-                                    }, enabled = !saving) { Text("수정") }
+                                        modifier = Modifier.clickable { specDetails = row },
+                                        maxLines = 2, overflow = TextOverflow.Ellipsis,
+                                        fontSize = 12.sp, color = editorMuted)
                                 }
                             }
                             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
@@ -330,7 +338,7 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
                                 }
                             }
                             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                                Text("품목 금액", color = Color(0xFF53695B),
+                                Text("소계", color = Color(0xFF53695B),
                                     modifier = Modifier.weight(1f),
                                     style = MaterialTheme.typography.bodySmall)
                                 val subtotal = (row.quantity.toIntOrNull()?.toLong() ?: 0L) *
@@ -376,11 +384,11 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
                         Surface(onClick = { draft = draft.copy(prepaid = value) },
                             enabled = !saving, shape = RoundedCornerShape(5.dp),
                             color = if (draft.prepaid == value)
-                                Color(0xFFD5EBDD) else Color(0xFFF1F2F0)) {
+                                editorGreen else Color(0xFFF1F2F0)) {
                             Text(label, Modifier.padding(horizontal = 7.dp, vertical = 8.dp),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = if (draft.prepaid == value)
-                                    Color(0xFF205943) else Color(0xFF68736A))
+                                    Color.White else Color(0xFF68736A))
                         }
                     }
                     if (draft.prepaid) {
@@ -407,7 +415,7 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
                                     tint = Color(0xFF205943), modifier = Modifier.size(18.dp))
                             }
                         }
-                    } else Text("고객 부담", color = Color(0xFF53695B),
+                    } else Text("배송비 후불(착불)", color = editorMuted,
                         style = MaterialTheme.typography.labelSmall, maxLines = 1)
                 }
             }
