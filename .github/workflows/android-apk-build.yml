@@ -20,9 +20,13 @@ jobs:
     name: Build ${{ inputs.apk_type }} APK
     runs-on: ubuntu-latest
     timeout-minutes: 50
+    permissions:
+      contents: write # Needed only to save the APK as a draft release.
     steps:
       - name: Check out selected commit
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Configure Java
         uses: actions/setup-java@v4
@@ -113,6 +117,8 @@ jobs:
           retention-days: 30
 
       - name: Upload signed release APK
+        id: release_artifact
+        continue-on-error: true
         if: inputs.apk_type == 'release'
         uses: actions/upload-artifact@v4
         with:
@@ -120,6 +126,26 @@ jobs:
           path: app/build/outputs/apk/release/*.apk
           if-no-files-found: error
           retention-days: 30
+
+      # Draft only: retains repository visibility and never publishes a release.
+      - name: Save signed APK as a draft release if artifact upload fails
+        if: inputs.apk_type == 'release' && steps.release_artifact.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          apks=(app/build/outputs/apk/release/*.apk)
+          if [ "${#apks[@]}" -ne 1 ]; then
+            echo "::error::Expected exactly one signed release APK."
+            exit 1
+          fi
+          tag="android-apk-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          gh release create "$tag" "${apks[0]}" --draft \
+            --target "$GITHUB_SHA" --title "Android APK ${GITHUB_SHA:0:7}" \
+            --notes "Manual signed Android APK build. Source commit: $GITHUB_SHA."
+          echo "Saved signed APK in draft release: $tag" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Remove temporary signing file
         if: always()
