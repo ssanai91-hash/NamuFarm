@@ -58,7 +58,6 @@ internal fun SellingHome(
     val listState = rememberLazyListState()
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     var query by rememberSaveable { mutableStateOf("") }
-    var salesFilter by rememberSaveable { mutableStateOf("배송 대기") }
     var deletion by remember { mutableStateOf<WorkDeleteTarget?>(null) }
     LaunchedEffect(workbenchSignal) {
         if (workbenchSignal > 0) selectedTab = 1
@@ -66,10 +65,13 @@ internal fun SellingHome(
     LaunchedEffect(selectedTab) { listState.scrollToItem(0) }
 
     // Local quotes remain in Room; these are read-only work-list views.
+    // Android 1차 버전: 서버 견적만 조회·확정하고 주문/판매장에는 접근하지 않는다.
     val paidRequestIds = state.allOrders.map { it.sourceRequestId }.filter(String::isNotBlank).toSet()
     val paidQuoteNumbers = state.allOrders.map { it.sourceQuoteNumber }.filter(String::isNotBlank).toSet()
-    val activeRequests = webRequests.filter { it.requestId !in paidRequestIds &&
-        it.status !in setOf("입금확인", "구매확정", "배송완료", "판매완료", "구매취소", "주문취소") }
+    val activeRequests = webRequests.filter {
+        it.requestId !in paidRequestIds &&
+            it.status !in setOf("입금확인", "구매확정", "배송완료", "판매완료", "구매취소", "주문취소", "보관종료")
+    }
     val newRequests = activeRequests.filter {
         it.status == "신규" && state.quotesByRequest[it.requestId] == null
     }.sortedByDescending { it.sequence }
@@ -77,20 +79,8 @@ internal fun SellingHome(
         newRequests.any { it.requestId == request.requestId }
     }.sortedByDescending { it.sequence }
     val linkedNumbers = webRequests.mapNotNull { state.quotesByRequest[it.requestId]?.quoteNumber }.toSet()
-    val localQuotes = state.allQuotes.filter {
-        it.quoteNumber !in linkedNumbers && it.quoteNumber !in paidQuoteNumbers
-    }
+    val localQuotes = state.allQuotes.filter { it.quoteNumber !in linkedNumbers && it.quoteNumber !in paidQuoteNumbers }
     val workCount = workRequests.size + localQuotes.size
-    val visibleSales = state.allOrders.filter { it.orderNumber !in state.hiddenOrderNumbers }
-    val pendingSales = visibleSales.count { it.status in setOf("구매확정", "입금확인") }
-    val completedSales = visibleSales.count { it.status in setOf("배송확인", "배송완료", "판매완료") }
-    val rowsSales = visibleSales.filter {
-        when (salesFilter) {
-            "배송 대기" -> it.status in setOf("구매확정", "입금확인")
-            "배송완료" -> it.status in setOf("배송확인", "배송완료", "판매완료")
-            else -> true
-        }
-    }.sortedByDescending { it.orderDate }
     fun matches(value: String) = query.isBlank() || value.contains(query.trim(), ignoreCase = true)
 
     Scaffold(
@@ -162,8 +152,7 @@ internal fun SellingHome(
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                     listOf(
                         Triple("신규 요청", newRequests.size, Icons.Outlined.Inbox),
-                        Triple("견적 작업대", workCount, Icons.Outlined.Description),
-                        Triple("판매 관리", visibleSales.size, Icons.Outlined.LocalShipping)
+                        Triple("견적 작업대", workCount, Icons.Outlined.Description)
                     ).forEachIndexed { index, (title, count, icon) ->
                         Surface(
                             onClick = { selectedTab = index; query = "" },
@@ -212,7 +201,7 @@ internal fun SellingHome(
                 }
             } else if (selectedTab == 1) {
                 item(key = "work-header") {
-                    NamuSectionTitle("견적 작업대", "택배비 · PDF · 문자 · 메일 발송, 이후 입금확인")
+                    NamuSectionTitle("견적 작업대", "확정한 견적 확인 · 판매 및 배송은 나피 PC에서 처리")
                 }
                 val visibleRequests = workRequests.filter {
                     matches(it.customerName) || matches(it.customerPhone) || matches(it.itemsJson)
@@ -227,7 +216,7 @@ internal fun SellingHome(
                     val quote = state.quotesByRequest[request.requestId]
                     val status = "견적확정" // Sending is an action, not another work stage.
                     RequestWorkCard(request, status,
-                        if (quote == null) "가격 확인 · 견적 작성" else "견적 확인 · 발송 · 입금확인",
+                        if (quote == null) "견적 가격 확인" else "견적 확인",
                         onDelete = { deletion = WorkDeleteTarget("request", request.requestId, request.customerName) }
                     ) {
                         if (quote == null) onRequest(request) else onSavedQuote(quote)
@@ -244,7 +233,7 @@ internal fun SellingHome(
                             }
                             Text("${quote.totalQty}주 · ${money(quote.totalPrice.toLong() + state.quoteTax(quote.quoteNumber))}")
                             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                                Text("견적 확인 · 발송 · 입금확인", color = MaterialTheme.colorScheme.primary,
+                                Text("견적 확인", color = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.weight(1f), style = MaterialTheme.typography.labelLarge)
                                 TextButton(onClick = {
                                     deletion = WorkDeleteTarget("quote", quote.quoteNumber, quote.customerPhone, quote = quote)
@@ -253,46 +242,7 @@ internal fun SellingHome(
                         }
                     }
                 }
-            } else {
-                item(key = "sales-title") {
-                    NamuSectionTitle("판매 관리", "입금확인 이후 · 배송완료까지")
-                    Row(Modifier.horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        listOf("배송 대기", "배송완료", "전체").forEach { label ->
-                            FilterChip(salesFilter == label, { salesFilter = label }, { Text(label) })
-                        }
-                    }
-                    Text("배송 대기 ${pendingSales}건 · 배송완료 ${completedSales}건",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        style = MaterialTheme.typography.bodySmall)
-                    TextButton(onClick = onSalesManagement) { Text("매출 · 이익 분석") }
-                }
-                if (rowsSales.isEmpty()) item {
-                    NamuEmptyState("해당 주문이 없어요", "입금확인된 견적은 이곳에서 관리합니다.")
-                }
-                items(rowsSales, key = { "sale-${it.orderNumber}" }) { order ->
-                    OutlinedCard(onClick = { onOrder(order) }, modifier = Modifier.fillMaxWidth()) {
-                        Column(Modifier.fillMaxWidth().padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(order.customerName.ifBlank { order.customerPhone },
-                                    style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-                                NamuBadge(if (order.status in setOf("배송확인", "배송완료", "판매완료"))
-                                    "배송완료" else if (order.status == "구매확정") "입금확인" else order.status)
-                            }
-                            Text("${order.totalQty}주 · ${money(order.totalPrice.toLong() + order.taxAmount)}")
-                            Text("${order.customerPhone} · ${order.orderDate}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            TextButton(onClick = {
-                                deletion = WorkDeleteTarget("sale", order.orderNumber,
-                                    order.customerName.ifBlank { order.customerPhone }, order = order)
-                            }, modifier = Modifier.align(Alignment.End)) {
-                                Text("삭제", color = MaterialTheme.colorScheme.error)
-                            }
-                        }
-                    }
-                }
+
             }
         }
     }

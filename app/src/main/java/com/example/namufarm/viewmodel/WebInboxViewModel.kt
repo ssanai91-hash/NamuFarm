@@ -71,12 +71,12 @@ class WebInboxViewModel(private val connection: WebRequestConnection) : ViewMode
         reloadLocal()
         showMessage(if (restored > 0) "이전 요청 ${restored}건을 불러왔어요." else "이 백업으로 새로 열 수 있는 이전 요청이 없습니다. 새 견적은 계속 사용할 수 있어요.")
     }
-    fun confirm(id: String) {
+    fun confirm(id: String, draft: com.example.namufarm.quotation.SellerQuoteDraft) {
         // A status update must not be discarded just because a download is running.
         viewModelScope.launch(Dispatchers.IO) {
             statusMutex.withLock {
                 try {
-                    connection.confirmQuote(id)
+                    connection.confirmQuote(id, draft)
                     connection.refresh()
                     reloadLocal()
                     showMessage("견적확정 상태를 구글시트에 반영했어요.")

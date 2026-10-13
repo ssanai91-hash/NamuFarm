@@ -134,7 +134,17 @@ class Manager:
         require(request.get("status", "신규") in ("신규", "견적확정"), "이미 판매 단계로 진행된 견적 요청입니다.")
         self.save_draft(draft)
         self.verify_server()
-        response = self.api.call("update_request_status", requestId=source, status="견적확정")
+        response = self.api.call("save_quote_pricing", requestId=source,
+                                 quotePricing={
+                                     "items": [{"species": item["species"],
+                                                "specification": item.get("specification", ""),
+                                                "quantity": item["quantity"],
+                                                "unitPrice": item["unitPrice"]}
+                                               for item in draft["items"]],
+                                     "isPrepaid": draft["isPrepaid"],
+                                     "shippingFee": draft["shippingFee"],
+                                     "taxAmount": draft["taxAmount"]
+                                 })
         require(response.get("updated") is True and response.get("requestId") == source
                 and response.get("status") == "견적확정", "견적확정 상태 저장을 확인하지 못했습니다.")
         return self.sync_requests()

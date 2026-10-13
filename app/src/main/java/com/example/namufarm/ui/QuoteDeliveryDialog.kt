@@ -79,7 +79,7 @@ internal fun QuoteDeliveryDialog(viewModel: ManagementViewModel, number: String,
             Button(onClick = { scope.launch { send(QuoteDelivery.EMAIL) } }, enabled = !busy && !loading && quote != null, modifier = Modifier.weight(1f).heightIn(min = 52.dp)) { Text(if (busy) "준비 중…" else "메일 보내기") }
         }
         if (!loading && quote != null) QuoteSentAction(viewModel, number, onQuoteSent)
-        TextButton(onClick = onDetails, enabled = !busy && !loading && quote != null, modifier = Modifier.fillMaxWidth()) { Text("견적 상세 · 입금 확인") }
+        TextButton(onClick = onDetails, enabled = !busy && !loading && quote != null, modifier = Modifier.fillMaxWidth()) { Text("견적 상세 보기") }
     }) {
         Column(Modifier.verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             if (loading || busy) LinearProgressIndicator(Modifier.fillMaxWidth())

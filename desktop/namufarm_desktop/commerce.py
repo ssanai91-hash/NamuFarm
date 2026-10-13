@@ -18,6 +18,13 @@ EXPORT_HEADERS = ("주문번호", "수하인명", "수하인전화", "우편번�
 def new_draft(request=None):
     person = request["personal"] if request else {}
     identifier = str(uuid.uuid4())
+    pricing = request.get("quotePricing") if request else None
+    rows = person.get("items", [])
+    priced = pricing.get("items", []) if isinstance(pricing, dict) else []
+    if not priced:
+        pricing = None
+    else:
+        rows = priced
     return {"id": identifier, "sourceRequestId": request["requestId"] if request else "",
             "requestReceiptNumber": (request.get("receiptNumber") or request["requestId"]) if request else "",
             "createdAt": now_ms(),
@@ -28,8 +35,12 @@ def new_draft(request=None):
             "quoteReplyChannel": person.get("replyChannel", "sms"),
             "zipNo": "", "roadAddress": "", "detailAddress": "", "requestRegion": person.get("region", ""), "note": person.get("message", ""),
             "items": [{"species": i["species"], "specification": i.get("specification", ""), "quantity": i["quantity"],
-                       "unitPrice": 0, "unitCost": 0} for i in person.get("items", [])],
-            "shippingFee": 0, "isPrepaid": False, "taxAmount": 0, "costConfirmed": False,
+                       "unitPrice": priced[n].get("unitPrice", 0) if pricing else 0, "unitCost": 0}
+                      for n, i in enumerate(rows)],
+            "shippingFee": pricing.get("shippingFee", 0) if pricing else 0,
+            "isPrepaid": pricing.get("isPrepaid", False) if pricing else False,
+            "taxAmount": pricing.get("taxAmount", 0) if pricing else 0,
+            "costConfirmed": False,
             "validUntil": (datetime.now(SEOUL) + timedelta(days=7)).strftime("%Y-%m-%d"),
             "issuer": copy.deepcopy(ISSUER), "paymentAccount": ""}
 

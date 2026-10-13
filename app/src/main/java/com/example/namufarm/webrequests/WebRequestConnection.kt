@@ -71,11 +71,21 @@ class WebRequestConnection(context: Context, private val repository: NamuFarmRep
             bytes.fill(0)
         } finally { password.fill('\u0000') }
     }
-    suspend fun confirmQuote(id: String) {
+    suspend fun confirmQuote(id: String, draft: com.example.namufarm.quotation.SellerQuoteDraft) {
         check(paired)
+        val quotePricing = mapOf<String, Any>(
+            "items" to draft.rows.map { row ->
+                mapOf("species" to row.name, "specification" to row.spec,
+                    "quantity" to (row.quantity.toIntOrNull() ?: error("수량을 확인해주세요.")),
+                    "unitPrice" to (row.price.toIntOrNull() ?: error("단가를 확인해주세요.")))
+            },
+            "isPrepaid" to draft.prepaid,
+            "shippingFee" to draft.shipping(),
+            "taxAmount" to if (draft.recipient.formalQuoteRequested) draft.options.taxAmount() else 0L
+        )
         val response = WebQuoteTransport.api.request(settings.url, mapOf(
-            "action" to "update_request_status", "deviceToken" to settings.deviceToken,
-            "requestId" to id, "status" to "견적확정"
+            "action" to "save_quote_pricing", "deviceToken" to settings.deviceToken,
+            "requestId" to id, "quotePricing" to quotePricing
         ))
         WebQuoteValidator.checkResponse(response)
         check(response.updated == true && response.requestId == id && response.status == "견적확정") {

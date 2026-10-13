@@ -30,6 +30,7 @@ function doPost(e) {
       if (body.action === 'list_requests') value = listRequests_(body);
       else if (body.action === 'snapshot_requests') value = snapshotRequests_(body);
       else if (body.action === 'update_request_status') value = updateRequestStatus_(body);
+      else if (body.action === 'save_quote_pricing') value = saveQuotePricing_(body);
       else if (body.action === 'email_profile') value = quoteEmailProfile_();
       else if (body.action === 'send_quote_email') value = sendQuoteEmail_(body);
       else if (body.action === 'sms_profile') value = quoteSmsProfile_();

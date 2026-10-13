@@ -137,7 +137,8 @@ internal fun buildSpecText(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: () -> Unit, onCallAssist: () -> Unit = {}, onWebInbox: () -> Unit = {}, webUnread: Int = 0, webRequests: List<com.example.namufarm.data.WebQuoteRequestEntity> = emptyList(), webBusy: Boolean = false, onWebSettings: () -> Unit = {}, onRequest: (com.example.namufarm.data.WebQuoteRequestEntity) -> Unit = {},
-    onQuoteConfirmed: (String) -> Unit = {}, onQuoteSentStatus: suspend (String) -> Unit = {},
+    onQuoteConfirmed: (String, com.example.namufarm.quotation.SellerQuoteDraft) -> Unit = {},
+    onQuoteSentStatus: suspend (String) -> Unit = {},
     onDeleteRequest: (String) -> Unit = {}) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
@@ -691,7 +692,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                     showQuickQuoteDialog = false; viewModel.dismissManualQuote()
                     if (draft.recipient.formalQuoteRequested) runCatching { QuoteIssuerSettings(context).save(draft.options.issuer) }
                     workbenchSignal++
-                    if (sourceId != null) onQuoteConfirmed(sourceId)
+                    if (sourceId != null) onQuoteConfirmed(sourceId, draft)
                     else if (action != QuoteDelivery.SAVE) {
                         deliveryAction = action.name; deliveryNumber = saved.quoteNumber
                     }

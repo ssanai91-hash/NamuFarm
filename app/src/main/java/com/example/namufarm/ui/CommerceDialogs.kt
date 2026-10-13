@@ -190,7 +190,7 @@ private fun HistoryCard(phone: String, date: String, summary: String, amount: In
 }
 
 @Composable
-internal fun QuoteDetailsDialog(quote: QuoteEntity, confirming: Boolean, snackbar: SnackbarHostState, onSms: () -> Unit, onConfirm: () -> Unit, onDelete: () -> Unit, onDismiss: () -> Unit, onDocument: () -> Unit = {}, sentAction: @Composable () -> Unit = {}, ordered: Boolean = false, onOrder: () -> Unit = {}, onEmail: () -> Unit = {}, taxAmount: Long = 0) {
+internal fun QuoteDetailsDialog(quote: QuoteEntity, confirming: Boolean, snackbar: SnackbarHostState, onSms: () -> Unit, onConfirm: () -> Unit, onDelete: () -> Unit, onDismiss: () -> Unit, onDocument: () -> Unit = {}, sentAction: @Composable () -> Unit = {}, ordered: Boolean = false, onOrder: () -> Unit = {}, onEmail: () -> Unit = {}, taxAmount: Long = 0, allowPayment: Boolean = true) {
     var confirm by remember { mutableStateOf(false) }
     if (confirm) AlertDialog(
         onDismissRequest = { confirm = false },
@@ -200,23 +200,24 @@ internal fun QuoteDetailsDialog(quote: QuoteEntity, confirming: Boolean, snackba
         dismissButton = { TextButton(onClick = { confirm = false }) { Text("다시 확인") } }
     )
     NamuDialog("견적 상세", quote.saveDate, onDismiss, snackbar, actions = {
-        if (ordered) Button(onClick = onOrder, modifier = Modifier.fillMaxWidth()) { Text("등록한 주문 보기") }
-        else {
-            Button(onClick = { confirm = true }, enabled = !confirming && quote.sentAt > 0L,
-                modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) {
-                Text(if (confirming) "입금 처리 중…" else "입금확인 · 판매 관리로 이동")
+        if (allowPayment) {
+            if (ordered) Button(onClick = onOrder, modifier = Modifier.fillMaxWidth()) { Text("등록한 주문 보기") }
+            else {
+                Button(onClick = { confirm = true }, enabled = !confirming && quote.sentAt > 0L,
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) {
+                    Text(if (confirming) "입금 처리 중…" else "입금확인 · 판매 관리로 이동")
+                }
             }
-            if (quote.sentAt == 0L) Text("견적을 고객에게 발송하고 발송완료로 기록한 뒤 입금확인할 수 있어요.",
-                style = MaterialTheme.typography.bodySmall)
-        }
-        sentAction()
-
-        OutlinedButton(onClick = onDocument, enabled = !confirming, modifier = Modifier.fillMaxWidth()) { Text("공식 견적서 · PDF / 이미지") }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            TextButton(onClick = onSms, enabled = !confirming) { Text("문자 보내기") }
-            TextButton(onClick = onEmail, enabled = !confirming) { Text("메일 보내기") }
-            TextButton(onClick = onDelete, enabled = !confirming && !ordered, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) { Text("견적 삭제") }
-        }
+            sentAction()
+            OutlinedButton(onClick = onDocument, enabled = !confirming, modifier = Modifier.fillMaxWidth()) { Text("공식 견적서 · PDF / 이미지") }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                TextButton(onClick = onSms, enabled = !confirming) { Text("문자 보내기") }
+                TextButton(onClick = onEmail, enabled = !confirming) { Text("메일 보내기") }
+                TextButton(onClick = onDelete, enabled = !confirming && !ordered,
+                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) { Text("견적 삭제") }
+            }
+        } else Text("견적 확인 전용 · 문자·메일·입금·배송은 나피 PC에서 처리합니다.",
+            style = MaterialTheme.typography.bodyMedium)
     }) {
         CommerceDetailBody(quote.customerPhone, "", quote.quoteNumber, quote.itemSummary, quote.totalQty, quote.totalPrice, quote.isPrepaid, quote.shippingFee, taxAmount = taxAmount)
     }

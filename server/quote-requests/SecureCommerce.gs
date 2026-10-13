@@ -21,6 +21,8 @@ function secureServiceInfo_() {
     sheet_(); namedSheet_(SALE_SHEET,SALE_HEADERS,false);
     ready=ready && rows_(sheet_()).every(row=>{const raw=JSON.parse(row[15]);return raw.expired===true || !!raw.request || !!raw.encryptedRequest;}); } catch (_) {}
   return {ok:true,service:'namufarm-quote-requests',version:5,connectionMode:'device-auth',customerDataReady:ready,
+    ledgerStorage:annualLedgersEnabled_()?'annual-v1':'legacy',
+    quoteLedgerMonth:'receivedAt',orderLedgerMonth:'paidAt',
     processingBases:['quote_request'],requestFields:['customerEmail','formalQuoteRequested','recipientName','replyChannel'],
     encryptionReady:false,customerDataStorage:'plain',sellerKey:key,retentionDays:30,requestDeletionSync:true,
     receiptFormat:'NAMU-YYYYMMDD-NNNN',receiptTimeZone:'Asia/Seoul',connectionFile:true,requestSnapshot:true,
@@ -40,7 +42,10 @@ function envelope_(value, key) {
     wrappedKey:byteString_(value.wrappedKey,384,384),iv:byteString_(value.iv,12,12),ciphertext:byteString_(value.ciphertext,17,30016)};
 }
 function namedSheet_(name, headers, create) {
-  const props = PropertiesService.getScriptProperties(); const id = props.getProperty('SPREADSHEET_ID'); assert_(id,'NOT_READY');
+  const props = PropertiesService.getScriptProperties(); const base = props.getProperty('SPREADSHEET_ID'); assert_(base,'NOT_READY');
+  const orderMeta=[SALE_SHEET,SALE_EVENT_SHEET,SALE_HIDDEN_SHEET].includes(name);
+  const id=twoBookActive_() && orderMeta ? props.getProperty('ORDER_WORKBOOK_ID') : base;
+  assert_(id,'NOT_READY');
   const book = SpreadsheetApp.openById(id); let sheet = book.getSheetByName(name);
   if (!sheet && create) sheet = book.insertSheet(name);
   assert_(sheet,'NOT_READY');
@@ -79,7 +84,8 @@ function quoteStoredData_(raw) {
   if(raw.request){
     const request=validateRequest_(Object.assign({},raw.request,{website:''}));
     assert_(canonical_(request)===canonical_(raw.request),'NOT_READY');
-    return {request:request};
+    return {request:request,quotePricing:raw.quotePricing?
+      quotePricing_(raw.quotePricing,request):null};
   }
   return {encryptedRequest:envelope_(raw.encryptedRequest,sellerKey_())};
 }
@@ -108,7 +114,8 @@ function quoteResponseRow_(row) {
   if(raw.expired===true || expires<=Date.now())return Object.assign(result,{expired:true});
   const stored=quoteStoredData_(raw);
   if(stored.request)assert_(stored.request.requestId===result.requestId,'NOT_READY');
-  return Object.assign(result,stored.request || stored);
+  return Object.assign(result,stored.request || stored,
+    stored.quotePricing?{quotePricing:stored.quotePricing}:{});
 }
 function listEncryptedRequests_(body) {
   assert_(Number.isSafeInteger(body.afterSequence) && body.afterSequence>=0);
@@ -241,10 +248,12 @@ function saveSale_(body) {
   const digest=saleDigest_(meta,personal,plain); assert_(body.fingerprint===digest);
   assert_(body.sourceRequestId==='' || UUID_PATTERN.test(body.sourceRequestId));
   return lock_(()=>{
-    const sheet=namedSheet_(SALE_SHEET,SALE_HEADERS,false), events=namedSheet_(SALE_EVENT_SHEET,SALE_EVENT_HEADERS,false);
+    const events=namedSheet_(SALE_EVENT_SHEET,SALE_EVENT_HEADERS,false);
+    const records=saleRecords_(),rows=records.map(r=>r.row);
+    const i=rows.findIndex(r=>r[0]===meta.orderNumber || r[0]===hash_(PropertiesService.getScriptProperties().getProperty('WEB_SECRET')+'expired-sale:'+meta.orderNumber));
+    reserveSaleSource_(body,records,i<0?null:records[i]);
     const receipts=namedRows_(events,5); const receipt=receipts.find(r=>r[0]===body.eventId);
-    if(receipt){assert_(receipt[1]===meta.orderNumber && Number(receipt[2])===meta.revision && receipt[3]===digest,'CONFLICT'); updateLinkedRequestStatus_(body.sourceRequestId,meta.status); return {saved:true,orderNumber:meta.orderNumber,revision:meta.revision,fingerprint:digest};}
-    const rows=namedRows_(sheet,20); const i=rows.findIndex(r=>r[0]===meta.orderNumber || r[0]===hash_(PropertiesService.getScriptProperties().getProperty('WEB_SECRET')+'expired-sale:'+meta.orderNumber));
+    if(receipt){assert_(receipt[1]===meta.orderNumber && Number(receipt[2])===meta.revision && receipt[3]===digest,'CONFLICT'); saleRequestSaved_(body); return {saved:true,orderNumber:meta.orderNumber,revision:meta.revision,fingerprint:digest};}
     const previous=i<0?null:JSON.parse(rows[i][15]);
     // Before accepting a newer revision, repair the previous write's missing receipt.
     // This keeps an earlier retry verifiable even if another device has since advanced the order.
@@ -268,12 +277,16 @@ function saveSale_(body) {
       const props=PropertiesService.getScriptProperties(); const seq=rows.reduce((m,r)=>Math.max(m,Number(r[1])||0),Number(props.getProperty('SALE_SEQUENCE'))||0)+1;
       assert_(Number.isSafeInteger(seq),'NOT_READY'); props.setProperty('SALE_SEQUENCE',String(seq));
       const row=[meta.orderNumber,seq,meta.status,new Date(meta.purchasedAt).toISOString(),meta.completedAt?new Date(meta.completedAt).toISOString():'',meta.totalQty,meta.totalPrice,meta.taxAmount,meta.costTotal,meta.expenseTotal,meta.costConfirmed,meta.profitMode,meta.commissionBps,profit_(meta),retentionUntil_(meta),JSON.stringify(meta),JSON.stringify(stored),digest,body.eventId,meta.revision];
-      sheet.getRange(i<0?sheet.getLastRow()+1:i+2,1,1,20).setNumberFormat('@').setValues([row]); SpreadsheetApp.flush();
+      reserveSaleSource_(body,records,i<0?null:records[i],true);
+      const sheet=i<0?newSaleSheet_(meta):records[i].sheet;
+      const rowNumber=i<0?sheet.getLastRow()+1:records[i].index+2;
+      if(rowNumber>sheet.getMaxRows())sheet.insertRowsAfter(sheet.getMaxRows(),Math.max(100,rowNumber-sheet.getMaxRows()));
+      sheet.getRange(rowNumber,1,1,20).setNumberFormat('@').setValues([row]); SpreadsheetApp.flush();
     }
     if(!namedRows_(events,5).some(r=>r[0]===body.eventId)) {
       events.getRange(events.getLastRow()+1,1,1,5).setNumberFormat('@').setValues([[body.eventId,meta.orderNumber,meta.revision,digest,new Date().toISOString()]]); SpreadsheetApp.flush();
     }
-    updateLinkedRequestStatus_(body.sourceRequestId,meta.status);
+    saleRequestSaved_(body);
     return {saved:true,orderNumber:meta.orderNumber,revision:meta.revision,fingerprint:digest};
   });
 }
@@ -317,6 +330,60 @@ function updateLinkedRequestStatus_(id,status) {
   const sequence=rows.reduce((m,r)=>Math.max(m,Number(r[1])||0),Number(props.getProperty('LAST_SEQUENCE'))||0)+1;
   assert_(Number.isSafeInteger(sequence),'NOT_READY');props.setProperty('LAST_SEQUENCE',String(sequence));
   const next=rows[i].slice();next[1]=sequence;next[9]=status;quoteWriteVerified_(sheet,i+2,next);
+}
+/** Quote-stage pricing belongs exclusively to the quote workbook. */
+function quotePricing_(raw,request) {
+  assert_(raw && typeof raw==='object' && Object.keys(raw).sort().join(',')==='isPrepaid,items,shippingFee,taxAmount','INVALID');
+  assert_(Array.isArray(raw.items) && raw.items.length>=1 && raw.items.length<=50,'INVALID');
+  // The seller may adjust size or quantity. The customer's original request is
+  // preserved separately in raw.request and is never rewritten.
+  const priceItems=raw.items.map(item=>{
+    assert_(item && typeof item.species==='string' && item.species.trim() &&
+      item.species.length<=200 && typeof item.specification==='string' &&
+      item.specification.length<=120 && [...item.species,...item.specification].every(ch=>ch.charCodeAt(0)>=32),'INVALID');
+    assert_(Number.isSafeInteger(item.quantity) && item.quantity>=1 && item.quantity<=1000000 &&
+      Number.isSafeInteger(item.unitPrice) && item.unitPrice>=0 && item.unitPrice<=2147483647,'INVALID');
+    return {species:item.species,specification:item.specification,quantity:item.quantity,unitPrice:item.unitPrice};
+  });
+  assert_(typeof raw.isPrepaid==='boolean' &&
+    Number.isSafeInteger(raw.shippingFee) && raw.shippingFee>=0 && raw.shippingFee<=2147483647 &&
+    Number.isSafeInteger(raw.taxAmount) && raw.taxAmount>=0 && raw.taxAmount<=2147483647,'INVALID');
+  const sum=priceItems.reduce((n,item)=>n+item.quantity*item.unitPrice,raw.isPrepaid?raw.shippingFee:0);
+  assert_(Number.isSafeInteger(sum+raw.taxAmount) && sum+raw.taxAmount<=2147483647,'INVALID');
+  return {items:priceItems,isPrepaid:raw.isPrepaid,shippingFee:raw.shippingFee,taxAmount:raw.taxAmount};
+}
+function saveQuotePricing_(body) {
+  assert_(UUID_PATTERN.test(body.requestId),'INVALID');
+  return lock_(()=>{
+    let record,entry=null,entries=[];
+    if(quoteStorageConfigured_()){
+      entries=quoteIndexEntries_();const cache={};
+      quoteRepairTransitions_(entries,cache);
+      entry=entries.find(e=>e.values[QI.id]===body.requestId);
+      assert_(entry && entry.values[QI.phase]==='COMMITTED','INVALID');
+      record=quoteRecord_(entry,cache,false);
+    }else {
+      record=quoteFindRow_(sheet_(),body.requestId);
+      assert_(record,'INVALID');
+    }
+    const original=JSON.parse(record.row[15]),request=quoteStoredData_(original).request;
+    assert_(request && ['신규','견적확정'].includes(record.row[9]),'CONFLICT');
+    const pricing=quotePricing_(body.quotePricing,request);
+    if(original.quotePricing && canonical_(original.quotePricing)===canonical_(pricing) &&
+      record.row[9]==='견적확정')return {updated:true,requestId:body.requestId,status:'견적확정'};
+    assert_(record.row[9]==='신규' || !original.quotePricing,'CONFLICT');
+    const props=PropertiesService.getScriptProperties();
+    const next=record.row.slice();
+    const sequence=entry?quoteNextSequence_(entries):
+      receiptRows_(sheet_()).reduce((n,r)=>Math.max(n,Number(r[1])||0),Number(props.getProperty('LAST_SEQUENCE'))||0)+1;
+    assert_(Number.isSafeInteger(sequence),'NOT_READY');
+    if(!entry)props.setProperty('LAST_SEQUENCE',String(sequence));
+    next[1]=sequence;next[9]='견적확정';
+    next[15]=JSON.stringify(Object.assign({},original,{quotePricing:pricing}));
+    quoteWriteVerified_(record.sheet,record.index+2,next);
+    if(entry){entry.values[QI.seq]=sequence;entry.values[QI.status]='견적확정';quoteSaveEntry_(entry);}
+    return {updated:true,requestId:body.requestId,status:'견적확정'};
+  });
 }
 function updateRequestStatus_(body) {
   assert_(UUID_PATTERN.test(body.requestId) && ['견적확정','견적발송완료'].includes(body.status));
@@ -486,7 +553,7 @@ function hideSale_(body) {
   assert_(body && /^[A-Za-z0-9_-]{1,120}$/.test(body.orderNumber) &&
       Number.isSafeInteger(body.revision) && body.revision>0,'INVALID');
   return lock_(()=>{
-    const records=namedRows_(namedSheet_(SALE_SHEET,SALE_HEADERS,false),20);
+    const records=saleRecords_().map(item=>item.row);
     const matches=records.filter(row=>row[0]===body.orderNumber);
     assert_(matches.length===1,'INVALID');
     const meta=JSON.parse(matches[0][15]);
@@ -504,7 +571,7 @@ function hideSale_(body) {
 }
 function hiddenSaleNumbers_() {
   const props=PropertiesService.getScriptProperties();
-  const book=SpreadsheetApp.openById(props.getProperty('SPREADSHEET_ID'));
+  const book=SpreadsheetApp.openById(twoBookActive_()?props.getProperty('ORDER_WORKBOOK_ID'):props.getProperty('SPREADSHEET_ID'));
   const sheet=book.getSheetByName(SALE_HIDDEN_SHEET);
   if(!sheet)return new Set();
   assert_(JSON.stringify(sheet.getRange(1,1,1,2).getValues()[0])===JSON.stringify(SALE_HIDDEN_HEADERS),'NOT_READY');
@@ -516,7 +583,7 @@ function hiddenSaleNumbers_() {
 function listSales_(body) {
   assert_(Number.isSafeInteger(body.afterSequence) && body.afterSequence>=0);
   const hidden=hiddenSaleNumbers_();
-  const rows=namedRows_(namedSheet_(SALE_SHEET,SALE_HEADERS,false),20).filter(r=>Number(r[1])>body.afterSequence).sort((a,b)=>Number(a[1])-Number(b[1]));
+  const rows=saleRecords_().map(r=>r.row).filter(r=>Number(r[1])>body.afterSequence).sort((a,b)=>Number(a[1])-Number(b[1]));
   const page=rows.slice(0,100).map(r=>{
     const meta=JSON.parse(r[15]); if(meta.archived)return {sequence:Number(r[1]),expired:true};
     const stored=JSON.parse(r[16]),plain=stored.personalData!==undefined;
@@ -529,7 +596,7 @@ function seoulDay_(time) { return new Date(time+9*3600000).toISOString().slice(0
 function salesReport_(body) {
   assert_(['day','month','year'].includes(body.granularity));
   assert_([body.from,body.to].every(v=>typeof v==='string' && /^\d{4}-\d{2}-\d{2}$/.test(v) && Number.isFinite(Date.parse(v+'T00:00:00.000Z')) && new Date(v+'T00:00:00.000Z').toISOString().slice(0,10)===v) && body.from<=body.to);
-  const sums={}; namedRows_(namedSheet_(SALE_SHEET,SALE_HEADERS,false),20).forEach(row=>{
+  const sums={}; saleRecords_().forEach(({row})=>{
     const meta=JSON.parse(row[15]); if(!['배송완료','판매완료'].includes(meta.status))return;
     const day=seoulDay_(meta.completedAt); if(day<body.from||day>body.to)return;
     const period=day.slice(0,body.granularity==='day'?10:body.granularity==='month'?7:4);
@@ -546,8 +613,8 @@ function purgeExpiredCustomerData() {
     if(quoteStorageConfigured_())purgeIndexedQuotes_();
     else {const sheet=sheet_();rows_(sheet).forEach((r,i)=>{if(Date.parse(String(r[2]))+QUOTE_RETENTION_MS<=Date.now() && JSON.parse(r[15]).expired!==true)expireQuoteRow_(sheet,r,i);});}
     purgeArchivedQuoteCopies_();
-    const sales=namedSheet_(SALE_SHEET,SALE_HEADERS,false);const rows=namedRows_(sales,20);const events=namedSheet_(SALE_EVENT_SHEET,SALE_EVENT_HEADERS,false);
-    rows.forEach((r,i)=>{
+    const records=saleRecords_();const events=namedSheet_(SALE_EVENT_SHEET,SALE_EVENT_HEADERS,false);
+    records.forEach(({row:r,sheet:sales,index:i})=>{
       const meta=JSON.parse(r[15]); if(meta.archived || !['배송완료','구매취소','판매완료','주문취소'].includes(meta.status) || Date.parse(String(r[14]))>Date.now())return;
       const archive={archived:true,status:meta.status,completedAt:meta.completedAt,totalQty:meta.totalQty,totalPrice:meta.totalPrice,taxAmount:meta.taxAmount,costTotal:meta.costTotal,expenseTotal:meta.expenseTotal,costConfirmed:meta.costConfirmed,profitMode:meta.profitMode,commissionBps:meta.commissionBps};
       const row=r.slice();row[0]=hash_(PropertiesService.getScriptProperties().getProperty('WEB_SECRET')+'expired-sale:'+r[0]);row[3]='';row[15]=JSON.stringify(archive);row[16]='';row[17]='';row[18]='';row[19]=0;

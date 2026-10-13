@@ -62,7 +62,9 @@ class MainActivity : ComponentActivity() {
         val api = RetrofitClient.api
         val keys = com.example.namufarm.privacy.SellerKeys(this)
         val localDataSource = LocalDataSource(database, dao, keys)
-        val syncManager = SyncManager(localDataSource, api, com.example.namufarm.sales.DeviceSalesGateway(com.example.namufarm.webrequests.WebRequestSettings(this),keys))
+        // 1차 Android is quote-only. Keep existing local order data untouched,
+        // but do not connect this app to the order/sales workbook.
+        val syncManager = SyncManager(localDataSource, api)
         com.example.namufarm.privacy.PrivacyCleanupWorker.schedule(this)
         val repository = NamuFarmRepository(localDataSource, syncManager, RetrofitClient.jusoApi)
 
@@ -124,7 +126,16 @@ class MainActivity : ComponentActivity() {
                     WebQuoteInboxDialog(webState, webRequestId, uiState.customerPhone, uiState.estimateCart.size,
                         onRefresh = webInbox::refresh, onPair = webInbox::pair, onRead = webInbox::read,
                         onRestore=webInbox::restore,onClose=webInbox::close,onConnectFile=webInbox::connectFile,
-                        onConfirm = webInbox::confirm,
+                        onConfirm = { id ->
+                            webState.requests.firstOrNull { it.requestId == id }?.let { request ->
+                                if (!uiState.isSavingQuote) {
+                                    viewModel.useWebRequestForQuote(request)
+                                    webInbox.read(id)
+                                    showWebInbox = false
+                                    webRequestId = null
+                                }
+                            }
+                        },
                         onUseRequest = { request ->
                             if (uiState.isSavingQuote) webInbox.showMessage("견적 저장이 끝난 뒤 고객 번호를 적용해주세요.")
                             else {
