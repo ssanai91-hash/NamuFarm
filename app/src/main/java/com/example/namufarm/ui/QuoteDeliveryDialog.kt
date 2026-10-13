@@ -58,8 +58,8 @@ internal fun QuoteDeliveryDialog(
     }
 
     suspend fun savePricingBeforeSend(): QuoteEntity {
-        val baseline = quote ?: error("견적을 불러오지 못했습니다.")
-        val current = viewModel.savedQuote(number) ?: error("저장된 견적을 찾을 수 없습니다.")
+        val baseline = quote ?: kotlin.error("견적을 불러오지 못했습니다.")
+        val current = viewModel.savedQuote(number) ?: kotlin.error("저장된 견적을 찾을 수 없습니다.")
         check(current == baseline) { "다른 화면에서 견적이 변경되었습니다. 닫았다가 다시 열어주세요." }
         if (!changedFrom(current)) return current
         check(editable) { "이미 발송·발행·주문한 견적이나 재고 견적은 수정할 수 없습니다." }
@@ -99,7 +99,7 @@ internal fun QuoteDeliveryDialog(
 
     LaunchedEffect(number) {
         try {
-            val saved = viewModel.savedQuote(number) ?: error("저장된 견적을 찾을 수 없습니다.")
+            val saved = viewModel.savedQuote(number) ?: kotlin.error("저장된 견적을 찾을 수 없습니다.")
             val recipient = viewModel.quoteRecipient(number)
             val lines = OrderSummaryCodec.parseStrict(saved.itemSummary)
             quote = saved
@@ -190,7 +190,7 @@ internal fun QuoteDeliveryDialog(
                 busy = true
                 scope.launch {
                     try {
-                        val saved = viewModel.savedQuote(number) ?: error("저장된 견적을 찾을 수 없습니다.")
+                        val saved = viewModel.savedQuote(number) ?: kotlin.error("저장된 견적을 찾을 수 없습니다.")
                         check(!changedFrom(saved)) { "변경된 견적을 먼저 다시 보내주세요." }
                         viewModel.markQuoteSent(number)
                         quote = viewModel.savedQuote(number)
