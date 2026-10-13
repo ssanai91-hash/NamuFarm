@@ -72,9 +72,10 @@ internal fun SellingHome(
         it.requestId !in paidRequestIds &&
             it.status !in setOf("입금확인", "구매확정", "배송완료", "판매완료", "구매취소", "주문취소", "보관종료")
     }
-    val newRequests = activeRequests.filter {
-        it.status == "신규" && state.quotesByRequest[it.requestId] == null
-    }.sortedByDescending { it.sequence }
+    // The badge is the count still marked 신규 in the server's 견적요청 tab,
+    // not the number of locally unread items or the number of saved drafts.
+    val newRequests = activeRequests.filter { it.status == "신규" }
+        .sortedByDescending { it.sequence }
     val workRequests = activeRequests.filterNot { request ->
         newRequests.any { it.requestId == request.requestId }
     }.sortedByDescending { it.sequence }
@@ -197,7 +198,10 @@ internal fun SellingHome(
                 items(visible, key = { "new-${it.requestId}" }) { request ->
                     RequestWorkCard(request, "신규", "가격 입력 · 견적확정",
                         onDelete = { deletion = WorkDeleteTarget("request", request.requestId, request.customerName) }
-                    ) { onRequest(request) }
+                    ) {
+                        state.quotesByRequest[request.requestId]?.let(onSavedQuote)
+                            ?: onRequest(request)
+                    }
                 }
             } else if (selectedTab == 1) {
                 item(key = "work-header") {

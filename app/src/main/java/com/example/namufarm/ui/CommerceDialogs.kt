@@ -110,18 +110,8 @@ internal fun QuoteCartDialog(
                         )
                         OutlinedTextField(recipient.customerName, { onRecipient(recipient.copy(customerName = it)) }, label = { Text("고객 성함 · 선택") }, singleLine = true, enabled = !saving, modifier = Modifier.fillMaxWidth())
                         OutlinedTextField(recipient.customerEmail, { onRecipient(recipient.copy(customerEmail = it)) }, label = { Text("이메일 · 선택") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email), singleLine = true, enabled = !saving, modifier = Modifier.fillMaxWidth())
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Checkbox(recipient.formalQuoteRequested, { onRecipient(recipient.copy(formalQuoteRequested = it, replyChannel = if (it) recipient.replyChannel else "sms")) }, enabled = !saving)
-                            Text("공식 견적서 작성")
-                        }
-                        if (recipient.formalQuoteRequested) {
-                            OutlinedTextField(recipient.recipientName, { onRecipient(recipient.copy(recipientName = it)) }, label = { Text("견적서 수신인·회사명 · 선택") }, singleLine = true, enabled = !saving, modifier = Modifier.fillMaxWidth())
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                listOf("sms" to "문자", "email" to "이메일", "both" to "둘 다").forEach { (key, label) ->
-                                    FilterChip(recipient.replyChannel == key, { onRecipient(recipient.copy(replyChannel = key)) }, { Text(label) }, enabled = !saving)
-                                }
-                            }
-                        }
+                        if (recipient.formalQuoteRequested)
+                            Text("공식 견적서는 나피 PC에서 별도 처리합니다.", style = MaterialTheme.typography.bodySmall)
                     }
                 }
             }
@@ -136,8 +126,8 @@ internal fun QuoteCartDialog(
 }
 
 @Composable
-internal fun TodayQuotesDialog(quotes: List<QuoteEntity>, onSelect: (QuoteEntity) -> Unit, onDismiss: () -> Unit, onDocuments: () -> Unit = {}) {
-    NamuDialog("오늘 견적", "오늘 발송한 견적 ${quotes.size}건", onDismiss, actions = { OutlinedButton(onClick = onDocuments, modifier = Modifier.fillMaxWidth()) { Text("발행 견적서 보관함") } }) {
+internal fun TodayQuotesDialog(quotes: List<QuoteEntity>, onSelect: (QuoteEntity) -> Unit, onDismiss: () -> Unit) {
+    NamuDialog("오늘 견적", "오늘 견적 ${quotes.size}건", onDismiss) {
         LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (quotes.isEmpty()) item { NamuEmptyState("오늘 발송한 견적이 없어요", "온라인 요청이나 빠른 견적에서 작성한 뒤 발송 완료를 기록해주세요.", Icons.Outlined.Description) }
             items(quotes, key = { it.quoteNumber }) { quote ->
@@ -216,8 +206,19 @@ internal fun QuoteDetailsDialog(quote: QuoteEntity, confirming: Boolean, snackba
                 TextButton(onClick = onDelete, enabled = !confirming && !ordered,
                     colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) { Text("견적 삭제") }
             }
-        } else Text("견적 확인 전용 · 문자·메일·입금·배송은 나피 PC에서 처리합니다.",
-            style = MaterialTheme.typography.bodyMedium)
+        } else {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = onSms, enabled = !confirming,
+                    modifier = Modifier.weight(1f).heightIn(min = 52.dp)) { Text("문자 보내기") }
+                Button(onClick = onEmail, enabled = !confirming,
+                    modifier = Modifier.weight(1f).heightIn(min = 52.dp)) { Text("메일 보내기") }
+            }
+            sentAction()
+            TextButton(onClick = onDelete, enabled = !confirming,
+                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) { Text("견적 삭제") }
+            Text("문자와 메일은 텍스트로 전송합니다. 입금과 배송은 나피 PC에서 처리합니다.",
+                style = MaterialTheme.typography.bodySmall)
+        }
     }) {
         CommerceDetailBody(quote.customerPhone, "", quote.quoteNumber, quote.itemSummary, quote.totalQty, quote.totalPrice, quote.isPrepaid, quote.shippingFee, taxAmount = taxAmount)
     }

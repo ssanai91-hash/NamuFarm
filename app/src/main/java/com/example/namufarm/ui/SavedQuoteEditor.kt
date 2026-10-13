@@ -27,8 +27,7 @@ internal fun SavedQuoteEditor(viewModel: ManagementViewModel, number: String, re
     initial?.let { draft ->
         ManualQuoteEditor(request, state.isSavingQuote, state.message, onDismiss, { changed, action ->
             viewModel.saveManualQuote(changed.validate(action), changed.phone, changed.recipient, changed.prepaid, changed.shipping(),
-                issueOptions = changed.options.takeIf { changed.recipient.formalQuoteRequested }, existingQuoteNumber = number) {
-                if (changed.recipient.formalQuoteRequested) runCatching { QuoteIssuerSettings(context).save(changed.options.issuer) }
+                issueOptions = null, existingQuoteNumber = number) {
                 onSaved(number, action)
             }
         }, initialDraft = draft, draftKey = number)

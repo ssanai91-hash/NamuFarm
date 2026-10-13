@@ -22,6 +22,7 @@ import com.google.firebase.FirebaseOptions
 import com.google.firebase.messaging.FirebaseMessaging
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 
@@ -36,6 +37,8 @@ class NamuFarmApplication : Application() {
 object WebRequestPush {
     const val ACTION = "com.example.namufarm.OPEN_WEB_REQUEST"
     const val CHANNEL = "web_quote_requests"
+    // Foreground refresh only; badge counts come from server-synced quote rows.
+    val incomingRequests = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val configured: Boolean get() = listOf(BuildConfig.FIREBASE_APPLICATION_ID, BuildConfig.FIREBASE_API_KEY, BuildConfig.FIREBASE_PROJECT_ID, BuildConfig.FIREBASE_SENDER_ID).all { it.isNotBlank() }
     fun initialize(context: Context): Boolean {
         if (!configured) return false
@@ -90,6 +93,9 @@ class WebRequestMessagingService : FirebaseMessagingService() {
     }
     override fun onMessageReceived(message: RemoteMessage) {
         if (message.data["type"] != "quote_request" || !WebRequestSettings(this).paired) return
-        message.data["requestId"]?.let { WebRequestPush.show(this, it) }
+        message.data["requestId"]?.takeIf(WebQuoteValidator::validId)?.let {
+            WebRequestPush.incomingRequests.tryEmit(Unit)
+            WebRequestPush.show(this, it)
+        }
     }
 }

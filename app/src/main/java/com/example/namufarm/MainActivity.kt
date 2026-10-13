@@ -1,9 +1,15 @@
 package com.example.namufarm
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -34,6 +40,7 @@ import com.example.namufarm.ui.theme.NamuFarmTheme
 import com.example.namufarm.viewmodel.ManagementViewModel
 import com.example.namufarm.viewmodel.ManagementViewModelFactory
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collect
 import com.example.namufarm.ui.WebQuoteInboxDialog
 import com.example.namufarm.viewmodel.WebInboxViewModel
 import com.example.namufarm.viewmodel.WebInboxViewModelFactory
@@ -80,8 +87,24 @@ class MainActivity : ComponentActivity() {
                 val navController = rememberNavController()
                 var showWebInbox by rememberSaveable { mutableStateOf(false) }
                 val webState by webInbox.state.collectAsState()
-                LaunchedEffect(showWebInbox, webRequestId) {
-                    if ((showWebInbox || webRequestId != null) && webState.paired) webInbox.refresh()
+                val notificationPermission = rememberLauncherForActivityResult(
+                    ActivityResultContracts.RequestPermission()
+                ) { /* No permission means no notification; manual sync remains available. */ }
+                LaunchedEffect(webState.paired, webState.pushConfigured) {
+                    if (webState.paired && webState.pushConfigured &&
+                        Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                        ContextCompat.checkSelfPermission(this@MainActivity,
+                            Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                    ) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                }
+                LaunchedEffect(showWebInbox, webRequestId, webState.paired) {
+                    if (webState.paired && (showWebInbox || webRequestId != null)) webInbox.refresh()
+                }
+                LaunchedEffect(webState.paired) {
+                    if (webState.paired) {
+                        webInbox.refresh()
+                        WebRequestPush.incomingRequests.collect { webInbox.refresh() }
+                    }
                 }
                 var showCallAssist by rememberSaveable { mutableStateOf(false) }
                 val uiState by viewModel.uiState.collectAsState()

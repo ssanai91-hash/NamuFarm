@@ -56,13 +56,11 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
                 Text("저장만")
             }
         }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Checkbox(draft.recipient.formalQuoteRequested, { draft = draft.copy(recipient = draft.recipient.copy(formalQuoteRequested = it)) }, enabled = !saving)
-            Column {
-                Text("공식 견적서 첨부", style = MaterialTheme.typography.labelLarge)
-                Text(if (draft.recipient.formalQuoteRequested) "문자: 이미지 · 메일: PDF" else "견적 내용을 텍스트로 보냅니다", style = MaterialTheme.typography.bodySmall)
-            }
-        }
+        Text("문자·메일은 PDF 첨부 없이 견적 내용을 텍스트로 보냅니다.",
+            style = MaterialTheme.typography.bodySmall)
+        if (draft.recipient.formalQuoteRequested)
+            Text("고객이 요청한 공식 견적서는 나피 PC에서 별도 처리합니다.",
+                style = MaterialTheme.typography.bodySmall)
         if (firstRequest) {
             Button(onClick = { submit(QuoteDelivery.SAVE) }, enabled = !saving,
                 modifier = Modifier.fillMaxWidth().heightIn(min = 54.dp)) {
@@ -141,8 +139,7 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
                 if (draft.prepaid) ManualField("선불 배송비 (원)", draft.fee, { draft = draft.copy(fee = it) }, saving, KeyboardType.Number)
                 else Text("배송비는 견적 합계에 포함되지 않습니다", style = MaterialTheme.typography.bodySmall)
             }
-            if (draft.recipient.formalQuoteRequested) QuoteIssueFields(draft.options, saving) { draft = draft.copy(options = it) }
-            Text(if (firstRequest) "견적확정 후 작업대에서 택배비와 공식견적서, 문자·메일을 처리해요."
+            Text(if (firstRequest) "견적확정 후 바로 문자 또는 메일을 보낼 수 있어요."
                 else "실제 문자·메일 발송은 해당 앱에서 확인해주세요.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
