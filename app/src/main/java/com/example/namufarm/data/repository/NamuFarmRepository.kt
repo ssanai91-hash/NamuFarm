@@ -98,8 +98,8 @@ class NamuFarmRepository(
     fun getAllOrders() = local.getAllOrders()
     fun hiddenSaleNumbers(): Set<String> = sales?.hiddenOrderNumbers().orEmpty()
     suspend fun hideSaleFromWorklist(orderNumber: String) = local.serializedSync {
-        val stored = getOrderByNumber(orderNumber) ?: error("판매 기록을 찾을 수 없습니다.")
-        check(getAllPendingSync().none { it.syncType in setOf(
+        val stored = local.getOrderByNumber(orderNumber) ?: error("판매 기록을 찾을 수 없습니다.")
+        check(local.getAllPendingSync().none { it.syncType in setOf(
             PendingSyncType.SALE, PendingSyncType.ORDER, PendingSyncType.DELIVERY,
             PendingSyncType.CANCEL_ORDER
         ) }) { "주문 변경사항을 먼저 서버에 동기화해주세요." }
