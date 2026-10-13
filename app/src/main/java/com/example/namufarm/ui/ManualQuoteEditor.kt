@@ -129,7 +129,6 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
             Text(it, color = MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodySmall)
         }
-        if (!firstRequest) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Button(onClick = { submit(QuoteDelivery.SMS) }, enabled = !saving,
                 modifier = Modifier.weight(1f).heightIn(min = 64.dp),
@@ -149,7 +148,6 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
                     Text("메일 보내기", fontSize = 15.sp)
                 }
             }
-        }
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             if (onDeleteRequest != null) {
