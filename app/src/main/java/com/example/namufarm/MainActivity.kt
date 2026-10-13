@@ -22,6 +22,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.ViewModelProvider
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -100,11 +102,17 @@ class MainActivity : ComponentActivity() {
                 LaunchedEffect(showWebInbox, webRequestId, webState.paired) {
                     if (webState.paired && (showWebInbox || webRequestId != null)) webInbox.refresh()
                 }
-                LaunchedEffect(webState.paired) {
-                    if (webState.paired) {
-                        webInbox.refresh()
-                        WebRequestPush.incomingRequests.collect { webInbox.refresh() }
+                // Refresh the badge after returning from other apps, even if
+                // the notification was not opened directly.
+                DisposableEffect(webState.paired) {
+                    val observer = LifecycleEventObserver { _, event ->
+                        if (event == Lifecycle.Event.ON_RESUME && webState.paired) webInbox.refresh()
                     }
+                    lifecycle.addObserver(observer)
+                    onDispose { lifecycle.removeObserver(observer) }
+                }
+                LaunchedEffect(webState.paired) {
+                    if (webState.paired) WebRequestPush.incomingRequests.collect { webInbox.refresh() }
                 }
                 var showCallAssist by rememberSaveable { mutableStateOf(false) }
                 val uiState by viewModel.uiState.collectAsState()

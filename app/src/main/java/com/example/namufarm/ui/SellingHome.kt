@@ -168,7 +168,11 @@ internal fun SellingHome(
                             Column(Modifier.fillMaxSize().padding(vertical = 11.dp, horizontal = 2.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                                Text(title, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                                Row(verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Text(title, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                                    if (index == 0 && count > 0) Badge { Text(count.toString()) }
+                                }
                                 Text("${count}건", style = MaterialTheme.typography.headlineSmall,
                                     fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                             }
