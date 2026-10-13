@@ -185,6 +185,33 @@ class NamuFarmRepository(
             insertQuoteDocument(com.example.namufarm.data.QuoteDocumentEntity(document.id, quote.quoteNumber, document.number, document.issuedAt, document.json()))
         }
     }
+    /** Update prices only on an editable manual draft; preserve the quote ID and linkage. */
+    suspend fun updateDraftQuotePricing(
+        number: String, lines: List<OrderLine>, prepaid: Boolean, shippingFee: Int
+    ): QuoteEntity = local.transaction {
+        val previous = getQuoteByNumber(number) ?: error("저장된 견적을 찾을 수 없습니다.")
+        check(previous.sentAt == 0L && getQuoteDocument(number) == null &&
+            getAllOrders().none { it.sourceQuoteNumber == number }) {
+            "이미 발송·발행·주문한 견적은 수정할 수 없습니다."
+        }
+        val original = OrderSummaryCodec.parseStrict(previous.itemSummary)
+        check(original.isNotEmpty() && original.all { it.source == OrderLineSource.MANUAL }) {
+            "수기 견적만 수정할 수 있습니다."
+        }
+        require(original.size == lines.size && original.zip(lines).all { (before, after) ->
+            before.copy(retailPrice = after.retailPrice) == after
+        }) { "품목과 수량은 변경할 수 없습니다." }
+        val fee = if (prepaid) shippingFee else 0
+        val amounts = OrderAmounts.calculate(lines, prepaid, fee)
+        val updated = previous.copy(
+            itemSummary = OrderSummaryCodec.encode(lines),
+            isPrepaid = prepaid, shippingFee = fee,
+            totalQty = amounts.quantity, totalPrice = amounts.price
+        )
+        replaceQuote(updated)
+        updated
+    }
+
     fun getSavedQuote(number: String) = local.getQuoteByNumber(number)
     fun getQuoteRecipient(number: String): com.example.namufarm.quotation.QuoteRecipient = local.getQuoteContact(number)?.let {
         Gson().fromJson(it.recipientJson, com.example.namufarm.quotation.QuoteRecipient::class.java).checked()

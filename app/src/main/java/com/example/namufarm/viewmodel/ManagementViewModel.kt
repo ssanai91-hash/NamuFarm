@@ -420,6 +420,13 @@ class ManagementViewModel(
             }
         }
     }
+    suspend fun updateQuotePricing(
+        number: String, lines: List<OrderLine>, prepaid: Boolean, shippingFee: Int
+    ): QuoteEntity = withContext(Dispatchers.IO) {
+        val saved = repository.updateDraftQuotePricing(number, lines, prepaid, shippingFee)
+        refreshLocalState()
+        saved
+    }
     suspend fun savedQuote(number: String) = withContext(Dispatchers.IO) { repository.getSavedQuote(number) }
     suspend fun quoteRecipient(number: String) = withContext(Dispatchers.IO) { repository.getQuoteRecipient(number) }
     suspend fun quoteDocument(number: String) = withContext(Dispatchers.IO) { repository.getQuoteDocument(number) }

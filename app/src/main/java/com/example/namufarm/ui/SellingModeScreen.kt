@@ -408,7 +408,8 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
     deliveryNumber?.let { number ->
         QuoteDeliveryDialog(viewModel, number, QuoteDelivery.valueOf(deliveryAction),
             onDetails = { selectedQuote = uiState.allQuotes.firstOrNull { it.quoteNumber == number }; deliveryNumber = null; showQuoteDetailDialog = selectedQuote != null },
-            onDismiss = { deliveryNumber = null })
+            onDismiss = { deliveryNumber = null },
+            onQuoteSent = { markLinkedQuoteSent(number) })
     }
     if (showOrderDetailDialog) selectedOrder?.let { selected ->
         val order = uiState.allOrders.firstOrNull { it.orderNumber == selected.orderNumber } ?: selected

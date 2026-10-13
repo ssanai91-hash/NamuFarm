@@ -7,6 +7,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Check
@@ -27,6 +28,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.text.input.KeyboardType
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -70,7 +72,13 @@ data class QuoteDeliveryUiState(
     val shippingFee: Int = 6000,
     val requestNote: String = "",
     val smsStatus: QuoteSendingStatus = QuoteSendingStatus.PENDING,
-    val emailStatus: QuoteSendingStatus = QuoteSendingStatus.PENDING
+    val emailStatus: QuoteSendingStatus = QuoteSendingStatus.PENDING,
+    val loading: Boolean = false,
+    val busy: Boolean = false,
+    val editable: Boolean = true,
+    val sent: Boolean = false,
+    val error: String? = null,
+    val notice: String? = null
 )
 
 private fun won(value: Long) =
@@ -92,13 +100,16 @@ fun QuoteDeliveryScreen(
     onSendSms: () -> Unit,
     onSendEmail: () -> Unit,
     onMarkDeliveryComplete: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onEmailChange: (String) -> Unit = {}
 ) {
     val itemsTotal = state.items.sumOf {
         it.quantity.coerceAtLeast(0).toLong() * it.unitPrice.coerceAtLeast(0)
     }
     val includedShipping = if (state.prepaid) state.shippingFee.coerceAtLeast(0).toLong() else 0L
     val total = itemsTotal + includedShipping
+    val canSend = !state.loading && !state.busy && state.items.isNotEmpty()
+    val canEdit = canSend && state.editable && !state.sent
 
     Scaffold(
         modifier = modifier,
@@ -140,24 +151,26 @@ fun QuoteDeliveryScreen(
                             label = "문자 보내기", color = green, status = state.smsStatus,
                             modifier = Modifier.weight(1f),
                             icon = { Icon(Icons.Outlined.Sms, null, tint = white, modifier = Modifier.size(20.dp)) },
-                            onClick = onSendSms
+                            onClick = onSendSms, enabled = canSend
                         )
                         DeliverySendButton(
                             label = "메일 보내기", color = blue, status = state.emailStatus,
                             modifier = Modifier.weight(1f),
                             icon = { Icon(Icons.Outlined.MailOutline, null, tint = white, modifier = Modifier.size(20.dp)) },
-                            onClick = onSendEmail
+                            onClick = onSendEmail, enabled = canSend
                         )
                     }
                     Button(
                         onClick = onMarkDeliveryComplete,
+                        enabled = canSend && !state.sent,
                         modifier = Modifier.fillMaxWidth().height(50.dp),
                         shape = RoundedCornerShape(16.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = orange)
                     ) {
                         Icon(Icons.Outlined.Check, null, modifier = Modifier.size(22.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text("견적발송완료", fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                        Text(if (state.sent) "발송 완료로 기록됨" else "견적발송완료",
+                            fontSize = 15.sp, fontWeight = FontWeight.Medium)
                     }
                 }
             }
@@ -168,6 +181,15 @@ fun QuoteDeliveryScreen(
             contentPadding = PaddingValues(horizontal = 18.dp, vertical = 14.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            if (state.loading || state.busy) item {
+                LinearProgressIndicator(Modifier.fillMaxWidth())
+            }
+            state.error?.let { message -> item {
+                Text(message, color = MaterialTheme.colorScheme.error, fontSize = 13.sp)
+            } }
+            state.notice?.let { message -> item {
+                Text(message, color = textSecondary, fontSize = 13.sp)
+            } }
             item {
                 DeliveryCard {
                     Row(
@@ -206,6 +228,23 @@ fun QuoteDeliveryScreen(
             }
             item {
                 DeliveryCard {
+                    Column(Modifier.fillMaxWidth().padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                        Text("이메일 수신 주소", color = textSecondary, fontSize = 12.sp)
+                        OutlinedTextField(
+                            value = state.customer.email.orEmpty(),
+                            onValueChange = { onEmailChange(it.take(254)) },
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = !state.loading && !state.busy,
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                            placeholder = { Text("이메일 주소를 입력하세요") }
+                        )
+                    }
+                }
+            }
+            item {
+                DeliveryCard {
                     Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -215,6 +254,7 @@ fun QuoteDeliveryScreen(
                             val selected = state.priceStep == amount
                             Surface(
                                 onClick = { onPriceStepChange(amount) },
+                                enabled = canEdit,
                                 shape = RoundedCornerShape(22.dp),
                                 color = if (selected) green else white,
                                 border = BorderStroke(0.5.dp, if (selected) green else border)
@@ -233,6 +273,7 @@ fun QuoteDeliveryScreen(
                 DeliveryItemCard(
                     item = item,
                     step = state.priceStep,
+                    enabled = canEdit,
                     onPriceChange = { onUnitPriceChange(item.id, it) }
                 )
             }
@@ -245,18 +286,26 @@ fun QuoteDeliveryScreen(
                             fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
                         Row(Modifier.background(Color(0xFFEEF1EF), RoundedCornerShape(8.dp)).padding(3.dp),
                             horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                            DeliveryMode("후불", selected = !state.prepaid) { onPrepaidChange(false) }
-                            DeliveryMode("선불", selected = state.prepaid) { onPrepaidChange(true) }
+                            DeliveryMode("후불", selected = !state.prepaid, enabled = canEdit) { onPrepaidChange(false) }
+                            DeliveryMode("선불", selected = state.prepaid, enabled = canEdit) { onPrepaidChange(true) }
                         }
-                        DeliveryStepButton(false) {
-                            onShippingFeeChange(nextPrice(state.shippingFee, -state.priceStep))
-                        }
-                        DeliveryPrice(won(state.shippingFee.toLong()), minWidth = 66.dp)
-                        DeliveryStepButton(true) {
-                            onShippingFeeChange(nextPrice(state.shippingFee, state.priceStep))
+                        if (state.prepaid) {
+                            DeliveryStepButton(false, enabled = canEdit) {
+                                onShippingFeeChange(nextPrice(state.shippingFee, -state.priceStep))
+                            }
+                            DeliveryPrice(won(state.shippingFee.toLong()), minWidth = 66.dp)
+                            DeliveryStepButton(true, enabled = canEdit) {
+                                onShippingFeeChange(nextPrice(state.shippingFee, state.priceStep))
+                            }
+                        } else {
+                            Text("착불", color = textSecondary, fontSize = 13.sp)
                         }
                     }
                 }
+            }
+            if (!state.editable && !state.loading) item {
+                Text("이미 발송·발행·주문된 견적 또는 재고 견적은 가격을 수정할 수 없습니다.",
+                    color = textSecondary, fontSize = 12.sp)
             }
             item {
                 DeliveryCard {
@@ -286,7 +335,8 @@ fun QuoteDeliveryScreen(
                                 verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Text("최종 견적 금액", fontSize = 15.sp, color = textPrimary,
                                     fontWeight = FontWeight.Medium)
-                                Text("품목 ${won(itemsTotal)} + 배송비 ${won(includedShipping)}",
+                                Text(if (state.prepaid) "품목 ${won(itemsTotal)} + 배송비 ${won(includedShipping)}"
+                                    else "품목 ${won(itemsTotal)} · 배송비 후불(착불), 합계 미포함",
                                     fontSize = 12.sp, color = textSecondary, maxLines = 1,
                                     overflow = TextOverflow.Ellipsis)
                             }
@@ -326,8 +376,8 @@ private fun DeliveryPill(value: String, fill: Color, ink: Color) {
 }
 
 @Composable
-private fun DeliveryStepButton(increase: Boolean, onClick: () -> Unit) {
-    Surface(onClick = onClick, modifier = Modifier.size(32.dp),
+private fun DeliveryStepButton(increase: Boolean, enabled: Boolean = true, onClick: () -> Unit) {
+    Surface(onClick = onClick, enabled = enabled, modifier = Modifier.size(32.dp),
         shape = CircleShape, color = paleGreen) {
         Box(contentAlignment = Alignment.Center) {
             Text(if (increase) "+" else "−",
@@ -349,7 +399,7 @@ private fun DeliveryPrice(value: String, minWidth: Dp = 84.dp) {
 }
 
 @Composable
-private fun DeliveryItemCard(item: QuoteDeliveryItem, step: Int, onPriceChange: (Int) -> Unit) {
+private fun DeliveryItemCard(item: QuoteDeliveryItem, step: Int, enabled: Boolean, onPriceChange: (Int) -> Unit) {
     DeliveryCard {
         Column(Modifier.fillMaxWidth().padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -365,11 +415,11 @@ private fun DeliveryItemCard(item: QuoteDeliveryItem, step: Int, onPriceChange: 
                 horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("1주 단가", color = textSecondary, fontSize = 14.sp,
                     modifier = Modifier.weight(1f))
-                DeliveryStepButton(false) {
+                DeliveryStepButton(false, enabled = enabled) {
                     onPriceChange(nextPrice(item.unitPrice, -step))
                 }
                 DeliveryPrice(won(item.unitPrice.toLong()))
-                DeliveryStepButton(true) {
+                DeliveryStepButton(true, enabled = enabled) {
                     onPriceChange(nextPrice(item.unitPrice, step))
                 }
             }
@@ -386,8 +436,8 @@ private fun DeliveryItemCard(item: QuoteDeliveryItem, step: Int, onPriceChange: 
 }
 
 @Composable
-private fun DeliveryMode(label: String, selected: Boolean, onClick: () -> Unit) {
-    Surface(onClick = onClick, shape = RoundedCornerShape(8.dp),
+private fun DeliveryMode(label: String, selected: Boolean, enabled: Boolean, onClick: () -> Unit) {
+    Surface(onClick = onClick, enabled = enabled, shape = RoundedCornerShape(8.dp),
         color = if (selected) green else Color.Transparent) {
         Text(label, color = if (selected) white else textSecondary,
             fontSize = 12.sp, fontWeight = FontWeight.Medium,
@@ -402,9 +452,10 @@ private fun DeliverySendButton(
     color: Color,
     icon: @Composable () -> Unit,
     modifier: Modifier,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    enabled: Boolean = true
 ) {
-    Surface(onClick = onClick, modifier = modifier.height(68.dp),
+    Surface(onClick = onClick, enabled = enabled, modifier = modifier.height(68.dp),
         shape = RoundedCornerShape(16.dp), color = color) {
         Column(modifier = Modifier.fillMaxSize(),
             horizontalAlignment = Alignment.CenterHorizontally,
