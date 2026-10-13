@@ -6,6 +6,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.platform.LocalContext
 import com.example.namufarm.data.QuoteEntity
 import com.example.namufarm.domain.order.OrderSummaryCodec
@@ -43,7 +44,7 @@ internal fun QuoteDeliveryDialog(
     var notice by remember(number) { mutableStateOf<String?>(null) }
     var confirmSent by remember(number) { mutableStateOf(false) }
     var lastOpened by remember(number) { mutableStateOf<QuoteDelivery?>(null) }
-    var initialHandled by remember(number) { mutableStateOf(false) }
+    var initialHandled by rememberSaveable(number) { mutableStateOf(false) }
 
     val editable = quote?.let { saved ->
         saved.sentAt == 0L &&
@@ -58,7 +59,8 @@ internal fun QuoteDeliveryDialog(
         return delivery.items.size != lines.size ||
             delivery.items.indices.any { index -> delivery.items[index].unitPrice != lines[index].retailPrice } ||
             delivery.prepaid != saved.isPrepaid ||
-            (if (delivery.prepaid) delivery.shippingFee else 0) != saved.shippingFee
+            (if (delivery.prepaid) delivery.shippingFee else 0) !=
+            (if (saved.isPrepaid) saved.shippingFee else 0)
     }
 
     suspend fun savePricingBeforeSend(): QuoteEntity {
