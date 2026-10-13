@@ -18,8 +18,14 @@ function secureServiceInfo_() {
   const key = sellerKey_();
   let ready = false;
   try { ready = PropertiesService.getScriptProperties().getProperty('PRIVACY_SETUP') === '1' && quoteStorageReady_();
-    sheet_(); namedSheet_(SALE_SHEET,SALE_HEADERS,false);
-    ready=ready && rows_(sheet_()).every(row=>{const raw=JSON.parse(row[15]);return raw.expired===true || !!raw.request || !!raw.encryptedRequest;}); } catch (_) {}
+    if(twoBookActive_()){
+      const quote=annualLedgerBook_('quote',seoulDay_(Date.now()).slice(0,4));
+      ready=ready && [TWO_REQUEST_TAB,TWO_CONFIRMED_TAB].every(name=>!!quote.getSheetByName(name));
+    }else{
+      sheet_();
+      ready=ready && rows_(sheet_()).every(row=>{const raw=JSON.parse(row[15]);return raw.expired===true || !!raw.request || !!raw.encryptedRequest;});
+    }
+    namedSheet_(SALE_SHEET,SALE_HEADERS,false); } catch (_) {}
   return {ok:true,service:'namufarm-quote-requests',version:5,connectionMode:'device-auth',customerDataReady:ready,
     ledgerStorage:annualLedgersEnabled_()?'annual-v1':'legacy',
     quoteLedgerMonth:'receivedAt',orderLedgerMonth:'paidAt',
@@ -43,7 +49,7 @@ function envelope_(value, key) {
 }
 function namedSheet_(name, headers, create) {
   const props = PropertiesService.getScriptProperties(); const base = props.getProperty('SPREADSHEET_ID'); assert_(base,'NOT_READY');
-  const orderMeta=[SALE_SHEET,SALE_EVENT_SHEET,SALE_HIDDEN_SHEET].includes(name);
+  const orderMeta=[SALE_SHEET,SALE_EVENT_SHEET,SALE_HIDDEN_SHEET,SALE_SOURCES].includes(name);
   const id=twoBookActive_() && orderMeta ? props.getProperty('ORDER_WORKBOOK_ID') : base;
   assert_(id,'NOT_READY');
   const book = SpreadsheetApp.openById(id); let sheet = book.getSheetByName(name);
@@ -91,6 +97,7 @@ function quoteStoredData_(raw) {
 }
 function commitQuoteRequest_(body,stored) {
   return lock_(() => {
+    if(twoBookActive_())return twoTabSubmit_(body,stored);
     if(quoteStorageConfigured_()) return submitIndexedQuote_(body,stored);
     const sheet = sheet_(); const rows = receiptRows_(sheet); const existingIndex = rows.findIndex(row=>row[0]===body.requestId);
     assert_(receiptColumnsReady_(sheet),'NOT_READY');
@@ -119,6 +126,11 @@ function quoteResponseRow_(row) {
 }
 function listEncryptedRequests_(body) {
   assert_(Number.isSafeInteger(body.afterSequence) && body.afterSequence>=0);
+  if(twoBookActive_())return lock_(()=>{
+    const rows=twoTabRecords_().filter(r=>Number(r.row[1])>body.afterSequence);
+    const requests=rows.slice(0,100).map(r=>quoteResponseRow_(r.row));
+    return {requests:requests,hasMore:rows.length>requests.length};
+  });
   if(quoteStorageConfigured_())return lock_(()=>{
     const matches=indexedQuoteRecords_(body.afterSequence,true);
     const requests=matches.slice(0,100).map(({entry,cache})=>quoteResponseRow_(quoteRecord_(entry,cache,false).row));
@@ -132,9 +144,10 @@ function snapshotRequests_(body) {
   assert_(Number.isSafeInteger(body.afterSequence) && body.afterSequence >= 0);
   assert_(body.afterSequence === 0 || /^[a-f0-9]{64}$/.test(body.snapshotId || ''));
   return lock_(() => {
-    const rows = quoteStorageConfigured_()
-      ? indexedQuoteRecords_(-1,true).map(({entry,cache}) => quoteRecord_(entry,cache,false).row)
-      : receiptRows_(sheet_());
+    const rows = twoBookActive_()?twoTabRecords_().map(r=>r.row):
+      quoteStorageConfigured_()
+        ? indexedQuoteRecords_(-1,true).map(({entry,cache})=>quoteRecord_(entry,cache,false).row)
+        : receiptRows_(sheet_());
     const all = rows.map(quoteResponseRow_).sort((a,b) => a.sequence-b.sequence);
     const ids = new Set(); let previous = 0;
     all.forEach(row => {
@@ -151,7 +164,9 @@ function snapshotRequests_(body) {
 }
 function closeRequest_(body) {
   assert_(UUID_PATTERN.test(body.requestId));
-  return lock_(()=>{if(quoteStorageConfigured_()){closeIndexedQuote_(body.requestId);return {closed:true,requestId:body.requestId};}
+  return lock_(()=>{
+    if(twoBookActive_()){twoTabClose_(body.requestId);return {closed:true,requestId:body.requestId};}
+    if(quoteStorageConfigured_()){closeIndexedQuote_(body.requestId);return {closed:true,requestId:body.requestId};}
     const sheet=sheet_(); const rows=rows_(sheet); const i=rows.findIndex(r=>r[0]===body.requestId);
     if (i>=0) expireQuoteRow_(sheet,rows[i],i); return {closed:true,requestId:body.requestId};});
 }
@@ -294,7 +309,7 @@ function requestStatusTransitionAllowed_(from,status) {
   if(from===status)return true;
   if(status==='견적확정')return from==='신규';
   if(status==='견적발송완료')return from==='견적확정';
-  if(status==='입금확인')return from==='견적발송완료';
+  if(status==='입금확인')return ['견적확정','견적발송완료'].includes(from);
   if(status==='배송완료')return from==='입금확인';
   if(status==='구매취소')return from==='입금확인';
   return false;
@@ -307,6 +322,7 @@ function updateLinkedRequestStatus_(id,status) {
   if(status==='배송확인' || status==='판매완료')status='배송완료';
   if(status==='주문취소')status='구매취소';
   assert_(['견적확정','견적발송완료','입금확인','배송완료','구매취소'].includes(status),'INVALID');
+  if(twoBookActive_()){twoTabSetStatus_(id,status);return;}
   if(quoteStorageConfigured_()){
     const entries=quoteIndexEntries_(),cache={};quoteRepairTransitions_(entries,cache);
     const entry=entries.find(e=>e.values[QI.id]===id);
@@ -355,6 +371,7 @@ function quotePricing_(raw,request) {
 function saveQuotePricing_(body) {
   assert_(UUID_PATTERN.test(body.requestId),'INVALID');
   return lock_(()=>{
+    if(twoBookActive_())return twoTabPriceConfirm_(body);
     let record,entry=null,entries=[];
     if(quoteStorageConfigured_()){
       entries=quoteIndexEntries_();const cache={};
@@ -394,6 +411,11 @@ function updateRequestStatus_(body) {
 }
 function quoteRequestStatus_(id) {
   assert_(UUID_PATTERN.test(id));
+  if(twoBookActive_()){
+    const record=twoTabRecord_(id);
+    assert_(record && JSON.parse(record.row[15]).expired!==true,'INVALID');
+    return String(record.row[9]||'신규');
+  }
   if(quoteStorageConfigured_()){
     const entries=quoteIndexEntries_(),cache={},entry=entries.find(e=>e.values[QI.id]===id);
     assert_(entry && entry.values[QI.phase]==='COMMITTED','INVALID');
@@ -610,7 +632,8 @@ function salesReport_(body) {
 function purgeExpiredCustomerData() {
   if(PropertiesService.getScriptProperties().getProperty('PRIVACY_SETUP')!=='1')return;
   lock_(()=>{
-    if(quoteStorageConfigured_())purgeIndexedQuotes_();
+    if(twoBookActive_())twoTabPurgeExpired_();
+    else if(quoteStorageConfigured_())purgeIndexedQuotes_();
     else {const sheet=sheet_();rows_(sheet).forEach((r,i)=>{if(Date.parse(String(r[2]))+QUOTE_RETENTION_MS<=Date.now() && JSON.parse(r[15]).expired!==true)expireQuoteRow_(sheet,r,i);});}
     purgeArchivedQuoteCopies_();
     const records=saleRecords_();const events=namedSheet_(SALE_EVENT_SHEET,SALE_EVENT_HEADERS,false);

@@ -64,36 +64,33 @@ function cutoverToTwoBooks() {
     const orderBook=annualLedgerBook_('order',year);
     assert_(oldId!==quoteBook.getId() && oldId!==orderBook.getId() &&
       quoteBook.getId()!==orderBook.getId(),'CONFLICT');
-    const quoteEntries=quoteIndexEntries_(),cache={};
-    quoteRepairTransitions_(quoteEntries,cache);
-    assert_(quoteEntries.every(e=>e.values[QI.phase]==='COMMITTED'),'NOT_READY');
-    // First relocate all quote records to annual month tabs. A retry finds the
-    // verified destination by requestId and never duplicates a customer row.
-    quoteEntries.forEach(entry=>{
-      const record=quoteRecord_(entry,cache,false),sourceRow=record.row.slice();
-      const target=annualQuoteSheet_(entry.values[QI.day]);
-      const dest=quoteFindRow_(target,entry.values[QI.id]);
-      if(dest)assert_(canonical_(dest.row)===canonical_(sourceRow),'CONFLICT');
-      else quoteWriteVerified_(target,target.getLastRow()+1,sourceRow);
-      const saved=quoteFindRow_(target,entry.values[QI.id]);
-      assert_(saved && canonical_(saved.row)===canonical_(sourceRow),'NOT_READY');
-      entry.values[QI.book]=target.getParent().getId();
-      entry.values[QI.sheet]=target.getSheetId();
-      entry.values[QI.slot]=saved.index+2;
-      entry.values[QI.copy]=false;
-      entry.values[QI.targetBook]='';
-      entry.values[QI.targetSheet]='';
-      quoteSaveEntry_(entry);
+    // Keep indexes and reservations in the original backup. The new quote
+    // workbooks will have exactly the two named business tabs.
+    const oldIndex=quoteIndexEntries_(),cache={};
+    quoteRepairTransitions_(oldIndex,cache);
+    assert_(oldIndex.every(e=>e.values[QI.phase]==='COMMITTED'),'NOT_READY');
+    const quoteYears=new Set();
+    oldIndex.forEach(entry=>{
+      const sourceRecord=quoteRecord_(entry,cache,false);
+      const row=sourceRecord.row.slice();
+      const quoteYear=entry.values[QI.day].slice(0,4);
+      quoteYears.add(quoteYear);
+      const tab=row[9]==='신규'?TWO_REQUEST_TAB:TWO_CONFIRMED_TAB;
+      const target=quoteEnsureHeaderSheet_(annualLedgerBook_('quote',quoteYear),
+        tab,RFQ_HEADERS.concat(RFQ_RECEIPT_HEADERS));
+      const existing=quoteFindRow_(target,row[0]);
+      if(existing)assert_(canonical_(existing.row)===canonical_(row),'CONFLICT');
+      else quoteWriteVerified_(target,target.getLastRow()+1,row);
+      const saved=quoteFindRow_(target,row[0]);
+      assert_(saved && canonical_(saved.row)===canonical_(row),'NOT_READY');
     });
-    // Copy historical sales into their original payment-month location.
-    // Preserve the exact source row including revision, receipt, customer JSON
-    // and calculated financial amounts.
-    const oldSales=namedSheet_(SALE_SHEET,SALE_HEADERS,false);
-    namedRows_(oldSales,20).filter(r=>r.some(v=>v!=='')).forEach(row=>{
+    const legacy=saleRecords_();
+    legacy.forEach(({row})=>{
+      if(!row.some(v=>v!==''))return;
       const metadata=JSON.parse(row[15]);
-      assert_(!metadata.archived && metadata.orderNumber===row[0] || metadata.archived,'NOT_READY');
-      const when=metadata.paidAt || metadata.purchasedAt ||
-        Date.parse(String(row[3])) || Date.now();
+      const when=metadata.paidAt || metadata.purchasedAt || metadata.completedAt ||
+        Date.parse(String(row[3])) || Date.parse(String(row[14]));
+      assert_(Number.isFinite(when) && when>0,'NOT_READY');
       const day=seoulDay_(when);
       const monthly=quoteEnsureHeaderSheet_(annualLedgerBook_('order',day.slice(0,4)),
         day.slice(5,7)+'월',SALE_HEADERS);
@@ -101,48 +98,51 @@ function cutoverToTwoBooks() {
       assert_(existing.length<=1,'NOT_READY');
       if(existing.length)assert_(canonical_(existing[0])===canonical_(row),'CONFLICT');
       else {
-        if(monthly.getLastRow()+1>monthly.getMaxRows())
-          monthly.insertRowsAfter(monthly.getMaxRows(),100);
-        monthly.getRange(monthly.getLastRow()+1,1,1,20).setNumberFormat('@').setValues([row]);
+        const dest=monthly.getLastRow()+1;
+        if(dest>monthly.getMaxRows())monthly.insertRowsAfter(monthly.getMaxRows(),100);
+        monthly.getRange(dest,1,1,20).setValues([row]);
         SpreadsheetApp.flush();
         assert_(namedRows_(monthly,20).some(r=>canonical_(r)===canonical_(row)),'NOT_READY');
       }
     });
-    // The quote workbook owns quote indexes and routing metadata; the order
-    // workbook owns financial receipts and work-list hide markers.
-    [
-      [ANNUAL_FILES,ANNUAL_FILE_HEADERS],
-      [ANNUAL_QUOTE_INDEX,QUOTE_INDEX_HEADERS],
-      [QUOTE_MONTHS,QUOTE_MONTH_HEADERS],
-      [SALE_SOURCES,SALE_SOURCE_HEADERS]
-    ].forEach(([name,headers])=>twoBookCopySheet_(source,quoteBook,name,headers,false));
-    twoBookEmptySheet_(quoteBook,RFQ_SHEET,RFQ_HEADERS.concat(RFQ_RECEIPT_HEADERS));
+    // House private sales receipts in the order workbook, not in the two
+    // quote tabs. The original operating workbook remains an untouched backup.
     twoBookCopySheet_(source,orderBook,SALE_EVENT_SHEET,SALE_EVENT_HEADERS,false);
     twoBookCopySheet_(source,orderBook,SALE_HIDDEN_SHEET,SALE_HIDDEN_HEADERS,true);
+    twoBookCopySheet_(source,orderBook,SALE_SOURCES,SALE_SOURCE_HEADERS,false);
     twoBookEmptySheet_(orderBook,SALE_SHEET,SALE_HEADERS);
-
-    // Verify a second time from the destination before switching routing.
-    assert_(namedRows_(quoteBook.getSheetByName(ANNUAL_QUOTE_INDEX),QUOTE_INDEX_HEADERS.length)
-      .filter(r=>r.some(v=>v!=='')).length===quoteEntries.length,'NOT_READY');
-    const legacyCount=namedRows_(oldSales,20).filter(r=>r.some(v=>v!=='')).length;
-    const imported=namedRows_(orderBook.getSheetByName(SALE_SHEET),20).filter(r=>r.some(v=>v!=='')).length;
-    assert_(imported===0 && legacyCount>=0,'NOT_READY');
-    const oldSaleNumbers=new Set(namedRows_(oldSales,20).filter(r=>r.some(v=>v!=='')).map(r=>r[0]));
-    const annualNumbers=new Set();
-    annualFileEntries_().filter(e=>e.values[0]==='order'&&e.values[4]==='READY').forEach(e=>{
-      const book=SpreadsheetApp.openById(e.values[2]);
-      for(let n=1;n<=12;n++)namedRows_(book.getSheetByName(String(n).padStart(2,'0')+'월'),20)
-        .filter(r=>r.some(v=>v!=='')).forEach(r=>annualNumbers.add(r[0]));
+    // Ensure all original requests and financial records are present in the
+    // destination before switching the live pointers.
+    const sourceIds=new Set(oldIndex.map(e=>e.values[QI.id]));
+    const movedIds=new Set();
+    quoteYears.forEach(y=>{
+      const book=annualLedgerBook_('quote',y);
+      [TWO_REQUEST_TAB,TWO_CONFIRMED_TAB].forEach(tab=>
+        namedRows_(book.getSheetByName(tab),18)
+          .filter(row=>row.some(v=>v!=='')).forEach(row=>movedIds.add(row[0])));
     });
-    assert_([...oldSaleNumbers].every(id=>annualNumbers.has(id)),'NOT_READY');
-    // Only change the live workbook pointers AFTER all data and metadata
-    // checks have succeeded. Nothing is removed from the old workbook.
+    assert_([...sourceIds].every(id=>movedIds.has(id)),'NOT_READY');
+    const saleIds=new Set(legacy.map(r=>r.row[0]));
+    const entries=annualFileEntries_(),registry={};
+    entries.forEach(e=>{registry[e.values[0]+':'+e.values[1]]={id:e.values[2]};});
+    const migrated=new Set();
+    entries.filter(e=>e.values[0]==='order' && e.values[4]==='READY')
+      .forEach(e=>{
+        const book=SpreadsheetApp.openById(e.values[2]);
+        for(let month=1;month<=12;month++)
+          namedRows_(book.getSheetByName(String(month).padStart(2,'0')+'월'),20)
+            .filter(r=>r.some(v=>v!=='')).forEach(r=>migrated.add(r[0]));
+      });
+    assert_([...saleIds].every(id=>migrated.has(id)),'NOT_READY');
+    // Set registry before the mode bit; only the final mode bit makes this
+    // version live. No source sheet is cleared during this procedure.
+    props.setProperty('TWO_BOOK_REGISTRY',JSON.stringify(registry));
     props.setProperty('LEGACY_SPREADSHEET_ID',oldId);
     props.setProperty('ORDER_WORKBOOK_ID',orderBook.getId());
     props.setProperty('SPREADSHEET_ID',quoteBook.getId());
     props.setProperty('TWO_BOOK_MODE','two-books-v1');
     return {ready:true,quoteFileId:quoteBook.getId(),
       orderFileId:orderBook.getId(),legacyPreserved:true,
-      requests:quoteEntries.length,sales:legacyCount};
+      requests:oldIndex.length,sales:saleIds.size};
   });
 }

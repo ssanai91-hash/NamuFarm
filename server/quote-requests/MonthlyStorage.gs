@@ -14,6 +14,8 @@ const QUOTE_SUMMARY_HEADERS = ['접수일','접수건수','신규','보관종료
 const QI = {id:0,book:1,sheet:2,day:3,created:4,receipt:5,seoul:6,hash:7,seq:8,phase:9,copy:10,targetBook:11,targetSheet:12,slot:13,status:14};
 function quoteStorageConfigured_() { return annualLedgersEnabled_() || PropertiesService.getScriptProperties().getProperty('QUOTE_STORAGE_READY') === '1'; }
 function quoteStorageReady_() {
+  if(twoBookActive_())return annualFileEntries_().some(e=>
+    e.values[0]==='quote' && e.values[4]==='READY');
   if (!quoteStorageConfigured_()) return PropertiesService.getScriptProperties().getProperty('QUOTE_STORAGE_MODE') !== 'monthly-v1';
   quoteTables_(); return true;
 }
@@ -338,6 +340,7 @@ function recoverQuoteMonthFile(month,fileId) {
   });
 }
 function maintainMonthlyQuoteStorage() {
+  if(twoBookActive_())return lock_(()=>({checked:twoTabRecords_().length,storage:'two-tabs'}));
   if(!quoteStorageConfigured_())return;
   if(annualLedgersEnabled_())return lock_(()=>{const entries=quoteIndexEntries_();quoteRepairTransitions_(entries,{});return {checked:entries.length};});
   return lock_(()=>{const entries=quoteIndexEntries_();quoteRepairTransitions_(entries,{});quoteMonthRows_().forEach(m=>{quoteEnsureMonth_(m.values[0]);quoteSummary_(m.values[0],entries);});return {checked:entries.length};});
@@ -366,7 +369,11 @@ function quoteAudit_(allowUncreatedMonths,allowSimpleCopies) {
   });
   return {requests:entries.length,committed:entries.filter(e=>e.values[QI.phase]==='COMMITTED').length,reservations:entries.filter(e=>e.values[QI.phase]==='PREPARED').length,months:quoteMonthRows_().length,unresolvedMonths:quoteMonthRows_().filter(m=>m.values[3]!=='READY').length};
 }
-function auditMonthlyQuoteStorage() { return lock_(()=>{assert_(quoteStorageConfigured_(),'NOT_READY');return quoteAudit_();}); }
+function auditMonthlyQuoteStorage() {
+  return lock_(()=>twoBookActive_()?
+    {requests:twoTabRecords_().length,storage:'two-tabs'}:
+    (assert_(quoteStorageConfigured_(),'NOT_READY'),quoteAudit_()));
+}
 /** Explicit owner-only copy migration. Never invoked by setup or public actions. */
 function copyLegacyQuotesToMonthly(limit) {
   assert_(Number.isSafeInteger(limit) && limit>=1 && limit<=20);

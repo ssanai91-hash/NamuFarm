@@ -275,7 +275,10 @@ function dispatchNotifications_(onlyId) {
     if (!targets.length) return null;
     const now = Date.now(); const lease = new Date(now + 600000).toISOString();
     const batch = [];
-    const records=quoteStorageConfigured_()?indexedQuoteRecords_(-1).filter(({entry})=>entry.values[QI.status]!=='보관종료' && (!onlyId || entry.values[QI.id]===onlyId) && Date.parse(entry.values[QI.created])+QUOTE_RETENTION_MS>now):quoteRows_(sheet_());
+    const records=twoBookActive_()
+      ? twoTabRecords_().filter(r=>r.row[9]==='신규' &&
+          (!onlyId || r.row[0]===onlyId) && Date.parse(String(r.row[2]))+QUOTE_RETENTION_MS>now)
+      : quoteStorageConfigured_()?indexedQuoteRecords_(-1).filter(({entry})=>entry.values[QI.status]!=='보관종료' && (!onlyId || entry.values[QI.id]===onlyId) && Date.parse(entry.values[QI.created])+QUOTE_RETENTION_MS>now):quoteRows_(sheet_());
     for(const candidate of records){
       if(batch.length >= (onlyId ? 1 : 10))break;
       const {sheet,row,index}=candidate.entry?quoteRecord_(candidate.entry,candidate.cache,false):candidate;
@@ -305,7 +308,8 @@ function dispatchNotifications_(onlyId) {
     });
     lock_(() => {
       let record;
-      if(quoteStorageConfigured_()){const entries=quoteIndexEntries_(),cache={};quoteRepairTransitions_(entries,cache);const entry=entries.find(e=>e.values[QI.id]===job.id);record=entry?quoteRecord_(entry,cache,false):null;}
+      if(twoBookActive_())record=twoTabRecord_(job.id);
+      else if(quoteStorageConfigured_()){const entries=quoteIndexEntries_(),cache={};quoteRepairTransitions_(entries,cache);const entry=entries.find(e=>e.values[QI.id]===job.id);record=entry?quoteRecord_(entry,cache,false):null;}
       else record=quoteFindRow_(sheet_(),job.id);
       if(!record || record.row[10]!=='PENDING' || record.row[13]!==job.lease)return;
       const {sheet,row,index}=record; const attempts = (Number(row[12]) || 0) + 1;

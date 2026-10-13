@@ -10,7 +10,17 @@ const SALE_SOURCE_HEADERS = ['견적식별해시','주문번호'];
 function annualLedgersEnabled_() {
   return PropertiesService.getScriptProperties().getProperty('ANNUAL_LEDGER_MODE') === 'annual-v1';
 }
+/** Active registry lives in script properties, not a third quote tab. */
 function annualFileEntries_() {
+  if(twoBookActive_()){
+    const data=JSON.parse(PropertiesService.getScriptProperties().getProperty('TWO_BOOK_REGISTRY')||'{}');
+    return Object.keys(data).map((key,index)=>{
+      const values=data[key],parts=key.split(':');
+      assert_(parts.length===2 && ['quote','order'].includes(parts[0]) &&
+        /^\d{4}$/.test(parts[1]) && values && values.id,'NOT_READY');
+      return {values:[parts[0],parts[1],values.id,'','READY',''],index:index};
+    });
+  }
   const book=SpreadsheetApp.openById(PropertiesService.getScriptProperties().getProperty('SPREADSHEET_ID'));
   if(!book.getSheetByName(ANNUAL_FILES))return [];
   const seen=new Set();
@@ -24,6 +34,7 @@ function annualFileEntries_() {
 }
 function annualLedgerBook_(kind,year) {
   assert_(['quote','order'].includes(kind) && /^\d{4}$/.test(String(year)));
+  if(twoBookActive_())return annualActiveBook_(kind,year);
   const table=namedSheet_(ANNUAL_FILES,ANNUAL_FILE_HEADERS,true);
   let entry=annualFileEntries_().find(e=>e.values[0]===kind && String(e.values[1])===String(year));
   if(!entry){
@@ -46,17 +57,61 @@ function annualLedgerBook_(kind,year) {
   const book=SpreadsheetApp.openById(v[2]);
   if(v[4]!=='READY'){
     book.setSpreadsheetTimeZone('Asia/Seoul');
-    const headers=kind==='quote'?RFQ_HEADERS.concat(RFQ_RECEIPT_HEADERS):SALE_HEADERS;
-    for(let month=1;month<=12;month++)quoteEnsureHeaderSheet_(book,String(month).padStart(2,'0')+'월',headers);
-    // Drive can add a blank default tab; remove only that empty extra tab.
-    book.getSheets().filter(s=>!/^((0[1-9])|(1[0-2]))월$/.test(s.getName()) && s.getLastRow()===0).forEach(s=>book.deleteSheet(s));
+    annualEnsureTabs_(book,kind);
     v[4]='READY';quoteWriteVerified_(table,entry.index+2,v);
   }
   return book;
 }
+function annualEnsureTabs_(book,kind){
+  if(kind==='quote'){
+    [TWO_REQUEST_TAB,TWO_CONFIRMED_TAB].forEach(name=>
+      quoteEnsureHeaderSheet_(book,name,RFQ_HEADERS.concat(RFQ_RECEIPT_HEADERS)));
+    // Keep only the two business tabs. Never discard a nonempty unknown tab.
+    book.getSheets().filter(sheet=>
+      ![TWO_REQUEST_TAB,TWO_CONFIRMED_TAB].includes(sheet.getName())).forEach(sheet=>{
+      assert_(sheet.getLastRow()===0,'CONFLICT');
+      book.deleteSheet(sheet);
+    });
+  }else{
+    for(let month=1;month<=12;month++)
+      quoteEnsureHeaderSheet_(book,String(month).padStart(2,'0')+'월',SALE_HEADERS);
+    book.getSheets().filter(sheet=>
+      !/^((0[1-9])|(1[0-2]))월$/.test(sheet.getName()) &&
+      sheet.getLastRow()===0).forEach(sheet=>book.deleteSheet(sheet));
+  }
+}
+function annualActiveBook_(kind,year){
+  const props=PropertiesService.getScriptProperties(),key=kind+':'+year;
+  const registry=JSON.parse(props.getProperty('TWO_BOOK_REGISTRY')||'{}');
+  if(registry[key]){
+    const book=SpreadsheetApp.openById(registry[key].id);
+    annualEnsureTabs_(book,kind);return book;
+  }
+  const tokenKey='TWO_BOOK_CREATE_'+kind+'_'+year;
+  let token=props.getProperty(tokenKey);
+  if(!token){
+    token=Utilities.getUuid();props.setProperty(tokenKey,token);
+  }
+  // Search first on every retry. An uncertain Drive create must never create
+  // a second annual workbook.
+  const saved=quoteFindCreatedFile_(token);
+  const entry=saved || Drive.Files.create({
+    name:'나무팜_'+(kind==='quote'?'견적':'주문')+'_'+year,
+    mimeType:'application/vnd.google-apps.spreadsheet',
+    appProperties:quoteMonthFileProperties_(token)
+  },null,{fields:'id'});
+  assert_(entry && entry.id,'NOT_READY');
+  const book=SpreadsheetApp.openById(entry.id);
+  annualEnsureTabs_(book,kind);
+  registry[key]={id:entry.id};
+  props.setProperty('TWO_BOOK_REGISTRY',JSON.stringify(registry));
+  props.deleteProperty(tokenKey);
+  return book;
+}
 function annualQuoteSheet_(day) {
   assert_(/^\d{4}-\d{2}-\d{2}$/.test(day));
-  return quoteEnsureHeaderSheet_(annualLedgerBook_('quote',day.slice(0,4)),day.slice(5,7)+'월',RFQ_HEADERS.concat(RFQ_RECEIPT_HEADERS));
+  return quoteEnsureHeaderSheet_(annualLedgerBook_('quote',day.slice(0,4)),
+    TWO_REQUEST_TAB,RFQ_HEADERS.concat(RFQ_RECEIPT_HEADERS));
 }
 function newSaleSheet_(meta) {
   // Unpaid legacy Android purchases keep their existing compatibility store.
@@ -116,9 +171,14 @@ function reserveSaleSource_(body,records,existing,commit) {
   if(commit && !bound.length)quoteWriteVerified_(table,table.getLastRow()+1,[key,number]);
 }
 function saleRequestSaved_(body) {
-  // Payment/shipping no longer writes to the quote workbook. Preserve the old
-  // encrypted-client disposal behavior only before the annual cutover.
-  if(annualLedgersEnabled_() || body.personalData!==undefined || !body.sourceRequestId)return;
+  if(!body.sourceRequestId)return;
+  // Preserve the original confirmed quote for review, while changing its
+  // status so Android's quote-only inbox no longer shows a paid sale.
+  if(twoBookActive_()){
+    updateLinkedRequestStatus_(body.sourceRequestId,body.metadata.status);
+    return;
+  }
+  if(annualLedgersEnabled_() || body.personalData!==undefined)return;
   if(quoteStorageConfigured_())closeIndexedQuote_(body.sourceRequestId);
   else {const record=quoteFindRow_(sheet_(),body.sourceRequestId);if(record)expireQuoteRow_(record.sheet,record.row,record.index);}
 }
