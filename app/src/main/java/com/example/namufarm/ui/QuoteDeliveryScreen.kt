@@ -1,0 +1,470 @@
+package com.example.namufarm.ui
+
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.MailOutline
+import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.Sms
+import androidx.compose.material.icons.outlined.SpeakerNotes
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.tooling.preview.Preview
+import java.text.NumberFormat
+import java.util.Locale
+
+private val background = Color(0xFFF5F6F3)
+private val white = Color.White
+private val border = Color(0xFFE3E9E5)
+private val green = Color(0xFF2F5D3F)
+private val paleGreen = Color(0xFFE3EEE6)
+private val blue = Color(0xFF3563A8)
+private val paleBlue = Color(0xFFE4ECF8)
+private val chipBlue = Color(0xFF2B5287)
+private val orange = Color(0xFFC8641F)
+private val textPrimary = Color(0xFF1B2A22)
+private val textSecondary = Color(0xFF7A8680)
+
+data class QuoteDeliveryCustomer(
+    val name: String,
+    val phone: String,
+    val email: String?,
+    val formalQuoteRequested: Boolean,
+    val smsRequested: Boolean,
+    val emailRequested: Boolean
+)
+
+data class QuoteDeliveryItem(
+    val id: String,
+    val name: String,
+    val quantity: Int,
+    val requestedSpecification: String,
+    val unitPrice: Int
+)
+
+enum class QuoteSendingStatus { PENDING, COMPLETED }
+
+data class QuoteDeliveryUiState(
+    val orderNumber: String,
+    val customer: QuoteDeliveryCustomer,
+    val items: List<QuoteDeliveryItem>,
+    val priceStep: Int = 1000,
+    val prepaid: Boolean = true,
+    val shippingFee: Int = 6000,
+    val requestNote: String = "",
+    val smsStatus: QuoteSendingStatus = QuoteSendingStatus.PENDING,
+    val emailStatus: QuoteSendingStatus = QuoteSendingStatus.PENDING
+)
+
+private fun won(value: Long) =
+    NumberFormat.getNumberInstance(Locale.KOREA).format(value.coerceAtLeast(0)) + "원"
+
+private fun nextPrice(value: Int, delta: Int): Int =
+    (value.toLong() + delta).coerceIn(0L, Int.MAX_VALUE.toLong()).toInt()
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun QuoteDeliveryScreen(
+    state: QuoteDeliveryUiState,
+    onBack: () -> Unit,
+    onMore: () -> Unit,
+    onPriceStepChange: (Int) -> Unit,
+    onUnitPriceChange: (itemId: String, newPrice: Int) -> Unit,
+    onPrepaidChange: (Boolean) -> Unit,
+    onShippingFeeChange: (Int) -> Unit,
+    onSendSms: () -> Unit,
+    onSendEmail: () -> Unit,
+    onMarkDeliveryComplete: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val itemsTotal = state.items.sumOf {
+        it.quantity.coerceAtLeast(0).toLong() * it.unitPrice.coerceAtLeast(0)
+    }
+    val includedShipping = if (state.prepaid) state.shippingFee.coerceAtLeast(0).toLong() else 0L
+    val total = itemsTotal + includedShipping
+
+    Scaffold(
+        modifier = modifier,
+        containerColor = background,
+        topBar = {
+            TopAppBar(
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, "뒤로가기", tint = textPrimary)
+                    }
+                },
+                title = {
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text("견적 전달", fontSize = 21.sp, fontWeight = FontWeight.SemiBold, color = textPrimary)
+                        Text(state.orderNumber, fontSize = 12.sp, color = textSecondary)
+                    }
+                },
+                actions = {
+                    IconButton(onClick = onMore) {
+                        Icon(Icons.Outlined.MoreVert, "더보기", tint = textPrimary)
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = background)
+            )
+        },
+        bottomBar = {
+            Surface(
+                color = white,
+                shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp),
+                border = BorderStroke(0.5.dp, border)
+            ) {
+                Column(
+                    Modifier.fillMaxWidth().navigationBarsPadding()
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        DeliverySendButton(
+                            label = "문자 보내기", color = green, status = state.smsStatus,
+                            modifier = Modifier.weight(1f),
+                            icon = { Icon(Icons.Outlined.Sms, null, tint = white, modifier = Modifier.size(20.dp)) },
+                            onClick = onSendSms
+                        )
+                        DeliverySendButton(
+                            label = "메일 보내기", color = blue, status = state.emailStatus,
+                            modifier = Modifier.weight(1f),
+                            icon = { Icon(Icons.Outlined.MailOutline, null, tint = white, modifier = Modifier.size(20.dp)) },
+                            onClick = onSendEmail
+                        )
+                    }
+                    Button(
+                        onClick = onMarkDeliveryComplete,
+                        modifier = Modifier.fillMaxWidth().height(50.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = orange)
+                    ) {
+                        Icon(Icons.Outlined.Check, null, modifier = Modifier.size(22.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("견적발송완료", fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                    }
+                }
+            }
+        }
+    ) { insets ->
+        LazyColumn(
+            modifier = Modifier.fillMaxSize().padding(insets),
+            contentPadding = PaddingValues(horizontal = 18.dp, vertical = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            item {
+                DeliveryCard {
+                    Row(
+                        Modifier.fillMaxWidth().padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Box(Modifier.size(52.dp).background(paleGreen, CircleShape),
+                            contentAlignment = Alignment.Center) {
+                            Text(state.customer.name.take(1).ifBlank { "고" },
+                                fontSize = 21.sp, color = green, fontWeight = FontWeight.Medium)
+                        }
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                                Text(state.customer.name, fontSize = 16.sp, color = textPrimary,
+                                    fontWeight = FontWeight.Medium, maxLines = 1)
+                                if (state.customer.formalQuoteRequested)
+                                    DeliveryPill("공식견적서 요청", paleBlue, chipBlue)
+                            }
+                            Text(state.customer.phone, fontSize = 14.sp, color = textPrimary)
+                            if (!state.customer.email.isNullOrBlank())
+                                Text(state.customer.email, fontSize = 12.sp, color = textSecondary,
+                                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                        Column(horizontalAlignment = Alignment.End,
+                            verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                            Text("수신방법", fontSize = 11.sp, color = textSecondary)
+                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                if (state.customer.smsRequested) DeliveryPill("문자", paleGreen, green)
+                                if (state.customer.emailRequested) DeliveryPill("메일", paleBlue, chipBlue)
+                            }
+                        }
+                    }
+                }
+            }
+            item {
+                DeliveryCard {
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text("단가 증감", color = textPrimary, fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+                        listOf(500, 1000, 10000).forEach { amount ->
+                            val selected = state.priceStep == amount
+                            Surface(
+                                onClick = { onPriceStepChange(amount) },
+                                shape = RoundedCornerShape(22.dp),
+                                color = if (selected) green else white,
+                                border = BorderStroke(0.5.dp, if (selected) green else border)
+                            ) {
+                                Text(if (amount == 10000) "1만원" else won(amount.toLong()),
+                                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 9.dp),
+                                    color = if (selected) white else textSecondary,
+                                    fontSize = 12.sp,
+                                    fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal)
+                            }
+                        }
+                    }
+                }
+            }
+            items(state.items, key = { it.id }) { item ->
+                DeliveryItemCard(
+                    item = item,
+                    step = state.priceStep,
+                    onPriceChange = { onUnitPriceChange(item.id, it) }
+                )
+            }
+            item {
+                DeliveryCard {
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                        Text("배송비", color = textPrimary, fontSize = 15.sp,
+                            fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+                        Row(Modifier.background(Color(0xFFEEF1EF), RoundedCornerShape(8.dp)).padding(3.dp),
+                            horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                            DeliveryMode("후불", selected = !state.prepaid) { onPrepaidChange(false) }
+                            DeliveryMode("선불", selected = state.prepaid) { onPrepaidChange(true) }
+                        }
+                        DeliveryStepButton(false) {
+                            onShippingFeeChange(nextPrice(state.shippingFee, -state.priceStep))
+                        }
+                        DeliveryPrice(won(state.shippingFee.toLong()), minWidth = 66.dp)
+                        DeliveryStepButton(true) {
+                            onShippingFeeChange(nextPrice(state.shippingFee, state.priceStep))
+                        }
+                    }
+                }
+            }
+            item {
+                DeliveryCard {
+                    Row(Modifier.fillMaxWidth().padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Icon(Icons.Outlined.SpeakerNotes, null, tint = textSecondary,
+                            modifier = Modifier.size(24.dp))
+                        Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                            Text("요청사항", fontSize = 12.sp, color = textSecondary)
+                            Text(state.requestNote.ifBlank { "없음" }, color = textPrimary,
+                                fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
+                }
+            }
+            item {
+                Surface(
+                    color = Color(0xFFFAF8EC),
+                    shape = RoundedCornerShape(16.dp),
+                    border = BorderStroke(0.5.dp, Color(0xFFECE6C8))
+                ) {
+                    Column(Modifier.fillMaxWidth().padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text("최종 견적 금액", fontSize = 15.sp, color = textPrimary,
+                                    fontWeight = FontWeight.Medium)
+                                Text("품목 ${won(itemsTotal)} + 배송비 ${won(includedShipping)}",
+                                    fontSize = 12.sp, color = textSecondary, maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis)
+                            }
+                            Text(won(total), fontSize = 28.sp, fontWeight = FontWeight.Medium,
+                                color = green, maxLines = 1)
+                        }
+                        Row(Modifier.fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(Color(0xFFFFF3D6))
+                                .padding(horizontal = 12.dp, vertical = 11.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                            Icon(Icons.Outlined.Info, null, tint = Color(0xFF8A5A00),
+                                modifier = Modifier.size(18.dp))
+                            Text("보낸 뒤 견적발송완료를 눌러주세요.",
+                                fontSize = 12.sp, color = Color(0xFF6B4A0A))
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DeliveryCard(content: @Composable () -> Unit) {
+    Surface(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp),
+        color = white, border = BorderStroke(0.5.dp, border), content = content)
+}
+
+@Composable
+private fun DeliveryPill(value: String, fill: Color, ink: Color) {
+    Surface(shape = RoundedCornerShape(50), color = fill) {
+        Text(value, color = ink, fontSize = 11.sp,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp), maxLines = 1)
+    }
+}
+
+@Composable
+private fun DeliveryStepButton(increase: Boolean, onClick: () -> Unit) {
+    Surface(onClick = onClick, modifier = Modifier.size(32.dp),
+        shape = CircleShape, color = paleGreen) {
+        Box(contentAlignment = Alignment.Center) {
+            Text(if (increase) "+" else "−",
+                fontSize = 21.sp, fontWeight = FontWeight.Medium, color = green)
+        }
+    }
+}
+
+@Composable
+private fun DeliveryPrice(value: String, minWidth: Dp = 84.dp) {
+    Surface(modifier = Modifier.defaultMinSize(minWidth = minWidth).height(34.dp),
+        shape = RoundedCornerShape(10.dp), color = white,
+        border = BorderStroke(0.5.dp, border)) {
+        Box(Modifier.padding(horizontal = 6.dp), contentAlignment = Alignment.Center) {
+            Text(value, color = textPrimary, fontWeight = FontWeight.Medium,
+                fontSize = 15.sp, maxLines = 1)
+        }
+    }
+}
+
+@Composable
+private fun DeliveryItemCard(item: QuoteDeliveryItem, step: Int, onPriceChange: (Int) -> Unit) {
+    DeliveryCard {
+        Column(Modifier.fillMaxWidth().padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(item.name, color = textPrimary, fontSize = 17.sp,
+                    fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+                DeliveryPill("${item.quantity}주", paleGreen, green)
+            }
+            Text("희망규격: ${item.requestedSpecification}",
+                color = textSecondary, fontSize = 12.sp,
+                maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("1주 단가", color = textSecondary, fontSize = 14.sp,
+                    modifier = Modifier.weight(1f))
+                DeliveryStepButton(false) {
+                    onPriceChange(nextPrice(item.unitPrice, -step))
+                }
+                DeliveryPrice(won(item.unitPrice.toLong()))
+                DeliveryStepButton(true) {
+                    onPriceChange(nextPrice(item.unitPrice, step))
+                }
+            }
+            HorizontalDivider(thickness = 0.5.dp, color = border)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically) {
+                Text("소계", color = textSecondary, fontSize = 14.sp)
+                Text(won(item.quantity.coerceAtLeast(0).toLong() *
+                    item.unitPrice.coerceAtLeast(0).toLong()),
+                    color = textPrimary, fontSize = 17.sp, fontWeight = FontWeight.Medium)
+            }
+        }
+    }
+}
+
+@Composable
+private fun DeliveryMode(label: String, selected: Boolean, onClick: () -> Unit) {
+    Surface(onClick = onClick, shape = RoundedCornerShape(8.dp),
+        color = if (selected) green else Color.Transparent) {
+        Text(label, color = if (selected) white else textSecondary,
+            fontSize = 12.sp, fontWeight = FontWeight.Medium,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp))
+    }
+}
+
+@Composable
+private fun DeliverySendButton(
+    label: String,
+    status: QuoteSendingStatus,
+    color: Color,
+    icon: @Composable () -> Unit,
+    modifier: Modifier,
+    onClick: () -> Unit
+) {
+    Surface(onClick = onClick, modifier = modifier.height(68.dp),
+        shape = RoundedCornerShape(16.dp), color = color) {
+        Column(modifier = Modifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center) {
+            Row(Modifier.clip(RoundedCornerShape(50))
+                    .background(white.copy(alpha = 0.22f))
+                    .padding(horizontal = 10.dp, vertical = 3.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                Box(Modifier.size(6.dp).background(
+                    if (status == QuoteSendingStatus.COMPLETED) Color(0xFFB9F19C)
+                    else Color(0xFFFFE08A), CircleShape))
+                Text(if (status == QuoteSendingStatus.COMPLETED) "전송 완료" else "전송 대기",
+                    color = white, fontSize = 11.sp)
+            }
+            Spacer(Modifier.height(4.dp))
+            Row(verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                icon()
+                Text(label, color = white, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+            }
+        }
+    }
+}
+
+@Preview(name = "견적 전달", showBackground = true, widthDp = 390, heightDp = 850)
+@Composable
+private fun QuoteDeliveryPreview() {
+    var state by remember {
+        mutableStateOf(
+            QuoteDeliveryUiState(
+                orderNumber = "NAMU-20261013-0002",
+                customer = QuoteDeliveryCustomer(
+                    name = "이승열", phone = "010-6538-1792",
+                    email = "ssanai91@gmail.com",
+                    formalQuoteRequested = true, smsRequested = true, emailRequested = true
+                ),
+                items = listOf(
+                    QuoteDeliveryItem("blueberry", "블루베리", 5, "포트묘 / H0.8~1.0", 1000),
+                    QuoteDeliveryItem("silktree", "자귀나무", 10, "H1.5 이상", 1000)
+                ),
+                shippingFee = 6000, prepaid = true, requestNote = "직접 수령 요청"
+            )
+        )
+    }
+    MaterialTheme {
+        QuoteDeliveryScreen(
+            state = state,
+            onBack = {}, onMore = {},
+            onPriceStepChange = { state = state.copy(priceStep = it) },
+            onUnitPriceChange = { id, price ->
+                state = state.copy(items = state.items.map {
+                    if (it.id == id) it.copy(unitPrice = price) else it
+                })
+            },
+            onPrepaidChange = { state = state.copy(prepaid = it) },
+            onShippingFeeChange = { state = state.copy(shippingFee = it) },
+            onSendSms = { state = state.copy(smsStatus = QuoteSendingStatus.COMPLETED) },
+            onSendEmail = { state = state.copy(emailStatus = QuoteSendingStatus.COMPLETED) },
+            onMarkDeliveryComplete = {}
+        )
+    }
+}
