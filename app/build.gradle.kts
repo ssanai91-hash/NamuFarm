@@ -69,7 +69,7 @@ android {
         buildConfigField(
             "String",
             "PAYMENT_ACCOUNT_TEXT",
-            "\"농협 328-12-035671/오진웅\""
+            "\"농협 328-12-035671 / 오진웅\""
         )
     }
 
