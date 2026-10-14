@@ -13,11 +13,12 @@ from PySide6.QtWidgets import (
     QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget, QDateEdit, QDoubleSpinBox,
 )
 
-from .api import DEFAULT_URL, ScriptApi, validate_url
+from .api import DEFAULT_URL
 from .crypto import SellerKey
 from .domain import EDITABLE, NEXT, SEOUL, STATES, MAX_SAFE, profit, require
 from .errors import ConflictError, UserError
 from .service import Manager
+from .connection import connection_input, valid_connection_key
 from .store import Vault
 
 
@@ -292,7 +293,7 @@ class MainWindow(QMainWindow):
         self.message.setText(
             "READY  >  연결 정보 복원됨 · ‘서버 동기화’를 눌러 최신 견적요청을 가져오세요."
             if data["paired"] else
-            "처음 한 번만 연결파일을 불러오면 다음 실행부터 연결 정보가 자동으로 복원됩니다."
+            "공통 연결 암호를 한 번 입력하면 다음 실행부터 자동으로 연결됩니다."
         )
 
     def update_controls(self):
@@ -302,11 +303,11 @@ class MainWindow(QMainWindow):
         self.sync_button.setEnabled(paired)
         self.open_button.setEnabled(self.manager is None and self.task is None)
         self.legacy_button.setEnabled(ready and self.data["paired"])
-        self.connection_file_button.setEnabled(ready)
+        valid_password = valid_connection_key(self.connection_password.text())
+        self.connect_key_button.setEnabled(ready and valid_password)
         self.copy_button.setEnabled(ready)
-        self.pair_button.setEnabled(ready and not self.data["paired"])
         self.url.setEnabled(ready and not self.data["paired"])
-        self.invite.setEnabled(ready and not self.data["paired"])
+        self.connection_password.setEnabled(ready)
         pending = bool(self.data["pending"])
         self.delete_button.setEnabled(paired and not pending and self.request_table.currentRow() >= 0)
         editable = paired and not pending and self.selected_sale is not None and self.selected_sale["metadata"]["status"] not in ("배송완료", "구매취소", "판매완료", "주문취소")
@@ -317,7 +318,7 @@ class MainWindow(QMainWindow):
         self.report_button.setEnabled(paired)
         self.resolve_button.setEnabled(paired and pending and self.conflict)
         self.summary.setText(f"문의 {len(self.data['requests'])}건 · 판매 {len(self.data['sales'])}건 · 전송 대기 {len(self.data['pending'])}건" if self.manager else "PC 자료 준비 중")
-        self.connection_status.setText("연결 정보 자동 복원됨" if self.data["paired"] else "연결파일 필요")
+        self.connection_status.setText("연결 정보 자동 복원됨" if self.data["paired"] else "연결 암호 입력 필요")
         self.pending_status.setText("전송 대기는 암호화해 보관합니다. '지금 동기화'로 재시도하세요." if pending else "전송 대기 없음")
 
     def allow_discard(self):
@@ -629,31 +630,31 @@ class MainWindow(QMainWindow):
         self.open_button = QPushButton("PC 자료 다시 열기")
         self.open_button.clicked.connect(self.open_vault)
         layout.addWidget(self.open_button)
-        self.connection_status = QLabel("연결파일 필요")
+        self.connection_status = QLabel("연결 암호 입력 필요")
         layout.addWidget(self.connection_status)
-        self.connection_file_button = QPushButton("연결파일 불러오기 (최초 1회)")
-        self.connection_file_button.clicked.connect(self.connect_file)
-        layout.addWidget(self.connection_file_button)
+        password_form = QFormLayout()
+        self.connection_password = QLineEdit()
+        self.connection_password.setEchoMode(QLineEdit.EchoMode.Password)
+        self.connection_password.setMaxLength(128)
+        self.connection_password.setPlaceholderText("현재 공통 연결키 64자리를 입력하거나 붙여넣어주세요")
+        password_form.addRow("공통 연결 암호", self.connection_password)
+        layout.addLayout(password_form)
+        self.connect_key_button = QPushButton("암호로 연결하기 (최초 1회)")
+        self.connect_key_button.clicked.connect(self.connect_key)
+        self.connection_password.textChanged.connect(lambda: self.update_controls())
+        layout.addWidget(self.connect_key_button)
         self.copy_button = QPushButton("로컬 엑셀 사본 열기")
         self.copy_button.clicked.connect(self.open_request_copy)
         layout.addWidget(self.copy_button)
         self.advanced_connection = QWidget()
         advanced_layout = QVBoxLayout(self.advanced_connection)
-        toggle = QPushButton("이전 연결코드 방식 표시")
+        toggle = QPushButton("서버 주소 확인")
         toggle.clicked.connect(lambda: self.advanced_connection.setVisible(not self.advanced_connection.isVisible()))
         layout.addWidget(toggle)
         form = QFormLayout()
         self.url = QLineEdit(DEFAULT_URL)
         form.addRow("Apps Script 웹 앱 주소", self.url)
-        self.invite = QLineEdit()
-        self.invite.setEchoMode(QLineEdit.EchoMode.Password)
-        self.invite.setMaxLength(64)
-        self.invite.setPlaceholderText("관리자에게 받은 PC 연결 코드를 입력하세요")
-        form.addRow("PC 연결 코드", self.invite)
         advanced_layout.addLayout(form)
-        self.pair_button = QPushButton("PC 연결하고 처음 동기화")
-        self.pair_button.clicked.connect(self.pair)
-        advanced_layout.addWidget(self.pair_button)
         layout.addWidget(self.advanced_connection)
         self.advanced_connection.hide()
         self.auto_check = QCheckBox("60초마다 자동 동기화 · 수정 중에는 입력내용을 유지합니다")
@@ -667,29 +668,27 @@ class MainWindow(QMainWindow):
         self.legacy_button = QPushButton("이전 자료 복원 (필요한 경우)")
         self.legacy_button.clicked.connect(self.restore_legacy)
         layout.addWidget(self.legacy_button)
-        note = QLabel("연결파일은 이 PC에서 최초 한 번만 불러옵니다. 연결 정보는 Windows 계정으로 보호해 저장하며 다음 실행부터 자동 복원합니다.\n‘지금 동기화’를 누르면 Google Sheet의 최신 견적요청을 내려받고 로컬 조회용 엑셀 사본도 함께 갱신합니다.\n로컬 엑셀 사본은 조회용이며 직접 수정한 내용은 서버에 올리지 않습니다.\n엑셀 사본 위치: " + str(self.vault_path.with_name("나무팜-견적요청.xlsx")))
+        note = QLabel("PC와 휴대폰에서 같은 공통 연결 암호를 사용합니다. 암호는 최초 한 번만 입력하고 다음 실행부터 자동 연결합니다. 기존에 저장한 연결 정보도 계속 사용합니다.\n연결 정보는 Windows 계정으로 보호해 저장합니다.\n‘지금 동기화’를 누르면 Google Sheet의 최신 견적요청을 내려받고 로컬 조회용 엑셀 사본도 함께 갱신합니다.\n로컬 엑셀 사본은 조회용이며 직접 수정한 내용은 서버에 올리지 않습니다.\n엑셀 사본 위치: " + str(self.vault_path.with_name("나무팜-견적요청.xlsx")))
         note.setWordWrap(True)
         note.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         layout.addWidget(note)
         layout.addStretch()
         self.tabs.addTab(page, "연결·설정")
 
-    def connect_file(self):
-        path, _ = QFileDialog.getOpenFileName(self, "나무팜 연결파일", "", "연결파일 (*.json);;모든 파일 (*)")
-        if not path:
+    def connect_key(self):
+        try:
+            url, password = connection_input(self.url.text(), self.connection_password.text())
+        except UserError as error:
+            QMessageBox.warning(self, "연결 암호 확인", str(error))
             return
+        self.connection_password.clear()
         def work():
-            try:
-                with Path(path).open("rb") as source:
-                    raw = source.read(8193)
-            except OSError:
-                raise UserError("연결파일을 읽을 수 없습니다.") from None
-            return self.manager.connect_file(raw)
+            return self.manager.connect_key(password, url)
         def connected(value):
             self.url.setText(self.manager.api.url)
             self.apply_view(value)
             self.message.setText("연결과 동기화를 마쳤습니다. 저장된 자료는 오프라인에서도 볼 수 있습니다.")
-        self.run_job("연결파일로 연결하고 자료 가져오는 중…", work, connected)
+        self.run_job("연결 암호 확인하고 자료 가져오는 중…", work, connected)
 
     def open_request_copy(self):
         def opened(value):
@@ -698,19 +697,6 @@ class MainWindow(QMainWindow):
                 QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.manager.request_copy_path)))
                 self.message.setText("로컬 엑셀 사본을 열었습니다. 수정한 내용은 시트에 반영되지 않습니다.")
         self.run_job("로컬 엑셀 사본 준비 중…", self.manager.local_copy_view, opened)
-
-    def pair(self):
-        try:
-            url = validate_url(self.url.text().strip())
-        except UserError as error:
-            QMessageBox.warning(self, "서버 주소 확인", str(error))
-            return
-        invite = self.invite.text().strip()
-        self.invite.clear()
-        def work():
-            self.manager.api = ScriptApi(url, self.manager.credentials["deviceToken"])
-            return self.manager.pair(invite)
-        self.run_job("PC 연결 중…", work)
 
     def resolve_conflict(self):
         self.run_job("서버 최신 판매 기록 확인 중…", self.manager.conflict_preview, self.confirm_conflict)

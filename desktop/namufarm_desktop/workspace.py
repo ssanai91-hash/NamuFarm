@@ -3601,8 +3601,8 @@ class SellerWindow(MainWindow):
             for widget in (self.sync_button, self.new_quote_button, self.manual_quote_button, self.request_quote_button,
                            self.draft_open, self.draft_delete, self.customer_open_button,
                            self.export_button, self.import_button, self.print_button,
-                           self.tracking_save, self.open_button, self.pair_button, self.report_button,
-                           self.connection_file_button, self.copy_button):
+                           self.tracking_save, self.open_button, self.connect_key_button, self.report_button,
+                           self.connection_password, self.copy_button):
                 widget.setEnabled(False)
 
     def apply_view(self, value):

@@ -1,21 +1,17 @@
-"""The same small connection file is imported by the PC and Android apps."""
-import json
+"""Validate manually entered shared credentials without a connection file."""
+import re
 
 from .api import validate_url
 from .domain import require
-from .errors import UserError
+
+def valid_connection_key(password):
+    return isinstance(password, str) and re.fullmatch(r"[a-f0-9]{64}", password.strip()) is not None
 
 
-def read_connection(raw):
-    try:
-        require(isinstance(raw, bytes) and len(raw) <= 8192, "연결파일 크기를 확인해주세요.")
-        value = json.loads(raw.decode("utf-8-sig"))
-        require(isinstance(value, dict) and value.get("format") == "namufarm-connection"
-                and type(value.get("version")) is int and value["version"] == 1,
-                "나무팜 연결파일을 선택해주세요.")
-        key = value.get("connectionKey")
-        require(isinstance(key, str) and len(key) == 64 and all(c in "0123456789abcdef" for c in key),
-                "연결파일이 올바르지 않습니다.")
-        return validate_url(value.get("url")), key
-    except (ValueError, UnicodeError, TypeError):
-        raise UserError("나무팜 연결파일을 읽을 수 없습니다.") from None
+def connection_input(url, password):
+    require(isinstance(url, str), "나무팜 서버 주소를 확인해주세요.")
+    require(isinstance(password, str), "공통 연결 암호를 입력해주세요.")
+    key = password.strip()
+    require(valid_connection_key(key),
+            "공통 연결 암호를 확인해주세요. 현재 연결키 64자리를 입력합니다.")
+    return validate_url(url.strip()), key

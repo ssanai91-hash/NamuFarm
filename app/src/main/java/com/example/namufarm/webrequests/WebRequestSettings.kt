@@ -48,7 +48,7 @@ class WebRequestSettings(context: Context, private val deviceKeyProvider: (() ->
         value.optBoolean("paired", false) && value.optString("endpoint", RETIRED_ENDPOINT) == url
     }
     val url: String get() = synchronized(LOCK) { read().optString("profileEndpoint", endpoint) }
-    val configured: Boolean get() = AppConnectionFile.validUrl(url)
+    val configured: Boolean get() = AppConnectionInput.validUrl(url)
     val deviceToken: String get() = synchronized(LOCK) { read().optString("token", "") }
     val connectionKey: String get() = synchronized(LOCK) { read().optString("connectionKey", "") }
     val fcmToken: String get() = synchronized(LOCK) { read().optString("fcm", "") }
@@ -61,7 +61,7 @@ class WebRequestSettings(context: Context, private val deviceKeyProvider: (() ->
     }
     fun markPaired() = update { it.put("paired", true); it.put("endpoint", url); it.remove("connectionKey") }
     fun markConnected(url: String, connectionKey: String = "") {
-        require(AppConnectionFile.validUrl(url))
+        require(AppConnectionInput.validUrl(url))
         require(connectionKey.isEmpty() || Regex("[a-f0-9]{64}").matches(connectionKey))
         update {
             it.put("profileEndpoint", url); it.put("endpoint", url); it.put("paired", true)
@@ -75,9 +75,9 @@ class WebRequestSettings(context: Context, private val deviceKeyProvider: (() ->
         if (sharedKey.isEmpty() || body["action"] in setOf("connect_app", "pair_device")) return@synchronized body
         check(value.optBoolean("paired", false) && targetUrl == value.optString("profileEndpoint", endpoint)
                 && targetUrl == value.optString("endpoint", RETIRED_ENDPOINT)) {
-            "연결파일을 다시 불러와주세요. 다른 서버에는 연결키를 전송할 수 없습니다."
+            "연결 암호를 다시 입력해주세요. 다른 서버에는 연결키를 전송할 수 없습니다."
         }
-        check(Regex("[a-f0-9]{64}").matches(sharedKey)) { "연결파일을 다시 불러와주세요." }
+        check(Regex("[a-f0-9]{64}").matches(sharedKey)) { "연결 암호를 다시 입력해주세요." }
         body.toMutableMap().apply { remove("deviceToken"); put("connectionKey", sharedKey) }
     }
     fun authenticatedApi(delegate: com.example.namufarm.data.remote.WebQuoteApi): com.example.namufarm.data.remote.WebQuoteApi =

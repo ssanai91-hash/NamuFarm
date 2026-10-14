@@ -15,21 +15,12 @@ class WebRequestConnection(context: Context, private val repository: NamuFarmRep
     val configured get() = settings.configured
     val paired get() = settings.paired
     val pushConfigured get() = WebRequestPush.configured
+    val serverUrl get() = settings.url
     fun localRequests() = repository.getWebRequests()
     val deferredCount get() = repository.deferredWebRequestCount()
     suspend fun read(id: String) = repository.markWebRequestRead(id)
-    suspend fun connectFile(uri: android.net.Uri) {
-        val bytes = checkNotNull(app.contentResolver.openInputStream(uri)) { "연결파일을 열 수 없습니다." }.use { stream ->
-            val out = java.io.ByteArrayOutputStream(); val buffer = ByteArray(2048)
-            while (true) {
-                val count = stream.read(buffer)
-                if (count < 0) break
-                check(out.size() + count <= 8192) { "연결파일 크기를 확인해주세요." }
-                out.write(buffer, 0, count)
-            }
-            out.toByteArray()
-        }
-        val profile = try { AppConnectionFile.parse(bytes) } finally { bytes.fill(0) }
+    suspend fun connectKey(key: String, url: String) {
+        val profile = AppConnectionInput.fromInput(url, key)
         check(profile.url == settings.url || (!settings.paired && localRequests().isEmpty() && deferredCount == 0
                 && repository.getAllOrders().isEmpty() && repository.getAllQuotes().isEmpty())) {
             "기존 자료가 있는 앱은 다른 서버로 바꿀 수 없습니다."
@@ -38,9 +29,9 @@ class WebRequestConnection(context: Context, private val repository: NamuFarmRep
             "authMode" to "shared-key-v1", "connectionKey" to profile.connectionKey,
             "deviceToken" to settings.prepareToken(), "label" to "나무팜 Android"))
         WebQuoteValidator.checkResponse(response)
-        check(response.paired == true) { "연결파일을 확인해주세요." }
-        check(response.authMode == null || response.authMode == "shared-key-v1") { "앱과 서버의 연결 방식을 확인해주세요." }
-        settings.markConnected(profile.url, if (response.authMode == "shared-key-v1") profile.connectionKey else "")
+        check(response.paired == true) { "연결 암호를 확인해주세요." }
+        check(response.authMode == "shared-key-v1") { "공통 연결 암호를 지원하는 서버 버전으로 업데이트해주세요." }
+        settings.markConnected(profile.url, profile.connectionKey)
         WebRequestPush.initialize(app)
         PushRegistrationWorker.enqueue(app)
     }

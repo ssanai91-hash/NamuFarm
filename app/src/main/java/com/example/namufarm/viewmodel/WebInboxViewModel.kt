@@ -24,16 +24,17 @@ data class WebInboxState(
     val configured: Boolean = false, val paired: Boolean = false,
     val pushConfigured: Boolean = false, val message: String? = null,
     val deferredCount: Int = 0,
-    val deleteFeedback: RequestDeleteFeedback? = null
+    val deleteFeedback: RequestDeleteFeedback? = null,
+    val serverUrl: String = ""
 ) { val unread: Int get() = requests.count { it.readAt == null } }
 
 class WebInboxViewModel(private val connection: WebRequestConnection) : ViewModel() {
-    private val mutableState = MutableStateFlow(WebInboxState(configured = connection.configured, paired = connection.paired, pushConfigured = connection.pushConfigured))
+    private val mutableState = MutableStateFlow(WebInboxState(configured = connection.configured, paired = connection.paired, pushConfigured = connection.pushConfigured, serverUrl = connection.serverUrl))
     val state = mutableState.asStateFlow()
     private val working = AtomicBoolean(false)
     private val statusMutex = Mutex()
     init { viewModelScope.launch(Dispatchers.IO) { reloadLocal() } }
-    private fun reloadLocal() { mutableState.update { it.copy(configured = connection.configured, requests = connection.localRequests(), paired = connection.paired, deferredCount = connection.deferredCount) } }
+    private fun reloadLocal() { mutableState.update { it.copy(configured = connection.configured, requests = connection.localRequests(), paired = connection.paired, deferredCount = connection.deferredCount, serverUrl = connection.serverUrl) } }
     fun refresh() = operate {
         reloadLocal()
         val count = connection.refresh()
@@ -44,15 +45,15 @@ class WebInboxViewModel(private val connection: WebRequestConnection) : ViewMode
                 else inboxRefreshMessage(count, it.deferredCount))
         }
     }
-    fun connectFile(uri: android.net.Uri) = operate {
-        connection.connectFile(uri)
+    fun connectKey(key: String, url: String) = operate {
+        connection.connectKey(key, url)
         reloadLocal()
         try {
             connection.refresh()
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            // A valid connection file may succeed even when the next snapshot
+            // A valid connection may succeed even when the next snapshot
             // contains an unreadable row. Keep the connection and local data.
             throw IllegalStateException(
                 "서버 연결은 완료됐지만 견적 내려받기에 실패했어요: ${e.message ?: "서버 응답을 확인해주세요."}", e

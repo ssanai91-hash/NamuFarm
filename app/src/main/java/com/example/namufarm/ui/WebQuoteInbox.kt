@@ -11,6 +11,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.*
@@ -22,29 +23,29 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.example.namufarm.data.WebQuoteRequestEntity
 import com.example.namufarm.data.WebQuoteItem
 import com.example.namufarm.phone.openSmsComposer
 import com.example.namufarm.ui.components.*
 import com.example.namufarm.viewmodel.WebInboxState
+import com.example.namufarm.webrequests.AppConnectionInput
 import com.google.gson.Gson
 
 @Composable
 internal fun WebQuoteInboxDialog(
     state: WebInboxState, initialRequestId: String?, customerPhone: String, cartItemCount: Int,
-    onRefresh: () -> Unit, onPair: (String) -> Unit, onRead: (String) -> Unit,
+    onRefresh: () -> Unit, onRead: (String) -> Unit,
     onUseRequest: (WebQuoteRequestEntity) -> Unit, onConfirm: (String) -> Unit,
     onMessageConsumed: () -> Unit, onDismiss: () -> Unit,
     onRestore: (android.net.Uri, CharArray) -> Unit = {_,_->}, onClose: (String) -> Unit = {},
-    onConnectFile: (android.net.Uri) -> Unit = {},
+    onConnectKey: (String, String) -> Unit = { _, _ -> },
     connectionOnly: Boolean = false
 ) {
     // Keep the selected customer stable if another notification arrives while composing.
     var selectedId by rememberSaveable { mutableStateOf(initialRequestId) }
-    var invite by remember { mutableStateOf("") } // Credentials never enter saved-state backups.
-    var showLegacyConnection by remember { mutableStateOf(false) }
-    val connectionFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let(onConnectFile) }
+    var showConnection by remember { mutableStateOf(false) }
     var showSecurity by remember { mutableStateOf(false) }
     var closeConfirm by remember { mutableStateOf(false) }
     val snackbar = remember { SnackbarHostState() }
@@ -52,30 +53,27 @@ internal fun WebQuoteInboxDialog(
     val context = LocalContext.current
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
     LaunchedEffect(selected?.requestId) { selected?.let { onRead(it.requestId) } }
-    LaunchedEffect(state.paired) { if (state.paired) invite = "" }
     LaunchedEffect(state.deleteFeedback?.phase, state.deleteFeedback?.requestId) {
         if (state.deleteFeedback?.phase == "success" &&
             selectedId == state.deleteFeedback.requestId) selectedId = null
     }
     LaunchedEffect(state.message) { state.message?.let { snackbar.showSnackbar(it); onMessageConsumed() } }
     if (connectionOnly) {
-        NamuDialog("기기 연결", "나무팜-연결.json을 한 번 선택하면 됩니다.", onDismiss) {
+        NamuDialog("기기 연결", "공통 연결 암호를 한 번 입력하면 됩니다.", onDismiss, snackbarHostState = snackbar) {
             Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
                 Text(if (state.paired) "서버 연결됨" else "서버 연결 필요",
                     color = if (state.paired) MaterialTheme.colorScheme.primary
                         else MaterialTheme.colorScheme.error,
                     style = MaterialTheme.typography.titleMedium)
-                Text("PC와 동일한 나무팜-연결.json 파일을 선택해주세요.",
-                    style = MaterialTheme.typography.bodyLarge)
-                Button(
-                    onClick = { connectionFile.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) },
-                    enabled = !state.busy, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
-                    Text(if (state.busy) "기기 연결 중…" else "연결파일 불러오기")
-                }
+                if (state.paired) Text("저장된 연결을 자동으로 사용합니다. 암호를 바꿀 때만 다시 입력해주세요.")
+                ConnectionPasswordForm(state.serverUrl, state.busy, onConnectKey)
                 if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
             }
         }
         return
+    }
+    if (showConnection) NamuDialog("연결 암호", "PC와 휴대폰에서 같은 암호를 사용합니다.", { showConnection = false }, snackbarHostState = snackbar) {
+        Column(Modifier.padding(20.dp)) { ConnectionPasswordForm(state.serverUrl, state.busy, onConnectKey) }
     }
     if(showSecurity) LegacyRestoreDialog(state,onRestore) { showSecurity=false }
     if(closeConfirm && selected!=null) AlertDialog(onDismissRequest={closeConfirm=false},title={Text("상담을 종료할까요?")},text={Text("구매하지 않은 고객 문의와 연결된 견적 사본을 삭제합니다. 실제 구매 기록은 따로 보관합니다.")},
@@ -111,13 +109,8 @@ internal fun WebQuoteInboxDialog(
                 }
                 if (!state.paired) item {
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text("PC와 같은 연결파일을 한 번 불러오세요. 이후 ‘지금 동기화’로 시트 자료를 내려받습니다.")
-                        Button(onClick = { connectionFile.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) }, enabled = !state.busy, modifier = Modifier.fillMaxWidth()) { Text("연결파일 불러오기") }
-                        TextButton(onClick = { showLegacyConnection = !showLegacyConnection }) { Text("이전 연결코드 방식") }
-                        if (showLegacyConnection && state.configured) {
-                            OutlinedTextField(invite, { invite = it.trim() }, label = { Text("기기 연결 코드") }, modifier = Modifier.fillMaxWidth(), singleLine = true, visualTransformation = PasswordVisualTransformation())
-                            Button(onClick = { onPair(invite) }, enabled = invite.length == 64 && !state.busy) { Text("코드로 연결") }
-                        }
+                        Text("공통 연결 암호를 한 번 입력해주세요. 이후 ‘지금 동기화’로 시트 자료를 내려받습니다.")
+                        ConnectionPasswordForm(state.serverUrl, state.busy, onConnectKey)
                         Text("나무팜 ${com.example.namufarm.BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.bodySmall)
                     }
                 }
@@ -135,7 +128,7 @@ internal fun WebQuoteInboxDialog(
                             else context.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName))
                         }) { Icon(Icons.Outlined.Notifications, null); Spacer(Modifier.width(8.dp)); Text("새 요청 알림 허용") }
                         else Text("푸시 설정 전에는 ‘지금 동기화’로 확인해주세요.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        TextButton(onClick = { connectionFile.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) }) { Text("연결파일 다시 불러오기") }
+                        TextButton(onClick = { showConnection = true }, enabled = !state.busy) { Text("연결 암호 다시 입력") }
                     }
                 }
                 if (state.requests.isEmpty() && state.paired && !state.busy) item {
@@ -157,6 +150,32 @@ internal fun WebQuoteInboxDialog(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun ConnectionPasswordForm(initialUrl: String, busy: Boolean, onConnect: (String, String) -> Unit) {
+    // Passwords are never put in saved state, previews, backups, or the APK.
+    var password by remember { mutableStateOf("") }
+    var serverUrl by remember(initialUrl) { mutableStateOf(initialUrl) }
+    var showAddress by remember { mutableStateOf(false) }
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        OutlinedTextField(password, { password = it }, label = { Text("공통 연결 암호") },
+            supportingText = { Text("현재 공통 연결키 64자리를 입력하거나 붙여넣어주세요.") },
+            singleLine = true, enabled = !busy, visualTransformation = PasswordVisualTransformation(),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), modifier = Modifier.fillMaxWidth())
+        Button(onClick = {
+            val entered = password
+            password = ""
+            onConnect(entered, serverUrl)
+        }, enabled = !busy && AppConnectionInput.validKey(password.trim()) && AppConnectionInput.validUrl(serverUrl.trim()),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
+            Text(if (busy) "서버 연결 중…" else "연결하기")
+        }
+        TextButton(onClick = { showAddress = !showAddress }, enabled = !busy) { Text("서버 주소 확인") }
+        if (showAddress) OutlinedTextField(serverUrl, { serverUrl = it }, label = { Text("나무팜 서버 주소") },
+            supportingText = { Text("기존 /exec 주소를 사용합니다. 보통은 바꿀 필요가 없어요.") },
+            enabled = !busy, modifier = Modifier.fillMaxWidth())
     }
 }
 

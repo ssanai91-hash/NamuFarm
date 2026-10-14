@@ -22,17 +22,27 @@ class WebRequestSettingsTest {
     @Before fun reset() { app.getSharedPreferences("web_request_connection", 0).edit().clear().commit() }
     private fun settings(url: String) = WebRequestSettings(app, url) { key }
 
-    @Test fun importedConnectionFilePersistsEndpointWithoutSavingSharedKey() {
-        val value = JSONObject().put("format", "namufarm-connection").put("version", 1)
-            .put("url", newUrl).put("connectionKey", "a".repeat(64))
-        val profile = AppConnectionFile.parse(value.toString().toByteArray())
+    @Test fun manuallyEnteredConnectionRetainsLegacyEndpointAndDeviceIdentity() {
+        val profile = AppConnectionInput.fromInput(" $newUrl ", " ${"a".repeat(64)} ")
         val original = settings(oldUrl); val token = original.prepareToken()
         original.markConnected(profile.url)
         val reopened = settings(oldUrl)
         assertTrue(reopened.paired); assertEquals(newUrl, reopened.url); assertEquals(token, reopened.deviceToken)
-        value.put("url", "https://example.com/exec")
-        assertTrue(runCatching { AppConnectionFile.parse(value.toString().toByteArray()) }.isFailure)
-        assertTrue(runCatching { AppConnectionFile.parse(ByteArray(8193)) }.isFailure)
+        assertTrue(runCatching { AppConnectionInput.fromInput("https://example.com/exec", "a".repeat(64)) }.isFailure)
+        assertFalse(profile.toString().contains(profile.connectionKey))
+    }
+
+    @Test fun invalidManualCredentialsCannotChangeTheSavedConnection() {
+        val original = settings(newUrl)
+        original.markConnected(newUrl, "b".repeat(64))
+        for (password in listOf("", "a".repeat(63), "A".repeat(64), "{\"connectionKey\":\"${"a".repeat(64)}\"}")) {
+            assertTrue(runCatching { AppConnectionInput.fromInput(newUrl, password) }.isFailure)
+        }
+        for (url in listOf("http://script.google.com/macros/s/recovered/exec", "$newUrl?key=secret", "$newUrl#secret")) {
+            assertTrue(runCatching { AppConnectionInput.fromInput(url, "a".repeat(64)) }.isFailure)
+        }
+        assertEquals(newUrl, original.url)
+        assertEquals("b".repeat(64), original.connectionKey)
     }
 
     @Test fun ordinaryUpdateRetainsPairingAndTokens() {

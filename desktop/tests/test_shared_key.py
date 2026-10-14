@@ -6,6 +6,7 @@ import unittest
 from namufarm_desktop.api import ScriptApi, DEFAULT_URL
 from namufarm_desktop.errors import UserError
 from namufarm_desktop.service import Manager
+from namufarm_desktop.connection import connection_input
 
 KEY='b'*64
 TOKEN='d'*64
@@ -22,6 +23,9 @@ class FakeVault:
         self.records={'customers':['existing-customer'],'quotes':['existing-quote'],'orders':['existing-order']}
         self.preferences={'drafts':['existing-draft']}
         self.fail_save=False
+    def rows(self, name): return copy.deepcopy(self.records.get(name, []))
+    def preference(self, name, default=None): return copy.deepcopy(self.preferences.get(name, default))
+    def pending(self): return []
     def credentials(self): return copy.deepcopy(self.value)
     def save_credentials(self,value):
         if self.fail_save: raise UserError('local write failed')
@@ -38,10 +42,15 @@ class FakeApi:
         if fields.get('connectionKey')!=KEY: raise UserError('wrong key')
         return {'paired':True, **({'authMode':self.mode} if self.mode else {})}
 
-def connection(key=KEY):
-    return json.dumps({'format':'namufarm-connection','version':1,'url':DEFAULT_URL,'connectionKey':key}).encode()
-
 class SharedKeyTest(unittest.TestCase):
+    def test_manual_credentials_accept_paste_and_reject_files_and_unsafe_urls(self):
+        self.assertEqual(connection_input(' '+DEFAULT_URL+' ', ' '+KEY+'\n'), (DEFAULT_URL, KEY))
+        for password in ['', 'a'*63, 'A'*64, '{"connectionKey":"'+KEY+'"}', KEY.encode()]:
+            with self.assertRaises(UserError): connection_input(DEFAULT_URL, password)
+        for url in ['http://script.google.com/macros/s/AKunsafeBackend01234567890/exec',
+                    'https://example.com/exec', DEFAULT_URL+'?key=secret', DEFAULT_URL+'#secret', None]:
+            with self.assertRaises(UserError): connection_input(url, KEY)
+
     def test_all_authenticated_actions_use_common_key_without_device_registration(self):
         opener=FakeOpener(); api=ScriptApi(token='',connection_key=KEY,opener=opener)
         for action in ['snapshot_requests','save_quote_pricing','update_request_status','list_sales',
@@ -66,18 +75,22 @@ class SharedKeyTest(unittest.TestCase):
     def test_confirmed_mode_is_saved_and_reopens_without_changing_local_records(self):
         vault=FakeVault(); before=(copy.deepcopy(vault.records),copy.deepcopy(vault.preferences))
         manager=Manager(vault); manager.sync=lambda: {'local':'unchanged'}
-        self.assertEqual(manager.connect_file(connection(),FakeApi),{'local':'unchanged'})
+        self.assertEqual(manager.connect_key(KEY,api_factory=FakeApi),{'local':'unchanged'})
         self.assertEqual(vault.value['connectionKey'],KEY)
         self.assertEqual(vault.value['deviceToken'],TOKEN)
         self.assertEqual(Manager(vault).api.connection_key,KEY)
         self.assertEqual((vault.records,vault.preferences),before)
 
-    def test_old_server_reply_retains_legacy_mode(self):
+    def test_unconfirmed_auth_mode_preserves_previous_credentials_and_api(self):
         vault=FakeVault(); manager=Manager(vault); manager.sync=lambda: None
-        manager.connect_file(connection(),lambda u,t: FakeApi(u,t,None))
-        self.assertNotIn('connectionKey',vault.value)
-        self.assertEqual(manager.api.connection_key,'')
-        self.assertEqual(vault.value['deviceToken'],TOKEN)
+        before=vault.credentials(); previous=manager.api
+        manager.request_snapshot=True
+        for mode in [None, 'unknown-mode']:
+            with self.assertRaises(UserError):
+                manager.connect_key(KEY,api_factory=lambda u,t: FakeApi(u,t,mode))
+            self.assertEqual(vault.credentials(),before)
+            self.assertIs(manager.api,previous)
+            self.assertTrue(manager.request_snapshot)
 
     def test_reopen_cannot_move_the_shared_key_to_another_server(self):
         vault=FakeVault()
@@ -90,8 +103,32 @@ class SharedKeyTest(unittest.TestCase):
             vault=FakeVault(); vault.fail_save=fail_save; before=vault.credentials()
             manager=Manager(vault); previous=manager.api
             with self.assertRaises(UserError):
-                manager.connect_file(connection('a'*64 if bad_key else KEY),FakeApi)
+                manager.connect_key('a'*64 if bad_key else KEY,api_factory=FakeApi)
             self.assertEqual(vault.credentials(),before)
             self.assertIs(manager.api,previous)
+
+    def test_failed_download_keeps_a_successfully_saved_connection(self):
+        vault=FakeVault(); manager=Manager(vault)
+        def failed_sync(): raise UserError('download failed')
+        manager.sync=failed_sync
+        with self.assertRaises(UserError): manager.connect_key(KEY,api_factory=FakeApi)
+        self.assertEqual(vault.value['connectionKey'],KEY)
+        self.assertEqual(Manager(vault).api.connection_key,KEY)
+
+    def test_existing_records_prevent_switching_servers_before_network_access(self):
+        vault=FakeVault(); before=vault.credentials(); manager=Manager(vault)
+        calls=[]
+        def factory(url,token): calls.append(url); return FakeApi(url,token)
+        with self.assertRaises(UserError):
+            manager.connect_key(KEY,'https://script.google.com/macros/s/AKotherBackend01234567890/exec',factory)
+        self.assertEqual(calls,[])
+        self.assertEqual(vault.credentials(),before)
+
+    def test_saved_legacy_connection_still_opens_without_reentering_a_password(self):
+        vault=FakeVault(); before=vault.credentials()
+        manager=Manager(vault)
+        self.assertTrue(manager.credentials['paired'])
+        self.assertEqual(manager.api.token,TOKEN)
+        self.assertEqual(vault.credentials(),before)
 
 if __name__=='__main__': unittest.main()

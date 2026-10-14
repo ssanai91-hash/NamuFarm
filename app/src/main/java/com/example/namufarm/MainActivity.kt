@@ -166,8 +166,8 @@ class MainActivity : ComponentActivity() {
                 }
                 if (showWebInbox || webRequestId != null) {
                     WebQuoteInboxDialog(webState, webRequestId, uiState.customerPhone, uiState.estimateCart.size,
-                        onRefresh = webInbox::refresh, onPair = webInbox::pair, onRead = webInbox::read,
-                        onRestore=webInbox::restore,onClose=webInbox::close,onConnectFile=webInbox::connectFile,
+                        onRefresh = webInbox::refresh, onRead = webInbox::read,
+                        onRestore=webInbox::restore,onClose=webInbox::close,onConnectKey=webInbox::connectKey,
                         onConfirm = { id ->
                             webState.requests.firstOrNull { it.requestId == id }?.let { request ->
                                 if (!uiState.isSavingQuote) {

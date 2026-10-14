@@ -98,6 +98,10 @@ jobs:
         if: inputs.apk_type == 'debug'
         run: ./gradlew --no-daemon :app:assembleDebug
 
+      # Offline credential tests only; no server requests or order/message trials.
+      - name: Verify connection credential preservation
+        run: ./gradlew --no-daemon :app:testDebugUnitTest --tests com.example.namufarm.webrequests.WebRequestSettingsTest
+
       - name: Build signed release APK
         if: inputs.apk_type == 'release'
         env:

@@ -75,7 +75,7 @@ class ScriptApi:
                 code = result.get("code") if isinstance(result, dict) else None
                 if code == "CONFLICT":
                     raise ConflictError("앱이나 다른 PC에서 먼저 수정했습니다. 전송 대기를 확인해주세요.")
-                messages = {"UNAUTHORIZED": "연결파일을 다시 불러와주세요. 이전 방식에서는 연결 코드를 확인해주세요.",
+                messages = {"UNAUTHORIZED": "공통 연결 암호를 다시 확인해주세요.",
                             "NOT_READY": "구글시트 서버 설정과 배포 버전을 확인해주세요.",
                             "DEVICE_LIMIT": "이전 서버의 기기 등록 한도가 찼습니다. 공통 연결키를 지원하는 서버로 배포를 업데이트해주세요.",
                             "UPGRADE_REQUIRED": "앱과 구글시트 서버를 최신 버전으로 업데이트해주세요.",
@@ -107,7 +107,7 @@ class ScriptApi:
     def call(self, action, **fields):
         if self.connection_key and action not in ("connect_app", "pair_device"):
             if self.url != self._connection_key_url or not re.fullmatch(r"[a-f0-9]{64}", self.connection_key):
-                raise UserError("연결파일을 다시 불러와주세요. 다른 서버에는 연결키를 전송할 수 없습니다.")
+                raise UserError("연결 암호를 다시 입력해주세요. 다른 서버에는 연결키를 전송할 수 없습니다.")
             payload = {**fields, "action": action, "connectionKey": self.connection_key}
             payload.pop("deviceToken", None)
             return self._send(payload)
