@@ -891,7 +891,7 @@ class ManagementViewModel(
         if (cart.isEmpty()) return ""
 
         val sb = StringBuilder()
-        sb.append("[나무팜 견적서]\n\n")
+        sb.append("안녕하세요. 나무팜입니다.\n\n[나무팜 견적서]\n\n")
 
         var totalRetail = 0L
 
@@ -938,7 +938,7 @@ class ManagementViewModel(
     // 🚨 [수정] DB에 저장된 QuoteEntity를 읽어서 문자 보낼 때도 택배비 내역 추가!
     fun generateQuoteTextFromEntity(quote: QuoteEntity): String {
         val sb = StringBuilder()
-        sb.append("[나무팜 견적서]\n\n")
+        sb.append("안녕하세요. 나무팜입니다.\n\n[나무팜 견적서]\n\n")
 
         val lines = try {
             OrderSummaryCodec.parseStrict(quote.itemSummary)
