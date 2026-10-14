@@ -128,23 +128,28 @@ internal fun SellingHome(
             }
         }
     ) { padding ->
-        LazyColumn(
-            state = listState,
-            modifier = Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(16.dp),
+        Column(
+            modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            item(key = "sync") {
-                Button(onClick = onSync, enabled = !webBusy,
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
-                    Icon(Icons.Outlined.CloudSync, null)
-                    Spacer(Modifier.width(9.dp))
-                    Text(if (webBusy) "견적 요청 가져오는 중…" else "견적 요청 가져오기",
-                        style = MaterialTheme.typography.titleMedium)
-                }
+            Button(onClick = onSync, enabled = !webBusy,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
+                Icon(Icons.Outlined.CloudSync, null)
+                Spacer(Modifier.width(9.dp))
+                Text(if (webBusy) "견적 요청 가져오는 중…" else "견적 요청 가져오기",
+                    style = MaterialTheme.typography.titleMedium)
             }
-            item(key = "tabs") {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+            // Keep both work queues inside a single visual group.
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.large,
+                color = MaterialTheme.colorScheme.surface,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+            ) {
+                Row(
+                    Modifier.fillMaxWidth().padding(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(7.dp)
+                ) {
                     listOf(
                         Triple("신규 요청", newRequests.size, Icons.Outlined.Inbox),
                         Triple("견적확정", workCount, Icons.Outlined.Description)
@@ -176,10 +181,24 @@ internal fun SellingHome(
                     }
                 }
             }
+            // Distinct list pane stays visible even when no quotes are available.
+            Surface(
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                shape = MaterialTheme.shapes.large,
+                color = MaterialTheme.colorScheme.surface,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+            ) {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    item(key = "list-title") {
+                        Text("목록", style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold)
+                    }
             if (selectedTab == 0) {
-                item(key = "new-header") {
-                    NamuSectionTitle("신규 견적 요청", "총 ${newRequests.size}건 · 목록을 눌러 견적을 작성하세요.")
-                }
                 val visible = newRequests
                 if (visible.isNotEmpty()) item(key = "new-columns") { QuoteRowHeader() }
                 if (visible.isEmpty()) item {
@@ -192,9 +211,6 @@ internal fun SellingHome(
                     }
                 }
             } else if (selectedTab == 1) {
-                item(key = "work-header") {
-                    NamuSectionTitle("견적확정", "총 ${workCount}건 · 고객·금액·발송 상태를 조회합니다.")
-                }
                 val visibleRequests = workRequests
                 val visibleQuotes = localQuotes.sortedByDescending { it.saveDate }
                 if (visibleRequests.isNotEmpty() || visibleQuotes.isNotEmpty())
@@ -221,6 +237,8 @@ internal fun SellingHome(
                                 maxLines = 1, style = MaterialTheme.typography.bodySmall)
                         }
                     }
+                }
+            }
                 }
             }
         }
