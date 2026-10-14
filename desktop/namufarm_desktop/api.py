@@ -46,9 +46,11 @@ class GoogleRedirect(urllib.request.HTTPRedirectHandler):
 
 
 class ScriptApi:
-    def __init__(self, url=DEFAULT_URL, token="", opener=None):
+    def __init__(self, url=DEFAULT_URL, token="", opener=None, connection_key=""):
         self.url = validate_url(url)
         self.token = token
+        self.connection_key = connection_key
+        self._connection_key_url = self.url
         self.opener = opener or urllib.request.build_opener(GoogleRedirect())
 
     def _send(self, payload=None):
@@ -75,6 +77,7 @@ class ScriptApi:
                     raise ConflictError("앱이나 다른 PC에서 먼저 수정했습니다. 전송 대기를 확인해주세요.")
                 messages = {"UNAUTHORIZED": "연결파일을 다시 불러와주세요. 이전 방식에서는 연결 코드를 확인해주세요.",
                             "NOT_READY": "구글시트 서버 설정과 배포 버전을 확인해주세요.",
+                            "DEVICE_LIMIT": "이전 서버의 기기 등록 한도가 찼습니다. 공통 연결키를 지원하는 서버로 배포를 업데이트해주세요.",
                             "UPGRADE_REQUIRED": "앱과 구글시트 서버를 최신 버전으로 업데이트해주세요.",
                             "INVALID_ACTION": "현재 연결된 Apps Script /exec 배포가 이전 버전입니다. 기존 웹앱을 새 버전으로 다시 배포해주세요.",
                             "UNAVAILABLE": "Apps Script 실행 중 오류가 발생했습니다. Apps Script의 실행 기록에서 실패 원인을 확인해주세요.",
@@ -102,8 +105,15 @@ class ScriptApi:
         return result
 
     def call(self, action, **fields):
+        if self.connection_key and action not in ("connect_app", "pair_device"):
+            if self.url != self._connection_key_url or not re.fullmatch(r"[a-f0-9]{64}", self.connection_key):
+                raise UserError("연결파일을 다시 불러와주세요. 다른 서버에는 연결키를 전송할 수 없습니다.")
+            payload = {**fields, "action": action, "connectionKey": self.connection_key}
+            payload.pop("deviceToken", None)
+            return self._send(payload)
         if not re.fullmatch(r"[a-f0-9]{64}", self.token):
             raise UserError("PC 기기 연결을 먼저 완료해주세요.")
         return self._send({"action": action, "deviceToken": self.token, **fields})
+
 
 

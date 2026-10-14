@@ -45,6 +45,36 @@ class WebRequestSettingsTest {
         assertEquals("push-token", reopened.fcmToken)
     }
 
+    @Test fun sharedKeyPersistsEncryptedAndReplacesOnlyRequestAuthentication() {
+        val original = settings(newUrl)
+        val token = original.prepareToken()
+        original.markHiddenOrder("existing-order")
+        original.markConnected(newUrl, "b".repeat(64))
+        val reopened = settings(oldUrl)
+        assertTrue(reopened.paired)
+        assertEquals(token, reopened.deviceToken)
+        assertEquals(setOf("existing-order"), reopened.hiddenOrderNumbers)
+        val body = mapOf<String, Any>("action" to "snapshot_requests", "deviceToken" to token, "afterSequence" to 27L)
+        val authorized = reopened.authorizeRequest(newUrl, body)
+        assertEquals("b".repeat(64), authorized["connectionKey"])
+        assertFalse(authorized.containsKey("deviceToken"))
+        assertEquals(27L, authorized["afterSequence"])
+        assertEquals(token, body["deviceToken"])
+        val payload = app.getSharedPreferences("web_request_connection", 0).getString("payload", "")!!
+        assertFalse(String(Base64.decode(payload, Base64.NO_WRAP), Charsets.UTF_8).contains("b".repeat(64)))
+        assertTrue(runCatching { reopened.authorizeRequest(oldUrl, body) }.isFailure)
+    }
+
+    @Test fun legacyReconnectionClearsSharedKeyAndPreservesDeviceToken() {
+        val original = settings(newUrl)
+        val token = original.prepareToken()
+        original.markConnected(newUrl, "b".repeat(64))
+        original.markConnected(newUrl) // Old server returned paired=true without authMode.
+        assertEquals("", original.connectionKey)
+        val body = mapOf<String, Any>("action" to "list_requests", "deviceToken" to token)
+        assertEquals(body, original.authorizeRequest(newUrl, body))
+    }
+
     @Test fun changedBackendRequiresPairingOnceWithoutReplacingDeviceIdentity() {
         val old = settings(oldUrl); val token = old.prepareToken(); old.markPaired()
         val replacement = settings(newUrl)
@@ -67,4 +97,5 @@ class WebRequestSettingsTest {
         assertEquals(token, settings(newUrl).deviceToken)
     }
 }
+
 

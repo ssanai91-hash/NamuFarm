@@ -37,7 +37,8 @@ object PrivacyWire {
 }
 
 class DeviceSalesGateway(private val settings: WebRequestSettings, private val keys: SellerKeys,
-    private val api: WebQuoteApi = WebQuoteTransport.api, private val url: String? = null) : SalesGateway {
+    api: WebQuoteApi = WebQuoteTransport.api, private val url: String? = null) : SalesGateway {
+    private val api = settings.authenticatedApi(api)
     private fun token(): String {
         check(settings.configured && settings.paired) { "홈페이지 요청함을 먼저 연결해주세요." }
         return settings.deviceToken
@@ -140,4 +141,5 @@ object SaleWire {
         return PrivacyWire.gson.fromJson(keys.open(encrypted, "order", row.eventId), SalePrivateData::class.java)
     }
 }
+
 

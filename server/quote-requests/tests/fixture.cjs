@@ -60,7 +60,7 @@ function fixture({configure=true,now=Date.now(),monthly=false}={}) {
  if(url.endsWith('/api/internal/encrypt')) {const request=context.validateRequest_({...payload.request,website:''});return{getResponseCode:()=>200,getContentText:()=>JSON.stringify({ok:true,encryptedRequest:seal(request,'quote',request.requestId),fingerprint:crypto.createHmac('sha256',properties.WEB_SECRET).update(JSON.stringify(request)).digest('hex')})}}
  return{getResponseCode:()=>200,getContentText:()=> '{}'}}}
  });
- for(const file of ['Code.gs','SecureCommerce.gs','MonthlyStorage.gs','RecoverySetup.gs'])vm.runInContext(fs.readFileSync(require('node:path').join(__dirname,'..',file),'utf8'),context);
+ for(const file of ['Code.gs','SecureCommerce.gs','MonthlyStorage.gs','RecoverySetup.gs','AnnualLedgers.gs','TwoTabQuotes.gs','TwoBookCutover.gs'])vm.runInContext(fs.readFileSync(require('node:path').join(__dirname,'..',file),'utf8'),context);
  vm.runInContext('setupQuoteRequests()',context);
  if(configure)properties.SELLER_PUBLIC_KEY=JSON.stringify({keyId,publicKey});
  if(monthly){context.setupMonthlyQuoteStorage();context.enableMonthlyQuoteStorage()}
@@ -79,4 +79,5 @@ function fixture({configure=true,now=Date.now(),monthly=false}={}) {
  setSmsStatus:(code,state='COMPLETE')=>{smsStatusCode=String(code);smsProviderState=state;}};
 }
 module.exports={fixture,seal,open,publicKey,keyId,pair};
+
 

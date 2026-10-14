@@ -21,7 +21,7 @@ class PushRegistrationWorker(context: Context, parameters: WorkerParameters) : C
         return try {
             val token = WebRequestPush.token(applicationContext) ?: return Result.retry()
             settings.saveFcmToken(token)
-            val response = WebQuoteTransport.api.request(settings.url, mapOf(
+            val response = settings.authenticatedApi(WebQuoteTransport.api).request(settings.url, mapOf(
                 "action" to "register_push", "deviceToken" to settings.deviceToken, "fcmToken" to token
             ))
             if (response.code == "UNAUTHORIZED") return Result.failure()
@@ -38,4 +38,5 @@ class PushRegistrationWorker(context: Context, parameters: WorkerParameters) : C
         }
     }
 }
+
 

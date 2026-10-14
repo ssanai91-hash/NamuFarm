@@ -22,6 +22,7 @@ interface WebQuoteApi {
 data class WebQuoteEnvelope(
     val ok: Boolean? = null, val code: String? = null,
     val paired: Boolean? = null, val registered: Boolean? = null,
+    val authMode: String? = null,
     val requests: List<WebQuoteRemote?>? = null, val hasMore: Boolean? = null,
     val saved: Boolean? = null, val orderNumber: String? = null, val revision: Long? = null, val fingerprint: String? = null,
     val sales: List<com.example.namufarm.sales.SaleRemote>? = null, val report: com.example.namufarm.sales.SalesReport? = null,
@@ -70,6 +71,7 @@ object WebQuoteValidator {
             "CONFLICT" -> "다른 기기에서 변경한 기록이 있습니다. 동기화 후 다시 확인해주세요."
             "UPGRADE_REQUIRED", "INVALID_ACTION" -> "앱과 구글시트 서버를 최신 버전으로 업데이트해주세요."
             "NOT_READY" -> "구글시트 서버 준비가 필요합니다. 서버 배포와 시트 설정을 확인해주세요."
+            "DEVICE_LIMIT" -> "이전 서버의 기기 등록 한도가 찼습니다. 공통 연결키를 지원하는 서버로 배포를 업데이트해주세요."
             "BUSY" -> "서버가 다른 요청을 처리 중입니다. 잠시 후 다시 동기화해주세요."
             "INVALID" -> "요청 형식이 맞지 않습니다. 앱과 서버 버전을 확인해주세요."
             else -> "서버 응답을 확인하지 못했어요. 저장된 기록을 유지하며 다시 시도할 수 있습니다."
@@ -147,5 +149,6 @@ object WebQuoteValidator {
     }
     private fun text(value: String?, max: Int, min: Int): String = checkNotNull(value).also { check(it.length in min..max && it == it.trim()) { "견적에 저장된 글자 형식을 확인해주세요." } }
 }
+
 
 

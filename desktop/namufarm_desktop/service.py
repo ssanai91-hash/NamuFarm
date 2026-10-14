@@ -17,10 +17,13 @@ class Manager:
     def __init__(self, vault, api=None):
         self.vault = vault
         self.credentials = vault.credentials()
-        # The connection file is a one-time bootstrap. Keep the paired URL and
-        # device token in the Windows-protected vault across restarts.
+        # Keep both legacy credentials and the negotiated common key in the
+        # existing Windows-protected vault, without replacing business records.
         self.seller = SellerKey(self.credentials["privateKey"], self.credentials["publicKey"]) if self.credentials.get("privateKey") else None
-        self.api = api or ScriptApi(self.credentials.get("url", DEFAULT_URL), self.credentials["deviceToken"])
+        self.api = api or ScriptApi(self.credentials.get("url", DEFAULT_URL), self.credentials["deviceToken"],
+                                   connection_key=self.credentials.get("connectionKey", "")
+                                   if self.credentials.get("authMode") == "shared-key-v1"
+                                   and self.credentials.get("connectionKeyUrl") == self.credentials.get("url", DEFAULT_URL) else "")
         self.request_snapshot = False
         self.copy_error = ""
 
@@ -52,11 +55,18 @@ class Manager:
         try:
             info = self.verify_server()
             require(info.get("connectionFile") is True, "연결파일을 지원하는 서버로 Apps Script 배포를 업데이트해주세요.")
-            result = self.api.call("connect_app", connectionKey=key, label="나무팜 PC")
+            result = self.api.call("connect_app", authMode="shared-key-v1", connectionKey=key, label="나무팜 PC")
             require(result.get("paired") is True, "연결파일을 확인해주세요.")
+            require(result.get("authMode") in (None, "shared-key-v1"), "앱과 서버의 연결 방식을 확인해주세요.")
             credentials = {**self.credentials, "paired":True, "url":url}
+            credentials.pop("connectionKey", None)
+            credentials.pop("authMode", None)
+            credentials.pop("connectionKeyUrl", None)
+            if result.get("authMode") == "shared-key-v1":
+                credentials.update(connectionKey=key, connectionKeyUrl=url, authMode="shared-key-v1")
             self.vault.save_credentials(credentials)
             self.credentials = credentials
+            self.api.connection_key = credentials.get("connectionKey", "")
         except Exception:
             self.api = previous
             raise
@@ -91,8 +101,12 @@ class Manager:
         require(result.get("paired") is True, "PC 연결을 확인하지 못했습니다.")
         credentials = self.vault.credentials()
         credentials.update(paired=True, url=self.api.url)
+        credentials.pop("connectionKey", None)
+        credentials.pop("authMode", None)
+        credentials.pop("connectionKeyUrl", None)
         self.vault.save_credentials(credentials)
         self.credentials = credentials
+        self.api.connection_key = ""
         return self.sync()
 
     def view(self):
@@ -672,5 +686,6 @@ class Manager:
             integer(bucket.get("knownProfit"), -9007199254740991)
             require(bucket["unknownProfitOrders"] <= bucket["orders"])
         return report
+
 
 

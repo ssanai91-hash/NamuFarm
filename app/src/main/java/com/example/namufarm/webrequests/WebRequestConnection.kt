@@ -10,6 +10,7 @@ import com.example.namufarm.data.repository.NamuFarmRepository
 class WebRequestConnection(context: Context, private val repository: NamuFarmRepository) {
     private val app = context.applicationContext
     private val settings = WebRequestSettings(app)
+    private val api = settings.authenticatedApi(WebQuoteTransport.api)
     private val keys = com.example.namufarm.privacy.SellerKeys(app)
     val configured get() = settings.configured
     val paired get() = settings.paired
@@ -34,10 +35,12 @@ class WebRequestConnection(context: Context, private val repository: NamuFarmRep
             "기존 자료가 있는 앱은 다른 서버로 바꿀 수 없습니다."
         }
         val response = WebQuoteTransport.api.request(profile.url, mapOf("action" to "connect_app",
-            "connectionKey" to profile.connectionKey, "deviceToken" to settings.prepareToken(), "label" to "나무팜 Android"))
+            "authMode" to "shared-key-v1", "connectionKey" to profile.connectionKey,
+            "deviceToken" to settings.prepareToken(), "label" to "나무팜 Android"))
         WebQuoteValidator.checkResponse(response)
         check(response.paired == true) { "연결파일을 확인해주세요." }
-        settings.markConnected(profile.url)
+        check(response.authMode == null || response.authMode == "shared-key-v1") { "앱과 서버의 연결 방식을 확인해주세요." }
+        settings.markConnected(profile.url, if (response.authMode == "shared-key-v1") profile.connectionKey else "")
         WebRequestPush.initialize(app)
         PushRegistrationWorker.enqueue(app)
     }
@@ -56,7 +59,7 @@ class WebRequestConnection(context: Context, private val repository: NamuFarmRep
     suspend fun refresh(): Int {
         check(configured && paired) { "홈페이지 요청함을 먼저 연결해주세요." }
         PushRegistrationWorker.enqueue(app)
-        return repository.syncWebSnapshot(WebQuoteTransport.api, settings.url, settings.deviceToken, ::readRequest)
+        return repository.syncWebSnapshot(api, settings.url, settings.deviceToken, ::readRequest)
     }
     private fun readRequest(outer: com.example.namufarm.data.remote.WebQuoteRemote): com.example.namufarm.data.remote.WebQuoteRemote =
         readLegacyWebRequest(outer, keys)
@@ -83,7 +86,7 @@ class WebRequestConnection(context: Context, private val repository: NamuFarmRep
             "shippingFee" to draft.shipping(),
             "taxAmount" to if (draft.recipient.formalQuoteRequested) draft.options.taxAmount() else 0L
         )
-        val response = WebQuoteTransport.api.request(settings.url, mapOf(
+        val response = api.request(settings.url, mapOf(
             "action" to "save_quote_pricing", "deviceToken" to settings.deviceToken,
             "requestId" to id, "quotePricing" to quotePricing
         ))
@@ -94,7 +97,7 @@ class WebRequestConnection(context: Context, private val repository: NamuFarmRep
     }
     suspend fun markQuoteSent(id: String) {
         check(paired) { "홈페이지 요청함을 먼저 연결해주세요." }
-        val response = WebQuoteTransport.api.request(settings.url, mapOf(
+        val response = api.request(settings.url, mapOf(
             "action" to "update_request_status", "deviceToken" to settings.deviceToken,
             "requestId" to id, "status" to "견적발송완료"
         ))
@@ -105,7 +108,7 @@ class WebRequestConnection(context: Context, private val repository: NamuFarmRep
     }
     suspend fun close(id: String) {
         check(paired)
-        val response=WebQuoteTransport.api.request(settings.url,mapOf("action" to "close_request","deviceToken" to settings.deviceToken,"requestId" to id))
+        val response=api.request(settings.url,mapOf("action" to "close_request","deviceToken" to settings.deviceToken,"requestId" to id))
         WebQuoteValidator.checkResponse(response);check(response.closed==true)
         repository.closeLocalRequest(id)
     }
@@ -116,5 +119,6 @@ internal fun readLegacyWebRequest(outer: com.example.namufarm.data.remote.WebQuo
     if (!keys.initialized || keys.keyId() != envelope.keyId) throw com.example.namufarm.data.remote.LegacyRequestKeyUnavailable()
     return com.google.gson.Gson().fromJson(keys.open(envelope, "quote", checkNotNull(outer.requestId)), com.example.namufarm.data.remote.WebQuoteRemote::class.java)
 }
+
 
 

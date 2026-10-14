@@ -26,7 +26,7 @@ function doPost(e) {
     } else if (body.action === 'pair_device') value = pairDevice_(body);
     else if (body.action === 'connect_app') value = connectApp_(body);
     else {
-      const device = authenticateDevice_(body.deviceToken);
+      const device = authenticateApp_(body);
       if (body.action === 'list_requests') value = listRequests_(body);
       else if (body.action === 'snapshot_requests') value = snapshotRequests_(body);
       else if (body.action === 'update_request_status') value = updateRequestStatus_(body);
@@ -47,7 +47,7 @@ function doPost(e) {
     return json_(Object.assign({ ok: true }, value));
   } catch (error) {
     // Do not leak customer data, sheet identifiers, or credentials in responses/logs.
-    const code = ['INVALID','UNAUTHORIZED','CONFLICT','RATE_LIMITED','NOT_READY','BUSY','INVALID_ACTION','UPGRADE_REQUIRED'].indexOf(error.code) >= 0 ? error.code : 'UNAVAILABLE';
+    const code = ['INVALID','UNAUTHORIZED','CONFLICT','RATE_LIMITED','NOT_READY','DEVICE_LIMIT','BUSY','INVALID_ACTION','UPGRADE_REQUIRED'].indexOf(error.code) >= 0 ? error.code : 'UNAVAILABLE';
     return json_({ ok: false, code: code });
   }
 }
@@ -210,7 +210,7 @@ function pairDevice_(body) {
     const hash = hash_(body.deviceToken); assert_(!invite.claimed || invite.claimed === hash, 'UNAUTHORIZED');
     if (!invite.claimed) {
       const devices = JSON.parse(props.getProperty('DEVICES') || '{}');
-      assert_(Object.keys(devices).length < 10, 'NOT_READY');
+      assert_(Object.keys(devices).length < 10, 'DEVICE_LIMIT');
       devices[hash] = { label: text_(body.label || '나무팜 앱', 40, 1), fcmToken: '', createdAt: new Date().toISOString() };
       props.setProperty('DEVICES', JSON.stringify(devices));
       props.setProperty(key, JSON.stringify({ expires: invite.expires, claimed: hash }));
@@ -222,6 +222,19 @@ function authenticateDevice_(token) {
   assert_(typeof token === 'string' && /^[a-f0-9]{64}$/.test(token), 'UNAUTHORIZED');
   const hash = hash_(token); const devices = JSON.parse(PropertiesService.getScriptProperties().getProperty('DEVICES') || '{}');
   assert_(devices[hash], 'UNAUTHORIZED'); return hash;
+}
+// A supplied common key must validate; never fall back to a legacy token on failure.
+function authenticateApp_(body) {
+  if (Object.prototype.hasOwnProperty.call(body, 'connectionKey')) {
+    authenticateConnectionKey_(body.connectionKey);
+    return null; // Push subscriptions are separate from legacy device authorization.
+  }
+  return authenticateDevice_(body.deviceToken);
+}
+function authenticateConnectionKey_(value) {
+  const key = PropertiesService.getScriptProperties().getProperty('APP_CONNECTION_KEY');
+  assert_(typeof value === 'string' && /^[a-f0-9]{64}$/.test(value) &&
+    key && equal_(value, key), 'UNAUTHORIZED');
 }
 /** Run once in the owner-only editor. Both apps import the same private file. */
 function createAppConnectionFile() {
@@ -241,13 +254,18 @@ function createAppConnectionFile() {
   return url;
 }
 function connectApp_(body) {
+  if (body.authMode === 'shared-key-v1') {
+    authenticateConnectionKey_(body.connectionKey);
+    return {paired:true, authMode:'shared-key-v1'}; // No registry writes or device limit.
+  }
+  assert_(!body.authMode, 'UPGRADE_REQUIRED');
   assert_(typeof body.deviceToken === 'string' && /^[a-f0-9]{64}$/.test(body.deviceToken));
   return lock_(() => {
     const props = PropertiesService.getScriptProperties(), key = props.getProperty('APP_CONNECTION_KEY');
     assert_(key && equal_(body.connectionKey, key), 'UNAUTHORIZED');
     const devices = JSON.parse(props.getProperty('DEVICES') || '{}'), hash = hash_(body.deviceToken);
     if (!devices[hash]) {
-      assert_(Object.keys(devices).length < 10, 'NOT_READY');
+      assert_(Object.keys(devices).length < 10, 'DEVICE_LIMIT');
       devices[hash] = {label:text_(body.label || '나무팜 앱', 40, 1), fcmToken:'', createdAt:new Date().toISOString()};
       props.setProperty('DEVICES', JSON.stringify(devices));
     }
@@ -257,6 +275,21 @@ function connectApp_(body) {
 function registerPush_(body, hash) {
   assert_(typeof body.fcmToken === 'string' && body.fcmToken.length <= 3000 && body.fcmToken.length > 20);
   return lock_(() => {
+    if (hash === null) {
+      const props = PropertiesService.getScriptProperties();
+      const subscriptions = JSON.parse(props.getProperty('PUSH_SUBSCRIPTIONS') || '{}');
+      const id = hash_(body.fcmToken), now = new Date().toISOString();
+      subscriptions[id] = {fcmToken:body.fcmToken, createdAt:subscriptions[id] ? subscriptions[id].createdAt : now, updatedAt:now};
+      // Bound notification metadata only; this never revokes common-key access.
+      const ids = Object.keys(subscriptions).sort((a,b) =>
+        subscriptions[a].updatedAt.localeCompare(subscriptions[b].updatedAt) || a.localeCompare(b));
+      const older = ids.filter(value => value !== id);
+      const encodedSize = () => encodeURIComponent(JSON.stringify(subscriptions)).replace(/%[0-9A-F]{2}|./g,'x').length;
+      while ((Object.keys(subscriptions).length > 32 || encodedSize() > 8000) && older.length)
+        delete subscriptions[older.shift()];
+      props.setProperty('PUSH_SUBSCRIPTIONS', JSON.stringify(subscriptions));
+      return {registered:true};
+    }
     const props = PropertiesService.getScriptProperties(); const devices = JSON.parse(props.getProperty('DEVICES') || '{}');
     assert_(devices[hash], 'UNAUTHORIZED'); devices[hash].fcmToken = body.fcmToken;
     props.setProperty('DEVICES', JSON.stringify(devices)); return { registered: true };
@@ -271,7 +304,14 @@ function dispatchNotifications_(onlyId) {
     const props = PropertiesService.getScriptProperties(); const project = props.getProperty('FIREBASE_PROJECT_ID');
     if (!project || !/^[a-z0-9-]+$/.test(project)) return null;
     const devices = JSON.parse(props.getProperty('DEVICES') || '{}');
-    const targets = Object.entries(devices).filter(entry => !!entry[1].fcmToken);
+    const subscriptions = JSON.parse(props.getProperty('PUSH_SUBSCRIPTIONS') || '{}');
+    const seenTokens = new Set();
+    const targets = Object.entries(subscriptions).map(([id,value]) => ['push:'+id,value])
+      .concat(Object.entries(devices)).filter(entry => {
+        const token = entry[1].fcmToken;
+        if (!token || seenTokens.has(token)) return false;
+        seenTokens.add(token); return true;
+      });
     if (!targets.length) return null;
     const now = Date.now(); const lease = new Date(now + 600000).toISOString();
     const batch = [];
@@ -316,8 +356,14 @@ function dispatchNotifications_(onlyId) {
       const next = new Date(Date.now() + Math.min(21600000, Math.pow(2,Math.min(attempts,12))*60000)).toISOString();
       sheet.getRange(index+2,11,1,5).setValues([[success ? 'SENT' : 'PENDING', row[11], attempts, next, code]]);
       const props = PropertiesService.getScriptProperties(); const devices = JSON.parse(props.getProperty('DEVICES') || '{}');
-      expired.forEach(([hash,token]) => { if (devices[hash] && devices[hash].fcmToken === token) devices[hash].fcmToken = ''; });
-      if (expired.length) props.setProperty('DEVICES',JSON.stringify(devices));
+      if (expired.length) {
+        const subscriptions = JSON.parse(props.getProperty('PUSH_SUBSCRIPTIONS') || '{}');
+        const tokens = new Set(expired.map(entry => entry[1]));
+        Object.values(devices).forEach(device => { if(tokens.has(device.fcmToken)) device.fcmToken = ''; });
+        Object.keys(subscriptions).forEach(id => { if(tokens.has(subscriptions[id].fcmToken)) delete subscriptions[id]; });
+        props.setProperty('DEVICES',JSON.stringify(devices));
+        props.setProperty('PUSH_SUBSCRIPTIONS',JSON.stringify(subscriptions));
+      }
       SpreadsheetApp.flush();
     });
   });
@@ -331,4 +377,5 @@ function revokeDevice(deviceHash) {
     delete devices[deviceHash]; props.setProperty('DEVICES', JSON.stringify(devices));
   });
 }
+
 

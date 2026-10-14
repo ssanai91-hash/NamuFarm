@@ -50,6 +50,7 @@ class WebRequestSettings(context: Context, private val deviceKeyProvider: (() ->
     val url: String get() = synchronized(LOCK) { read().optString("profileEndpoint", endpoint) }
     val configured: Boolean get() = AppConnectionFile.validUrl(url)
     val deviceToken: String get() = synchronized(LOCK) { read().optString("token", "") }
+    val connectionKey: String get() = synchronized(LOCK) { read().optString("connectionKey", "") }
     val fcmToken: String get() = synchronized(LOCK) { read().optString("fcm", "") }
     fun prepareToken(): String = synchronized(LOCK) {
         deviceToken.ifBlank {
@@ -58,11 +59,31 @@ class WebRequestSettings(context: Context, private val deviceKeyProvider: (() ->
             update { it.put("token", value) }; value
         }
     }
-    fun markPaired() = update { it.put("paired", true); it.put("endpoint", url) }
-    fun markConnected(url: String) {
+    fun markPaired() = update { it.put("paired", true); it.put("endpoint", url); it.remove("connectionKey") }
+    fun markConnected(url: String, connectionKey: String = "") {
         require(AppConnectionFile.validUrl(url))
-        update { it.put("profileEndpoint", url); it.put("endpoint", url); it.put("paired", true) }
+        require(connectionKey.isEmpty() || Regex("[a-f0-9]{64}").matches(connectionKey))
+        update {
+            it.put("profileEndpoint", url); it.put("endpoint", url); it.put("paired", true)
+            if (connectionKey.isEmpty()) it.remove("connectionKey") else it.put("connectionKey", connectionKey)
+        }
     }
+    /** Freeze credentials and endpoint together; never send the common key to another URL. */
+    fun authorizeRequest(targetUrl: String, body: Map<String, Any>): Map<String, Any> = synchronized(LOCK) {
+        val value = read()
+        val sharedKey = value.optString("connectionKey", "")
+        if (sharedKey.isEmpty() || body["action"] in setOf("connect_app", "pair_device")) return@synchronized body
+        check(value.optBoolean("paired", false) && targetUrl == value.optString("profileEndpoint", endpoint)
+                && targetUrl == value.optString("endpoint", RETIRED_ENDPOINT)) {
+            "연결파일을 다시 불러와주세요. 다른 서버에는 연결키를 전송할 수 없습니다."
+        }
+        check(Regex("[a-f0-9]{64}").matches(sharedKey)) { "연결파일을 다시 불러와주세요." }
+        body.toMutableMap().apply { remove("deviceToken"); put("connectionKey", sharedKey) }
+    }
+    fun authenticatedApi(delegate: com.example.namufarm.data.remote.WebQuoteApi): com.example.namufarm.data.remote.WebQuoteApi =
+        object : com.example.namufarm.data.remote.WebQuoteApi {
+            override suspend fun request(url: String, body: Map<String, Any>) = delegate.request(url, authorizeRequest(url, body))
+        }
     fun saveFcmToken(value: String) = update { it.put("fcm", value) }
     // An order hidden by the seller remains in the financial ledger.
     val hiddenOrderNumbers: Set<String> get() = synchronized(LOCK) {
@@ -80,5 +101,6 @@ class WebRequestSettings(context: Context, private val deviceKeyProvider: (() ->
         private const val RETIRED_ENDPOINT = "https://script.google.com/macros/s/AKfycbw8uqBWveIhqmXielALjSLnY1yDenKAwl070FT6Lsxsj7Xiod1C5JSBDZGfQtlrl6A-CQ/exec"
     }
 }
+
 
 
