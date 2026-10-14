@@ -148,13 +148,13 @@ fun QuoteDeliveryScreen(
                 ) {
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         DeliverySendButton(
-                            label = "문자 보내기", color = green, status = state.smsStatus,
+                            label = "문자", color = green, status = state.smsStatus,
                             modifier = Modifier.weight(1f),
                             icon = { Icon(Icons.Outlined.Sms, null, tint = white, modifier = Modifier.size(20.dp)) },
                             onClick = onSendSms, enabled = canSend
                         )
                         DeliverySendButton(
-                            label = "메일 보내기", color = blue, status = state.emailStatus,
+                            label = "메일", color = blue, status = state.emailStatus,
                             modifier = Modifier.weight(1f),
                             icon = { Icon(Icons.Outlined.MailOutline, null, tint = white, modifier = Modifier.size(20.dp)) },
                             onClick = onSendEmail, enabled = canSend
@@ -169,7 +169,7 @@ fun QuoteDeliveryScreen(
                     ) {
                         Icon(Icons.Outlined.Check, null, modifier = Modifier.size(22.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text(if (state.sent) "발송 완료로 기록됨" else "견적발송완료",
+                        Text(if (state.sent) "발송 완료로 기록됨" else "견적완료",
                             fontSize = 15.sp, fontWeight = FontWeight.Medium)
                     }
                 }
@@ -497,18 +497,6 @@ private fun DeliverySendButton(
         Column(modifier = Modifier.fillMaxSize(),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center) {
-            Row(Modifier.clip(RoundedCornerShape(50))
-                    .background(white.copy(alpha = 0.22f))
-                    .padding(horizontal = 10.dp, vertical = 3.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                Box(Modifier.size(6.dp).background(
-                    if (status == QuoteSendingStatus.COMPLETED) Color(0xFFB9F19C)
-                    else Color(0xFFFFE08A), CircleShape))
-                Text(if (status == QuoteSendingStatus.COMPLETED) "전송 완료" else "발송 대기",
-                    color = white, fontSize = 11.sp)
-            }
-            Spacer(Modifier.height(4.dp))
             Row(verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                 icon()

@@ -70,6 +70,49 @@ private fun EditorChannelChip(label: String, selectedColor: Color, textColor: Co
     }
 }
 
+
+/** The app cannot detect external SMS/email success; this is the seller's explicit attestation. */
+@Composable
+internal fun ConfirmQuoteSentDialog(onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
+    var selected by remember { mutableStateOf("none") }
+    val choices = listOf(
+        "sms" to "문자로 보냈습니다",
+        "email" to "메일로 보냈습니다",
+        "both" to "문자와 메일 모두 보냈습니다",
+        "none" to "아직 보내지 않았습니다"
+    )
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("견적 발송 확인") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("고객에게 실제로 보낸 방법을 선택해 주세요.")
+                choices.forEach { (value, label) ->
+                    Row(
+                        Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                            .clickable { selected = value },
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(selected = selected == value, onClick = { selected = value })
+                        Text(label)
+                    }
+                }
+                Text("문자·메일 앱을 연 것만으로는 발송 완료가 아닙니다.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        },
+        confirmButton = {
+            Button(onClick = { onConfirm(selected) }, enabled = selected != "none") {
+                Text("견적완료 확인")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("취소") }
+        }
+    )
+}
+
 /** Fullscreen quote editor with the same layout as the delivery screen. */
 @Composable
 private fun EditorDialog(
@@ -127,6 +170,7 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
     var error by rememberSaveable { mutableStateOf<String?>(null) }
     var discard by remember { mutableStateOf(false) }
     var deleteConfirm by remember { mutableStateOf(false) }
+    var confirmSent by remember { mutableStateOf(false) }
     val initial = remember(draftKey) {
         initialDraft ?: SellerQuoteDraft.from(request, QuoteIssuerSettings(context).load())
     }
@@ -159,43 +203,39 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
             Text(it, color = MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodySmall)
         }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Button(onClick = { submit(QuoteDelivery.SMS) }, enabled = !saving,
-                modifier = Modifier.weight(1f).heightIn(min = 64.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = editorGreen)) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("● 발송 대기", fontSize = 11.sp, color = Color.White.copy(alpha = 0.85f))
-                    Text("문자 보내기", fontSize = 15.sp)
-                }
-            }
-            Button(onClick = { submit(QuoteDelivery.EMAIL) }, enabled = !saving,
-                modifier = Modifier.weight(1f).heightIn(min = 64.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3563A8))) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("● 발송 대기", fontSize = 11.sp, color = Color.White.copy(alpha = 0.85f))
-                    Text("메일 보내기", fontSize = 15.sp)
-                }
-            }
-        }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically) {
             if (onDeleteRequest != null) {
                 OutlinedButton(onClick = { deleteConfirm = true }, enabled = !saving,
-                    modifier = Modifier.size(56.dp),
-                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.size(48.dp), shape = RoundedCornerShape(13.dp),
                     contentPadding = PaddingValues(0.dp),
+                    border = BorderStroke(0.5.dp, Color(0xFFE5B5B5)),
                     colors = ButtonDefaults.outlinedButtonColors(
                         containerColor = Color(0xFFFFF0F0), contentColor = Color(0xFFB94545))) {
-                    Icon(Icons.Outlined.Delete, "견적 요청 삭제")
+                    Icon(Icons.Outlined.Delete, "견적 요청 삭제", modifier = Modifier.size(23.dp))
                 }
             }
-            Button(onClick = { submit(QuoteDelivery.SAVE) }, enabled = !saving,
-                modifier = Modifier.weight(1f).heightIn(min = 56.dp),
-                shape = RoundedCornerShape(16.dp),
+            Button(onClick = { submit(QuoteDelivery.SMS) }, enabled = !saving,
+                modifier = Modifier.width(64.dp).height(52.dp),
+                contentPadding = PaddingValues(0.dp),
+                shape = RoundedCornerShape(13.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = editorGreen)) {
+                Text("문자", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+            }
+            Button(onClick = { submit(QuoteDelivery.EMAIL) }, enabled = !saving,
+                modifier = Modifier.width(64.dp).height(52.dp),
+                contentPadding = PaddingValues(0.dp),
+                shape = RoundedCornerShape(13.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3563A8))) {
+                Text("메일", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+            }
+            Button(onClick = { confirmSent = true }, enabled = !saving,
+                modifier = Modifier.weight(1f).height(52.dp),
+                contentPadding = PaddingValues(horizontal = 2.dp),
+                shape = RoundedCornerShape(13.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC8641F))) {
-                Text(if (saving) "저장 중…" else if (firstRequest) "견적확정" else "견적 저장",
-                    fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+                Text("견적완료", maxLines = 1,
+                    fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
             }
         }
     }) {
@@ -494,6 +534,13 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
         title = { Text("고객 요청사항") },
         text = { Text(request?.message.orEmpty()) },
         confirmButton = { TextButton(onClick = { messageExpanded = false }) { Text("닫기") } })
+    if (confirmSent) ConfirmQuoteSentDialog(
+        onDismiss = { confirmSent = false },
+        onConfirm = {
+            confirmSent = false
+            submit(QuoteDelivery.COMPLETE)
+        }
+    )
     if (deleteConfirm) AlertDialog(
         onDismissRequest = { deleteConfirm = false },
         title = { Text("견적 요청을 삭제할까요?") },

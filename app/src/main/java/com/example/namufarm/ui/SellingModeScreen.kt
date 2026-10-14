@@ -39,6 +39,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.core.content.ContextCompat
 import androidx.compose.runtime.saveable.rememberSaveable
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
 import com.example.namufarm.domain.order.OrderLineSource
 import com.example.namufarm.ui.components.*
 import com.example.namufarm.phone.openSmsComposer
@@ -149,6 +151,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
         }
     }
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
     var showAddressSearch by remember { mutableStateOf(false) }
@@ -657,8 +660,25 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                     showQuickQuoteDialog = false; viewModel.dismissManualQuote()
                     workbenchSignal++
                     if (sourceId != null) onQuoteConfirmed(sourceId, draft)
-                    deliveryAction = action.name
-                    deliveryNumber = saved.quoteNumber
+                    if (action == QuoteDelivery.COMPLETE) {
+                        // Explicit seller confirmation was collected before saving this quote.
+                        scope.launch {
+                            try {
+                                viewModel.markQuoteSent(saved.quoteNumber)
+                                if (sourceId != null) onQuoteSentStatus(sourceId)
+                            } catch (e: CancellationException) {
+                                throw e
+                            } catch (e: Exception) {
+                                viewModel.showMessage("발송완료 기록 실패: ${e.message}")
+                                // Keep the saved quote reachable for retry without creating a duplicate.
+                                deliveryAction = QuoteDelivery.SAVE.name
+                                deliveryNumber = saved.quoteNumber
+                            }
+                        }
+                    } else {
+                        deliveryAction = action.name
+                        deliveryNumber = saved.quoteNumber
+                    }
                 }
             })
     }

@@ -10,9 +10,9 @@ import com.example.namufarm.domain.order.OrderLine
 import com.example.namufarm.domain.order.OrderLineSource
 import com.google.gson.Gson
 
-enum class QuoteDelivery { SAVE, SMS, EMAIL }
+enum class QuoteDelivery { SAVE, SMS, EMAIL, COMPLETE }
 
-data class SellerQuoteRow(val name: String = "", val spec: String = "", val quantity: String = "", val price: String = "") {
+data class SellerQuoteRow(val name: String = "", val spec: String = "", val quantity: String = "", val price: String = "2000") {
     fun line(): OrderLine {
         require(name.isNotBlank()) { "묘목명을 입력해주세요." }
         val qty = quantity.toIntOrNull()?.takeIf { it > 0 } ?: error("수량은 1주 이상 입력해주세요.")
@@ -66,7 +66,7 @@ data class SellerQuoteDraft(
         }
         fun from(request: WebQuoteRequestEntity?, issuer: QuoteIssuer): SellerQuoteDraft = SellerQuoteDraft(
             rows = request?.let { Gson().fromJson(it.itemsJson, Array<WebQuoteItem>::class.java).map { row ->
-                SellerQuoteRow(row.species, row.specification, row.quantity.toString())
+                SellerQuoteRow(row.species, row.specification, row.quantity.toString(), "2000")
             } } ?: listOf(SellerQuoteRow()),
             phone = request?.customerPhone.orEmpty(), recipient = request?.let(QuoteRecipient::from) ?: QuoteRecipient(),
             prepaid = request != null, fee = if (request != null) "6000" else "0",

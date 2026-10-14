@@ -43,7 +43,6 @@ internal fun QuoteDeliveryDialog(
     var error by remember(number) { mutableStateOf<String?>(null) }
     var notice by remember(number) { mutableStateOf<String?>(null) }
     var confirmSent by remember(number) { mutableStateOf(false) }
-    var lastOpened by remember(number) { mutableStateOf<QuoteDelivery?>(null) }
     var initialHandled by rememberSaveable(number) { mutableStateOf(false) }
 
     val editable = quote?.let { saved ->
@@ -92,8 +91,7 @@ internal fun QuoteDeliveryDialog(
             } else {
                 openSmsComposer(context, saved.customerPhone, body)?.let { kotlin.error(it) }
             }
-            lastOpened = action
-            notice = "문자·메일 앱에서 실제 전송을 마친 뒤 ‘견적발송완료’를 눌러주세요."
+            notice = "문자·메일 앱에서 실제 전송을 마친 뒤 ‘견적완료’를 눌러주세요."
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -192,40 +190,34 @@ internal fun QuoteDeliveryDialog(
         )
     }
 
-    if (confirmSent) AlertDialog(
-        onDismissRequest = { if (!busy) confirmSent = false },
-        title = { Text("고객에게 견적을 보내셨나요?") },
-        text = { Text("실제로 전송한 뒤 확인해주세요. 오늘 견적은 최초 발송 시 1건만 집계됩니다.") },
-        confirmButton = {
-            TextButton(enabled = !busy, onClick = {
-                confirmSent = false
-                busy = true
-                scope.launch {
-                    try {
-                        val saved = viewModel.savedQuote(number) ?: kotlin.error("저장된 견적을 찾을 수 없습니다.")
-                        check(!changedFrom(saved)) { "변경된 견적을 먼저 다시 보내주세요." }
-                        viewModel.markQuoteSent(number)
-                        quote = viewModel.savedQuote(number)
-                        when (lastOpened) {
-                            QuoteDelivery.SMS -> delivery = delivery.copy(smsStatus = QuoteSendingStatus.COMPLETED)
-                            QuoteDelivery.EMAIL -> delivery = delivery.copy(emailStatus = QuoteSendingStatus.COMPLETED)
-                            else -> Unit
-                        }
-                        onQuoteSent()
-                        notice = "견적 발송을 기록했습니다."
-                        error = null
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (e: Exception) {
-                        error = e.message ?: "발송 기록 저장에 실패했습니다."
-                    } finally {
-                        busy = false
-                    }
+    if (confirmSent) ConfirmQuoteSentDialog(
+        onDismiss = { if (!busy) confirmSent = false },
+        onConfirm = { method ->
+            confirmSent = false
+            busy = true
+            scope.launch {
+                try {
+                    val saved = viewModel.savedQuote(number) ?: kotlin.error("저장된 견적을 찾을 수 없습니다.")
+                    check(!changedFrom(saved)) { "변경된 견적을 먼저 다시 보내주세요." }
+                    viewModel.markQuoteSent(number)
+                    quote = viewModel.savedQuote(number)
+                    delivery = delivery.copy(
+                        smsStatus = if (method == "sms" || method == "both")
+                            QuoteSendingStatus.COMPLETED else QuoteSendingStatus.PENDING,
+                        emailStatus = if (method == "email" || method == "both")
+                            QuoteSendingStatus.COMPLETED else QuoteSendingStatus.PENDING
+                    )
+                    onQuoteSent()
+                    notice = "견적 발송을 기록했습니다."
+                    error = null
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    error = e.message ?: "발송 기록 저장에 실패했습니다."
+                } finally {
+                    busy = false
                 }
-            }) { Text("발송 완료") }
-        },
-        dismissButton = {
-            TextButton(onClick = { confirmSent = false }) { Text("돌아가기") }
+            }
         }
     )
 }
