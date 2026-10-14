@@ -156,7 +156,7 @@ internal fun SellingHome(
                     ).forEachIndexed { index, (title, count, icon) ->
                         Surface(
                             onClick = { selectedTab = index },
-                            modifier = Modifier.weight(1f).heightIn(min = 104.dp),
+                            modifier = Modifier.weight(1f).height(108.dp),
                             shape = MaterialTheme.shapes.large,
                             color = if (selectedTab == index) MaterialTheme.colorScheme.primaryContainer
                                 else MaterialTheme.colorScheme.surface,
