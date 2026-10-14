@@ -46,7 +46,7 @@ class CommerceUiTest {
     @Test fun homeShowsOnlineReceiptInsteadOfInventory() {
         var selected = false
         compose.setContent { NamuFarmTheme {
-            SellingHome(ManagementUiState(), SnackbarHostState(), {}, {}, {}, {}, {}, {}, {}, { _, _ -> },
+            SellingHome(ManagementUiState(), SnackbarHostState(), {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, { _, _ -> },
                 webRequests = listOf(webRequest), onRequest = { selected = true })
         } }
         compose.onNodeWithText("온라인 견적 요청함").assertIsDisplayed()
@@ -198,7 +198,7 @@ class CommerceUiTest {
     @Test fun webCustomerNeedsConfirmationBeforeReplacingDraftRecipient() {
         var phone = "01099998888"
         compose.setContent { NamuFarmTheme {
-            androidx.compose.foundation.layout.Column { WebRequestCustomerActions(webRequest, phone, 2) { phone = it } }
+            androidx.compose.foundation.layout.Column { WebRequestCustomerActions(webRequest, phone, 2, onConfirm = {}) { phone = it } }
         } }
         compose.onNodeWithText("수동 견적 작성").performClick()
         assertEquals("01099998888", phone)
@@ -263,7 +263,7 @@ class CommerceUiTest {
     @Test fun sellerHomeKeepsAllThreeShortcutsAndBusySyncCannotRunAgain() {
         val calls = mutableListOf<String>()
         compose.setContent { NamuFarmTheme {
-            SellingHome(ManagementUiState(), SnackbarHostState(), { calls += "sync" }, {}, { calls += "quick" }, { calls += "quotes" }, { calls += "orders" }, {}, {}, { _, _ -> }, webBusy = true)
+            SellingHome(ManagementUiState(), SnackbarHostState(), { calls += "sync" }, {}, { calls += "quick" }, { calls += "quotes" }, { calls += "orders" }, {}, {}, {}, {}, {}, { _, _ -> }, webBusy = true)
         } }
         compose.onNodeWithText("빠른 견적").performClick()
         compose.onNodeWithText("오늘 견적").performClick()
