@@ -505,7 +505,7 @@ private fun DeliverySendButton(
                 Box(Modifier.size(6.dp).background(
                     if (status == QuoteSendingStatus.COMPLETED) Color(0xFFB9F19C)
                     else Color(0xFFFFE08A), CircleShape))
-                Text(if (status == QuoteSendingStatus.COMPLETED) "전송 완료" else "전송 대기",
+                Text(if (status == QuoteSendingStatus.COMPLETED) "전송 완료" else "발송 대기",
                     color = white, fontSize = 11.sp)
             }
             Spacer(Modifier.height(4.dp))

@@ -165,7 +165,7 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
                 shape = RoundedCornerShape(16.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = editorGreen)) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("● 전송 대기", fontSize = 11.sp, color = Color.White.copy(alpha = 0.85f))
+                    Text("● 발송 대기", fontSize = 11.sp, color = Color.White.copy(alpha = 0.85f))
                     Text("문자 보내기", fontSize = 15.sp)
                 }
             }
@@ -174,7 +174,7 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
                 shape = RoundedCornerShape(16.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3563A8))) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("● 전송 대기", fontSize = 11.sp, color = Color.White.copy(alpha = 0.85f))
+                    Text("● 발송 대기", fontSize = 11.sp, color = Color.White.copy(alpha = 0.85f))
                     Text("메일 보내기", fontSize = 15.sp)
                 }
             }

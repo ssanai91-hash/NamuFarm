@@ -166,13 +166,6 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
     var showQuoteDetailDialog by remember { mutableStateOf(false) }
     var showQuickQuoteDialog by rememberSaveable { mutableStateOf(false) }
     var workbenchSignal by rememberSaveable { mutableIntStateOf(0) }
-    var editSavedNumber by rememberSaveable { mutableStateOf<String?>(null) }
-    LaunchedEffect(deleteFeedback?.phase, deleteFeedback?.requestId) {
-        if (deleteFeedback?.phase == "success" && editSavedNumber != null &&
-            uiState.quotesByRequest[deleteFeedback.requestId]?.quoteNumber == editSavedNumber) {
-            editSavedNumber = null
-        }
-    }
     var deliveryNumber by rememberSaveable { mutableStateOf<String?>(null) }
     var deliveryAction by rememberSaveable { mutableStateOf(QuoteDelivery.SAVE.name) }
 
@@ -247,9 +240,8 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
         onWebInbox = onWebInbox, webUnread = webUnread, webRequests = webRequests, webBusy = webBusy, onRequest = onRequest,
         workbenchSignal = workbenchSignal,
         onSavedQuote = { quote ->
-            val manual = runCatching { com.example.namufarm.domain.order.OrderSummaryCodec.parseStrict(quote.itemSummary).all { it.source == com.example.namufarm.domain.order.OrderLineSource.MANUAL } }.getOrDefault(false)
-            if (manual && quote.sentAt == 0L && uiState.quoteDocuments.none { it.quoteNumber == quote.quoteNumber } && uiState.allOrders.none { it.sourceQuoteNumber == quote.quoteNumber }) editSavedNumber = quote.quoteNumber
-            else { selectedQuote = quote; showQuoteDetailDialog = true }
+            selectedQuote = quote
+            showQuoteDetailDialog = true
         }
     )
 
@@ -377,33 +369,9 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
     )
     if (showQuoteDetailDialog) selectedQuote?.let { selected ->
         val quote = uiState.allQuotes.firstOrNull { it.quoteNumber == selected.quoteNumber } ?: selected
-        QuoteDetailsDialog(
-            quote, uiState.confirmingQuoteNumber == quote.quoteNumber, snackbarHostState,
-            onSms = { deliveryAction = QuoteDelivery.SMS.name; deliveryNumber = quote.quoteNumber; showQuoteDetailDialog = false },
-            onEmail = { deliveryAction = QuoteDelivery.EMAIL.name; deliveryNumber = quote.quoteNumber; showQuoteDetailDialog = false },
-            taxAmount = uiState.quoteTax(quote.quoteNumber),
-            onConfirm = {
-                viewModel.convertQuoteToOrder(quote) { order ->
-                    selectedOrder = order
-                    showQuoteDetailDialog = false
-                    showTodayQuotesDialog = false
-                    showOrderDetailDialog = true
-                }
-            },
-            onDelete = { quoteToDelete = quote; showDeleteQuoteConfirm = true },
-            onDismiss = { showQuoteDetailDialog = false },
-            sentAction = { QuoteSentAction(viewModel, quote.quoteNumber) { markLinkedQuoteSent(quote.quoteNumber) } },
-            allowPayment = false,
-            ordered = uiState.allOrders.any { it.sourceQuoteNumber == quote.quoteNumber },
-            onOrder = { selectedOrder = uiState.allOrders.first { it.sourceQuoteNumber == quote.quoteNumber }; showQuoteDetailDialog = false; showOrderDetailDialog = true }
-        )
-    }
-    editSavedNumber?.let { number ->
-        val requestId = uiState.quotesByRequest.entries.firstOrNull { it.value.quoteNumber == number }?.key
-        SavedQuoteEditor(viewModel, number, webRequests.firstOrNull { it.requestId == requestId },
-            onSaved = { savedNumber, action -> editSavedNumber = null; deliveryAction = action.name; deliveryNumber = savedNumber },
-            onDismiss = { if (!uiState.isSavingQuote) editSavedNumber = null },
-            onDeleteRequest = onDeleteRequest)
+        ConfirmedQuoteSummaryDialog(quote, viewModel) {
+            showQuoteDetailDialog = false
+        }
     }
     deliveryNumber?.let { number ->
         QuoteDeliveryDialog(viewModel, number, QuoteDelivery.valueOf(deliveryAction),

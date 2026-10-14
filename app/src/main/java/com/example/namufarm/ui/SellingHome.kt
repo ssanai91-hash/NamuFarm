@@ -193,7 +193,7 @@ internal fun SellingHome(
                 }
             } else if (selectedTab == 1) {
                 item(key = "work-header") {
-                    NamuSectionTitle("견적확정", "총 ${workCount}건 · 문자·메일은 상세 화면에서 보냅니다.")
+                    NamuSectionTitle("견적확정", "총 ${workCount}건 · 고객·금액·발송 상태를 조회합니다.")
                 }
                 val visibleRequests = workRequests
                 val visibleQuotes = localQuotes.sortedByDescending { it.saveDate }

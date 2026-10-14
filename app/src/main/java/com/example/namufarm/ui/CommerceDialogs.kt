@@ -1,6 +1,7 @@
 package com.example.namufarm.ui
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -12,6 +13,8 @@ import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.KeyboardType
@@ -19,6 +22,9 @@ import androidx.compose.ui.unit.dp
 import com.example.namufarm.data.OrderEntity
 import com.example.namufarm.data.QuoteEntity
 import com.example.namufarm.domain.order.OrderLineSource
+import com.example.namufarm.domain.order.OrderSummaryCodec
+import com.example.namufarm.quotation.QuoteRecipient
+import com.example.namufarm.viewmodel.ManagementViewModel
 import com.example.namufarm.ui.components.*
 import com.example.namufarm.viewmodel.CartItem
 
@@ -176,6 +182,153 @@ private fun HistoryCard(phone: String, date: String, summary: String, amount: In
                 Icon(Icons.Outlined.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
+    }
+}
+
+
+/** 견적확정 목록은 작업 버튼이 없는 조회 화면만 표시한다. */
+@Composable
+internal fun ConfirmedQuoteSummaryDialog(
+    quote: QuoteEntity,
+    viewModel: ManagementViewModel,
+    onDismiss: () -> Unit
+) {
+    var recipient by remember(quote.quoteNumber) { mutableStateOf(QuoteRecipient()) }
+    var recipientError by remember(quote.quoteNumber) { mutableStateOf(false) }
+    LaunchedEffect(quote.quoteNumber) {
+        try {
+            recipient = viewModel.quoteRecipient(quote.quoteNumber)
+        } catch (_: Exception) {
+            recipientError = true
+        }
+    }
+    val lines = remember(quote.itemSummary) {
+        runCatching { OrderSummaryCodec.parseStrict(quote.itemSummary) }.getOrNull()
+    }
+    val sent = quote.sentAt > 0L
+    val sentDate = remember(quote.sentAt) {
+        if (!sent) "" else java.text.SimpleDateFormat(
+            "yyyy.MM.dd HH:mm", java.util.Locale.KOREA
+        ).apply {
+            timeZone = java.util.TimeZone.getTimeZone("Asia/Seoul")
+        }.format(java.util.Date(quote.sentAt))
+    }
+    val name = recipient.customerName.ifBlank { recipient.recipientName }
+        .ifBlank { if (recipientError) "고객명 확인 불가" else "미입력" }
+    val channels = when (recipient.replyChannel) {
+        "both" -> "문자 · 메일"
+        "email" -> "메일"
+        else -> "문자"
+    }
+    val itemTotal = quote.totalPrice.toLong() -
+        if (quote.isPrepaid) quote.shippingFee.toLong() else 0L
+    NamuDialog("견적 내역", quote.saveDate, onDismiss, actions = {
+        Button(onClick = onDismiss, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
+            shape = RoundedCornerShape(14.dp)) { Text("닫기") }
+    }) {
+        LazyColumn(modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            item {
+                Surface(color = if (sent) Color(0xFFE3EEE6) else Color(0xFFFFF3D6),
+                    shape = RoundedCornerShape(12.dp)) {
+                    Column(Modifier.fillMaxWidth().padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(if (sent) "견적 발송 완료" else "견적확정 · 발송 대기",
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (sent) Color(0xFF2F5D3F) else Color(0xFF8A5A00))
+                        Text(if (sent) "발송완료 기록: " + sentDate
+                            else "발송완료 기록이 아직 없습니다.",
+                            style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+            item {
+                Surface(color = Color.White, shape = RoundedCornerShape(16.dp),
+                    border = BorderStroke(0.5.dp, Color(0xFFE3E9E5))) {
+                    Column(Modifier.fillMaxWidth().padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        ConfirmedInfoRow("고객명", name)
+                        ConfirmedInfoRow("연락처", quote.customerPhone)
+                        ConfirmedInfoRow("견적번호", quote.quoteNumber)
+                        ConfirmedInfoRow("견적일", quote.saveDate)
+                        ConfirmedInfoRow("수신방법", if (recipientError) "확인 불가" else channels)
+                        if (recipient.customerEmail.isNotBlank()) {
+                            ConfirmedInfoRow("이메일", recipient.customerEmail)
+                        }
+                    }
+                }
+            }
+            item {
+                Surface(color = Color.White, shape = RoundedCornerShape(16.dp),
+                    border = BorderStroke(0.5.dp, Color(0xFFE3E9E5))) {
+                    Column(Modifier.fillMaxWidth().padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text("견적 품목", fontWeight = FontWeight.SemiBold)
+                        if (lines == null) {
+                            Text("저장된 품목을 읽을 수 없습니다.",
+                                color = MaterialTheme.colorScheme.error)
+                        } else {
+                            lines.forEach { line ->
+                                Row(Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically) {
+                                    Column(Modifier.weight(1f)) {
+                                        Text(line.speciesName + " · " + line.orderQty + "주")
+                                        val specification = listOf(line.quality, line.age,
+                                            line.size, line.plantType)
+                                            .filter(String::isNotBlank).joinToString(" / ")
+                                        if (specification.isNotBlank()) {
+                                            Text(specification,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        }
+                                    }
+                                    Text(money(line.orderQty.toLong() * line.retailPrice))
+                                }
+                            }
+                        }
+                        HorizontalDivider()
+                        ConfirmedInfoRow("상품 합계", money(itemTotal))
+                        ConfirmedInfoRow("배송비", if (quote.isPrepaid)
+                            "선불 · " + money(quote.shippingFee.toLong()) else "후불(착불)")
+                        Row(Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically) {
+                            Text("최종 견적 금액", fontWeight = FontWeight.SemiBold)
+                            Text(money(quote.totalPrice.toLong()),
+                                color = Color(0xFF2F5D3F),
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+            item {
+                Surface(color = Color.White, shape = RoundedCornerShape(16.dp),
+                    border = BorderStroke(0.5.dp, Color(0xFFE3E9E5))) {
+                    Column(Modifier.fillMaxWidth().padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("발송 정보", fontWeight = FontWeight.SemiBold)
+                        ConfirmedInfoRow("발송 상태", if (sent) "완료로 기록됨" else "발송 대기")
+                        ConfirmedInfoRow("수신방법", if (recipientError) "확인 불가" else channels)
+                        Text("문자·메일 각각의 실제 전송 결과는 별도로 기록되지 않습니다.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ConfirmedInfoRow(label: String, value: String) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(label, modifier = Modifier.width(88.dp),
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(value, modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurface)
     }
 }
 
