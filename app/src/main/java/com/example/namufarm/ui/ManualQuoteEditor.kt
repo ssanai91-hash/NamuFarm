@@ -517,7 +517,7 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Icon(Icons.Outlined.Info, null, tint = Color(0xFF8A5A00),
                             modifier = Modifier.size(18.dp))
-                        Text("보낸 뒤 견적발송완료를 눌러주세요.",
+                        Text("보낸 뒤 견적완료를 눌러주세요.",
                             color = Color(0xFF6B4A0A), fontSize = 12.sp)
                     }
                 }
