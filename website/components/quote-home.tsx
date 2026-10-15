@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Sprout, Plus, Minus, Search, Trash2, FileText, CheckCheck, MessageCircle, ShieldCheck, LoaderCircle, CircleCheck, X, Copy, Phone } from "lucide-react";
+import { Sprout, Plus, Minus, Search, Trash2, FileText, CheckCheck, MessageCircle, ShieldCheck, LoaderCircle, CircleCheck, X, Copy, Phone, ChevronDown } from "lucide-react";
 import SpeciesBrowser from "@/components/species-browser";
 import SpeciesPickerDialog from "@/components/species-picker-dialog";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,7 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
   const [lines, setLines] = useState<Line[]>([emptyLine(0)]);
   const nextLine = useRef(1);
   const [pickerLineId, setPickerLineId] = useState<number | null>(null);
+  const [manualLineIds, setManualLineIds] = useState<Set<number>>(() => new Set());
   const [name, setName] = useState(""); const [phone, setPhone] = useState("");
   const [region, setRegion] = useState(""); const [message, setMessage] = useState("");
   const [email, setEmail] = useState(""); const [formalQuote, setFormalQuote] = useState(false);
@@ -113,6 +114,13 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
   }, []);
 
   const clearProblem = (id: string) => setProblems(old => old.filter(problem => problem.id !== id));
+  function focusField(id: string) {
+    if (id.startsWith("species-")) {
+      const lineId = Number(id.slice("species-".length));
+      setManualLineIds(old => new Set(old).add(lineId));
+    }
+    requestAnimationFrame(() => document.getElementById(id)?.focus());
+  }
   const updateLine = (id: number, key: keyof Omit<Line, "id">, value: string) => {
     if (locked) return;
     clearProblem(`${key === "specification" ? "spec" : key}-${id}`);
@@ -185,7 +193,7 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
     if (!parsed.success) {
       const fields = quoteFieldProblems(parsed.error.issues, lines);
       setProblems(fields); setError("아래 항목을 확인해주세요.");
-      requestAnimationFrame(() => document.getElementById(fields[0]?.id || "quote-errors")?.focus()); return;
+      focusField(fields[0]?.id || "quote-errors"); return;
     }
     const { requestId: _, ...payload } = parsed.data;
     const fingerprint = requestFingerprint(payload);
@@ -259,7 +267,13 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
       </section>
       <div className="journey-strip wrap" aria-label="견적 상담 순서"><span><b>1</b>묘목 고르기</span><span><b>2</b>수량·연락처 입력</span><span><b>3</b>상담 후 결정</span></div>
       <SpeciesBrowser lines={lines} onSelect={selectSpecies} onRemove={removeLine} notice={notice} locked={locked} />
-      <section id="quote" className="quote-section" aria-labelledby="quote-title"><div className="quote-layout wrap">
+      <section id="quote" className="quote-section" aria-labelledby="quote-title quote-mobile-title"><div className="quote-layout wrap">
+        <div className="quote-mobile-intro">
+          <h2 id="quote-mobile-title">묘목 견적 상담</h2>
+          <p>묘목과 수량을 알려주세요.</p>
+          <details className="quote-writing-guide"><summary>작성 안내 보기 <ChevronDown aria-hidden="true" /></summary><div><p>수량은 주 단위로 적어주세요. 1주는 나무 1그루입니다.</p><p>규격을 모르면 비워두세요. 상담하면서 확인합니다.</p><a href="#trees">묘목 더 찾아보기</a></div></details>
+          <div className="quote-mobile-promise"><ShieldCheck aria-hidden="true" /><p>견적 요청만으로 <strong>주문이 확정되지 않아요.</strong></p></div>
+        </div>
         <aside className="quote-intro"><span className="overline">묘목 견적 상담</span><h2 id="quote-title">필요한 만큼,<br />함께 알아볼게요.</h2><p>수량은 <strong>주 단위</strong>로 적어주세요.<br />규격을 몰라도 괜찮습니다.</p><div className="intro-promise"><ShieldCheck /><p>견적 요청만으로<br /><strong>주문이나 결제가 확정되지 않아요.</strong></p></div><a href="#trees" className="back-to-trees">묘목 더 찾아보기</a></aside>
         <form className="quote-form" ref={formRef} onSubmit={prepare} noValidate aria-busy={busy}>
           {success ? <div className="success-panel" ref={successRef} tabIndex={-1} role="status"><CircleCheck /><span className="overline">접수 완료</span><h3>{testMode ? "테스트 요청을 저장했어요." : "견적 상담 요청이 접수됐어요."}</h3><p>{testMode ? "테스트 요청만 저장됐습니다. 실제 상담·견적서 발송은 진행하지 않습니다." : "판매자가 여러 농원의 재고와 규격을 확인한 뒤 남겨주신 연락처로 안내드립니다."}</p><div className="receipt"><span>견적접수번호</span><code>{success.receiptNumber}</code><Button type="button" variant="outline" onClick={copyReceipt}><Copy />접수번호 복사</Button><p className="copy-notice" role="status">{copyNotice}</p><span className="receipt-date-label">접수일시 · 한국시간</span><time dateTime={success.createdAt}>{receiptTimeSeoul(success.createdAt)}</time></div>{successContact && <p className="success-followup">상담 연락처: 끝 네 자리 <strong>{successContact.phoneTail}</strong><br />공식 견적서: {successContact.formal ? successContact.channel === "both" ? "이메일과 문자로 수신" : successContact.channel === "email" ? "이메일로 수신" : "문자로 수신" : "요청 안 함"}</p>}<p className="submit-note">아직 주문이나 결제가 확정된 것은 아닙니다.</p><Button type="button" variant="outline" onClick={() => { setSuccess(null); setNotice(""); }}>{testMode ? "다른 테스트 요청하기" : "다른 견적 요청하기"}</Button></div> : <>
@@ -279,13 +293,14 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
               <div className="item-number">품목 {index + 1}{lines.length > 1 && <Button type="button" variant="ghost" aria-label={`품목 ${index + 1} ${line.species} 빼기`} onClick={() => removeLine(line.id)}><Trash2 />빼기</Button>}</div>
               <div className="item-fields">
                 <div className="field species-field">
-                  <Label htmlFor={"species-" + line.id}>묘목 이름 <small>필수</small></Label>
-                  <div className="species-select-row">
+                  <Label htmlFor={"species-" + line.id} onClick={() => { if (!locked) focusField("species-" + line.id); }}>묘목 이름 <small>필수</small></Label>
+                  <div className={`species-select-row ${manualLineIds.has(line.id) ? "is-manual" : ""}`}>
                     <Input id={"species-" + line.id} required maxLength={80} placeholder="예: 감나무" value={line.species} onChange={e => updateLine(line.id, "species", e.target.value)} {...fieldAttrs("species-" + line.id)} />
                     <Button id={"choose-species-" + line.id} type="button" className="species-select-button" aria-haspopup="dialog" aria-label={"품목 " + (index + 1) + " 묘목 선택"} onClick={() => setPickerLineId(line.id)}>
-                      <Search aria-hidden="true" /> 묘목 선택
+                      <Search aria-hidden="true" /><span className="species-picker-desktop-label">묘목 선택</span><span className="species-picker-mobile-label">{line.species || "묘목을 선택해주세요"}</span><ChevronDown className="species-picker-chevron" aria-hidden="true" />
                     </Button>
                   </div>
+                  <Button type="button" variant="link" className="species-manual-toggle" aria-expanded={manualLineIds.has(line.id)} aria-controls={"species-" + line.id} onClick={() => focusField("species-" + line.id)}>이름 직접 입력</Button>
                   {fieldError("species-" + line.id)}
                 </div>
                 <div className="field quantity-field">
@@ -300,11 +315,11 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
                     </Button>
                     <span className="quantity-unit">주</span>
                   </div>
-                  <p id={"quantity-help-" + line.id} className="field-help">1주는 나무 1그루입니다. 숫자를 직접 입력해도 돼요.</p>
+                  <p id={"quantity-help-" + line.id} className="field-help">1주는 나무 1그루입니다.<span className="quantity-extra-help"> 숫자를 직접 입력해도 돼요.</span></p>
                   {fieldError("quantity-" + line.id)}
                 </div>
               </div><div className="field spec-field"><Label htmlFor={`spec-${line.id}`}>희망 규격 <small>선택</small></Label><Input id={`spec-${line.id}`} maxLength={120} placeholder="예: 2년생, 키 1m" value={line.specification} onChange={e => updateLine(line.id, "specification", e.target.value)} {...fieldAttrs(`spec-${line.id}`, `spec-help-${line.id}`)} /><p id={`spec-help-${line.id}`} className="field-help">모르면 비워두세요. 상담하면서 확인합니다.</p>{fieldError(`spec-${line.id}`)}</div>
-            </div>)}</div><Button className="add-line" type="button" variant="outline" disabled={lines.length >= 20} onClick={() => { const id = nextLine.current++; setLines(old => [...old, emptyLine(id)]); setNotice(""); requestAnimationFrame(() => document.getElementById(`species-${id}`)?.focus()); }}><Plus />묘목 추가하기</Button><p className="field-help">한 번에 20종까지 요청할 수 있어요.</p></fieldset>
+            </div>)}</div><Button className="add-line" type="button" variant="outline" disabled={lines.length >= 20} onClick={() => { const id = nextLine.current++; setLines(old => [...old, emptyLine(id)]); setNotice(""); focusField(`species-${id}`); }}><Plus />다른 묘목 추가</Button><p className="field-help">한 번에 20종까지 요청할 수 있어요.</p></fieldset>
             <fieldset className="quote-section-box" disabled={locked}><legend><span>2</span>상담받을 분 · 연락처</legend><div className="contact-grid">
               <div className="field"><Label htmlFor="name">성함 <small>필수</small></Label><Input id="name" autoComplete="name" required minLength={2} maxLength={50} placeholder="성함을 적어주세요" value={name} onChange={e => { setName(e.target.value); clearProblem("name"); }} {...fieldAttrs("name")} />{fieldError("name")}</div>
               <div className="field"><Label htmlFor="phone">전화번호 <small>필수</small></Label><Input id="phone" type="tel" autoComplete="tel" inputMode="tel" required maxLength={20} placeholder="010-1234-5678" value={phone} onChange={e => { setPhone(e.target.value); clearProblem("phone"); }} {...fieldAttrs("phone")} />{fieldError("phone")}</div>
@@ -320,7 +335,7 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
             </fieldset>
             <div className="honeypot" aria-hidden="true"><label htmlFor="website">Website</label><input id="website" tabIndex={-1} autoComplete="off" value={website} onChange={e => setWebsite(e.target.value)} /></div>
             <div className="processing-notice"><p>{quoteProcessingNotice}</p><a href="/privacy">개인정보 처리방침</a></div>
-            <div id="quote-errors" ref={errorRef} tabIndex={-1} className={error ? "form-error" : ""} role={error ? "alert" : undefined}>{error}{problems.length > 0 && <ul>{problems.map(problem => <li key={problem.id}><button type="button" onClick={() => document.getElementById(problem.id)?.focus()}>{problem.message}</button></li>)}</ul>}</div>
+            <div id="quote-errors" ref={errorRef} tabIndex={-1} className={error ? "form-error" : ""} role={error ? "alert" : undefined}>{error}{problems.length > 0 && <ul>{problems.map(problem => <li key={problem.id}><button type="button" onClick={() => focusField(problem.id)}>{problem.message}</button></li>)}</ul>}</div>
             <div className="form-summary"><span>요청 품목 <strong>{count}종</strong></span><span>총 수량 <strong>{total.toLocaleString()}주</strong></span></div><Button className="submit-button" type="submit" disabled={busy} onClick={uncertain ? event => { event.preventDefault(); setReviewOpen(true); } : undefined}>{uncertain ? "접수 확인 이어가기" : "내용 확인하기"}</Button><p className="submit-note">주문과 결제는 상담 후 결정합니다.</p>
           </>}
         </form>

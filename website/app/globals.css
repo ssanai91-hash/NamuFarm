@@ -2343,3 +2343,63 @@ body { background:#fafbf7; }
 @media(max-width:30rem) {
   .mobile-cta small { display: none; }
 }
+
+/* Selected mobile quote design: short guidance, then the actual fields. */
+.quote-mobile-intro,
+.species-picker-mobile-label,
+.species-picker-chevron,
+.species-manual-toggle { display: none; }
+@media(max-width:48rem) {
+  .quote-section { padding: 0 0 2rem; background: #fff; }
+  .quote-layout.wrap { width: 100%; gap: 0; }
+  .quote-intro { display: none; }
+  .quote-mobile-intro { display: block; padding: 1.4rem 20px 0; background: #eaf2e6; }
+  .quote-mobile-intro h2 { margin: 0; color: #174d37; font-size: 1.75rem; line-height: 1.3; font-weight: 800; }
+  .quote-mobile-intro>p { margin-top: .5rem; font-size: 1.125rem; color: #415a48; line-height: 1.6; }
+  .quote-writing-guide { margin: .45rem 0 .75rem; color: #205844; }
+  .quote-writing-guide summary { display: flex; align-items: center; gap: .5rem; min-height: 3rem; width: fit-content; cursor: pointer; font-size: 1.0625rem; font-weight: 650; text-decoration: underline; text-underline-offset: .25em; list-style: none; }
+  .quote-writing-guide summary::-webkit-details-marker { display: none; }
+  .quote-writing-guide summary svg { width: 1.2rem; height: 1.2rem; }
+  .quote-writing-guide[open] summary svg { transform: rotate(180deg); }
+  .quote-writing-guide>div { padding: .2rem 0 .8rem; font-size: 1.0625rem; line-height: 1.7; }
+  .quote-writing-guide>div p+p { margin-top: .45rem; }
+  .quote-writing-guide a { display: inline-flex; align-items: center; min-height: 3rem; text-decoration: underline; text-underline-offset: .2em; }
+  .quote-mobile-promise { display: flex; align-items: center; gap: .65rem; margin-inline: -20px; padding: .8rem 20px; background: #f4f7f0; color: #36543e; }
+  .quote-mobile-promise svg { width: 1.6rem; height: 1.6rem; flex-shrink: 0; }
+  .quote-mobile-promise p { font-size: 1rem; line-height: 1.5; }
+  .quote-form { display: flex; flex-direction: column; max-width: none; padding: 1.4rem 20px 0; border: 0; border-radius: 0; box-shadow: none; }
+  .quote-form>.form-title { display: none; }
+  .quote-form>.form-call-help { order: 1; margin: .75rem 0 0; padding: .8rem 0; border-top: 1px solid #dce5dc; font-size: 1.0625rem; }
+  .quote-form>.quote-section-box { border: 0; border-radius: 0; background: #fff; padding: .85rem 0 0; margin-bottom: 1.6rem; }
+  .quote-form>.quote-section-box>legend { width: 100%; padding: 0 0 .6rem; border-bottom: 1px solid #d9e1d7; font-size: 1.3rem; font-weight: 800; }
+  .quote-section-box>legend>span { display: none; }
+  .line-list { gap: 1.2rem; }
+  .item-line { border: 0; border-radius: 0; padding: 0; }
+  .item-line+.item-line { padding-top: 1rem; border-top: 1px solid #dce5dc; }
+  .item-number { margin-bottom: .5rem; font-size: 1rem; }
+  .item-fields { gap: 1rem; }
+  .field { gap: .45rem; }
+  .field label { font-size: 1.125rem; }
+  .field input,.field textarea { min-height: 3.5rem; font-size: 1.125rem; }
+  .species-select-row { grid-template-columns: minmax(0,1fr); gap: .6rem; }
+  .species-select-row>input { display: none; }
+  .species-select-row.is-manual>input { display: block; grid-row: 2; }
+  .species-select-row .species-select-button { width: 100%; min-width: 0; min-height: 3.5rem; padding: .65rem .85rem; border: 1px solid #8a9b8d; background: #fff; color: #31483b; font-size: 1.125rem; font-weight: 400; justify-content: space-between; white-space: normal; text-align: left; height: auto; }
+  .species-select-row .species-select-button:hover { background: #f4f7f0; }
+  .species-select-button>svg:first-child,.species-picker-desktop-label { display: none; }
+  .species-picker-mobile-label { display: block; overflow-wrap: anywhere; }
+  .species-picker-chevron { display: block; flex-shrink: 0; }
+  .species-manual-toggle { display: inline-flex; align-self: flex-start; min-height: 2.75rem; padding: .35rem 0; font-size: 1.0625rem; color: #205844; text-decoration: underline; text-underline-offset: .25em; }
+  .species-select-row.is-manual+.species-manual-toggle { display: none; }
+  .quantity-stepper { grid-template-columns: 3.5rem minmax(0,1fr) 3.5rem auto; gap: 0; }
+  .quantity-stepper .quantity-step-button { min-height: 3.5rem; border: 1px solid #8a9b8d; border-radius: .65rem 0 0 .65rem; background: #f3f6ef; color: #205844; }
+  .quantity-stepper .quantity-step-button:nth-of-type(2) { border-radius: 0 .65rem .65rem 0; }
+  .quantity-stepper .quantity-step-button:hover { background: #e4ecdf; }
+  .quantity-stepper .quantity-step-button:disabled { background: #f2f4f0; color: #647567; opacity: 1; }
+  .quantity-stepper .quantity-value { border-inline: 0; border-radius: 0; border-color: #8a9b8d; min-height: 3.5rem; }
+  .quantity-unit { padding-left: .45rem; }
+  .quantity-extra-help { display: none; }
+  .spec-field { margin-top: 1rem; }
+  .quote-form .field-help { font-size: 1rem; line-height: 1.6; }
+  .quote-form .add-line { width: 100%; min-height: 3.25rem; margin-top: 1rem; border-style: solid; background: #fff; color: #205844; font-size: 1.125rem; }
+}
