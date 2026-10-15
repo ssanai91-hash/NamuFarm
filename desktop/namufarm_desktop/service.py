@@ -44,6 +44,23 @@ class Manager:
     def request_copy_path(self):
         return self.vault.path.with_name("나무팜-견적요청.xlsx")
 
+    def connect(self):
+        """Enroll this PC with the configured server without asking for a key or file."""
+        if self.credentials.get("paired") is True:
+            return self.sync()
+        self.verify_server()
+        result = self.api.call("connect_app", authMode="auto-v1", label="나무팜 PC")
+        require(result.get("paired") is True and result.get("authMode") == "auto-v1",
+                "구글시트 서버에 자동 연결 기능을 배포해주세요.")
+        credentials = {**self.credentials, "paired": True, "url": self.api.url}
+        credentials.pop("connectionKey", None)
+        credentials.pop("connectionKeyUrl", None)
+        credentials.pop("authMode", None)
+        self.vault.save_credentials(credentials)
+        self.credentials = credentials
+        self.api.connection_key = ""
+        return self.sync()
+
     def connect_key(self, password, url=None, api_factory=ScriptApi):
         from .connection import connection_input
         url, key = connection_input(self.api.url if url is None else url, password)

@@ -134,10 +134,7 @@ class MainActivity : ComponentActivity() {
                             viewModel = viewModel,
                             onNavigateToManagement = { navController.navigate("management") },
                             onCallAssist = { showCallAssist = true },
-                            onWebInbox = {
-                                if (webState.paired) webInbox.refresh()
-                                else { connectionOnly = true; showWebInbox = true }
-                            },
+                            onWebInbox = { webInbox.refresh() },
                             onWebSettings = { connectionOnly = true; showWebInbox = true },
                             webRequests = webState.requests, webBusy = webState.busy,
                             onRequest = { request -> if (!uiState.isSavingQuote) { viewModel.useWebRequestForQuote(request); webInbox.read(request.requestId) } },
@@ -167,7 +164,7 @@ class MainActivity : ComponentActivity() {
                 if (showWebInbox || webRequestId != null) {
                     WebQuoteInboxDialog(webState, webRequestId, uiState.customerPhone, uiState.estimateCart.size,
                         onRefresh = webInbox::refresh, onRead = webInbox::read,
-                        onRestore=webInbox::restore,onClose=webInbox::close,onConnectKey=webInbox::connectKey,
+                        onRestore=webInbox::restore,onClose=webInbox::close,onConnect=webInbox::connect,
                         onConfirm = { id ->
                             webState.requests.firstOrNull { it.requestId == id }?.let { request ->
                                 if (!uiState.isSavingQuote) {

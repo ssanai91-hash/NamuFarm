@@ -67,11 +67,11 @@ object WebQuoteValidator {
     fun validId(value: String) = uuid.matches(value)
     fun checkResponse(response: WebQuoteEnvelope) {
         check(response.ok == true) { when (response.code) {
-            "UNAUTHORIZED" -> "연결을 확인할 수 없어요. 공통 연결 암호를 다시 확인해주세요."
+            "UNAUTHORIZED" -> "서버 연결이 유효하지 않습니다. 서버 연결을 다시 시도해주세요."
             "CONFLICT" -> "다른 기기에서 변경한 기록이 있습니다. 동기화 후 다시 확인해주세요."
             "UPGRADE_REQUIRED", "INVALID_ACTION" -> "앱과 구글시트 서버를 최신 버전으로 업데이트해주세요."
             "NOT_READY" -> "구글시트 서버 준비가 필요합니다. 서버 배포와 시트 설정을 확인해주세요."
-            "DEVICE_LIMIT" -> "이전 서버의 기기 등록 한도가 찼습니다. 공통 연결키를 지원하는 서버로 배포를 업데이트해주세요."
+            "DEVICE_LIMIT" -> "등록 가능한 기기 수가 찼습니다. 서버 관리자에게 등록 기기 정리를 요청해주세요."
             "BUSY" -> "서버가 다른 요청을 처리 중입니다. 잠시 후 다시 동기화해주세요."
             "INVALID" -> "요청 형식이 맞지 않습니다. 앱과 서버 버전을 확인해주세요."
             else -> "서버 응답을 확인하지 못했어요. 저장된 기록을 유지하며 다시 시도할 수 있습니다."

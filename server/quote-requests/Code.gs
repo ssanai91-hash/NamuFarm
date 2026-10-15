@@ -220,8 +220,13 @@ function pairDevice_(body) {
 }
 function authenticateDevice_(token) {
   assert_(typeof token === 'string' && /^[a-f0-9]{64}$/.test(token), 'UNAUTHORIZED');
-  const hash = hash_(token); const devices = JSON.parse(PropertiesService.getScriptProperties().getProperty('DEVICES') || '{}');
-  assert_(devices[hash], 'UNAUTHORIZED'); return hash;
+  const hash = hash_(token); const props = PropertiesService.getScriptProperties();
+  const devices = JSON.parse(props.getProperty('DEVICES') || '{}');
+  if (devices[hash]) return hash;
+  // Auto-connected devices are independent of the legacy 10-device registry.
+  const autoDevices = JSON.parse(props.getProperty('AUTO_DEVICES') || '{}');
+  assert_(autoDevices[hash], 'UNAUTHORIZED');
+  return null; // Use the existing bounded FCM subscription flow.
 }
 // A supplied common key must validate; never fall back to a legacy token on failure.
 function authenticateApp_(body) {
@@ -254,6 +259,21 @@ function createAppConnectionFile() {
   return url;
 }
 function connectApp_(body) {
+  if (body.authMode === 'auto-v1') {
+    // User-chosen zero-input enrollment. Anyone knowing this endpoint can enroll.
+    assert_(typeof body.deviceToken === 'string' && /^[a-f0-9]{64}$/.test(body.deviceToken), 'UNAUTHORIZED');
+    return lock_(() => {
+      const props = PropertiesService.getScriptProperties();
+      const devices = JSON.parse(props.getProperty('AUTO_DEVICES') || '{}');
+      const id = hash_(body.deviceToken);
+      if (!devices[id]) {
+        assert_(Object.keys(devices).length < 32, 'DEVICE_LIMIT');
+        devices[id] = new Date().toISOString();
+        props.setProperty('AUTO_DEVICES', JSON.stringify(devices));
+      }
+      return {paired:true, authMode:'auto-v1'};
+    });
+  }
   if (body.authMode === 'shared-key-v1') {
     authenticateConnectionKey_(body.connectionKey);
     return {paired:true, authMode:'shared-key-v1'}; // No registry writes or device limit.
@@ -372,9 +392,15 @@ function dispatchNotifications_(onlyId) {
 /** Owner-only maintenance: pass a device hash from Script Properties, never a customer number. */
 function revokeDevice(deviceHash) {
   lock_(() => {
-    const props = PropertiesService.getScriptProperties(); const devices = JSON.parse(props.getProperty('DEVICES') || '{}');
-    assert_(typeof deviceHash === 'string' && devices[deviceHash], 'INVALID');
-    delete devices[deviceHash]; props.setProperty('DEVICES', JSON.stringify(devices));
+    const props = PropertiesService.getScriptProperties();
+    const devices = JSON.parse(props.getProperty('DEVICES') || '{}');
+    const autoDevices = JSON.parse(props.getProperty('AUTO_DEVICES') || '{}');
+    assert_(typeof deviceHash === 'string' && (devices[deviceHash] || autoDevices[deviceHash]), 'INVALID');
+    if (devices[deviceHash]) {
+      delete devices[deviceHash]; props.setProperty('DEVICES', JSON.stringify(devices));
+    } else {
+      delete autoDevices[deviceHash]; props.setProperty('AUTO_DEVICES', JSON.stringify(autoDevices));
+    }
   });
 }
 

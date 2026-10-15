@@ -19,6 +19,22 @@ class WebRequestConnection(context: Context, private val repository: NamuFarmRep
     fun localRequests() = repository.getWebRequests()
     val deferredCount get() = repository.deferredWebRequestCount()
     suspend fun read(id: String) = repository.markWebRequestRead(id)
+    /** No file or password: new devices enroll on first manual sync or server connect. */
+    suspend fun connect() {
+        if (settings.paired) return
+        check(settings.configured) { "나무팜 서버 주소를 확인해주세요." }
+        val response = WebQuoteTransport.api.request(settings.url, mapOf(
+            "action" to "connect_app", "authMode" to "auto-v1",
+            "deviceToken" to settings.prepareToken(), "label" to "나무팜 Android"
+        ))
+        WebQuoteValidator.checkResponse(response)
+        check(response.paired == true && response.authMode == "auto-v1") {
+            "구글시트 서버에 자동 연결 기능을 배포해주세요."
+        }
+        settings.markPaired()
+        WebRequestPush.initialize(app)
+        PushRegistrationWorker.enqueue(app)
+    }
     suspend fun connectKey(key: String, url: String) {
         val profile = AppConnectionInput.fromInput(url, key)
         check(profile.url == settings.url || (!settings.paired && localRequests().isEmpty() && deferredCount == 0
@@ -48,6 +64,7 @@ class WebRequestConnection(context: Context, private val repository: NamuFarmRep
         PushRegistrationWorker.enqueue(app)
     }
     suspend fun refresh(): Int {
+        if (!paired) connect()
         check(configured && paired) { "홈페이지 요청함을 먼저 연결해주세요." }
         PushRegistrationWorker.enqueue(app)
         return repository.syncWebSnapshot(api, settings.url, settings.deviceToken, ::readRequest)

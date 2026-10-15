@@ -18,7 +18,6 @@ from .crypto import SellerKey
 from .domain import EDITABLE, NEXT, SEOUL, STATES, MAX_SAFE, profit, require
 from .errors import ConflictError, UserError
 from .service import Manager
-from .connection import connection_input, valid_connection_key
 from .store import Vault
 
 
@@ -293,21 +292,19 @@ class MainWindow(QMainWindow):
         self.message.setText(
             "READY  >  연결 정보 복원됨 · ‘서버 동기화’를 눌러 최신 견적요청을 가져오세요."
             if data["paired"] else
-            "공통 연결 암호를 한 번 입력하면 다음 실행부터 자동으로 연결됩니다."
+            "서버 연결 또는 지금 동기화를 누르면 암호 없이 연결됩니다."
         )
 
     def update_controls(self):
         ready = self.manager is not None and self.task is None
         paired = ready and self.data["paired"]
         self.tabs.setEnabled(self.task is None)
-        self.sync_button.setEnabled(paired)
+        self.sync_button.setEnabled(ready)
         self.open_button.setEnabled(self.manager is None and self.task is None)
         self.legacy_button.setEnabled(ready and self.data["paired"])
-        valid_password = valid_connection_key(self.connection_password.text())
-        self.connect_key_button.setEnabled(ready and valid_password)
+        self.connect_button.setEnabled(ready)
         self.copy_button.setEnabled(ready)
         self.url.setEnabled(ready and not self.data["paired"])
-        self.connection_password.setEnabled(ready)
         pending = bool(self.data["pending"])
         self.delete_button.setEnabled(paired and not pending and self.request_table.currentRow() >= 0)
         editable = paired and not pending and self.selected_sale is not None and self.selected_sale["metadata"]["status"] not in ("배송완료", "구매취소", "판매완료", "주문취소")
@@ -318,7 +315,7 @@ class MainWindow(QMainWindow):
         self.report_button.setEnabled(paired)
         self.resolve_button.setEnabled(paired and pending and self.conflict)
         self.summary.setText(f"문의 {len(self.data['requests'])}건 · 판매 {len(self.data['sales'])}건 · 전송 대기 {len(self.data['pending'])}건" if self.manager else "PC 자료 준비 중")
-        self.connection_status.setText("연결 정보 자동 복원됨" if self.data["paired"] else "연결 암호 입력 필요")
+        self.connection_status.setText("서버 연결됨" if self.data["paired"] else "서버 연결 필요")
         self.pending_status.setText("전송 대기는 암호화해 보관합니다. '지금 동기화'로 재시도하세요." if pending else "전송 대기 없음")
 
     def allow_discard(self):
@@ -328,7 +325,8 @@ class MainWindow(QMainWindow):
 
     def manual_sync(self):
         if self.manager and self.allow_discard():
-            self.run_job("SYNC  >  구글시트 서버 동기화 중…", self.manager.sync)
+            self.run_job("SYNC  >  구글시트 서버 동기화 중…",
+                         self.manager.sync if self.data["paired"] else self.manager.connect)
 
     def auto_sync(self):
         if self.manager and self.data["paired"] and self.auto_check.isChecked() and not self.task and not self.dirty and not self.conflict:
@@ -630,19 +628,11 @@ class MainWindow(QMainWindow):
         self.open_button = QPushButton("PC 자료 다시 열기")
         self.open_button.clicked.connect(self.open_vault)
         layout.addWidget(self.open_button)
-        self.connection_status = QLabel("연결 암호 입력 필요")
+        self.connection_status = QLabel("서버 연결 필요")
         layout.addWidget(self.connection_status)
-        password_form = QFormLayout()
-        self.connection_password = QLineEdit()
-        self.connection_password.setEchoMode(QLineEdit.EchoMode.Password)
-        self.connection_password.setMaxLength(128)
-        self.connection_password.setPlaceholderText("현재 공통 연결키 64자리를 입력하거나 붙여넣어주세요")
-        password_form.addRow("공통 연결 암호", self.connection_password)
-        layout.addLayout(password_form)
-        self.connect_key_button = QPushButton("암호로 연결하기 (최초 1회)")
-        self.connect_key_button.clicked.connect(self.connect_key)
-        self.connection_password.textChanged.connect(lambda: self.update_controls())
-        layout.addWidget(self.connect_key_button)
+        self.connect_button = QPushButton("서버 연결")
+        self.connect_button.clicked.connect(self.connect_server)
+        layout.addWidget(self.connect_button)
         self.copy_button = QPushButton("로컬 엑셀 사본 열기")
         self.copy_button.clicked.connect(self.open_request_copy)
         layout.addWidget(self.copy_button)
@@ -668,27 +658,21 @@ class MainWindow(QMainWindow):
         self.legacy_button = QPushButton("이전 자료 복원 (필요한 경우)")
         self.legacy_button.clicked.connect(self.restore_legacy)
         layout.addWidget(self.legacy_button)
-        note = QLabel("PC와 휴대폰에서 같은 공통 연결 암호를 사용합니다. 암호는 최초 한 번만 입력하고 다음 실행부터 자동 연결합니다. 기존에 저장한 연결 정보도 계속 사용합니다.\n연결 정보는 Windows 계정으로 보호해 저장합니다.\n‘지금 동기화’를 누르면 Google Sheet의 최신 견적요청을 내려받고 로컬 조회용 엑셀 사본도 함께 갱신합니다.\n로컬 엑셀 사본은 조회용이며 직접 수정한 내용은 서버에 올리지 않습니다.\n엑셀 사본 위치: " + str(self.vault_path.with_name("나무팜-견적요청.xlsx")))
+        note = QLabel("‘서버 연결’이나 ‘지금 동기화’만 누르면 암호·연결파일 없이 서버 자료를 가져옵니다. 기존 연결 정보도 유지합니다.\n연결 정보는 Windows 계정으로 보호해 저장합니다.\n로컬 엑셀 사본은 조회용이며 직접 수정한 내용은 서버에 올리지 않습니다.\n엑셀 사본 위치: " + str(self.vault_path.with_name("나무팜-견적요청.xlsx")))
         note.setWordWrap(True)
         note.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         layout.addWidget(note)
         layout.addStretch()
         self.tabs.addTab(page, "연결·설정")
 
-    def connect_key(self):
-        try:
-            url, password = connection_input(self.url.text(), self.connection_password.text())
-        except UserError as error:
-            QMessageBox.warning(self, "연결 암호 확인", str(error))
+    def connect_server(self):
+        if not self.manager:
             return
-        self.connection_password.clear()
-        def work():
-            return self.manager.connect_key(password, url)
         def connected(value):
             self.url.setText(self.manager.api.url)
             self.apply_view(value)
             self.message.setText("연결과 동기화를 마쳤습니다. 저장된 자료는 오프라인에서도 볼 수 있습니다.")
-        self.run_job("연결 암호 확인하고 자료 가져오는 중…", work, connected)
+        self.run_job("서버 연결 및 동기화 중…", self.manager.connect, connected)
 
     def open_request_copy(self):
         def opened(value):

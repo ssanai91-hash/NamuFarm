@@ -45,6 +45,13 @@ class WebInboxViewModel(private val connection: WebRequestConnection) : ViewMode
                 else inboxRefreshMessage(count, it.deferredCount))
         }
     }
+    fun connect() = operate {
+        connection.connect()
+        reloadLocal()
+        connection.refresh()
+        reloadLocal()
+        showMessage("서버 연결과 동기화를 마쳤어요.")
+    }
     fun connectKey(key: String, url: String) = operate {
         connection.connectKey(key, url)
         reloadLocal()

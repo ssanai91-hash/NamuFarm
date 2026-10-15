@@ -43,7 +43,7 @@ android {
 
     defaultConfig {
         listOf("WEB_REQUEST_SCRIPT_URL", "FIREBASE_APPLICATION_ID", "FIREBASE_API_KEY", "FIREBASE_PROJECT_ID", "FIREBASE_SENDER_ID").forEach { name ->
-            buildConfigField("String", name, "\"${localProperty(name, if(name=="WEB_REQUEST_SCRIPT_URL") "https://script.google.com/macros/s/AKfycbzY7JKzXYmS9APLNFDt15k8dv09zb4EXKFHOOv_T1vpFmkr6TLwbqGznGLgpd2cIVgD/exec" else "")}\"")
+            buildConfigField("String", name, "\"${localProperty(name, if(name=="WEB_REQUEST_SCRIPT_URL") "https://script.google.com/macros/s/AKfycbw4GnfIlXyjMo9TPZmCmRnmIIzd016piTDma-xrh7w/exec" else "")}\"")
         }
 
         applicationId = "com.example.namufarm"

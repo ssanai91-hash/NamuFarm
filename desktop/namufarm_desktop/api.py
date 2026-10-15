@@ -75,9 +75,9 @@ class ScriptApi:
                 code = result.get("code") if isinstance(result, dict) else None
                 if code == "CONFLICT":
                     raise ConflictError("앱이나 다른 PC에서 먼저 수정했습니다. 전송 대기를 확인해주세요.")
-                messages = {"UNAUTHORIZED": "공통 연결 암호를 다시 확인해주세요.",
+                messages = {"UNAUTHORIZED": "기기 연결을 확인하지 못했습니다. 서버 연결을 다시 시도해주세요.",
                             "NOT_READY": "구글시트 서버 설정과 배포 버전을 확인해주세요.",
-                            "DEVICE_LIMIT": "이전 서버의 기기 등록 한도가 찼습니다. 공통 연결키를 지원하는 서버로 배포를 업데이트해주세요.",
+                            "DEVICE_LIMIT": "서버 기기 등록 한도에 도달했습니다. 서버 관리자에게 문의해주세요.",
                             "UPGRADE_REQUIRED": "앱과 구글시트 서버를 최신 버전으로 업데이트해주세요.",
                             "INVALID_ACTION": "현재 연결된 Apps Script /exec 배포가 이전 버전입니다. 기존 웹앱을 새 버전으로 다시 배포해주세요.",
                             "UNAVAILABLE": "Apps Script 실행 중 오류가 발생했습니다. Apps Script의 실행 기록에서 실패 원인을 확인해주세요.",
