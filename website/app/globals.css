@@ -1801,18 +1801,32 @@ section {
 /* Compact seedling entry: existing names can be picked without typing. */
 .species-select-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) 7.4rem;
+  align-items: stretch;
   gap: .5rem;
 }
+.species-select-row > input {
+  width: 100%;
+  min-width: 0;
+}
 .species-select-row .species-select-button {
+  width: 100%;
+  min-width: 0;
   min-height: 3.5rem;
-  min-width: 7rem;
-  padding: .6rem .75rem;
+  padding: .55rem .5rem;
   border-radius: .65rem;
   background: #205844;
   color: #fff;
   font-size: 1rem;
   font-weight: 700;
+  white-space: nowrap;
+  gap: .25rem;
+}
+.species-select-button .species-picker-chevron {
+  display: block;
+  width: 1.1rem;
+  height: 1.1rem;
+  flex-shrink: 0;
 }
 .species-select-row .species-select-button:hover,
 .quantity-stepper .quantity-step-button:hover { background: #164632; }
@@ -2345,10 +2359,7 @@ body { background:#fafbf7; }
 }
 
 /* Selected mobile quote design: short guidance, then the actual fields. */
-.quote-mobile-intro,
-.species-picker-mobile-label,
-.species-picker-chevron,
-.species-manual-toggle { display: none; }
+.quote-mobile-intro { display: none; }
 @media(max-width:48rem) {
   .quote-section { padding: 0 0 2rem; background: #fff; }
   .quote-layout.wrap { width: 100%; gap: 0; }
@@ -2381,16 +2392,23 @@ body { background:#fafbf7; }
   .field { gap: .45rem; }
   .field label { font-size: 1.125rem; }
   .field input,.field textarea { min-height: 3.5rem; font-size: 1.125rem; }
-  .species-select-row { grid-template-columns: minmax(0,1fr); gap: .6rem; }
-  .species-select-row>input { display: none; }
-  .species-select-row.is-manual>input { display: block; grid-row: 2; }
-  .species-select-row .species-select-button { width: 100%; min-width: 0; min-height: 3.5rem; padding: .65rem .85rem; border: 1px solid #8a9b8d; background: #fff; color: #31483b; font-size: 1.125rem; font-weight: 400; justify-content: space-between; white-space: normal; text-align: left; height: auto; }
-  .species-select-row .species-select-button:hover { background: #f4f7f0; }
-  .species-select-button>svg:first-child,.species-picker-desktop-label { display: none; }
-  .species-picker-mobile-label { display: block; overflow-wrap: anywhere; }
-  .species-picker-chevron { display: block; flex-shrink: 0; }
-  .species-manual-toggle { display: inline-flex; align-self: flex-start; min-height: 2.75rem; padding: .35rem 0; font-size: 1.0625rem; color: #205844; text-decoration: underline; text-underline-offset: .25em; }
-  .species-select-row.is-manual+.species-manual-toggle { display: none; }
+  .species-select-row { grid-template-columns: minmax(0,1fr) 6.8rem; gap: .5rem; }
+  .species-select-row>input { display: block; min-width: 0; }
+  .species-select-row .species-select-button {
+    width: 100%;
+    min-width: 0;
+    min-height: 3.5rem;
+    height: 3.5rem;
+    padding: .5rem .4rem;
+    border: 1px solid #8a9b8d;
+    background: #eaf2e6;
+    color: #205844;
+    font-size: 1rem;
+    font-weight: 700;
+    justify-content: center;
+    white-space: nowrap;
+  }
+  .species-select-row .species-select-button:hover { background: #dcebdd; }
   .quantity-stepper { grid-template-columns: 3.5rem minmax(0,1fr) 3.5rem auto; gap: 0; }
   .quantity-stepper .quantity-step-button { min-height: 3.5rem; border: 1px solid #8a9b8d; border-radius: .65rem 0 0 .65rem; background: #f3f6ef; color: #205844; }
   .quantity-stepper .quantity-step-button:nth-of-type(2) { border-radius: 0 .65rem .65rem 0; }
@@ -2398,7 +2416,6 @@ body { background:#fafbf7; }
   .quantity-stepper .quantity-step-button:disabled { background: #f2f4f0; color: #647567; opacity: 1; }
   .quantity-stepper .quantity-value { border-inline: 0; border-radius: 0; border-color: #8a9b8d; min-height: 3.5rem; }
   .quantity-unit { padding-left: .45rem; }
-  .quantity-extra-help { display: none; }
   .spec-field { margin-top: 1rem; }
   .quote-form .field-help { font-size: 1rem; line-height: 1.6; }
   .quote-form .add-line { width: 100%; min-height: 3.25rem; margin-top: 1rem; border-style: solid; background: #fff; color: #205844; font-size: 1.125rem; }

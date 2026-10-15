@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Sprout, Plus, Minus, Search, Trash2, FileText, CheckCheck, MessageCircle, ShieldCheck, LoaderCircle, CircleCheck, X, Copy, Phone, ChevronDown } from "lucide-react";
+import { Sprout, Plus, Minus, Trash2, FileText, CheckCheck, MessageCircle, ShieldCheck, LoaderCircle, CircleCheck, X, Copy, Phone, ChevronDown } from "lucide-react";
 import SpeciesBrowser from "@/components/species-browser";
 import SpeciesPickerDialog from "@/components/species-picker-dialog";
 import { Button } from "@/components/ui/button";
@@ -22,7 +22,6 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
   const [lines, setLines] = useState<Line[]>([emptyLine(0)]);
   const nextLine = useRef(1);
   const [pickerLineId, setPickerLineId] = useState<number | null>(null);
-  const [manualLineIds, setManualLineIds] = useState<Set<number>>(() => new Set());
   const [name, setName] = useState(""); const [phone, setPhone] = useState("");
   const [region, setRegion] = useState(""); const [message, setMessage] = useState("");
   const [email, setEmail] = useState(""); const [formalQuote, setFormalQuote] = useState(false);
@@ -115,10 +114,6 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
 
   const clearProblem = (id: string) => setProblems(old => old.filter(problem => problem.id !== id));
   function focusField(id: string) {
-    if (id.startsWith("species-")) {
-      const lineId = Number(id.slice("species-".length));
-      setManualLineIds(old => new Set(old).add(lineId));
-    }
     requestAnimationFrame(() => document.getElementById(id)?.focus());
   }
   const updateLine = (id: number, key: keyof Omit<Line, "id">, value: string) => {
@@ -271,7 +266,7 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
         <div className="quote-mobile-intro">
           <h2 id="quote-mobile-title">묘목 견적 상담</h2>
           <p>묘목과 수량을 알려주세요.</p>
-          <details className="quote-writing-guide"><summary>작성 안내 보기 <ChevronDown aria-hidden="true" /></summary><div><p>수량은 주 단위로 적어주세요. 1주는 나무 1그루입니다.</p><p>규격을 모르면 비워두세요. 상담하면서 확인합니다.</p><a href="#trees">묘목 더 찾아보기</a></div></details>
+          <details className="quote-writing-guide"><summary>작성 안내 보기 <ChevronDown aria-hidden="true" /></summary><div><p>수량은 주 단위로 적어주세요.</p><p>규격을 모르면 비워두세요. 상담하면서 확인합니다.</p><a href="#trees">묘목 더 찾아보기</a></div></details>
           <div className="quote-mobile-promise"><ShieldCheck aria-hidden="true" /><p>견적 요청만으로 <strong>주문이 확정되지 않아요.</strong></p></div>
         </div>
         <aside className="quote-intro"><span className="overline">묘목 견적 상담</span><h2 id="quote-title">필요한 만큼,<br />함께 알아볼게요.</h2><p>수량은 <strong>주 단위</strong>로 적어주세요.<br />규격을 몰라도 괜찮습니다.</p><div className="intro-promise"><ShieldCheck /><p>견적 요청만으로<br /><strong>주문이나 결제가 확정되지 않아요.</strong></p></div><a href="#trees" className="back-to-trees">묘목 더 찾아보기</a></aside>
@@ -294,13 +289,12 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
               <div className="item-fields">
                 <div className="field species-field">
                   <Label htmlFor={"species-" + line.id} onClick={() => { if (!locked) focusField("species-" + line.id); }}>묘목 이름 <small>필수</small></Label>
-                  <div className={`species-select-row ${manualLineIds.has(line.id) ? "is-manual" : ""}`}>
-                    <Input id={"species-" + line.id} required maxLength={80} placeholder="예: 감나무" value={line.species} onChange={e => updateLine(line.id, "species", e.target.value)} {...fieldAttrs("species-" + line.id)} />
-                    <Button id={"choose-species-" + line.id} type="button" className="species-select-button" aria-haspopup="dialog" aria-label={"품목 " + (index + 1) + " 묘목 선택"} onClick={() => setPickerLineId(line.id)}>
-                      <Search aria-hidden="true" /><span className="species-picker-desktop-label">묘목 선택</span><span className="species-picker-mobile-label">{line.species || "묘목을 선택해주세요"}</span><ChevronDown className="species-picker-chevron" aria-hidden="true" />
+                  <div className="species-select-row">
+                    <Input id={"species-" + line.id} required maxLength={80} placeholder="묘목 이름 직접 입력" value={line.species} onChange={e => updateLine(line.id, "species", e.target.value)} {...fieldAttrs("species-" + line.id)} />
+                    <Button id={"choose-species-" + line.id} type="button" className="species-select-button" aria-haspopup="dialog" aria-label={"품목 " + (index + 1) + " 초성으로 묘목 선택"} onClick={() => setPickerLineId(line.id)}>
+                      <span>초성 선택</span><ChevronDown className="species-picker-chevron" aria-hidden="true" />
                     </Button>
                   </div>
-                  <Button type="button" variant="link" className="species-manual-toggle" aria-expanded={manualLineIds.has(line.id)} aria-controls={"species-" + line.id} onClick={() => focusField("species-" + line.id)}>이름 직접 입력</Button>
                   {fieldError("species-" + line.id)}
                 </div>
                 <div className="field quantity-field">
@@ -309,17 +303,16 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
                     <Button type="button" className="quantity-step-button" aria-label={"품목 " + (index + 1) + " 수량 줄이기"} disabled={!line.quantity || Number(line.quantity) <= 1} onClick={() => stepQuantity(line.id, -1)}>
                       <Minus className="size-5" aria-hidden="true" />
                     </Button>
-                    <Input id={"quantity-" + line.id} className="quantity-value" required inputMode="numeric" type="number" min="1" max="1000000" step="1" placeholder="예: 100" value={line.quantity} onChange={e => updateLine(line.id, "quantity", e.target.value)} {...fieldAttrs("quantity-" + line.id, "quantity-help-" + line.id)} />
+                    <Input id={"quantity-" + line.id} className="quantity-value" required inputMode="numeric" type="number" min="1" max="1000000" step="1" placeholder="예: 100" value={line.quantity} onChange={e => updateLine(line.id, "quantity", e.target.value)} {...fieldAttrs("quantity-" + line.id)} />
                     <Button type="button" className="quantity-step-button" aria-label={"품목 " + (index + 1) + " 수량 늘리기"} disabled={Number(line.quantity) >= 1000000} onClick={() => stepQuantity(line.id, 1)}>
                       <Plus className="size-5" aria-hidden="true" />
                     </Button>
                     <span className="quantity-unit">주</span>
                   </div>
-                  <p id={"quantity-help-" + line.id} className="field-help">1주는 나무 1그루입니다.<span className="quantity-extra-help"> 숫자를 직접 입력해도 돼요.</span></p>
                   {fieldError("quantity-" + line.id)}
                 </div>
-              </div><div className="field spec-field"><Label htmlFor={`spec-${line.id}`}>희망 규격 <small>선택</small></Label><Input id={`spec-${line.id}`} maxLength={120} placeholder="예: 2년생, 키 1m" value={line.specification} onChange={e => updateLine(line.id, "specification", e.target.value)} {...fieldAttrs(`spec-${line.id}`, `spec-help-${line.id}`)} /><p id={`spec-help-${line.id}`} className="field-help">모르면 비워두세요. 상담하면서 확인합니다.</p>{fieldError(`spec-${line.id}`)}</div>
-            </div>)}</div><Button className="add-line" type="button" variant="outline" disabled={lines.length >= 20} onClick={() => { const id = nextLine.current++; setLines(old => [...old, emptyLine(id)]); setNotice(""); focusField(`species-${id}`); }}><Plus />다른 묘목 추가</Button><p className="field-help">한 번에 20종까지 요청할 수 있어요.</p></fieldset>
+              </div><div className="field spec-field"><Label htmlFor={`spec-${line.id}`}>희망 규격 <small>선택</small></Label><Input id={`spec-${line.id}`} maxLength={120} placeholder="예: 2년생, 키 1m" value={line.specification} onChange={e => updateLine(line.id, "specification", e.target.value)} {...fieldAttrs(`spec-${line.id}`)} />{fieldError(`spec-${line.id}`)}</div>
+            </div>)}</div><Button className="add-line" type="button" variant="outline" disabled={lines.length >= 20} onClick={() => { const id = nextLine.current++; setLines(old => [...old, emptyLine(id)]); setNotice(""); focusField(`species-${id}`); }}><Plus />다른 묘목 추가</Button></fieldset>
             <fieldset className="quote-section-box" disabled={locked}><legend><span>2</span>상담받을 분 · 연락처</legend><div className="contact-grid">
               <div className="field"><Label htmlFor="name">성함 <small>필수</small></Label><Input id="name" autoComplete="name" required minLength={2} maxLength={50} placeholder="성함을 적어주세요" value={name} onChange={e => { setName(e.target.value); clearProblem("name"); }} {...fieldAttrs("name")} />{fieldError("name")}</div>
               <div className="field"><Label htmlFor="phone">전화번호 <small>필수</small></Label><Input id="phone" type="tel" autoComplete="tel" inputMode="tel" required maxLength={20} placeholder="010-1234-5678" value={phone} onChange={e => { setPhone(e.target.value); clearProblem("phone"); }} {...fieldAttrs("phone")} />{fieldError("phone")}</div>
