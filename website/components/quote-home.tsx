@@ -13,7 +13,7 @@ import { businessInfo } from "@/lib/business-info";
 import { testNotice, testRequestMessage } from "@/lib/quote-test";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { quoteItemSchema, quoteSchema, requestFingerprint, newRequestId, type QuoteRequest } from "@/lib/quote-schema";
+import { quoteItemSchema, quoteSchema, normalizeQuotePhone, requestFingerprint, newRequestId, type QuoteRequest } from "@/lib/quote-schema";
 import { validatedQuoteReceipt, receiptTimeSeoul, type QuoteReceipt } from "@/lib/quote-receipt";
 import { retainPendingReceipt } from "@/lib/quote-upstream";
 import { toggleCatalogLine, emptyLine, isEmptyLine, quoteFieldProblems, type FieldProblem, type RemovedQuoteLine, type QuoteLine as Line } from "@/lib/quote-form";
@@ -183,7 +183,7 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
   function prepare(event: FormEvent) {
     event.preventDefault(); if (locked) return; setError(""); setProblems([]); setConflict(false);
     if (testMode && !testAcknowledged) { setTestNoticeOpen(true); return; }
-    const candidate = { requestId: newRequestId(), customerName: name, customerPhone: phone, region, items: lines.map(({ species, specification, quantity }) => ({ species, specification, quantity: Number(quantity) })), message: testMode ? testRequestMessage(message) : message, processingBasis: "quote_request", website, customerEmail: formalQuote && replyChannel !== "sms" ? email : "", formalQuoteRequested: formalQuote, recipientName: formalQuote ? recipient : "", replyChannel: formalQuote ? replyChannel : "sms" };
+    const candidate = { requestId: newRequestId(), customerName: name, customerPhone: normalizeQuotePhone(phone), region, items: lines.map(({ species, specification, quantity }) => ({ species, specification, quantity: Number(quantity) })), message: testMode ? testRequestMessage(message) : message, processingBasis: "quote_request", website, customerEmail: formalQuote && replyChannel !== "sms" ? email : "", formalQuoteRequested: formalQuote, recipientName: formalQuote ? recipient : "", replyChannel: formalQuote ? replyChannel : "sms" };
     const parsed = quoteSchema.safeParse(candidate);
     if (!parsed.success) {
       const fields = quoteFieldProblems(parsed.error.issues, lines);

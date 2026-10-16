@@ -32,13 +32,12 @@ export default function SpeciesBrowser({ lines, onSelect, onRemove, notice, lock
         <div className="initial-filter" role="group" aria-label="첫 글자로 묘목 찾기">{(["all", ...catalogInitials] as const).map(value => <Button type="button" variant="ghost" key={value} className="initial-button" aria-pressed={initial === value} onClick={() => chooseInitial(value)}>{value === "all" ? "전체" : value}</Button>)}</div>
         <p className="catalog-filter-summary" role="status" aria-live="polite" aria-atomic="true">{query.trim() ? `“${query.trim()}” 검색 결과입니다.` : initial === "all" ? "전체 묘목을 보고 있어요." : `${initial}으로 시작하는 묘목을 보고 있어요.`}</p>
       </div>
-      <p id="catalog-illustration-note" className="catalog-note">그림은 종류를 알아보기 위한 참고용입니다.<br />실제 묘목 상태는 상담할 때 확인해 드립니다.<br />그림이 없는 품목도 견적을 요청할 수 있어요.</p>
       <p className="catalog-results-heading">여러 품목을 함께 담으세요</p>
       <p className="catalog-live" role="status" aria-live="polite" aria-atomic="true">{notice || "카드를 누르면 담기고, 다시 누르면 빠져요."}</p>
       <div className="catalog-grid">{matches.slice(0, visibleCount).map((species, index) => {
         const isSelected = selected.has(species.name);
         const variant = species.name.match(/^(.+?)\(([^)]+)\)$/);
-        return <button type="button" key={species.id} data-species-id={species.id} className={`catalog-card${isSelected ? " selected" : ""}`} disabled={locked} onClick={() => onSelect(species.name)} aria-label={`${species.name}, ${isSelected ? "견적에 담았어요. 다시 누르면 빼기" : "견적에 담기"}`} aria-pressed={isSelected} aria-describedby="catalog-illustration-note">
+        return <button type="button" key={species.id} data-species-id={species.id} className={`catalog-card${isSelected ? " selected" : ""}`} disabled={locked} onClick={() => onSelect(species.name)} aria-label={`${species.name}, ${isSelected ? "견적에 담았어요. 다시 누르면 빼기" : "견적에 담기"}`} aria-pressed={isSelected}>
           <PlantImage id={species.id} eager={index < 6} /><span className="catalog-card-name">{variant ? <>{variant[1]}<strong className="catalog-variant">{variant[2]}</strong></> : species.name}</span><span className="catalog-card-caption">{isSelected && <Check aria-hidden="true" />}<span>{isSelected ? "담김 · 빼기" : "견적에 담기"}</span></span>
         </button>;
       })}</div>
