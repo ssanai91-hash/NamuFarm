@@ -19,6 +19,7 @@ from .domain import EDITABLE, NEXT, SEOUL, STATES, MAX_SAFE, profit, require
 from .errors import ConflictError, UserError
 from .service import Manager
 from .store import Vault
+from .ui_theme import DataTable, StatusMessage, align_table, workspace_style
 
 
 def money(value):
@@ -36,7 +37,7 @@ def timestamp(value):
 
 
 def table(headers):
-    result = QTableWidget(0, len(headers))
+    result = DataTable(0, len(headers))
     result.setHorizontalHeaderLabels(headers)
     result.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
     result.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
@@ -52,40 +53,6 @@ def table(headers):
     header.setDefaultAlignment(Qt.AlignmentFlag.AlignCenter)
     header.setHighlightSections(False)
 
-    result.setStyleSheet("""
-        QTableWidget {
-            background: #f6faf6;
-            alternate-background-color: #edf4ed;
-            border: 1px solid #8ea48e;
-            border-radius: 6px;
-            gridline-color: #b7c8b7;
-            selection-background-color: #dbe9d8;
-            selection-color: #17311d;
-        }
-        QTableCornerButton::section {
-            background-color: #2f5d3a;
-            border: 1px solid #24472d;
-        }
-        QHeaderView::section {
-            background-color: #2f5d3a;
-            color: #ffffff;
-            font-weight: 700;
-            padding: 8px 10px;
-            border-top: 1px solid #24472d;
-            border-bottom: 1px solid #24472d;
-            border-right: 1px solid #dbe7db;
-        }
-        QTableWidget::item {
-            padding: 7px 8px;
-            border-right: 1px solid #d7e1d7;
-            border-bottom: 1px solid #d7e1d7;
-        }
-        QTableWidget::item:selected {
-            background: #dbe9d8;
-            color: #17311d;
-        }
-    """)
-
     result.setWordWrap(False)
     return result
 
@@ -94,6 +61,7 @@ def fill_table(widget, rows):
     for index, values in enumerate(rows):
         for column, value in enumerate(values):
             widget.setItem(index, column, QTableWidgetItem(str(value)))
+    align_table(widget)
 
 
 class Task(QThread):
@@ -188,7 +156,7 @@ class MainWindow(QMainWindow):
         self.sync_button.clicked.connect(self.manual_sync)
         top.addWidget(self.sync_button)
         layout.addLayout(top)
-        self.message = QLabel("PC를 연결하면 구글시트에 저장된 요청·판매 기록을 조회합니다.")
+        self.message = StatusMessage("PC를 연결하면 구글시트에 저장된 요청·판매 기록을 조회합니다.")
         self.message.setWordWrap(True)
         layout.addWidget(self.message)
         self.tabs = QTabWidget()
@@ -210,6 +178,7 @@ class MainWindow(QMainWindow):
         self.message.setText(title)
         refresh = refresh_on_error if callable(refresh_on_error) else (self.manager.view if self.manager and refresh_on_error else None)
         task = Task(work, refresh, self)
+        task.operation_title = title
         self.task = task
         task.completed.connect(lambda value, error, conflict: self.job_finished(task, value, error, conflict, on_success))
         self.update_controls()
@@ -314,7 +283,7 @@ class MainWindow(QMainWindow):
         self.report_button.setEnabled(paired)
         self.resolve_button.setEnabled(paired and pending and self.conflict)
         self.summary.setText(f"문의 {len(self.data['requests'])}건 · 판매 {len(self.data['sales'])}건 · 전송 대기 {len(self.data['pending'])}건" if self.manager else "PC 자료 준비 중")
-        self.connection_status.setText("서버 연결됨" if self.data["paired"] else "서버 연결 필요")
+        self.connection_status.setText("연결 정보 저장됨" if self.data["paired"] else "서버 연결 필요")
         self.pending_status.setText("전송 대기는 암호화해 보관합니다. '지금 동기화'로 재시도하세요." if pending else "전송 대기 없음")
 
     def allow_discard(self):
@@ -346,7 +315,7 @@ class MainWindow(QMainWindow):
         self.request_search.textChanged.connect(self.refresh_requests)
         layout.addWidget(self.request_search)
         self.request_table = table(["접수번호", "접수일", "상태", "고객명", "전화번호", "메일주소", "지역", "견적서요청", "희망 묘목", "요청사항"])
-        self.request_table.setMinimumHeight(400)
+        self.request_table.setMinimumHeight(180)
         header = self.request_table.horizontalHeader()
         header.setStretchLastSection(False)
         header.setSectionResizeMode(8, QHeaderView.ResizeMode.Stretch)
@@ -623,46 +592,88 @@ class MainWindow(QMainWindow):
 
     def build_connection(self):
         page = QWidget()
-        layout = QVBoxLayout(page)
+        outer = QVBoxLayout(page)
+        outer.setContentsMargins(0, 0, 0, 0)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        content = QWidget()
+        layout = QVBoxLayout(content)
+        layout.setContentsMargins(0, 0, 12, 0)
+        layout.setSpacing(24)
+
+        status = QGroupBox("서버 연결 상태")
+        status_layout = QVBoxLayout(status)
+        status_layout.setSpacing(12)
+        self.connection_status = QLabel("서버 연결 필요")
+        self.last_sync_label = QLabel("이번 실행에서 동기화한 기록이 없습니다.")
+        self.last_sync_label.setObjectName("muted")
+        self.last_sync_label.setWordWrap(True)
+        self.pending_status = QLabel("전송 대기 없음")
+        self.pending_status.setWordWrap(True)
+        status_layout.addWidget(self.connection_status)
+        status_layout.addWidget(self.last_sync_label)
+        status_layout.addWidget(self.pending_status)
+        status_actions = QHBoxLayout()
+        status_actions.setSpacing(12)
+        self.connect_button = QPushButton("서버 연결 · 동기화")
+        self.connect_button.setObjectName("primary")
+        self.connect_button.clicked.connect(self.connect_server)
         self.open_button = QPushButton("PC 자료 다시 열기")
         self.open_button.clicked.connect(self.open_vault)
-        layout.addWidget(self.open_button)
-        self.connection_status = QLabel("서버 연결 필요")
-        layout.addWidget(self.connection_status)
-        self.connect_button = QPushButton("서버 연결")
-        self.connect_button.clicked.connect(self.connect_server)
-        layout.addWidget(self.connect_button)
+        status_actions.addWidget(self.connect_button)
+        status_actions.addWidget(self.open_button)
+        status_actions.addStretch()
+        status_layout.addLayout(status_actions)
+        layout.addWidget(status)
+
+        local = QGroupBox("화면과 로컬 자료")
+        local_layout = QVBoxLayout(local)
+        local_layout.setSpacing(12)
         self.copy_button = QPushButton("로컬 엑셀 사본 열기")
         self.copy_button.clicked.connect(self.open_request_copy)
-        layout.addWidget(self.copy_button)
-        self.advanced_connection = QWidget()
-        advanced_layout = QVBoxLayout(self.advanced_connection)
-        toggle = QPushButton("서버 주소 확인")
-        toggle.clicked.connect(lambda: self.advanced_connection.setVisible(not self.advanced_connection.isVisible()))
-        layout.addWidget(toggle)
+        local_layout.addWidget(self.copy_button, 0, Qt.AlignmentFlag.AlignLeft)
+        self.auto_check = QCheckBox("60초마다 자동 동기화 · 수정 중에는 입력내용 유지")
+        self.auto_check.setChecked(True)
+        self.large_font_check = QCheckBox("큰 글씨로 보기")
+        local_layout.addWidget(self.auto_check)
+        local_layout.addWidget(self.large_font_check)
+        note = QLabel("로컬 엑셀은 조회용 사본입니다. 엑셀에서 수정한 내용은 서버에 올라가지 않습니다.\n"
+                      "엑셀 사본 위치: " + str(self.vault_path.with_name("나무팜-견적요청.xlsx")))
+        note.setObjectName("muted")
+        note.setWordWrap(True)
+        note.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        local_layout.addWidget(note)
+        layout.addWidget(local)
+
+        toggle = QPushButton("서버 주소 · 고급 설정 펼치기")
+        toggle.setCheckable(True)
+        layout.addWidget(toggle, 0, Qt.AlignmentFlag.AlignLeft)
+        self.advanced_connection = QGroupBox("서버 주소와 자료 복구")
+        advanced = QVBoxLayout(self.advanced_connection)
+        advanced.setSpacing(12)
         form = QFormLayout()
         self.url = QLineEdit(DEFAULT_URL)
         self.url.setReadOnly(True)
-        form.addRow("Apps Script 웹 앱 주소", self.url)
-        advanced_layout.addLayout(form)
-        layout.addWidget(self.advanced_connection)
-        self.advanced_connection.hide()
-        self.auto_check = QCheckBox("60초마다 자동 동기화 · 수정 중에는 입력내용을 유지합니다")
-        self.auto_check.setChecked(True)
-        layout.addWidget(self.auto_check)
-        self.pending_status = QLabel("전송 대기 없음")
-        layout.addWidget(self.pending_status)
+        self.url.setAccessibleName("현재 연결된 서버 주소")
+        form.addRow("서버 주소", self.url)
+        advanced.addLayout(form)
         self.resolve_button = QPushButton("수정 충돌 확인")
         self.resolve_button.clicked.connect(self.resolve_conflict)
-        layout.addWidget(self.resolve_button)
-        self.legacy_button = QPushButton("이전 자료 복원 (필요한 경우)")
+        self.legacy_button = QPushButton("이전 자료 복원")
         self.legacy_button.clicked.connect(self.restore_legacy)
-        layout.addWidget(self.legacy_button)
-        note = QLabel("‘서버 연결’이나 ‘지금 동기화’만 누르면 암호·연결파일 없이 서버 자료를 가져옵니다. 기존 연결 정보도 유지합니다.\n연결 정보는 Windows 계정으로 보호해 저장합니다.\n로컬 엑셀 사본은 조회용이며 직접 수정한 내용은 서버에 올리지 않습니다.\n엑셀 사본 위치: " + str(self.vault_path.with_name("나무팜-견적요청.xlsx")))
-        note.setWordWrap(True)
-        note.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        layout.addWidget(note)
+        advanced.addWidget(self.resolve_button, 0, Qt.AlignmentFlag.AlignLeft)
+        advanced.addWidget(self.legacy_button, 0, Qt.AlignmentFlag.AlignLeft)
+        help_text = QLabel("연결 실패 시 서버 주소를 확인해주세요. 이전 자료 복원은 복원이 필요한 경우에만 사용합니다.")
+        help_text.setWordWrap(True)
+        help_text.setObjectName("muted")
+        advanced.addWidget(help_text)
+        toggle.toggled.connect(self.advanced_connection.setVisible)
+        toggle.toggled.connect(lambda opened: toggle.setText("서버 주소 · 고급 설정 접기" if opened else "서버 주소 · 고급 설정 펼치기"))
+        layout.addWidget(self.advanced_connection)
+        self.advanced_connection.hide()
         layout.addStretch()
+        scroll.setWidget(content)
+        outer.addWidget(scroll)
         self.tabs.addTab(page, "연결·설정")
 
     def connect_server(self):
@@ -720,31 +731,10 @@ def main():
     app.setApplicationName("NamuFarmDesktop")
     app.setOrganizationName("NamuFarm")
     app.setStyle("Fusion")
-    app.setStyleSheet("""
-        QPushButton {
-            padding:7px 12px 8px 12px;
-            border:1px solid #c9d6cb;
-            border-bottom:3px solid #aebfb2;
-            border-radius:7px;
-            font-weight:600;
-        }
-        QPushButton:hover {background:#eaf1e7;border-color:#94ad99;border-bottom-color:#78967f;}
-        QPushButton:pressed {
-            background:#d8e6d6;
-            border:1px solid #8da392;
-            border-top:3px solid #708c76;
-            border-bottom:1px solid #a8b8aa;
-            padding:9px 12px 6px 12px;
-        }
-        QPushButton:disabled {color:#9aa69d;border-color:#e1e6df;border-bottom:2px solid #d9dfd9;}
-        QLineEdit,QComboBox,QDateEdit {padding:5px;}
-        QTabBar::tab {padding:10px 20px;}
-        QGroupBox {font-weight:600;}
-    """)
+    app.setStyleSheet(workspace_style())
     from .workspace import SellerWindow
     window = SellerWindow()
-    # SellerWindow already uses a 1920x1080 (FHD) default size. Open it as a normal window
-    # instead of forcing it to the monitor's maximum size.
+    # Fit the normal window to the available desktop, including display scaling.
     window.show()
     if "--self-check" in sys.argv:
         app.processEvents()

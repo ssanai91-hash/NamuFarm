@@ -8,16 +8,17 @@ from importlib.resources import files as package_files
 from pathlib import Path
 from html import escape as html_escape
 
-from PySide6.QtCore import Qt, QUrl, QSaveFile, QIODevice, QTimer, Signal, Slot, QRectF
+from PySide6.QtCore import QSettings, Qt, QUrl, QSaveFile, QIODevice, QTimer, Signal, Slot, QRectF
 from PySide6.QtGui import (QColor, QDesktopServices, QFont, QFontMetricsF, QImage, QIntValidator,
     QKeySequence, QPainter, QPdfWriter, QPen, QPixmap, QShortcut, QTextDocument, QPageSize)
 from PySide6.QtPrintSupport import QPrinter, QPrintDialog
 from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDialog, QDoubleSpinBox, QFileDialog, QFormLayout,
     QFrame, QGridLayout, QGroupBox, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QListWidget,
     QMessageBox, QPlainTextEdit, QPushButton, QRadioButton, QScrollArea, QSplitter, QStackedWidget,
-    QStyle, QSystemTrayIcon, QTableWidgetItem, QTextBrowser, QVBoxLayout, QWidget, QSpinBox)
+    QSizePolicy, QStyle, QSystemTrayIcon, QTableWidget, QTableWidgetItem, QTextBrowser, QVBoxLayout, QWidget, QSpinBox)
 
 from . import __version__
+from .ui_theme import align_table, fit_window, scroll_dialog, scroll_page, workspace_style
 from .app import MainWindow, Task, table, fill_table, money, timestamp
 from .commerce import (ISSUER, new_draft, new_manual_draft, draft_amounts, validate_draft, quote_html, quote_document_html, shipping_html,
                        shipping_problem, parse_tracking_csv, tracking_number)
@@ -25,592 +26,7 @@ from .domain import SEOUL, profit, require
 from .errors import UserError
 from .shipping_excel import shipping_xls, parse_tracking_xls, export_orders, UPLOAD_SHEET
 
-STYLE = """
-QWidget{font-family:'Malgun Gothic','NanumGothic',sans-serif;font-size:13px;color:#263e35;}
-QMainWindow,#workspace{background:#f3f5f1;}
-#sidebar{background:#153e33;border:0;}
-#sidebar QLabel{color:#bdd2c7;} #sidebar #brand{font-size:29px;font-weight:800;color:#fff;}
-#sidebar QPushButton{background:transparent;color:#c6d9cf;border:0;border-radius:8px;text-align:left;padding:14px 18px;font-weight:600;}
-#sidebar QPushButton:checked{background:#2e604e;color:#fff;}
-#sidebar QPushButton:hover{background:#285442;color:#fff;}
-#sidebar QPushButton:pressed{background:#1d4939;color:#fff;padding:15px 17px 13px 19px;}
-#sidebar QWidget#navRow{background:transparent;}
-#sidebar QLabel#navBadge{
-    background:#9cf36f;
-    color:#12351e;
-    border:1px solid #c2ffa0;
-    border-radius:10px;
-    min-width:22px;
-    max-height:20px;
-    padding:1px 6px;
-    font-family:'Consolas','Malgun Gothic',monospace;
-    font-size:11px;
-    font-weight:900;
-    qproperty-alignment:AlignCenter;
-}
-#sidebar #navFoot{color:#a8c0b3;font-size:12px;}
-QLabel#pageTitle{font-size:26px;font-weight:800;color:#193d2e;}
-QLabel#muted{color:#76867c;} QLabel#eyebrow{color:#748a78;font-size:11px;font-weight:700;}
-QLabel#sectionTitle{font-size:18px;font-weight:700;}
-QLabel#metricValue{font-size:30px;font-weight:800;color:#194d3a;}
-QFrame#card{background:#fff;border:1px solid #dfe7df;border-radius:12px;}
-QFrame#hero{background:#e3eddf;border:1px solid #d5e2d0;border-radius:14px;}
-QFrame#hero QLabel{background:transparent;}
-QLabel#heroTitle{font-size:25px;font-weight:800;color:#1a482f;}
-QLabel#notice{background:#e8efe6;color:#365c42;border-radius:7px;padding:10px;}
-
-QFrame#serverLogFrame{
-    background:#070b08;
-    border:1px solid #31573a;
-    border-radius:0;
-    min-height:44px;
-}
-QLabel#serverLogTitle{
-    background:#101812;
-    color:#72cf6e;
-    border:0;
-    border-right:1px solid #31573a;
-    border-radius:0;
-    padding:0 10px;
-    font-family:'Consolas','Malgun Gothic',monospace;
-    font-size:10px;
-    font-weight:900;
-}
-QLabel#serverLogText{
-    background:transparent;
-    color:#a7ff8b;
-    border:0;
-    border-radius:0;
-    padding:0 12px;
-    font-family:'Consolas','Malgun Gothic',monospace;
-    font-size:12px;
-    font-weight:800;
-}
-QPushButton#syncPrimary{
-    min-height:42px;
-    background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #2d8054,stop:1 #1b633f);
-    color:#ffffff;
-    border:1px solid #155333;
-    border-bottom:4px solid #0b3b23;
-    border-radius:7px;
-    padding:8px 17px 9px 17px;
-    font-weight:900;
-}
-QPushButton#syncPrimary:hover{
-    background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #34915f,stop:1 #207149);
-    border-color:#174f33;
-    border-bottom-color:#082f1b;
-}
-QPushButton#syncPrimary:pressed{
-    background:#164f33;
-    border:1px solid #0f472b;
-    border-top:4px solid #082f1b;
-    border-bottom:1px solid #2d8054;
-    padding:11px 17px 6px 17px;
-}
-QPushButton#syncPrimary:disabled{
-    background:#a3b4a7;
-    color:#edf2ed;
-    border:1px solid #98aa9c;
-    border-bottom:2px solid #879a8b;
-}
-QPushButton{
-    background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #ffffff,stop:1 #f4f8f3);
-    border:1px solid #c9d6cb;
-    border-bottom:3px solid #aebfb2;
-    border-radius:8px;
-    padding:8px 15px 9px 15px;
-    font-weight:700;
-}
-QPushButton:hover{
-    background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #ffffff,stop:1 #e8f1e6);
-    border-color:#94ad99;
-    border-bottom:3px solid #78967f;
-}
-QPushButton:pressed{
-    background:#d8e6d6;
-    border:1px solid #8da392;
-    border-top:3px solid #708c76;
-    border-bottom:1px solid #a8b8aa;
-    padding:10px 15px 7px 15px;
-}
-QPushButton:disabled{
-    background:#ecefea;
-    color:#9aa69d;
-    border:1px solid #e1e6df;
-    border-bottom:2px solid #d9dfd9;
-}
-QPushButton#primary{
-    background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #347756,stop:1 #286547);
-    color:#fff;
-    border:1px solid #235b40;
-    border-bottom:3px solid #16442e;
-}
-QPushButton#primary:hover{
-    background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #3b805e,stop:1 #1f5a3d);
-    border-color:#1b5036;
-    border-bottom-color:#103823;
-}
-QPushButton#primary:pressed{
-    background:#1b5036;
-    border:1px solid #16442e;
-    border-top:3px solid #0f3522;
-    border-bottom:1px solid #286547;
-    padding:10px 15px 7px 15px;
-}
-QPushButton#primary:disabled{
-    background:#a3b7a7;
-    border:1px solid #a3b7a7;
-    border-bottom:2px solid #91a796;
-    color:#eef2ed;
-}
-QPushButton#danger{
-    background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #fffdfc,stop:1 #fbeeea);
-    color:#9f4935;
-    border:1px solid #e6b9ad;
-    border-bottom:3px solid #c98c7d;
-}
-QPushButton#danger:hover{
-    background:#f8e4de;
-    color:#8e3827;
-    border-color:#d79c8d;
-    border-bottom-color:#b56f5d;
-}
-QPushButton#danger:pressed{
-    background:#f1d4cc;
-    border:1px solid #c98675;
-    border-top:3px solid #ae6756;
-    border-bottom:1px solid #d9a397;
-    padding:10px 15px 7px 15px;
-}
-QLineEdit,QComboBox,QDateEdit,QDoubleSpinBox,QSpinBox,QPlainTextEdit{background:#fff;border:1px solid #d5dfd6;border-radius:6px;padding:7px;selection-background-color:#d3e5d7;selection-color:#173b2e;}
-QLineEdit:focus,QPlainTextEdit:focus{border:1px solid #4b805d;}
-QLineEdit:disabled,QComboBox:disabled,QPlainTextEdit:disabled{background:#f2f4f0;color:#829085;}
-QTableWidget{background:#fff;alternate-background-color:#fafbf8;border:1px solid #dfe7df;border-radius:8px;gridline-color:#edf1eb;selection-background-color:#e3efdf;selection-color:#183d2c;}
-QTableWidget::item{padding:9px;border:0;border-bottom:1px solid #edf1eb;}
-QTableWidget::item:selected{background:#e2efdf;color:#16492e;}
-QHeaderView::section{background:#dfeadd;color:#315b46;border:0;border-bottom:1px solid #c9d9c8;padding:11px 9px;font-weight:700;}
-QGroupBox{background:#fff;border:1px solid #dfe7df;border-radius:9px;margin-top:18px;padding:15px;font-weight:700;}
-QGroupBox::title{subcontrol-origin:margin;left:15px;padding:0 5px;}
-QScrollArea{border:0;background:transparent;} QScrollArea>QWidget>QWidget{background:transparent;}
-QScrollBar:vertical{background:transparent;width:9px;margin:0;}
-QScrollBar::handle:vertical{background:#cad7c8;border-radius:4px;min-height:30px;}
-QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}
-QScrollBar::add-page:vertical,QScrollBar::sub-page:vertical{background:transparent;}
-QCheckBox{spacing:8px;} QCheckBox::indicator{width:16px;height:16px;}
-QRadioButton{spacing:8px;padding:4px 8px;font-weight:600;}
-QRadioButton::indicator{width:18px;height:18px;}
-QTextBrowser{background:#fff;border:1px solid #dfe7df;padding:16px;}
-QToolTip{background:#153e33;color:#fff;border:0;padding:8px;}
-QDialog#quoteDeliveryDialog{
-    background:#f4f7f3;
-}
-
-QLabel#deliveryTitle{
-    font-size:28px;
-    font-weight:800;
-    color:#173f2f;
-}
-
-QLabel#deliverySubtitle{
-    color:#6f8175;
-    font-size:13px;
-}
-
-QLabel#quoteStatusBadge{
-    background:#dcebdc;
-    color:#23593a;
-    border:1px solid #bdd2bd;
-    border-radius:14px;
-    padding:6px 14px;
-    font-weight:700;
-}
-
-QFrame#deliveryInfoCard{
-    background:#ffffff;
-    border:1px solid #d9e4da;
-    border-radius:12px;
-}
-
-QLabel#infoCaption{
-    color:#7b8b80;
-    font-size:11px;
-    font-weight:600;
-}
-
-QLabel#infoValue{
-    color:#183d2d;
-    font-size:14px;
-    font-weight:700;
-}
-
-QFrame#quoteItemsCard{
-    background:#ffffff;
-    border:1px solid #cbdcca;
-    border-radius:12px;
-}
-
-QLabel#quoteItemsTitle{
-    color:#173f2f;
-    font-size:20px;
-    font-weight:800;
-}
-
-QLabel#quoteItemsHint{
-    color:#77877d;
-    font-size:12px;
-}
-
-QTableWidget#deliveryItems{
-    background:#ffffff;
-    alternate-background-color:#f7faf6;
-    border:1px solid #ceddce;
-    border-radius:8px;
-    gridline-color:#d4e1d4;
-    selection-background-color:#e0eddf;
-    selection-color:#173f2f;
-}
-
-QTableWidget#deliveryItems::item{
-    padding:12px 10px;
-    border-right:1px solid #dde7dd;
-    border-bottom:1px solid #dde7dd;
-    font-size:14px;
-}
-
-QTableWidget#deliveryItems QHeaderView::section{
-    background:#2f6842;
-    color:#ffffff;
-    border:0;
-    border-right:1px solid #5c8265;
-    padding:11px 10px;
-    font-weight:800;
-}
-
-QFrame#deliveryShippingCard{
-    background:#f7faf6;
-    border:1px solid #d5e2d4;
-    border-radius:10px;
-}
-QLabel#deliveryShippingTitle{
-    color:#244f36;
-    font-size:15px;
-    font-weight:800;
-}
-QLabel#deliveryShippingStatus{
-    color:#607467;
-    font-size:12px;
-    font-weight:600;
-}
-QLineEdit#deliveryShippingFee{
-    min-width:110px;
-    max-width:150px;
-    font-weight:700;
-    text-align:right;
-}
-QLineEdit#deliveryShippingFee:disabled{
-    background:#edf0ec;
-    color:#9aa49c;
-    border-color:#dde3dc;
-}
-QLabel#deliveryShippingFeeLabel:disabled{
-    color:#a0aaa2;
-}
-
-QFrame#quoteTotalBand{
-    background:#e3eee0;
-    border:1px solid #c4d8c1;
-    border-radius:10px;
-}
-
-QLabel#quoteTotalCaption{
-    color:#42644e;
-    font-size:14px;
-    font-weight:700;
-}
-
-QLabel#quoteTotalValue{
-    color:#174c31;
-    font-size:30px;
-    font-weight:900;
-}
-
-QFrame#requestNoteCard{
-    background:#ffffff;
-    border:1px solid #dbe5db;
-    border-radius:10px;
-}
-
-QLabel#deliveryNotice{
-    background:#eaf2e7;
-    color:#49654f;
-    border:1px solid #d6e4d3;
-    border-radius:8px;
-    padding:11px 13px;
-}
-
-QPushButton#smsAction{
-    background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #4a8a5d,stop:1 #3e7a50);
-    color:#ffffff;
-    border:1px solid #356d46;
-    border-bottom:3px solid #285a38;
-    border-radius:8px;
-    padding:10px 20px 11px 20px;
-    font-weight:800;
-}
-
-QPushButton#smsAction:hover{
-    background:#357048;
-    border-color:#2d623e;
-    border-bottom-color:#214d30;
-}
-QPushButton#smsAction:pressed{
-    background:#2b5e3c;
-    border:1px solid #285a38;
-    border-top:3px solid #1f492e;
-    border-bottom:1px solid #3e7a50;
-    padding:12px 20px 9px 20px;
-}
-
-QPushButton#mailAction{
-    background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #527faa,stop:1 #416f9d);
-    color:#ffffff;
-    border:1px solid #39658f;
-    border-bottom:3px solid #2c5278;
-    border-radius:8px;
-    padding:10px 20px 11px 20px;
-    font-weight:800;
-}
-
-QPushButton#mailAction:hover{
-    background:#38658f;
-    border-color:#315a81;
-    border-bottom-color:#24496d;
-}
-QPushButton#mailAction:pressed{
-    background:#2f567d;
-    border:1px solid #2c5278;
-    border-top:3px solid #214361;
-    border-bottom:1px solid #416f9d;
-    padding:12px 20px 9px 20px;
-}
-
-QPushButton#pdfAction{
-    background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #ffffff,stop:1 #f0f5ef);
-    color:#3c5546;
-    border:1px solid #9caf9f;
-    border-bottom:3px solid #7f9783;
-    border-radius:8px;
-    padding:10px 20px 11px 20px;
-    font-weight:800;
-}
-
-QPushButton#pdfAction:hover{
-    background:#e8f0e6;
-    border-color:#8ca191;
-    border-bottom-color:#6f8974;
-}
-QPushButton#pdfAction:pressed{
-    background:#dce8da;
-    border:1px solid #829987;
-    border-top:3px solid #6b846f;
-    border-bottom:1px solid #9caf9f;
-    padding:12px 20px 9px 20px;
-}
-QLabel#quoteFileName{
-    background:#101512;
-    color:#8fe3a8;
-    border:1px solid #29372f;
-    border-radius:6px;
-    font-family:'Consolas','Malgun Gothic',monospace;
-    font-size:12px;
-    font-weight:700;
-    padding:8px 11px;
-}
-
-QPushButton#closeAction{
-    background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #ffffff,stop:1 #f3f5f2);
-    color:#657269;
-    border:1px solid #c4cec6;
-    border-bottom:3px solid #aeb9b0;
-    border-radius:8px;
-    padding:10px 20px 11px 20px;
-    font-weight:700;
-}
-QPushButton#closeAction:hover{
-    background:#edf1ec;
-    border-color:#adb9af;
-    border-bottom-color:#929f95;
-}
-QPushButton#closeAction:pressed{
-    background:#e0e6df;
-    border:1px solid #a6b2a8;
-    border-top:3px solid #8e9c91;
-    border-bottom:1px solid #c4cec6;
-    padding:12px 20px 9px 20px;
-}
-
-QPushButton#sentAction{
-    background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #26724d,stop:1 #185d3c);
-    color:#ffffff;
-    border:1px solid #165637;
-    border-bottom:3px solid #0d4229;
-    border-radius:8px;
-    padding:11px 24px 12px 24px;
-    font-weight:900;
-}
-
-QPushButton#sentAction:hover{
-    background:#145438;
-    border-color:#104a2f;
-    border-bottom-color:#0a3823;
-}
-QPushButton#sentAction:pressed{
-    background:#0f472e;
-    border:1px solid #0d4229;
-    border-top:3px solid #08351f;
-    border-bottom:1px solid #185d3c;
-    padding:13px 24px 10px 24px;
-}
-
-QPushButton#sentAction:disabled{
-    background:#a9baad;
-    color:#edf2ed;
-    border-color:#a9baad;
-}
-
-QLabel#channelStatusBadge{
-    border-radius:7px;
-    padding:3px 6px;
-    font-size:10px;
-    font-weight:700;
-    qproperty-alignment:AlignCenter;
-}
-QLabel#channelStatusBadge[done="false"]{
-    background:#eef1ed;
-    color:#859087;
-    border:1px solid #d8dfd8;
-}
-QLabel#channelStatusBadge[done="true"]{
-    background:#dcebdd;
-    color:#23603b;
-    border:1px solid #b8d2bd;
-}
-QLabel#channelStatusBadge[state="pending"]{
-    background:#fff3d8;
-    color:#8a641d;
-    border:1px solid #e5cf98;
-}
-QLabel#channelStatusBadge[state="failed"]{
-    background:#fbe5e2;
-    color:#a13d32;
-    border:1px solid #e6b8b1;
-}
-QLabel#channelStatusBadge[state="success"]{
-    background:#dcebdd;
-    color:#23603b;
-    border:1px solid #b8d2bd;
-}
-
-QDialog#customerOrderDialog{background:#f4f7f3;}
-QLabel#customerStatusBadge{
-    background:#dcebdd;
-    color:#23593a;
-    border:1px solid #bdd2bd;
-    border-radius:14px;
-    padding:6px 14px;
-    font-weight:800;
-}
-QFrame#customerSummaryCard,QFrame#customerInfoCard,QFrame#customerFinanceCard{
-    background:#ffffff;
-    border:1px solid #d9e4da;
-    border-radius:11px;
-}
-QLabel#customerMetricCaption{color:#7b8b80;font-size:11px;font-weight:600;}
-QLabel#customerMetricValue{color:#183d2d;font-size:15px;font-weight:800;}
-QLabel#customerAmountValue{color:#174c31;font-size:25px;font-weight:900;}
-
-QDialog#quoteEmailDialog{background:#f4f7f3;}
-QFrame#emailAddressCard{
-    background:#ffffff;
-    border:1px solid #d9e4da;
-    border-radius:11px;
-}
-QLabel#emailSectionTitle{
-    color:#173f2f;
-    font-size:17px;
-    font-weight:800;
-}
-QLabel#emailHelp{
-    color:#6f8175;
-    font-size:12px;
-}
-QLabel#emailSendStatus{
-    background:#edf4ea;
-    color:#47624e;
-    border:1px solid #d5e2d2;
-    border-radius:8px;
-    padding:9px 11px;
-}
-QPushButton#emailSendPrimary{
-    background:#2f6597;
-    color:#ffffff;
-    border:1px solid #2f6597;
-    border-radius:8px;
-    padding:11px 24px;
-    font-weight:800;
-}
-QPushButton#emailSendPrimary{
-    border-bottom:3px solid #1d466c;
-    padding:10px 24px 11px 24px;
-}
-QPushButton#emailSendPrimary:hover{background:#275680;border-color:#275680;border-bottom-color:#173b5c;}
-QPushButton#emailSendPrimary:pressed{
-    background:#214d74;
-    border:1px solid #1d466c;
-    border-top:3px solid #153851;
-    border-bottom:1px solid #2f6597;
-    padding:12px 24px 9px 24px;
-}
-QPushButton#emailSendPrimary:disabled{background:#aab8c6;border:1px solid #aab8c6;border-bottom:2px solid #95a5b4;color:#eef2f5;}
-
-QDialog#quoteSmsDialog{background:#f4f7f3;}
-QLabel#smsSendStatus{
-    background:#edf4ea;
-    color:#47624e;
-    border:1px solid #d5e2d2;
-    border-radius:8px;
-    padding:9px 11px;
-}
-QPushButton#smsSendPrimary{
-    background:#3e7a50;
-    color:#ffffff;
-    border:1px solid #3e7a50;
-    border-radius:8px;
-    padding:11px 24px;
-    font-weight:800;
-}
-QPushButton#smsSendPrimary{
-    border-bottom:3px solid #285a38;
-    padding:10px 24px 11px 24px;
-}
-QPushButton#smsSendPrimary:hover{background:#316640;border-color:#316640;border-bottom-color:#214d30;}
-QPushButton#smsSendPrimary:pressed{
-    background:#2a5b39;
-    border:1px solid #285a38;
-    border-top:3px solid #1f492e;
-    border-bottom:1px solid #3e7a50;
-    padding:12px 24px 9px 24px;
-}
-QPushButton#smsSendPrimary:disabled{background:#a9baad;border:1px solid #a9baad;border-bottom:2px solid #92a596;color:#eef2ed;}
-
-QPushButton#smsAction:disabled,QPushButton#mailAction:disabled,QPushButton#pdfAction:disabled,QPushButton#closeAction:disabled{
-    background:#e9ede8;
-    color:#98a29a;
-    border:1px solid #d8ded8;
-    border-bottom:2px solid #cbd3cc;
-}
-"""
+STYLE = workspace_style()
 
 
 def label(text, name="", wrap=False):
@@ -640,7 +56,9 @@ def card(title):
 
 
 def polish_table(widget):
-    widget.verticalHeader().setDefaultSectionSize(51)
+    large = bool(QApplication.instance().property("namufarmLargeFont"))
+    widget.verticalHeader().setMinimumSectionSize(64 if large else 56)
+    widget.verticalHeader().setDefaultSectionSize(64 if large else 56)
     widget.setShowGrid(False)
     widget.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
     widget.horizontalHeader().setDefaultAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -665,7 +83,8 @@ class UnitPriceEditor(QWidget):
 
         self.minus = QPushButton("-")
         self.minus.setToolTip("판매 단가 1,000원 내리기")
-        self.minus.setFixedWidth(38)
+        self.minus.setFixedSize(44, 44)
+        self.minus.setAccessibleName("판매 단가 1,000원 내리기")
         self.minus.clicked.connect(lambda: self.adjust(-self.STEP))
         row.addWidget(self.minus)
 
@@ -673,12 +92,14 @@ class UnitPriceEditor(QWidget):
         self.input.setValidator(QIntValidator(0, self.MAX_PRICE, self.input))
         self.input.setAlignment(Qt.AlignmentFlag.AlignRight)
         self.input.setPlaceholderText("판매 단가")
+        self.input.setAccessibleName("판매 단가 (원)")
         self.input.textChanged.connect(lambda _text: self.changed.emit())
         row.addWidget(self.input, 1)
 
         self.plus = QPushButton("+")
         self.plus.setToolTip("판매 단가 1,000원 올리기")
-        self.plus.setFixedWidth(38)
+        self.plus.setFixedSize(44, 44)
+        self.plus.setAccessibleName("판매 단가 1,000원 올리기")
         self.plus.clicked.connect(lambda: self.adjust(self.STEP))
         row.addWidget(self.plus)
 
@@ -695,12 +116,8 @@ class UnitPriceEditor(QWidget):
         self.set_value(max(0, min(self.MAX_PRICE, current + delta)))
 
 def center_table_columns(widget, columns=None):
-    columns = range(widget.columnCount()) if columns is None else columns
-    for row in range(widget.rowCount()):
-        for column in columns:
-            item = widget.item(row, column)
-            if item is not None:
-                item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+    # Kept as a compatibility hook; presentation is now based on column meaning.
+    align_table(widget)
 
 
 def _quote_font(pixel_size, bold=False):
@@ -1158,6 +575,7 @@ class ManualQuoteDialog(QDialog):
         actions.addWidget(button("취소", self.reject))
         actions.addWidget(button("견적 추가", self.accept_quote, True))
         layout.addLayout(actions)
+        scroll_dialog(self, layout)
 
         for item in self.draft.get("items", []):
             self.add_item(item)
@@ -1178,10 +596,10 @@ class ManualQuoteDialog(QDialog):
         )):
             cell = QTableWidgetItem(str(value))
             if column > 0:
-                cell.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                cell.setTextAlignment((Qt.AlignmentFlag.AlignLeft if column == 0 else Qt.AlignmentFlag.AlignRight) | Qt.AlignmentFlag.AlignVCenter)
             self.items.setItem(row, column, cell)
         amount = QTableWidgetItem("")
-        amount.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+        amount.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         amount.setFlags(amount.flags() & ~Qt.ItemFlag.ItemIsEditable)
         self.items.setItem(row, 3, amount)
         self.items.blockSignals(False)
@@ -1286,6 +704,7 @@ class QuoteDialog(QDialog):
                                  ("지역", draft.get("requestRegion", ""))):
                 field = QLineEdit(str(value))
                 field.setReadOnly(True)
+                field.setAccessibleName(title)
                 form.addRow(title, field)
 
             formal = bool(draft.get("formalQuoteRequested", False))
@@ -1307,7 +726,10 @@ class QuoteDialog(QDialog):
             self.note.setMinimumHeight(82)
             self.note.setMaximumHeight(110)
             form.addRow(label("고객이 요청한 품목과 수량을 확인하고 판매 단가를 입력하세요.", "muted", True))
-            split.addWidget(info)
+            info_scroll = QScrollArea()
+            info_scroll.setWidgetResizable(True)
+            info_scroll.setWidget(info)
+            split.addWidget(info_scroll)
             self.cost = QCheckBox()
         else:
             info = QWidget()
@@ -1317,6 +739,7 @@ class QuoteDialog(QDialog):
                                ("validUntil", "견적 유효기간"), ("paymentAccount", "입금계좌 안내")):
                 field = QLineEdit(str(draft.get(key, "")))
                 field.setPlaceholderText(title)
+                field.setAccessibleName(title)
                 self.fields[key] = field
                 form.addRow(title, field)
             self.note = QPlainTextEdit(draft.get("note", ""))
@@ -1351,6 +774,10 @@ class QuoteDialog(QDialog):
         self.items.setEditTriggers(self.items.EditTrigger.DoubleClicked | self.items.EditTrigger.EditKeyPressed | self.items.EditTrigger.AnyKeyPressed)
         self.items.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         polish_table(self.items)
+        if self.simple_request:
+            self.items.set_column_layout(((0, 3), (1, 1), (3, 2.8), (2, 2)))
+        else:
+            self.items.set_column_layout(((0, 3), (1, 1.6), (2, 1), (3, 1.5), (4, 1.5), (5, 1.8)))
         self.items.itemChanged.connect(self.recalculate)
         content.addWidget(self.items)
 
@@ -1388,6 +815,7 @@ class QuoteDialog(QDialog):
         else:
             footer.addWidget(button("입금확인 · 판매 등록", lambda: self.finish("confirm"), True))
         layout.addLayout(footer)
+        scroll_dialog(self, layout)
 
         for item in draft["items"]:
             self.add_item(item)
@@ -1405,7 +833,7 @@ class QuoteDialog(QDialog):
             values = (item["species"], item["quantity"], f"{item['quantity'] * item['unitPrice']:,}")
             for column, value in enumerate(values):
                 cell = QTableWidgetItem(str(value))
-                cell.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                cell.setTextAlignment((Qt.AlignmentFlag.AlignLeft if column == 0 else Qt.AlignmentFlag.AlignRight) | Qt.AlignmentFlag.AlignVCenter)
                 cell.setFlags(cell.flags() & ~Qt.ItemFlag.ItemIsEditable)
                 self.items.setItem(index, column, cell)
             price_editor = UnitPriceEditor(item["unitPrice"], self.items)
@@ -1415,10 +843,10 @@ class QuoteDialog(QDialog):
             for column, key in enumerate(("species", "specification", "quantity", "unitPrice", "unitCost")):
                 cell = QTableWidgetItem(str(item[key]))
                 if column >= 2:
-                    cell.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                    cell.setTextAlignment((Qt.AlignmentFlag.AlignLeft if column == 0 else Qt.AlignmentFlag.AlignRight) | Qt.AlignmentFlag.AlignVCenter)
                 self.items.setItem(index, column, cell)
             amount = QTableWidgetItem("")
-            amount.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            amount.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
             amount.setFlags(amount.flags() & ~Qt.ItemFlag.ItemIsEditable)
             self.items.setItem(index, 5, amount)
         self.items.blockSignals(False)
@@ -1637,6 +1065,7 @@ class QuoteSmsDialog(QDialog):
         actions.addWidget(self.cancel_button)
         actions.addWidget(self.send_button)
         layout.addLayout(actions)
+        scroll_dialog(self, layout)
 
         QTimer.singleShot(0, self.load_profile)
 
@@ -1914,6 +1343,7 @@ class QuoteEmailDialog(QDialog):
         actions.addWidget(self.cancel_button)
         actions.addWidget(self.send_button)
         layout.addLayout(actions)
+        scroll_dialog(self, layout)
 
         QTimer.singleShot(0, self.load_profile)
 
@@ -2142,7 +1572,7 @@ class QuoteDeliveryDialog(QDialog):
         self.email_status_badge = QLabel()
         for badge in (self.sms_status_badge, self.email_status_badge):
             badge.setObjectName("channelStatusBadge")
-            badge.setFixedSize(88, 24)
+            badge.setMinimumSize(120, 36)
             badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
             delivery_badges.addWidget(badge)
         self.update_delivery_badges()
@@ -2260,9 +1690,9 @@ class QuoteDeliveryDialog(QDialog):
         self.items.setObjectName("deliveryItems")
         self.items.setAlternatingRowColors(True)
         self.items.setShowGrid(True)
-        visible_rows = min(max(len(self.draft.get("items", [])), 3), 8)
-        self.items.setMinimumHeight(62 + visible_rows * 54)
-        self.items.verticalHeader().setDefaultSectionSize(54)
+        visible_rows = min(max(len(self.draft.get("items", [])), 2), 4)
+        self.items.setMinimumHeight(54 + visible_rows * 56)
+        self.items.verticalHeader().setDefaultSectionSize(56)
 
         header = self.items.horizontalHeader()
         header.setStretchLastSection(False)
@@ -2484,15 +1914,22 @@ class QuoteDeliveryDialog(QDialog):
         actions.addWidget(self.email_button)
         actions.addWidget(self.generate_quote_button)
         actions.addWidget(self.preview_quote_button)
-        actions.addWidget(self.quote_file_label)
-
         actions.addStretch()
-
-        actions.addWidget(close_button)
-        actions.addWidget(self.sent_button)
-        actions.addWidget(self.payment_button)
-
-        layout.addLayout(actions)
+        finish_actions = QHBoxLayout()
+        finish_actions.setSpacing(12)
+        self.quote_file_label.setWordWrap(True)
+        self.quote_file_label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        finish_actions.addWidget(self.quote_file_label, 1)
+        finish_actions.addWidget(close_button)
+        finish_actions.addWidget(self.sent_button)
+        finish_actions.addWidget(self.payment_button)
+        footer = QVBoxLayout()
+        footer.setSpacing(12)
+        footer.addLayout(actions)
+        footer.addLayout(finish_actions)
+        layout.addLayout(footer)
+        self.items.set_column_layout(((0, 3.6), (1, 1.2), (2, 1.8), (3, 2)))
+        scroll_dialog(self, layout)
 
     def quote_number(self):
         return (
@@ -2812,12 +2249,11 @@ class CustomerOrderDialog(QDialog):
             ("송장번호", tracking),
             ("품목", item_names),
         )
-        for column, (caption, value) in enumerate(summary_values):
-            metrics.addWidget(label(caption, "customerMetricCaption"), 0, column)
-            metrics.addWidget(label(value, "customerMetricValue"), 1, column)
-        metrics.addWidget(label("결제금액", "customerMetricCaption"), 0, len(summary_values))
-        amount_label = label(money(payment), "customerAmountValue")
-        metrics.addWidget(amount_label, 1, len(summary_values))
+        for index, (caption, value) in enumerate((*summary_values, ("결제금액", money(payment)))):
+            row, column = divmod(index, 3)
+            metrics.addWidget(label(caption, "customerMetricCaption"), row * 2, column)
+            metrics.addWidget(label(value, "customerAmountValue" if index == 5 else "customerMetricValue", True), row * 2 + 1, column)
+            metrics.setColumnStretch(column, 1)
         layout.addWidget(summary)
 
         body = QHBoxLayout()
@@ -2843,6 +2279,7 @@ class CustomerOrderDialog(QDialog):
         )
         for index, (name, caption) in enumerate(fields):
             edit = QLineEdit(str(self.order.get(name, "") or ""))
+            edit.setAccessibleName(caption)
             edit.setMaxLength({"customerEmail":254, "roadAddress":300, "detailAddress":300,
                                "receiverName":100, "customerName":50, "customerPhone":20, "zipNo":10}.get(name, 300))
             if name == "customerPhone" and self.row["private"].get("quoteDocumentJson"):
@@ -2857,6 +2294,7 @@ class CustomerOrderDialog(QDialog):
 
         info_layout.addWidget(label("배송 메모", "customerMetricCaption"))
         self.note = QPlainTextEdit(str(self.order.get("note", "") or ""))
+        self.note.setAccessibleName("배송 메모")
         self.note.setMaximumHeight(100)
         info_layout.addWidget(self.note)
         body.addWidget(info_card, 3)
@@ -2882,10 +2320,12 @@ class CustomerOrderDialog(QDialog):
         finance_form.addRow("수수료율", self.commission)
 
         self.cost_total = QLineEdit(str(int(self.order.get("costTotal", 0) or 0)))
+        self.cost_total.setAlignment(Qt.AlignmentFlag.AlignRight)
         self.cost_total.setValidator(QIntValidator(0, 999999999, self.cost_total))
         finance_form.addRow("원가 합계 (원)", self.cost_total)
 
         self.expense_total = QLineEdit(str(int(self.order.get("expenseTotal", 0) or 0)))
+        self.expense_total.setAlignment(Qt.AlignmentFlag.AlignRight)
         self.expense_total.setValidator(QIntValidator(0, 999999999, self.expense_total))
         finance_form.addRow("기타 비용 (원)", self.expense_total)
 
@@ -2921,6 +2361,7 @@ class CustomerOrderDialog(QDialog):
         ])
         polish_table(self.items)
         center_table_columns(self.items, (1, 2, 3, 4))
+        self.items.set_column_layout(((0, 3.5), (1, 2), (2, 1), (3, 1.7), (4, 2)))
         self.items.setMinimumHeight(min(280, 62 + max(1, len(self.meta.get("items", []))) * 45))
         layout.addWidget(self.items, 1)
 
@@ -2947,6 +2388,7 @@ class CustomerOrderDialog(QDialog):
         actions.addWidget(self.save_button)
         actions.addWidget(self.delivery_button)
         layout.addLayout(actions)
+        scroll_dialog(self, layout)
 
     def collect_fields(self):
         result = {name: edit.text().strip() for name, edit in self.customer_fields.items()}
@@ -3081,6 +2523,7 @@ class ShippingExportDialog(QDialog):
         actions.addWidget(button("취소", self.reject))
         actions.addWidget(button("확인 후 XLS 저장", self.validate_export, True))
         layout.addLayout(actions)
+        scroll_dialog(self, layout)
 
     def apply_common(self):
         for _, freight, fare, jeju in self.parcel_inputs:
@@ -3108,8 +2551,8 @@ class ShippingExportDialog(QDialog):
 
 
 class SellerWindow(MainWindow):
-    PAGES = (("오늘의 업무", "OVERVIEW"), ("온라인 견적 요청", "INBOX"), ("견적 작업대", "QUOTATIONS"),
-             ("판매 · 고객 관리", "ORDERS"), ("배송 · 로젠 송장", "FULFILLMENT"), ("매출 · 이익 분석", "REPORTS"), ("연결 · 설정", "SETTINGS"))
+    PAGES = (("오늘의 업무", "OVERVIEW"), ("견적요청", "INBOX"), ("견적확정", "QUOTATIONS"),
+             ("판매관리", "ORDERS"), ("배송 · 송장", "FULFILLMENT"), ("매출 · 이익", "REPORTS"), ("연결 · 설정", "SETTINGS"))
 
     def __init__(self, vault_path=None):
         self.workspace_ready = False
@@ -3119,8 +2562,8 @@ class SellerWindow(MainWindow):
         self.tray_icon = None
         super().__init__(vault_path)
         self.setWindowTitle("나무팜 판매관리 | NamuFarm Seller")
-        self.setMinimumSize(1240, 760)
-        self.resize(1920, 1080)
+        self.setMinimumSize(1000, 620)
+        fit_window(self, 1920, 1080)
         self.setStyleSheet(STYLE)
         old_root = self.takeCentralWidget()
         old_pages = []
@@ -3143,13 +2586,14 @@ class SellerWindow(MainWindow):
         outer.setSpacing(0)
         sidebar = QFrame()
         sidebar.setObjectName("sidebar")
-        sidebar.setFixedWidth(242)
+        self.sidebar = sidebar
+        sidebar.setFixedWidth(220)
         side = QVBoxLayout(sidebar)
-        side.setContentsMargins(18, 32, 18, 22)
-        side.setSpacing(9)
+        side.setContentsMargins(12, 20, 12, 16)
+        side.setSpacing(6)
         side.addWidget(label("  namufarm", "brand"))
-        side.addWidget(label(f"    나무팜 판매관리 (Ver. {__version__})", "navFoot"))
-        side.addSpacing(35)
+        side.addWidget(label(f"  나피 · Ver. {__version__}", "navFoot"))
+        side.addSpacing(12)
         self.nav = []
         for index, (title, _) in enumerate(self.PAGES):
             widget = button(f"{index+1:02d}   {title}", lambda checked=False, i=index: self.navigate(i))
@@ -3173,8 +2617,8 @@ class SellerWindow(MainWindow):
         outer.addWidget(sidebar)
         content = QWidget()
         content_layout = QVBoxLayout(content)
-        content_layout.setContentsMargins(30, 22, 30, 16)
-        content_layout.setSpacing(15)
+        content_layout.setContentsMargins(24, 20, 24, 16)
+        content_layout.setSpacing(16)
         header = QHBoxLayout()
         heading = QVBoxLayout()
         self.page_eyebrow = label("", "eyebrow")
@@ -3186,7 +2630,9 @@ class SellerWindow(MainWindow):
         header.addWidget(label(datetime.now(SEOUL).strftime("%Y.%m.%d"), "muted"))
         self.global_search = QLineEdit()
         self.global_search.setPlaceholderText("고객 · 주문 검색   Ctrl+K")
-        self.global_search.setFixedWidth(230)
+        self.global_search.setMinimumWidth(160)
+        self.global_search.setMaximumWidth(260)
+        self.global_search.setAccessibleName("고객과 주문 검색")
         self.global_search.returnPressed.connect(self.search_all)
         header.addWidget(self.global_search)
 
@@ -3195,47 +2641,67 @@ class SellerWindow(MainWindow):
         self.sync_button.setMinimumWidth(138)
         header.addWidget(self.sync_button)
 
-        self.server_log_frame = QFrame()
-        self.server_log_frame.setObjectName("serverLogFrame")
-        self.server_log_frame.setMinimumWidth(330)
-        self.server_log_frame.setMaximumWidth(480)
-        log_layout = QHBoxLayout(self.server_log_frame)
-        log_layout.setContentsMargins(0, 0, 0, 0)
-        log_layout.setSpacing(0)
-        log_title = QLabel("SERVER LOG")
-        log_title.setObjectName("serverLogTitle")
-        log_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        log_layout.addWidget(log_title)
-        self.message.setObjectName("serverLogText")
-        self.message.setWordWrap(False)
-        self.message.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
-        self.message.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        log_layout.addWidget(self.message, 1)
-        header.addWidget(self.server_log_frame, 1)
-
-        self.new_quote_button = button("+ 전화 견적", self.add_manual_quote, True)
+        self.new_quote_button = button("+ 전화 견적", self.add_manual_quote)
         header.addWidget(self.new_quote_button)
         content_layout.addLayout(header)
+
+        self.server_log_frame = QFrame()
+        self.server_log_frame.setObjectName("serverLogFrame")
+        self.server_log_frame.setProperty("state", "idle")
+        log_layout = QHBoxLayout(self.server_log_frame)
+        log_layout.setContentsMargins(12, 10, 12, 10)
+        log_layout.setSpacing(12)
+        self.status_title = label("연결 안내", "serverLogTitle")
+        log_layout.addWidget(self.status_title)
+        self.message.setObjectName("serverLogText")
+        self.message.setWordWrap(True)
+        self.message.setMinimumWidth(0)
+        self.message.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        self.message.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        self.message.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        self.message.setAccessibleName("연결 및 작업 상태")
+        log_layout.addWidget(self.message, 1)
+        self.status_details_button = button("자세히 보기", self.show_status_details)
+        log_layout.addWidget(self.status_details_button)
+        content_layout.addWidget(self.server_log_frame)
+
         self.stack = QStackedWidget()
-        self.stack.addWidget(self.build_dashboard())
+        self.stack.addWidget(scroll_page(self.build_dashboard()))
         self.stack.addWidget(old_pages[0])
         self.stack.addWidget(self.build_drafts())
         self.stack.addWidget(self.build_customer_management())
-        self.stack.addWidget(self.build_shipping())
-        self.stack.addWidget(old_pages[2])
+        self.stack.addWidget(scroll_page(self.build_shipping()))
+        self.stack.addWidget(scroll_page(old_pages[2]))
         self.stack.addWidget(old_pages[3])
+        for index in range(self.stack.count()):
+            self.stack.widget(index).setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Ignored)
         content_layout.addWidget(self.stack, 1)
         content_layout.addWidget(self.summary)
         outer.addWidget(content, 1)
         old_root.deleteLater()
-        self.manual_quote_button = button("전화 견적 추가", self.add_manual_quote, True)
+        self.manual_quote_button = button("전화 견적 추가", self.add_manual_quote)
+        # The same action is already available in the persistent page header.
+        self.manual_quote_button.setParent(self)
+        self.manual_quote_button.hide()
         self.request_quote_button = button("견적 작성", self.quote_request, True)
+        self.request_details_button = button("요청 상세", self.show_request_details)
         self.request_table.itemDoubleClicked.connect(self.quote_request)
-        self.request_actions.addWidget(self.manual_quote_button)
+        for index in range(self.request_actions.count()):
+            item = self.request_actions.itemAt(index)
+            if isinstance(item.widget(), QLabel):
+                item.widget().hide()
+        self.request_actions.removeWidget(self.delete_button)
+        self.request_actions.insertWidget(0, self.request_details_button)
+        self.request_actions.insertWidget(1, self.delete_button)
         self.request_actions.addWidget(self.request_quote_button)
-        for item in old_pages[0].findChildren(QLabel):
-            if "수동 견적" in item.text():
-                item.setText("요청을 더블클릭해 견적을 작성하세요. 견적확정 후 견적 작업대에서 고객 전달을 진행합니다.")
+        self.request_table.setWordWrap(False)
+        self.request_table.setTextElideMode(Qt.TextElideMode.ElideRight)
+        self.request_table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Fixed)
+        self.request_table.set_column_layout(((0, 2.1), (3, 1.6), (4, 1.7), (8, 2.8), (1, 1.7), (7, 1.1)))
+        self.ui_settings = QSettings("NamuFarm", "NamuFarmDesktop")
+        self.large_font_check.setChecked(self.ui_settings.value("ui/largeFont", False, type=bool))
+        self.large_font_check.toggled.connect(self.apply_design_scale)
+        self.apply_design_scale(self.large_font_check.isChecked())
         for widget in self.findChildren(type(self.request_table)):
             polish_table(widget)
         self.save_button.setObjectName("primary")
@@ -3259,8 +2725,81 @@ class SellerWindow(MainWindow):
         QShortcut(QKeySequence("Ctrl+K"), self, activated=self.global_search.setFocus)
         QShortcut(QKeySequence("Ctrl+N"), self, activated=self.add_manual_quote)
         QShortcut(QKeySequence("F5"), self, activated=self.manual_sync)
+        for widget, action in ((self.request_table, self.show_request_details),
+                               (self.draft_table, self.open_draft),
+                               (self.sale_table, self.open_customer_order)):
+            shortcut = QShortcut(QKeySequence("Return"), widget, activated=action)
+            shortcut.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
         self.refresh_workspace()
         self.update_controls()
+
+    def apply_design_scale(self, large):
+        app = QApplication.instance()
+        app.setProperty("namufarmLargeFont", bool(large))
+        style = workspace_style(bool(large))
+        app.setStyleSheet(style)
+        self.setStyleSheet(style)
+        self.ui_settings.setValue("ui/largeFont", bool(large))
+        for widget in self.findChildren(QTableWidget):
+            polish_table(widget)
+            if hasattr(widget, "fit_columns"):
+                widget.fit_columns()
+
+    def show_status_details(self):
+        dialog = QMessageBox(self)
+        dialog.setWindowTitle("연결 및 작업 안내")
+        dialog.setIcon(QMessageBox.Icon.Information)
+        dialog.setText(getattr(self.message, "details", self.message.text()))
+        dialog.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        dialog.setStandardButtons(QMessageBox.StandardButton.Ok)
+        dialog.exec()
+
+    def show_request_details(self):
+        index = self.request_table.currentRow()
+        if not 0 <= index < len(self.request_rows):
+            return
+        request = self.request_rows[index]
+        personal = request["personal"]
+        def escaped(value):
+            return html_escape(str(value or "미입력")).replace("\n", "<br>")
+        fields = (
+            ("접수번호", request.get("receiptNumber") or request["requestId"]),
+            ("접수일", timestamp(request["createdAt"])),
+            ("고객명", personal.get("customerName")),
+            ("연락처", personal.get("customerPhone")),
+            ("이메일", personal.get("customerEmail")),
+            ("지역", personal.get("region")),
+            ("공식 견적서", "요청" if personal.get("formalQuoteRequested") else "미요청"),
+        )
+        rows = "".join(f"<p><b>{escaped(title)}</b><br>{escaped(value)}</p>" for title, value in fields)
+        items = "".join(
+            f"<li>{escaped(item['species'])} · {escaped(item.get('specification'))} · {item['quantity']:,}주</li>"
+            for item in personal.get("items", [])
+        )
+        dialog = QDialog(self)
+        dialog.setWindowTitle("견적요청 상세")
+        layout = QVBoxLayout(dialog)
+        browser = QTextBrowser()
+        browser.setOpenExternalLinks(False)
+        browser.setAccessibleName("고객 정보와 묘목 요청 상세")
+        browser.setHtml(rows + "<h3>희망 묘목</h3><ul>" + items + "</ul><h3>요청사항</h3><p>" + escaped(personal.get("message")) + "</p>")
+        layout.addWidget(browser, 1)
+        layout.addWidget(button("닫기", dialog.accept), 0, Qt.AlignmentFlag.AlignRight)
+        fit_window(dialog, 760, 760)
+        dialog.exec()
+
+    def run_job(self, title, work, on_success=None, refresh_on_error=True):
+        starting = self.task is None
+        super().run_job(title, work, on_success, refresh_on_error)
+        if starting and self.workspace_ready:
+            self.set_status_state("working", "처리 중")
+
+    def set_status_state(self, state, title):
+        self.status_title.setText(title)
+        self.server_log_frame.setProperty("state", state)
+        self.server_log_frame.style().unpolish(self.server_log_frame)
+        self.server_log_frame.style().polish(self.server_log_frame)
+        self.server_log_frame.update()
 
     def build_dashboard(self):
         page = QWidget()
@@ -3318,8 +2857,8 @@ class SellerWindow(MainWindow):
     def build_drafts(self):
         page = QWidget()
         layout = QVBoxLayout(page)
-        layout.addWidget(label("확정된 견적을 고객에게 전달하고 후속 작업을 관리하세요.", "sectionTitle"))
-        layout.addWidget(label("견적확정 → 고객 전달 → 견적발송완료까지 이 작업대에서 관리합니다. 이후 실제 입금을 확인하면 입금확인으로 판매 · 고객 관리에 이동합니다.", "muted", True))
+        layout.addWidget(label("고객에게 전달할 견적을 선택하세요.", "sectionTitle"))
+        layout.addWidget(label("견적확정 → 발송완료 → 입금확인 순서로 진행합니다. 메일·요청사항은 선택 견적 열기에서 확인하세요.", "muted", True))
         self.draft_table = table(["견적번호", "상태", "작성일", "고객명", "연락처", "메일", "공식견적서", "품목", "판매금액"])
         self.draft_sort_descending = False
         header = self.draft_table.horizontalHeader()
@@ -3332,11 +2871,13 @@ class SellerWindow(MainWindow):
             header.setSectionResizeMode(column, QHeaderView.ResizeMode.Interactive)
             self.draft_table.setColumnWidth(column, width)
         header.setSectionResizeMode(7, QHeaderView.ResizeMode.Stretch)
-        self.draft_table.itemDoubleClicked.connect(self.open_draft)
+        self.draft_table.set_column_layout(((0, 2.1), (1, 1.5), (3, 1.6), (4, 1.7), (7, 2.7), (8, 1.7)))
         self.draft_table.itemSelectionChanged.connect(self.update_controls)
+        self.draft_table.itemDoubleClicked.connect(self.open_draft)
         layout.addWidget(self.draft_table)
         bar = QHBoxLayout()
         self.draft_delete = button("선택 견적 삭제", self.remove_draft)
+        self.draft_delete.setObjectName("danger")
         self.draft_open = button("선택 견적 열기", self.open_draft, True)
         bar.addWidget(self.draft_delete)
         bar.addStretch()
@@ -3361,8 +2902,7 @@ class SellerWindow(MainWindow):
         layout.setSpacing(12)
         layout.addWidget(label("입금확인 이후 고객 · 배송 · 판매 상태를 관리하세요.", "sectionTitle"))
         layout.addWidget(label(
-            "견적발송완료 후 구매·입금이 확인된 주문이 이 목록으로 이동합니다. "
-            "주문을 더블클릭하면 고객정보, 배송주소, 품목, 원가와 다음 단계를 한 번에 확인할 수 있습니다.",
+            "입금확인 → 배송완료 순서로 관리합니다. 주소·메일·수령인은 고객 관리 열기에서 확인하세요.",
             "muted", True
         ))
 
@@ -3388,9 +2928,10 @@ class SellerWindow(MainWindow):
             header.setSectionResizeMode(column, QHeaderView.ResizeMode.Interactive)
             self.sale_table.setColumnWidth(column, width)
         header.setSectionResizeMode(8, QHeaderView.ResizeMode.Stretch)
-        self.sale_table.setWordWrap(True)
-        self.sale_table.setTextElideMode(Qt.TextElideMode.ElideNone)
-        self.sale_table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+        self.sale_table.setWordWrap(False)
+        self.sale_table.setTextElideMode(Qt.TextElideMode.ElideRight)
+        self.sale_table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Fixed)
+        self.sale_table.set_column_layout(((0, 1.9), (3, 1.6), (4, 1.7), (8, 2.6), (9, 1.7), (1, 1.4), (2, 1.7)))
         self.sale_table.itemSelectionChanged.connect(self.select_sale)
         self.sale_table.itemDoubleClicked.connect(self.open_customer_order)
         layout.addWidget(self.sale_table, 1)
@@ -3569,8 +3110,15 @@ class SellerWindow(MainWindow):
 
     def job_finished(self, task, value, error, conflict, on_success):
         super().job_finished(task, value, error, conflict, on_success)
+        self.set_status_state("error" if error else "success", "처리 실패" if error else "처리 완료")
+        title = getattr(task, "operation_title", "")
+        if (not error and isinstance(value, dict) and "requests" in value
+                and ("동기화" in title or "서버 연결" in title)):
+            completed = timestamp(datetime.now(SEOUL).timestamp() * 1000)
+            self.last_sync_label.setText("마지막 동기화 성공 · " + completed)
+            self.set_status_state("success", "동기화 완료")
         if self._request_arrival_notice:
-            current = self.message.text().strip()
+            current = getattr(self.message, "details", self.message.text()).strip()
             self.message.setText(
                 self._request_arrival_notice + ("  |  " + current if current else "")
             )
@@ -3595,8 +3143,9 @@ class SellerWindow(MainWindow):
         self.new_quote_button.setEnabled(ready)
         self.manual_quote_button.setEnabled(ready)
         self.request_quote_button.setEnabled(ready and self.request_table.currentRow() >= 0)
-        self.draft_open.setEnabled(ready)
+        self.request_details_button.setEnabled(self.request_table.currentRow() >= 0)
         selected_draft = self.draft_table.currentRow()
+        self.draft_open.setEnabled(ready and 0 <= selected_draft < len(self.draft_rows))
         self.draft_delete.setEnabled(
             ready and 0 <= selected_draft < len(self.draft_rows)
             and self.draft_rows[selected_draft]["id"] not in getattr(self, "cloud_quote_ids", set())
@@ -4142,6 +3691,7 @@ class SellerWindow(MainWindow):
     def manual_sync(self):
         if not getattr(self, "demo_mode", False):
             super().manual_sync()
+
 
 
 
