@@ -55,7 +55,7 @@ class Manager:
                 pass
         info = self.verify_server()
         require(info.get("connectionAuth") == "auto-v1",
-                "현재 서버는 암호 없는 재연결을 지원하지 않습니다. 기존 Apps Script 웹앱을 최신 버전으로 배포해주세요.")
+                "운영 Apps Script 배포가 이전 인증 방식입니다. 기존 서버의 Code.gs와 SecureCommerce.gs를 최신 main 코드로 교체하고, 동일 배포 ID의 새 버전으로 업데이트해주세요. 기존 자료는 유지됩니다.")
         result = self.api.call("connect_app", authMode="auto-v1", label="나무팜 PC")
         require(result.get("paired") is True and result.get("authMode") == "auto-v1",
                 "구글시트 서버에 자동 연결 기능을 배포해주세요.")

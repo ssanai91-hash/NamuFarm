@@ -29,7 +29,7 @@ class WebRequestConnection(context: Context, private val repository: NamuFarmRep
         ))
         WebQuoteValidator.checkResponse(response)
         check(response.paired == true && response.authMode == "auto-v1") {
-            "구글시트 서버에 자동 연결 기능을 배포해주세요."
+            "운영 Apps Script 배포가 이전 인증 방식입니다. Code.gs·SecureCommerce.gs를 최신 버전으로 반영하고 기존 웹앱 배포를 업데이트해주세요."
         }
         settings.markPaired()
         WebRequestPush.initialize(app)
