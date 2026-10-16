@@ -26,7 +26,7 @@ jobs:
         run: python -m pip install -e desktop 'pyinstaller>=6.11,<7'
       - name: Build Windows executable
         working-directory: desktop
-        run: python -m PyInstaller --noconfirm --clean --onefile --windowed --name NamuFarm-PC run_desktop.py
+        run: python -m PyInstaller --noconfirm --clean --onefile --windowed --name NamuFarm-PC --collect-data namufarm_desktop run_desktop.py
       - name: Verify packaged Windows Qt startup
         env:
           QT_QPA_PLATFORM: offscreen
@@ -53,3 +53,4 @@ jobs:
           $tag = "desktop-exe-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
           gh release create $tag desktop/dist/NamuFarm-PC.exe desktop/README.md --draft --target $env:GITHUB_SHA --title "NamuFarm-PC $($env:GITHUB_SHA.Substring(0,7))" --notes "Manual Windows executable build. Source commit: $env:GITHUB_SHA."
           if ($LASTEXITCODE -ne 0) { throw "Could not save Windows EXE draft release." }
+

@@ -749,6 +749,9 @@ def main():
     if "--self-check" in sys.argv:
         app.processEvents()
         require(window.stack.count() == 7, "PC 화면 초기화에 실패했습니다.")
+        from importlib.resources import files
+        stamp = files("namufarm_desktop").joinpath("assets", "quote_stamp.png").read_bytes()
+        require(stamp.startswith(b"\x89PNG\r\n\x1a\n"), "공식 견적서 직인 이미지를 확인해주세요.")
         from .shipping_excel import check_excel_runtime
         check_excel_runtime()
         window.close()
@@ -759,4 +762,5 @@ def main():
         return app.exec()
     QTimer.singleShot(0, window.open_vault)
     return app.exec()
+
 

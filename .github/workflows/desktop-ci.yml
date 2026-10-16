@@ -54,7 +54,7 @@ jobs:
         run: python -m unittest discover -s desktop/tests -v
       - name: Build Windows executable
         working-directory: desktop
-        run: python -m PyInstaller --noconfirm --clean --onefile --windowed --name NamuFarm-PC run_desktop.py
+        run: python -m PyInstaller --noconfirm --clean --onefile --windowed --name NamuFarm-PC --collect-data namufarm_desktop run_desktop.py
       - name: Verify packaged Windows Qt startup
         env:
           QT_QPA_PLATFORM: offscreen
