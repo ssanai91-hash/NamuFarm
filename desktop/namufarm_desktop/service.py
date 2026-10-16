@@ -8,7 +8,7 @@ from pathlib import Path
 from .api import DEFAULT_URL, ScriptApi
 from .crypto import canonical, digest, customer_digest, SellerKey
 from .domain import (changed, integer, metadata, now_ms, require, valid_id, validate_metadata, validate_request, sale_expired)
-from .errors import UserError, ConflictError
+from .errors import AuthenticationError, UserError, ConflictError
 from .commerce import (validate_draft, order_from_draft, quote_document, tracking_fields,
                        tracking_number, normalize_tracking)
 
@@ -47,8 +47,15 @@ class Manager:
     def connect(self):
         """Enroll this PC with the configured server without asking for a key or file."""
         if self.credentials.get("paired") is True:
-            return self.sync()
-        self.verify_server()
+            try:
+                return self.sync()
+            except AuthenticationError:
+                # A restored vault can outlive the server's device registry.
+                # Reuse its token and pending event IDs on this same server.
+                pass
+        info = self.verify_server()
+        require(info.get("connectionAuth") == "auto-v1",
+                "현재 서버는 암호 없는 재연결을 지원하지 않습니다. 기존 Apps Script 웹앱을 최신 버전으로 배포해주세요.")
         result = self.api.call("connect_app", authMode="auto-v1", label="나무팜 PC")
         require(result.get("paired") is True and result.get("authMode") == "auto-v1",
                 "구글시트 서버에 자동 연결 기능을 배포해주세요.")
@@ -703,6 +710,7 @@ class Manager:
             integer(bucket.get("knownProfit"), -9007199254740991)
             require(bucket["unknownProfitOrders"] <= bucket["orders"])
         return report
+
 
 
 

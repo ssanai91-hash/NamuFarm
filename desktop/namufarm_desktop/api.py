@@ -5,16 +5,16 @@ import urllib.parse
 import urllib.request
 
 from .crypto import canonical
-from .errors import ConflictError, NetworkError, UserError
+from .errors import AuthenticationError, ConflictError, NetworkError, UserError
 
 RETIRED_URL = "https://script.google.com/macros/s/AKfycbw8uqBWveIhqmXielALjSLnY1yDenKAwl070FT6Lsxsj7Xiod1C5JSBDZGfQtlrl6A-CQ/exec"
 PREVIOUS_URL = "https://script.google.com/macros/s/AKfycbzY7JKzXYmS9APLNFDt15k8dv09zb4EXKFHOOv_T1vpFmkr6TLwbqGznGLgpd2cIVgD/exec"
-DEFAULT_URL = "https://script.google.com/macros/s/AKfycbw4GnfIlXyjMo9TPZmCmRnmIIzd016piTDma-xrh7w/exec"
+DEFAULT_URL = "https://script.google.com/macros/s/AKfycbzY7JKzXYmS9APLNFDt15k8dv09zb4EXKFHOOv_T1vpFmkr6TLwbqGznGLgpd2cIVgD/exec"
 MAX_RESPONSE = 8 * 1024 * 1024
 # Allow the server's 15-second lock wait plus connection/startup overhead.
 # urllib applies this to blocking I/O, not the entire redirect/request chain.
 REQUEST_TIMEOUT = 75
-ACTION_LABELS = {"pair_device": "PC 연결", "close_request": "문의 삭제", "save_sale": "판매 저장",
+ACTION_LABELS = {"connect_app": "서버 재연결", "pair_device": "PC 연결", "close_request": "문의 삭제", "save_sale": "판매 저장",
                  "update_request_status": "견적 발송 상태 저장", "email_profile": "메일 발신 계정 확인",
                  "send_quote_email": "견적 메일 전송", "sms_profile": "문자 발신 설정 확인",
                  "send_quote_sms": "견적 문자 전송", "quote_sms_status": "문자 전송 결과 확인",
@@ -75,8 +75,9 @@ class ScriptApi:
                 code = result.get("code") if isinstance(result, dict) else None
                 if code == "CONFLICT":
                     raise ConflictError("앱이나 다른 PC에서 먼저 수정했습니다. 전송 대기를 확인해주세요.")
-                messages = {"UNAUTHORIZED": "기기 연결을 확인하지 못했습니다. 서버 연결을 다시 시도해주세요.",
-                            "NOT_READY": "구글시트 서버 설정과 배포 버전을 확인해주세요.",
+                if code == "UNAUTHORIZED":
+                    raise AuthenticationError(f"{label} 중 기기 연결을 확인하지 못했습니다. ‘서버 동기화’를 눌러 다시 연결해주세요.")
+                messages = {"NOT_READY": "구글시트 서버 설정과 배포 버전을 확인해주세요.",
                             "DEVICE_LIMIT": "서버 기기 등록 한도에 도달했습니다. 서버 관리자에게 문의해주세요.",
                             "UPGRADE_REQUIRED": "앱과 구글시트 서버를 최신 버전으로 업데이트해주세요.",
                             "INVALID_ACTION": "현재 연결된 Apps Script /exec 배포가 이전 버전입니다. 기존 웹앱을 새 버전으로 다시 배포해주세요.",
@@ -114,6 +115,7 @@ class ScriptApi:
         if not re.fullmatch(r"[a-f0-9]{64}", self.token):
             raise UserError("PC 기기 연결을 먼저 완료해주세요.")
         return self._send({"action": action, "deviceToken": self.token, **fields})
+
 
 
 

@@ -7,12 +7,12 @@ from zipfile import ZipFile
 from xml.etree import ElementTree as ET
 
 from namufarm_desktop.connection import connection_input
-from namufarm_desktop.errors import UserError, NetworkError
+from namufarm_desktop.errors import AuthenticationError, UserError, NetworkError
 from namufarm_desktop.service import Manager
 from namufarm_desktop.store import Vault
 from namufarm_desktop.commerce import new_draft
 from test_simple_connection import TestAccount
-from support import Bridge, TestApi
+from support import Bridge, TestApi, PASSWORD
 
 
 class LocalSyncTest(unittest.TestCase):
@@ -80,4 +80,61 @@ class LocalSyncTest(unittest.TestCase):
             with self.assertRaises(UserError):
                 connection_input(url, key)
         self.assertEqual(before, self.vault.credentials())
+
+    def test_missing_registration_recovers_without_losing_draft_or_duplicating_pending_sale(self):
+        self.manager.restore_legacy(self.bridge.initial['backup'], PASSWORD)
+        self.bridge.send(control='seed')
+        self.bridge.send(control='submit_plain')
+        before = self.manager.sync()
+        draft = new_draft(before['requests'][0])
+        self.manager.save_draft(draft)
+        credentials = self.vault.credentials()
+        self.api.offline = True
+        with self.assertRaises(NetworkError):
+            self.manager.save_sale('ORDER_TEST', 1, {'receiverName': '전송 대기 수정'})
+        operation = self.vault.pending()[0]
+        self.api.offline = False
+        self.bridge.send(control='revoke_devices')
+        self.api.calls.clear()
+        view = self.manager.connect()
+        self.assertEqual(1, self.api.calls.count('connect_app'))
+        self.assertEqual(credentials['deviceToken'], self.vault.credentials()['deviceToken'])
+        self.assertEqual(credentials['url'], self.api.url)
+        self.assertEqual(before['requests'], view['requests'])
+        self.assertEqual([draft], view['drafts'])
+        self.assertEqual(operation['id'], view['sales'][0]['eventId'])
+        self.assertEqual(2, view['sales'][0]['metadata']['revision'])
+        self.assertEqual('전송 대기 수정', view['sales'][0]['private']['order']['receiverName'])
+        self.assertEqual([], view['pending'])
+        self.assertEqual(2, self.bridge.send(control='stored')['order']['revision'])
+
+    def test_valid_connection_and_offline_failure_do_not_register_again(self):
+        credentials = self.vault.credentials()
+        self.api.calls.clear()
+        self.manager.connect()
+        self.assertNotIn('connect_app', self.api.calls)
+        self.api.calls.clear()
+        self.api.offline = True
+        with self.assertRaises(NetworkError):
+            self.manager.connect()
+        self.assertNotIn('connect_app', self.api.calls)
+        self.assertEqual(credentials, self.vault.credentials())
+
+    def test_old_server_reports_required_deployment_without_changing_credentials(self):
+        credentials = self.vault.credentials()
+        self.bridge.send(control='revoke_devices')
+        self.api.info_filter = lambda info: {**info, 'connectionAuth': 'shared-key-v1'}
+        self.api.calls.clear()
+        with self.assertRaisesRegex(UserError, 'Apps Script'):
+            self.manager.connect()
+        self.assertNotIn('connect_app', self.api.calls)
+        self.assertEqual(credentials, self.vault.credentials())
+
+    def test_repeated_auth_rejection_stops_after_one_reenrollment(self):
+        self.api.calls.clear()
+        with patch.object(self.manager, 'sync', side_effect=AuthenticationError('rejected')) as sync:
+            with self.assertRaises(AuthenticationError):
+                self.manager.connect()
+        self.assertEqual(2, sync.call_count)
+        self.assertEqual(1, self.api.calls.count('connect_app'))
 

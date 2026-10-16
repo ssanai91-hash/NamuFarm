@@ -4,7 +4,7 @@ import unittest
 import urllib.error
 
 from namufarm_desktop.api import DEFAULT_URL, REQUEST_TIMEOUT, GoogleRedirect, ScriptApi
-from namufarm_desktop.errors import NetworkError
+from namufarm_desktop.errors import AuthenticationError, NetworkError, UserError
 
 
 class FakeOpener:
@@ -87,6 +87,29 @@ class ApiTest(unittest.TestCase):
         self.assertEqual('test-request', json.loads(request.data)['requestId'])
         self.assertEqual(1, len(opener.calls))
 
+    def test_rejected_device_is_distinct_from_transport_and_other_server_errors(self):
+        opener = FakeOpener(b'{"ok":false,"code":"UNAUTHORIZED"}')
+        api = ScriptApi(token='a' * 64, opener=opener)
+        with self.assertRaises(AuthenticationError) as caught:
+            api.call('list_requests')
+        self.assertIn('문의 목록 조회', str(caught.exception))
+        self.assertNotIn('a' * 64, str(caught.exception))
+        self.assertEqual(1, len(opener.calls))
+        for code in ('NOT_READY', 'BUSY', 'UPGRADE_REQUIRED'):
+            api.opener = FakeOpener(json.dumps({'ok': False, 'code': code}).encode())
+            with self.assertRaises(UserError) as other:
+                api.call('list_requests')
+            self.assertNotIsInstance(other.exception, AuthenticationError)
+
+    def test_reenrollment_uses_the_existing_token_without_the_rejected_common_key(self):
+        opener = FakeOpener(b'{"ok":true,"paired":true,"authMode":"auto-v1"}')
+        api = ScriptApi(token='a' * 64, connection_key='b' * 64, opener=opener)
+        api.call('connect_app', authMode='auto-v1')
+        payload = json.loads(opener.calls[0][0].data)
+        self.assertEqual('a' * 64, payload['deviceToken'])
+        self.assertNotIn('connectionKey', payload)
+
 
 if __name__ == '__main__':
     unittest.main()
+

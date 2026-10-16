@@ -6,6 +6,7 @@ import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+from unittest.mock import patch
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QHeaderView, QMessageBox
@@ -172,6 +173,15 @@ class UiTest(QtTestCase):
         self.assertEqual(requests_before, self.window.request_table.rowCount())
         self.assertEqual(customer_before, self.window.fields['customerName'].text())
         self.assertTrue(self.window.sync_button.isEnabled())
+
+    def test_manual_sync_uses_reconnection_even_for_a_previously_paired_vault(self):
+        self.assertTrue(self.window.data['paired'])
+        with patch.object(self.manager, 'connect', return_value=self.manager.view()) as reconnect:
+            self.window.sync_button.click()
+            self.wait_job()
+        reconnect.assert_called_once_with()
+        self.assertIsNotNone(self.window.manager)
+        self.assertTrue(self.window.data['paired'])
 
 
 if __name__ == '__main__':

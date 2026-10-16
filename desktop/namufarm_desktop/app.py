@@ -325,7 +325,7 @@ class MainWindow(QMainWindow):
     def manual_sync(self):
         if self.manager and self.allow_discard():
             self.run_job("SYNC  >  구글시트 서버 동기화 중…",
-                         self.manager.sync if self.data["paired"] else self.manager.connect)
+                         self.manager.connect)
 
     def auto_sync(self):
         if self.manager and self.data["paired"] and self.auto_check.isChecked() and not self.task and not self.dirty and not self.conflict:

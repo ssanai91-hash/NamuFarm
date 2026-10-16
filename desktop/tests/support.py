@@ -5,7 +5,7 @@ from pathlib import Path
 
 from namufarm_desktop.api import DEFAULT_URL
 from namufarm_desktop.crypto import SellerKey
-from namufarm_desktop.errors import ConflictError, NetworkError, UserError
+from namufarm_desktop.errors import AuthenticationError, ConflictError, NetworkError, UserError
 from namufarm_desktop.service import Manager
 from namufarm_desktop.store import Vault
 
@@ -58,6 +58,8 @@ class TestApi:
             raise NetworkError('offline')
         result = self.bridge.send(action=action, deviceToken=self.token, **fields)
         if result.get('ok') is not True:
+            if result.get('code') == 'UNAUTHORIZED':
+                raise AuthenticationError('connection rejected')
             if result.get('code') == 'CONFLICT':
                 raise ConflictError('conflict')
             raise UserError('server failed')
@@ -83,3 +85,4 @@ def manager_at(path, bridge):
     manager = Manager(vault, api)
     manager.pair(bridge.send(control='invite')['invite'])
     return manager
+
