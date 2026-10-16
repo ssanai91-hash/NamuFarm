@@ -3128,6 +3128,10 @@ class SellerWindow(MainWindow):
             self.tabs.removeTab(0)
             page.setParent(None)
             old_pages.append(page)
+        # Keep the hidden legacy editor alive for inherited control updates.
+        self._legacy_sales_page = old_pages[1]
+        self._legacy_sales_page.setParent(self)
+        self._legacy_sales_page.hide()
         self.tabs.setParent(self)
         self.tabs.hide()
         root = QWidget()
