@@ -178,7 +178,7 @@ def validate_request(outer, plain):
     require(valid_id(outer["requestId"]) and plain.get("requestId") == outer["requestId"])
     require(isinstance(plain.get("customerName"), str) and 2 <= len(plain["customerName"]) <= 50)
     require(isinstance(plain.get("customerPhone"), str) and re.fullmatch(r"0[0-9-]{8,19}", plain["customerPhone"]))
-    require(isinstance(plain.get("region"), str) and 2 <= len(plain["region"]) <= 100)
+    require(isinstance(plain.get("region"), str) and 0 <= len(plain["region"]) <= 100)
     require(isinstance(plain.get("items"), list) and 1 <= len(plain["items"]) <= 20)
     for item in plain["items"]:
         require(isinstance(item, dict) and isinstance(item.get("species"), str) and 1 <= len(item["species"]) <= 80)

@@ -8,7 +8,7 @@ export const quoteSchema = z.object({
   requestId: z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/),
   customerName: z.string().regex(/^[^\x00-\x08\x0b\x0c\x0e-\x1f]*$/, "입력할 수 없는 문자가 있습니다.").trim().min(2, "성함을 2자 이상 입력해주세요.").max(50),
   customerPhone: z.string().transform(v => v.replace(/[\s()-]/g, "")).pipe(z.string().regex(/^0\d{8,10}$/, "연락 가능한 전화번호를 확인해주세요.")),
-  region: z.string().regex(/^[^\x00-\x08\x0b\x0c\x0e-\x1f]*$/, "입력할 수 없는 문자가 있습니다.").trim().min(2, "배송받을 시·군·구를 입력해주세요.").max(100),
+  region: z.string().regex(/^[^\x00-\x08\x0b\x0c\x0e-\x1f]*$/, "입력할 수 없는 문자가 있습니다.").trim().max(100),
   items: z.array(quoteItemSchema).min(1).max(20),
   message: z.string().regex(/^[^\x00-\x08\x0b\x0c\x0e-\x1f]*$/, "입력할 수 없는 문자가 있습니다.").trim().max(1000),
   processingBasis: z.literal("quote_request").optional(),

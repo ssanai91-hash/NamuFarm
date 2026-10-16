@@ -139,7 +139,7 @@ object WebQuoteValidator {
             val recipient = text(row.recipientName ?: "", 100, 0)
             check(recipient.none { it.code < 32 }) { "견적서 수신인 형식을 확인해주세요." }
             WebQuoteRequestEntity(id, sequence, created, text(row.customerName, 50, 2), phone,
-                text(row.region, 100, 2), Gson().toJson(checkedItems), text(row.message, 1000, 0), customerEmail = email,
+                text(row.region, 100, 0), Gson().toJson(checkedItems), text(row.message, 1000, 0), customerEmail = email,
                 formalQuoteRequested = row.formalQuoteRequested ?: false, recipientName = recipient, replyChannel = channel, status = requestStatus,
                 receiptNumber = row.receiptNumber?.also {
                     check(Regex("(NAMU|NFQ)-[0-9]{8}-[0-9]{4,16}").matches(it)) { "견적접수번호를 확인해주세요." }

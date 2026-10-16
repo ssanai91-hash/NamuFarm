@@ -75,7 +75,7 @@ function validateRequest_(raw) {
   assert_(/^0\d{8,10}$/.test(phone));
   assert_(Array.isArray(raw.items) && raw.items.length > 0 && raw.items.length <= 20);
   const request = { requestId: raw.requestId.toLowerCase(), customerName: text_(raw.customerName, 50, 2), customerPhone: phone,
-    region: text_(raw.region, 100, 2), items: raw.items.map(item => {
+    region: text_(raw.region, 100, 0), items: raw.items.map(item => {
       assert_(item && Number.isSafeInteger(item.quantity) && item.quantity > 0 && item.quantity <= 1000000);
       return { species: text_(item.species, 80, 1), specification: text_(item.specification, 120), quantity: item.quantity };
     }), message: text_(raw.message, 1000), ...(current ? { processingBasis: 'quote_request' } : { consent: true }) };

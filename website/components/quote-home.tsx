@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Sprout, Plus, Minus, Trash2, FileText, CheckCheck, MessageCircle, ShieldCheck, LoaderCircle, CircleCheck, X, Copy, Phone, ChevronDown } from "lucide-react";
+import { Sprout, Plus, Minus, FileText, CheckCheck, MessageCircle, ShieldCheck, LoaderCircle, CircleCheck, X, Copy, Phone, ChevronDown } from "lucide-react";
 import SpeciesBrowser from "@/components/species-browser";
 import SpeciesPickerDialog from "@/components/species-picker-dialog";
 import { Button } from "@/components/ui/button";
@@ -285,14 +285,14 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
             {!ready && <div className="service-notice">온라인 접수를 준비하고 있어요. 지금은 양식을 살펴볼 수 있으며 요청은 전송되지 않습니다.</div>}
             {removed && <div className="undo-notice"><span>{removed.label} · 목록에서 뺐어요.</span><Button type="button" variant="ghost" onClick={undoRemove} disabled={locked}>되돌리기</Button></div>}
             <fieldset className="quote-section-box" disabled={locked}><legend><span>1</span>견적 요청 묘목</legend><div className="line-list">{lines.map((line, index) => <div className="item-line" key={line.id}>
-              <div className="item-number">품목 {index + 1}{lines.length > 1 && <Button type="button" variant="ghost" aria-label={`품목 ${index + 1} ${line.species} 빼기`} onClick={() => removeLine(line.id)}><Trash2 />빼기</Button>}</div>
+              <div className="item-number"><span className="item-badge">품목 {index + 1}</span>{lines.length > 1 && <Button type="button" variant="ghost" className="item-remove-button" aria-label={`품목 ${index + 1} ${line.species} 빼기`} onClick={() => removeLine(line.id)}><X aria-hidden="true" />빼기</Button>}</div>
               <div className="item-fields">
                 <div className="field species-field">
                   <Label htmlFor={"species-" + line.id} onClick={() => { if (!locked) focusField("species-" + line.id); }}>묘목 이름 <small>필수</small></Label>
                   <div className="species-select-row">
                     <Input id={"species-" + line.id} required maxLength={80} placeholder="묘목 이름 직접 입력" value={line.species} onChange={e => updateLine(line.id, "species", e.target.value)} {...fieldAttrs("species-" + line.id)} />
                     <Button id={"choose-species-" + line.id} type="button" className="species-select-button" aria-haspopup="dialog" aria-label={"품목 " + (index + 1) + " 초성으로 묘목 선택"} onClick={() => setPickerLineId(line.id)}>
-                      <span>초성 선택</span><ChevronDown className="species-picker-chevron" aria-hidden="true" />
+                      <span>초성검색</span><ChevronDown className="species-picker-chevron" aria-hidden="true" />
                     </Button>
                   </div>
                   {fieldError("species-" + line.id)}
@@ -316,7 +316,7 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
             <fieldset className="quote-section-box" disabled={locked}><legend><span>2</span>상담받을 분 · 연락처</legend><div className="contact-grid">
               <div className="field"><Label htmlFor="name">성함 <small>필수</small></Label><Input id="name" autoComplete="name" required minLength={2} maxLength={50} placeholder="성함을 적어주세요" value={name} onChange={e => { setName(e.target.value); clearProblem("name"); }} {...fieldAttrs("name")} />{fieldError("name")}</div>
               <div className="field"><Label htmlFor="phone">전화번호 <small>필수</small></Label><Input id="phone" type="tel" autoComplete="tel" inputMode="tel" required maxLength={20} placeholder="010-1234-5678" value={phone} onChange={e => { setPhone(e.target.value); clearProblem("phone"); }} {...fieldAttrs("phone")} />{fieldError("phone")}</div>
-              <div className="field full"><Label htmlFor="region">배송받을 시·군·구 <small>필수</small></Label><Input id="region" autoComplete="address-level2" required minLength={2} maxLength={100} placeholder="예: 충북 옥천군" value={region} onChange={e => { setRegion(e.target.value); clearProblem("region"); }} {...fieldAttrs("region", "region-help")} /><p id="region-help" className="field-help">상세 주소는 상담할 때 확인해요.</p>{fieldError("region")}</div>
+              <div className="field full"><Label htmlFor="region">배송지 <small>선택</small></Label><Input id="region" autoComplete="address-level2" maxLength={100} placeholder="예: 충북 옥천군" value={region} onChange={e => { setRegion(e.target.value); clearProblem("region"); }} {...fieldAttrs("region")} />{fieldError("region")}</div>
               <div className="field full"><Label htmlFor="message">궁금한 점이나 요청사항 <small>선택</small></Label><Textarea id="message" maxLength={testMode ? 900 : 1000} placeholder="심을 장소, 희망 배송 시기 등을 남겨주세요." value={message} onChange={e => { setMessage(e.target.value); clearProblem("message"); }} rows={3} {...fieldAttrs("message")} />{fieldError("message")}</div>
             </div></fieldset>
             <fieldset className="quote-section-box formal-quote-options" disabled={locked}><legend><span>3</span>공식 견적서 <small>선택</small></legend>
@@ -342,7 +342,7 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
     <Dialog open={reviewOpen && !!review} onOpenChange={open => { if (!open) closeReview(); }}><DialogContent className="review-dialog" onOpenAutoFocus={event => { event.preventDefault(); reviewTitleRef.current?.focus(); }} showCloseButton={false}>
       <DialogClose asChild><Button className="dialog-dismiss" type="button" variant="ghost" aria-label="접수 확인창 닫기"><X /></Button></DialogClose>
       <DialogHeader><DialogTitle ref={reviewTitleRef} tabIndex={-1}>{testMode ? "테스트 요청을 확인해주세요" : "견적 상담을 요청할까요?"}</DialogTitle><DialogDescription>{testMode ? testNotice : "품목·수량·연락처를 확인해주세요. 주문과 결제는 상담 후 결정합니다."}</DialogDescription></DialogHeader>
-      {review && <><section className="review-section-box" aria-labelledby="review-items-title"><h3 id="review-items-title">견적 요청 묘목</h3><div className="review-items">{review.items.map((item, i) => <div key={i}><span><strong>{item.species}</strong><small>{item.specification || "규격 상담 희망"}</small></span><b>{item.quantity.toLocaleString()}주</b></div>)}</div></section><section className="review-section-box" aria-labelledby="review-contact-title"><h3 id="review-contact-title">상담받을 분 · 연락처</h3><dl className="review-contact"><dt>성함</dt><dd>{review.customerName}</dd><dt>전화번호</dt><dd>{review.customerPhone}</dd><dt>배송 지역</dt><dd>{review.region}</dd>{review.customerEmail && <><dt>이메일</dt><dd>{review.customerEmail}</dd></>}<dt>공식 견적서</dt><dd>{review.formalQuoteRequested ? review.replyChannel === "email" ? "이메일 · PDF" : review.replyChannel === "both" ? "이메일과 문자" : "문자 · 이미지" : "요청 안 함"}</dd>{review.formalQuoteRequested && <><dt>견적서 수신인</dt><dd>{review.recipientName || review.customerName}</dd></>}{review.message && <><dt>요청사항</dt><dd>{review.message}</dd></>}</dl></section>
+      {review && <><section className="review-section-box" aria-labelledby="review-items-title"><h3 id="review-items-title">견적 요청 묘목</h3><div className="review-items">{review.items.map((item, i) => <div key={i}><span><strong>{item.species}</strong><small>{item.specification || "규격 상담 희망"}</small></span><b>{item.quantity.toLocaleString()}주</b></div>)}</div></section><section className="review-section-box" aria-labelledby="review-contact-title"><h3 id="review-contact-title">상담받을 분 · 연락처</h3><dl className="review-contact"><dt>성함</dt><dd>{review.customerName}</dd><dt>전화번호</dt><dd>{review.customerPhone}</dd><dt>배송지</dt><dd>{review.region || "미입력"}</dd>{review.customerEmail && <><dt>이메일</dt><dd>{review.customerEmail}</dd></>}<dt>공식 견적서</dt><dd>{review.formalQuoteRequested ? review.replyChannel === "email" ? "이메일 · PDF" : review.replyChannel === "both" ? "이메일과 문자" : "문자 · 이미지" : "요청 안 함"}</dd>{review.formalQuoteRequested && <><dt>견적서 수신인</dt><dd>{review.recipientName || review.customerName}</dd></>}{review.message && <><dt>요청사항</dt><dd>{review.message}</dd></>}</dl></section>
         {!ready && <p className="service-notice">온라인 접수를 준비하고 있어요. 현재 요청은 전송할 수 없습니다.</p>}
         <div role="status" aria-live="polite">{busy ? <p className="service-notice">{delayed ? "확인이 늦어지고 있어요. 창을 닫아도 접수 확인은 계속됩니다. 결과가 확인되지 않으면 같은 요청으로 다시 확인해주세요." : "접수하고 있어요. 창을 닫아도 이 페이지에서 결과를 확인할 수 있어요."}</p> : uncertain && !conflict && <p className="service-notice">이미 저장됐을 수 있어요. 창을 닫아도 입력 내용과 접수 확인 정보는 유지됩니다. 같은 요청으로 다시 확인하면 중복 접수를 방지할 수 있어요.</p>}</div>
         {conflict && <div className="form-error" role="alert"><p>저장된 요청과 내용이 달라 자동 재확인을 멈췄어요. 새 요청을 만들기 전에 전화로 접수 여부를 확인해주세요.</p><a className="support-call" href={`tel:${businessInfo.mobile.replaceAll("-", "")}`}><Phone />{businessInfo.mobile}</a><details><summary>상담 시 알려줄 확인번호</summary><code>{review.requestId}</code></details></div>}
