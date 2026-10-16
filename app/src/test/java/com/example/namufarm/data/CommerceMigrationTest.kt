@@ -60,7 +60,18 @@ class CommerceMigrationTest {
     }
 
     /** Recreate the actual old order schema instead of merely changing the version number on a new DB. */
+    // A current DB must be rebuilt to the actual pre-v18 inbox schema before
+    // downgrading its version; otherwise the migration adds existing columns.
+    private fun stripV18(db: SQLiteDatabase) {
+        db.execSQL("ALTER TABLE web_quote_request RENAME TO web_quote_request_current")
+        db.execSQL("CREATE TABLE web_quote_request (requestId TEXT NOT NULL PRIMARY KEY, sequence INTEGER NOT NULL, createdAt TEXT NOT NULL, customerName TEXT NOT NULL, customerPhone TEXT NOT NULL, region TEXT NOT NULL, itemsJson TEXT NOT NULL, message TEXT NOT NULL, readAt INTEGER, customerEmail TEXT NOT NULL DEFAULT '', formalQuoteRequested INTEGER NOT NULL DEFAULT 0, recipientName TEXT NOT NULL DEFAULT '', replyChannel TEXT NOT NULL DEFAULT 'sms')")
+        val fields = "requestId,sequence,createdAt,customerName,customerPhone,region,itemsJson,message,readAt,customerEmail,formalQuoteRequested,recipientName,replyChannel"
+        db.execSQL("INSERT INTO web_quote_request ($fields) SELECT $fields FROM web_quote_request_current")
+        db.execSQL("DROP TABLE web_quote_request_current")
+        db.execSQL("CREATE UNIQUE INDEX index_web_quote_request_sequence ON web_quote_request(sequence)")
+    }
     private fun stripV16(db: SQLiteDatabase) {
+        stripV18(db)
         db.execSQL("DROP TABLE IF EXISTS deferred_web_request")
         db.execSQL("ALTER TABLE quote_list RENAME TO quote_list_v16")
         db.execSQL("CREATE TABLE quote_list (quote_id INTEGER PRIMARY KEY AUTOINCREMENT, is_prepaid INTEGER NOT NULL, shipping_fee INTEGER NOT NULL, quote_number TEXT NOT NULL, save_date TEXT NOT NULL, customer_phone TEXT NOT NULL, total_qty INTEGER NOT NULL, total_price INTEGER NOT NULL, item_summary TEXT NOT NULL)")
@@ -109,12 +120,16 @@ class CommerceMigrationTest {
         original.managementDao().insertPendingSync(PendingSyncEntity(syncType = "inventory", payloadJson = "{}"))
         original.close()
         SQLiteDatabase.openDatabase(context.getDatabasePath(name).path, null, SQLiteDatabase.OPEN_READWRITE).use { raw ->
+            stripV18(raw)
             raw.execSQL("DROP TABLE deferred_web_request"); raw.execSQL("DROP TABLE room_master_table"); raw.version = 16
         }
         val migrated = Room.databaseBuilder(context, AppDatabase::class.java, name).addMigrations(*AppDatabase.ALL_MIGRATIONS).allowMainThreadQueries().build()
         try {
             val dao = migrated.managementDao()
-            assertEquals(42L, dao.getWebRequests().single().readAt)
+            val request = dao.getWebRequests().single()
+            assertEquals(42L, request.readAt)
+            assertEquals("신규", request.status)
+            assertEquals("", request.receiptNumber)
             assertEquals(9L, dao.privacyCursor("web"))
             assertEquals(1, dao.getAllPendingSync().size)
             assertTrue(dao.getDeferredWebRequests().isEmpty())
@@ -169,3 +184,4 @@ class CommerceMigrationTest {
         }
     }
 }
+

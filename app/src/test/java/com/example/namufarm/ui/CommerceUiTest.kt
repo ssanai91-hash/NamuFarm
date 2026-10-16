@@ -49,8 +49,8 @@ class CommerceUiTest {
             SellingHome(ManagementUiState(), SnackbarHostState(), {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, { _, _ -> },
                 webRequests = listOf(webRequest), onRequest = { selected = true })
         } }
-        compose.onNodeWithText("온라인 견적 요청함").assertIsDisplayed()
-        compose.onNodeWithText("요청 동기화").assertIsDisplayed()
+        compose.onNodeWithText("신규 요청").assertIsDisplayed()
+        compose.onNodeWithText("견적 요청 가져오기").assertIsDisplayed()
         capture("selling-home", compose.onRoot())
         compose.onNodeWithText("김나무").performScrollTo().performClick()
         assertTrue(selected)
@@ -69,10 +69,10 @@ class CommerceUiTest {
                 assertEquals(request.requestId, draft.recipient.sourceRequestId)
             })
         } }
-        compose.onNodeWithText("받는 사람 · 연락처").assertIsDisplayed()
-        compose.onNodeWithTag("unit_price_0").performScrollTo().performTextInput("1500")
+        compose.onNodeWithText("고객명").assertIsDisplayed()
+        compose.onNodeWithTag("unit_price_0").performScrollTo().performTextReplacement("1500")
         capture("manual-quote", compose.onNodeWithTag("namu_dialog"))
-        compose.onNodeWithText("문자 보내기").performClick()
+        compose.onNode(hasText("문자") and hasClickAction()).performClick()
         assertEquals(OrderLineSource.MANUAL, saved!!.single().source)
         assertEquals("감나무", saved!!.single().speciesName)
         assertEquals(30, saved!!.single().orderQty)
@@ -232,18 +232,19 @@ class CommerceUiTest {
         val restoration = StateRestorationTester(compose)
         restoration.setContent { NamuFarmTheme {
             ManualQuoteEditor(webRequest.copy(itemsJson = """[{"species":"감나무","specification":"2년생","quantity":30}]""", customerEmail = "buyer@example.com", formalQuoteRequested = true), false, null, {}, { draft, action ->
-                assertEquals(2000, draft.validate(action).single().retailPrice)
+                assertEquals(4000, draft.validate(action).single().retailPrice)
                 assertTrue(draft.recipient.formalQuoteRequested)
                 selected = action
             })
         } }
+        compose.onNodeWithTag("unit_price_0").performScrollTo().assertTextContains("2000")
         compose.onNodeWithContentDescription("1번 단가 올리기").performScrollTo().performClick().performClick()
         restoration.emulateSavedInstanceStateRestore()
-        compose.onNodeWithTag("unit_price_0").performScrollTo().assertTextContains("2000")
-        compose.onNodeWithText("문자 보내기").assertIsDisplayed()
-        compose.onNodeWithText("메일 보내기").assertIsDisplayed()
+        compose.onNodeWithTag("unit_price_0").performScrollTo().assertTextContains("4000")
+        compose.onNode(hasText("문자") and hasClickAction()).assertIsDisplayed()
+        compose.onNode(hasText("메일") and hasClickAction()).assertIsDisplayed()
         capture("seller-official-quote", compose.onNodeWithTag("namu_dialog"))
-        compose.onNodeWithText("메일 보내기").performClick()
+        compose.onNode(hasText("메일") and hasClickAction()).performClick()
         assertEquals(QuoteDelivery.EMAIL, selected)
     }
 
@@ -252,24 +253,29 @@ class CommerceUiTest {
         compose.setContent { NamuFarmTheme {
             ManualQuoteEditor(webRequest.copy(itemsJson = """[{"species":"감나무","specification":"2년생","quantity":30}]"""), false, null, {}, { _, _ -> submitted = true })
         } }
-        compose.onNodeWithTag("unit_price_0").performScrollTo().performTextInput("1200")
-        compose.onNodeWithText("메일 보내기").performClick()
+        compose.onNodeWithTag("unit_price_0").performScrollTo().performTextReplacement("1200")
+        compose.onNode(hasText("메일") and hasClickAction()).performClick()
         compose.onNodeWithText("메일을 보낼 이메일 주소를 입력해주세요.").assertIsDisplayed()
         assertFalse(submitted)
-        compose.onNodeWithText("문자 보내기").performClick()
+        compose.onNode(hasText("문자") and hasClickAction()).performClick()
         assertTrue(submitted)
     }
 
-    @Test fun sellerHomeKeepsAllThreeShortcutsAndBusySyncCannotRunAgain() {
+    @Test fun sellerHomeSwitchesQuoteQueuesAndBusySyncCannotRunAgain() {
         val calls = mutableListOf<String>()
+        val confirmed = webRequest.copy(requestId = "confirmed", sequence = 2,
+            customerName = "확정고객", status = "견적확정")
         compose.setContent { NamuFarmTheme {
-            SellingHome(ManagementUiState(), SnackbarHostState(), { calls += "sync" }, {}, { calls += "quick" }, { calls += "quotes" }, { calls += "orders" }, {}, {}, {}, {}, {}, { _, _ -> }, webBusy = true)
+            SellingHome(ManagementUiState(), SnackbarHostState(), { calls += "sync" }, {}, {}, {}, {}, {}, {}, {}, {}, {}, { _, _ -> },
+                webBusy = true, webRequests = listOf(webRequest, confirmed), onRequest = { calls += it.requestId })
         } }
-        compose.onNodeWithText("빠른 견적").performClick()
-        compose.onNodeWithText("오늘 견적").performClick()
-        compose.onNodeWithText("오늘 주문").performClick()
-        compose.onNodeWithText("구글시트에서 가져오는 중…").assertIsNotEnabled()
-        assertEquals(listOf("quick", "quotes", "orders"), calls)
+        compose.onNodeWithText("김나무").performScrollTo().performClick()
+        compose.onNodeWithText("견적확정").performClick()
+        compose.onNodeWithText("확정고객").performScrollTo().performClick()
+        compose.onNodeWithText("견적 요청 가져오는 중…").assertIsNotEnabled()
+        compose.onNodeWithText("빠른 견적").assertDoesNotExist()
+        compose.onNodeWithText("오늘 주문").assertDoesNotExist()
+        assertEquals(listOf(webRequest.requestId, confirmed.requestId), calls)
     }
 
     @Test
@@ -278,27 +284,27 @@ class CommerceUiTest {
         compose.setContent { NamuFarmTheme {
             ManualQuoteEditor(webRequest, false, null, {}, { _, _ -> })
         } }
-        compose.onNodeWithText("문자 보내기").assertIsDisplayed()
-        compose.onNodeWithText("메일 보내기").assertIsDisplayed()
-        compose.onNodeWithTag("unit_price_1").performScrollTo().performTextInput("900")
+        compose.onNode(hasText("문자") and hasClickAction()).assertIsDisplayed()
+        compose.onNode(hasText("메일") and hasClickAction()).assertIsDisplayed()
+        compose.onNodeWithTag("unit_price_1").performScrollTo().performTextReplacement("900")
         compose.onNodeWithContentDescription("2번 단가 올리기").performClick()
         compose.onNodeWithTag("unit_price_1").assertTextContains("1900")
         capture("seller-compact-phone", compose.onNodeWithTag("namu_dialog"))
     }
 
     @Test fun quotePaymentConfirmationIncludesOfficialTax() {
-        val quote = com.example.namufarm.data.QuoteEntity(quoteNumber = "TAX", saveDate = "2026-10-08", customerPhone = "01012345678", totalQty = 12, totalPrice = 130000, itemSummary = order.itemSummary)
+        val quote = com.example.namufarm.data.QuoteEntity(quoteNumber = "TAX", sentAt = 1, saveDate = "2026-10-08", customerPhone = "01012345678", totalQty = 12, totalPrice = 130000, itemSummary = order.itemSummary)
         compose.setContent { NamuFarmTheme {
             QuoteDetailsDialog(quote, false, SnackbarHostState(), {}, {}, {}, {}, taxAmount = 13000)
         } }
-        compose.onNodeWithText("입금 완료 · 주문 등록").performClick()
+        compose.onNodeWithText("입금확인 · 판매 관리로 이동").performClick()
         compose.onNodeWithText("최종 견적 143,000원의 실제 입금을 확인해주세요. 입금 확인 시 오늘 주문이 증가하고 발송한 견적 기록은 유지됩니다.").assertIsDisplayed()
     }
 
     @Test fun searchAndStatusKeepNewestMatchingRequestsFirst() {
         val first = webRequest.copy(sequence = 1)
         val latest = webRequest.copy(requestId = "new", sequence = 2)
-        assertEquals(listOf(latest, first), filterQuoteRequests(listOf(first, latest), ManagementUiState(), " 감나무 ", "답변 대기"))
+        assertEquals(listOf(latest, first), filterQuoteRequests(listOf(first, latest), ManagementUiState(), " 감나무 ", "신규"))
         assertEquals(listOf(latest, first), filterQuoteRequests(listOf(first, latest), ManagementUiState(), "010-1234", "전체"))
         assertTrue(filterQuoteRequests(listOf(first), ManagementUiState(), "", "발송 완료").isEmpty())
         assertEquals("10.04 10:23", requestDateLabel(first.createdAt))
@@ -318,3 +324,4 @@ class CommerceUiTest {
         }
     }
 }
+

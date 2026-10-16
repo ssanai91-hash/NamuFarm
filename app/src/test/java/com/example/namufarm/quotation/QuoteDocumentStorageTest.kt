@@ -33,13 +33,15 @@ class QuoteDocumentStorageTest {
         assertEquals(1, db.managementDao().getQuoteByNumber(quote.quoteNumber).size)
         assertEquals(QuoteTestData.recipient, repo.getQuoteRecipient(quote.quoteNumber))
     }
-    @Test fun issuedSnapshotCannotBeOverwrittenAndSurvivesQuoteDeletion() = runBlocking {
+    @Test fun issuedSnapshotCannotBeOverwrittenAndDraftDeletionRemovesSnapshot() = runBlocking {
         val quote = QuoteTestData.quote(); repo.insertQuoteWithContact(quote, QuoteTestData.recipient)
         val first = repo.issueQuoteDocument(quote.quoteNumber, QuoteTestData.issuer, 0, "7일", "", "")
         val retry = repo.issueQuoteDocument(quote.quoteNumber, QuoteTestData.issuer.copy(businessName = "변경된 농원"), 9000, "1일", "변경", "")
         assertEquals(first, retry); assertEquals(1, repo.getQuoteDocuments().size)
         repo.deleteQuote(db.managementDao().getQuoteByNumber(quote.quoteNumber).single())
-        assertEquals(first, repo.getQuoteDocument(quote.quoteNumber))
+        assertNull(repo.getQuoteDocument(quote.quoteNumber))
+        assertNull(repo.getSavedQuote(quote.quoteNumber))
+        assertTrue(repo.getQuoteDocuments().isEmpty())
         assertEquals(60000L, QuoteDocument.read(first.snapshotJson).lines.first().unitPrice)
         assertTrue(db.managementDao().getAllPendingSync().isEmpty()); assertTrue(db.managementDao().getAllInventoryEntities().isEmpty())
     }
@@ -85,3 +87,4 @@ class QuoteDocumentStorageTest {
         assertTrue(repo.getQuoteDocuments().isEmpty())
     }
 }
+
