@@ -32,7 +32,7 @@ function secureServiceInfo_() {
     processingBases:['quote_request'],requestFields:['customerEmail','formalQuoteRequested','recipientName','replyChannel'],
     encryptionReady:false,customerDataStorage:'plain',sellerKey:key,retentionDays:30,requestDeletionSync:true,
     receiptFormat:'NAMU-YYYYMMDD-NNNN',receiptTimeZone:'Asia/Seoul',connectionFile:true,requestSnapshot:true,
-    connectionAuth:'auto-v1',legacyDeviceAuth:true,
+    connectionAuth:'auto-v1',quoteReadMode:twoBookActive_()?'annual-two-tabs':'legacy-storage',legacyDeviceAuth:true,
     quoteEmail:true,quoteEmailSender:QUOTE_SENDER_EMAIL,
     quoteSms:true,quoteSmsProvider:'SOLAPI',
     commerceStates:['입금확인','배송완료','구매취소']};

@@ -1,6 +1,7 @@
 """FHD seller workspace, built on the existing verified sync controller."""
 import copy
 import json
+import uuid
 import tempfile
 from datetime import datetime
 from importlib.resources import files as package_files
@@ -3332,6 +3333,7 @@ class SellerWindow(MainWindow):
             self.draft_table.setColumnWidth(column, width)
         header.setSectionResizeMode(7, QHeaderView.ResizeMode.Stretch)
         self.draft_table.itemDoubleClicked.connect(self.open_draft)
+        self.draft_table.itemSelectionChanged.connect(self.update_controls)
         layout.addWidget(self.draft_table)
         bar = QHBoxLayout()
         self.draft_delete = button("선택 견적 삭제", self.remove_draft)
@@ -3594,7 +3596,11 @@ class SellerWindow(MainWindow):
         self.manual_quote_button.setEnabled(ready)
         self.request_quote_button.setEnabled(ready and self.request_table.currentRow() >= 0)
         self.draft_open.setEnabled(ready)
-        self.draft_delete.setEnabled(ready)
+        selected_draft = self.draft_table.currentRow()
+        self.draft_delete.setEnabled(
+            ready and 0 <= selected_draft < len(self.draft_rows)
+            and self.draft_rows[selected_draft]["id"] not in getattr(self, "cloud_quote_ids", set())
+        )
         self.export_button.setEnabled(paired)
         self.import_button.setEnabled(paired)
         self.print_button.setEnabled(ready and not self.data["pending"])
@@ -3632,11 +3638,28 @@ class SellerWindow(MainWindow):
         fill_table(self.work_table, rows)
         request_status = {r["requestId"]: r.get("status", "신규") for r in self.data["requests"]}
         draft_pairs = []
+        local_sources = set()
         for draft in self.data.get("drafts", []):
             source = draft.get("sourceRequestId", "")
             status = request_status.get(source, "상태확인") if source else draft.get("manualStatus", "수기견적")
             if source and status not in ("견적확정", "견적발송완료"):
                 continue
+            draft_pairs.append((draft, status))
+            if source:
+                local_sources.add(source)
+        # The server's confirmed tab is authoritative even when a quote was
+        # finalized on Android and this PC never created a local draft.
+        # Build a display-only copy; do not save or replace existing PC drafts.
+        self.cloud_quote_ids = set()
+        for request in self.data["requests"]:
+            status = request.get("status", "신규")
+            if status not in ("견적확정", "견적발송완료") or request["requestId"] in local_sources:
+                continue
+            draft = new_draft(request)
+            draft["id"] = str(uuid.uuid5(uuid.NAMESPACE_URL, "namufarm:quote:" + request["requestId"]))
+            draft["createdAt"] = int(datetime.fromisoformat(
+                request["createdAt"].replace("Z", "+00:00")).timestamp() * 1000)
+            self.cloud_quote_ids.add(draft["id"])
             draft_pairs.append((draft, status))
         draft_pairs.sort(
             key=lambda pair: draft_quote_sort_key(pair[0]),
@@ -3977,6 +4000,9 @@ class SellerWindow(MainWindow):
     def remove_draft(self):
         index = self.draft_table.currentRow()
         if not self.manager or not 0 <= index < len(self.draft_rows):
+            return
+        if self.draft_rows[index]["id"] in getattr(self, "cloud_quote_ids", set()):
+            QMessageBox.information(self, "서버 견적", "서버에서 불러온 견적은 PC 임시 견적 삭제 대상이 아닙니다.")
             return
         if QMessageBox.question(self, "견적 삭제", "선택한 PC 견적을 삭제할까요?", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No) == QMessageBox.StandardButton.Yes:
             identifier = self.draft_rows[index]["id"]
