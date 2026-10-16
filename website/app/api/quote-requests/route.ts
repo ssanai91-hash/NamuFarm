@@ -24,6 +24,8 @@ export async function POST(request: Request) {
   } catch { return jsonResult({ receiptState: "not_sent", error: "입력 내용을 확인해주세요." }, 400); }
   const parsed = quoteSchema.safeParse(input);
   if (!parsed.success) return jsonResult({ receiptState: "not_sent", error: "품목, 수량과 연락처를 다시 확인해주세요." }, 400);
+  // Older Apps Script deployments require nonempty location text; normalize before fingerprinting.
+  if (!parsed.data.region) parsed.data.region = "미입력";
   const ip = request.headers.get("cf-connecting-ip") ?? "preview";
   const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(settings.secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
   const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(ip));
