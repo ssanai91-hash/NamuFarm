@@ -6,7 +6,7 @@ from unittest.mock import patch
 from zipfile import ZipFile
 from xml.etree import ElementTree as ET
 
-from namufarm_desktop.connection import read_connection
+from namufarm_desktop.connection import connection_input
 from namufarm_desktop.errors import UserError, NetworkError
 from namufarm_desktop.service import Manager
 from namufarm_desktop.store import Vault
@@ -23,14 +23,13 @@ class LocalSyncTest(unittest.TestCase):
         self.api = TestApi(self.bridge)
         self.api.token = self.vault.credentials()['deviceToken']
         self.manager = Manager(self.vault, self.api)
-        self.profile = self.bridge.send(control='connection_file')
-        self.manager.connect_file(json.dumps(self.profile).encode(), lambda url, token: self.api)
+        self.manager.connect()
 
     def tearDown(self):
         self.bridge.close()
         self.tmp.cleanup()
 
-    def test_file_connects_and_cleared_sheet_replaces_cache_but_preserves_draft(self):
+    def test_auto_connects_and_cleared_sheet_replaces_cache_but_preserves_draft(self):
         self.bridge.send(control='submit_plain')
         view = self.manager.sync_requests()
         draft = new_draft(view['requests'][0])
@@ -75,11 +74,10 @@ class LocalSyncTest(unittest.TestCase):
         self.assertEqual(before, self.manager.request_copy_path.read_bytes())
         self.assertEqual(1, len(result['requests']))
 
-    def test_invalid_file_does_not_change_connection(self):
+    def test_invalid_manual_input_does_not_change_connection(self):
         before = self.vault.credentials()
-        for overrides in ({'url':'https://example.com/exec'}, {'connectionKey':'bad'}, {'version':True}):
+        for url, key in (('https://example.com/exec', 'c'*64), (self.api.url, 'bad'), (True, 'c'*64)):
             with self.assertRaises(UserError):
-                read_connection(json.dumps({**self.profile, **overrides}).encode())
-        with self.assertRaises(UserError):
-            read_connection(b' '*8193)
+                connection_input(url, key)
         self.assertEqual(before, self.vault.credentials())
+

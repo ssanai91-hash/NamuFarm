@@ -3605,8 +3605,8 @@ class SellerWindow(MainWindow):
             for widget in (self.sync_button, self.new_quote_button, self.manual_quote_button, self.request_quote_button,
                            self.draft_open, self.draft_delete, self.customer_open_button,
                            self.export_button, self.import_button, self.print_button,
-                           self.tracking_save, self.open_button, self.connect_key_button, self.report_button,
-                           self.connection_password, self.copy_button):
+                           self.tracking_save, self.open_button, self.connect_button, self.report_button,
+                           self.copy_button):
                 widget.setEnabled(False)
 
     def apply_view(self, value):
@@ -3703,7 +3703,7 @@ class SellerWindow(MainWindow):
         rows.sort(
             key=lambda row: (
                 status_priority.get(customer_status_text(row["metadata"]["status"]), 9),
-                -int(row["metadata"].get("orderDate", 0) or 0),
+                -int(row["metadata"].get("purchasedAt", 0) or 0),
                 row["metadata"]["orderNumber"],
             )
         )
@@ -4116,5 +4116,6 @@ class SellerWindow(MainWindow):
     def manual_sync(self):
         if not getattr(self, "demo_mode", False):
             super().manual_sync()
+
 
 

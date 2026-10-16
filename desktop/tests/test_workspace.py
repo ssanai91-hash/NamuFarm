@@ -31,6 +31,12 @@ def draft_for_test():
     return draft
 
 
+def sent_draft_for_test():
+    draft = draft_for_test()
+    draft['manualStatus'] = '견적발송완료'
+    return draft
+
+
 def row_for_test():
     order = order_from_draft(draft_for_test())
     order.update(status='입금확인', paidAt=order['purchasedAt'])
@@ -157,6 +163,7 @@ class WorkspaceServiceTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.bridge = Bridge()
+        self.assertTrue(self.bridge.send(control='current_storage')['ready'])
         self.manager = manager_at(Path(self.tmp.name)/'pc.db', self.bridge)
 
     def tearDown(self):
@@ -192,7 +199,7 @@ class WorkspaceServiceTest(unittest.TestCase):
         self.assertEqual([], self.manager.vault.preference('drafts'))
 
     def test_quote_confirmation_updates_server_state_and_keeps_local_quote(self):
-        self.bridge.send(control='submit')
+        self.bridge.send(control='submit_plain')
         view = self.manager.sync()
         request = view['requests'][0]
         draft = draft_for_test()
@@ -203,7 +210,7 @@ class WorkspaceServiceTest(unittest.TestCase):
         self.assertNotIn('테스트 고객'.encode(), self.manager.vault.path.read_bytes())
 
     def test_quote_sent_updates_server_state_before_purchase(self):
-        self.bridge.send(control='submit')
+        self.bridge.send(control='submit_plain')
         view = self.manager.sync()
         draft = draft_for_test()
         draft['sourceRequestId'] = view['requests'][0]['requestId']
@@ -213,13 +220,13 @@ class WorkspaceServiceTest(unittest.TestCase):
         with self.assertRaises(UserError):
             # A fresh request that skipped the sent stage cannot become a sale.
             other = draft_for_test()
-            other['sourceRequestId'] = self.bridge.send(control='submit_new')['requestId']
+            other['sourceRequestId'] = self.bridge.send(control='submit_plain')['requestId']
             self.manager.sync()
             self.manager.confirm_quote(other)
             self.manager.confirm_draft(other)
 
     def test_quote_email_sends_through_server_and_records_delivery_state(self):
-        self.bridge.send(control='submit')
+        self.bridge.send(control='submit_plain')
         view = self.manager.sync()
         draft = draft_for_test()
         draft['sourceRequestId'] = view['requests'][0]['requestId']
@@ -237,7 +244,7 @@ class WorkspaceServiceTest(unittest.TestCase):
         self.assertEqual(result['delivery'], self.manager.quote_delivery_state(draft['id']))
 
     def test_quote_email_attaches_generated_official_pdf(self):
-        self.bridge.send(control='submit')
+        self.bridge.send(control='submit_plain')
         view = self.manager.sync()
         draft = draft_for_test()
         draft['sourceRequestId'] = view['requests'][0]['requestId']
@@ -255,7 +262,7 @@ class WorkspaceServiceTest(unittest.TestCase):
 
     def test_quote_sms_sends_through_server_and_records_delivery_state(self):
         self.bridge.send(control='configure_sms')
-        self.bridge.send(control='submit')
+        self.bridge.send(control='submit_plain')
         view = self.manager.sync()
         draft = draft_for_test()
         draft['sourceRequestId'] = view['requests'][0]['requestId']
@@ -278,7 +285,7 @@ class WorkspaceServiceTest(unittest.TestCase):
     def test_quote_sms_failure_is_logged_without_marking_sent(self):
         self.bridge.send(control='configure_sms')
         self.bridge.send(control='sms_status_fail')
-        self.bridge.send(control='submit')
+        self.bridge.send(control='submit_plain')
         view = self.manager.sync()
         draft = draft_for_test()
         draft['sourceRequestId'] = view['requests'][0]['requestId']
@@ -291,7 +298,7 @@ class WorkspaceServiceTest(unittest.TestCase):
         self.assertEqual('3043', final['smsStatusCode'])
 
     def test_shipping_export_preferences_are_encrypted_and_do_not_advance_sale(self):
-        row = self.manager.confirm_draft(draft_for_test())['sales'][0]
+        row = self.manager.confirm_draft(sent_draft_for_test())['sales'][0]
         before = self.manager.view()['sales']
         sender = {'name': '출고 설정 테스트', 'address': '테스트 출고지', 'phone': '01012345678', 'mobile': ''}
         number = row['metadata']['orderNumber']
@@ -302,8 +309,8 @@ class WorkspaceServiceTest(unittest.TestCase):
         self.assertEqual(before, self.manager.view()['sales'])
         self.assertNotIn(sender['name'].encode(), self.manager.vault.path.read_bytes())
 
-    def test_request_to_sale_closes_request_and_preserves_document(self):
-        self.bridge.send(control='submit')
+    def test_request_to_sale_preserves_paid_quote_and_document(self):
+        self.bridge.send(control='submit_plain')
         view = self.manager.sync()
         draft = draft_for_test()
         draft['sourceRequestId'] = view['requests'][0]['requestId']
@@ -313,7 +320,8 @@ class WorkspaceServiceTest(unittest.TestCase):
         sent = self.manager.mark_quote_sent(draft)
         self.assertEqual('견적발송완료', sent['requests'][0]['status'])
         view = self.manager.confirm_draft(draft)
-        self.assertEqual([], view['requests'])
+        self.assertEqual('입금확인', view['requests'][0]['status'])
+        self.assertEqual(draft['sourceRequestId'], view['requests'][0]['requestId'])
         self.assertEqual([], view['drafts'])
         self.assertEqual(1, len(view['sales']))
         self.assertIn('quoteDocumentJson', view['sales'][0]['private'])
@@ -323,7 +331,7 @@ class WorkspaceServiceTest(unittest.TestCase):
 
 
     def test_lost_new_order_ack_reuses_event_and_never_duplicates(self):
-        draft = draft_for_test()
+        draft = sent_draft_for_test()
         self.manager.api.lose_ack = True
         with self.assertRaises(NetworkError):
             self.manager.confirm_draft(draft)
@@ -335,7 +343,7 @@ class WorkspaceServiceTest(unittest.TestCase):
         self.assertEqual([], view['pending'])
 
     def test_deleted_source_draft_is_purged(self):
-        self.bridge.send(control='submit')
+        self.bridge.send(control='submit_plain')
         request = self.manager.sync()['requests'][0]
         draft = draft_for_test()
         draft['sourceRequestId'] = request['requestId']
@@ -345,25 +353,23 @@ class WorkspaceServiceTest(unittest.TestCase):
             self.manager.confirm_draft(draft)
 
     def test_tracking_sync_roundtrip_retry_and_duplicate_guard(self):
-        draft = draft_for_test()
+        draft = sent_draft_for_test()
         row = self.manager.confirm_draft(draft)['sales'][0]
         number = row['metadata']['orderNumber']
-        view = self.manager.save_sale(number, 1, {}, '입금확인')
         self.manager.api.lose_ack = True
         with self.assertRaises(NetworkError):
-            self.manager.register_tracking(number, 2, '01234567890')
+            self.manager.register_tracking(number, 1, '01234567890')
         row = self.manager.sync()['sales'][0]
         self.assertEqual('01234567890', tracking_number(row['private']['order']))
         self.assertEqual('입금확인', row['metadata']['status'])
-        self.assertEqual(3, row['metadata']['revision'])
-        second = self.manager.confirm_draft(draft_for_test())['sales'][0]
+        self.assertEqual(2, row['metadata']['revision'])
+        second = self.manager.confirm_draft(sent_draft_for_test())['sales'][0]
         other = second['metadata']['orderNumber']
-        self.manager.save_sale(other, 1, {}, '입금확인')
         with self.assertRaises(UserError):
-            self.manager.register_tracking(other, 2, '01234567890')
+            self.manager.register_tracking(other, 1, '01234567890')
         self.manager.import_tracking({number: '01234567890'})
         row = next(r for r in self.manager.view()['sales'] if r['metadata']['orderNumber'] == number)
-        self.assertEqual(3, row['metadata']['revision'])
+        self.assertEqual(2, row['metadata']['revision'])
 
 
 class SellerUiTest(QtTestCase):
@@ -390,7 +396,7 @@ class SellerUiTest(QtTestCase):
         self.app.processEvents()
         self.assertEqual(7, window.stack.count())
         self.assertFalse(window.sync_button.isEnabled())
-        self.assertFalse(window.connection_file_button.isEnabled())
+        self.assertFalse(window.connect_button.isEnabled())
         self.assertFalse(window.copy_button.isEnabled())
         self.assertFalse(hasattr(window, 'inbox_sync_button'))
         self.assertEqual('↻  서버 동기화', window.sync_button.text())
@@ -443,6 +449,8 @@ class SellerUiTest(QtTestCase):
         show_demo(window)
         window.demo_mode = False
         window.manager = FakeNotificationManager()
+        window.show()
+        self.app.processEvents()
         window.data['paired'] = True
         window.data['requests'] = [
             {'requestId':'00000000-0000-4000-8000-000000000005','sequence':5,'status':'신규','personal':{}},
@@ -994,4 +1002,5 @@ class SellerUiTest(QtTestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
 

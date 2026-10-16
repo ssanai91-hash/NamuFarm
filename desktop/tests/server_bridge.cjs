@@ -27,6 +27,7 @@ readline.createInterface({input:process.stdin}).on('line',line=>{
   else if(request.control==='invite')result={invite:f.context.createDeviceInvite()};
   else if(request.control==='info')result=f.context.doGet();
   else if(request.control==='seed')result=seed();
+  else if(request.control==='current_storage'){f.context.setupAnnualQuoteOrderLedgers();result=f.context.cutoverToTwoBooks();}
   else if(request.control==='connection_file'){f.properties.APP_CONNECTION_KEY='c'.repeat(64);result={format:'namufarm-connection',version:1,url:'https://script.google.com/macros/s/AKfycbzY7JKzXYmS9APLNFDt15k8dv09zb4EXKFHOOv_T1vpFmkr6TLwbqGznGLgpd2cIVgD/exec',connectionKey:f.properties.APP_CONNECTION_KEY};}
   else if(request.control==='clear_requests'){f.cells.splice(1);result={ok:true};}
   else if(request.control==='clear_key'){delete f.properties.SELLER_PUBLIC_KEY;result={ok:true};}
@@ -46,5 +47,6 @@ readline.createInterface({input:process.stdin}).on('line',line=>{
   process.stdout.write(JSON.stringify(result)+'\n');
  } catch (_) {process.stdout.write(JSON.stringify({ok:false,code:'TEST_FAILURE'})+'\n');}
 });
+
 
 

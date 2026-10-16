@@ -152,17 +152,15 @@ class ManagerTest(unittest.TestCase):
     def test_state_workflow_requires_cost_confirmation_and_reports_commission(self):
         with self.assertRaises(UserError):
             self.manager.save_sale('ORDER_TEST', 1, {}, '배송확인')
-        self.manager.save_sale('ORDER_TEST', 1, {}, '입금확인')
-        self.manager.save_sale('ORDER_TEST', 2, {}, '배송확인')
         with self.assertRaises(UserError):
-            self.manager.save_sale('ORDER_TEST', 3, {}, '판매완료')
-        self.manager.save_sale('ORDER_TEST', 3, {'costConfirmed': True, 'profitMode': 'commission', 'commissionBps': 3000}, '판매완료')
+            self.manager.save_sale('ORDER_TEST', 1, {}, '배송완료')
+        self.manager.save_sale('ORDER_TEST', 1, {'costConfirmed': True, 'profitMode': 'commission', 'commissionBps': 3000}, '배송완료')
         for unit in ('day', 'month', 'year'):
             report = self.manager.report(unit, '2000-01-01', '2099-12-31')
             self.assertEqual(1, report['buckets'][0]['orders'])
             self.assertEqual(530, report['buckets'][0]['knownProfit'])
         with self.assertRaises(UserError):
-            self.manager.save_sale('ORDER_TEST', 4, {'costTotal': 0})
+            self.manager.save_sale('ORDER_TEST', 2, {'costTotal': 0})
 
     def test_request_deletion_is_readable_after_previously_imported_cursor(self):
         request = self.bridge.send(control='submit')
@@ -376,3 +374,4 @@ class ManagerTest(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+

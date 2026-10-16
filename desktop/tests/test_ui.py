@@ -162,14 +162,18 @@ class UiTest(QtTestCase):
         self.assertFalse(hasattr(self.window, "reset_connection_button"))
 
     def test_statistics_job_keeps_open_workspace(self):
+        self.window.sale_table.selectRow(0)
+        requests_before = self.window.request_table.rowCount()
+        customer_before = self.window.fields['customerName'].text()
         self.window.fetch_report()
         self.wait_job()
         self.assertIn('총', self.window.report_summary.text())
         self.assertIsNotNone(self.window.manager)
-        self.assertEqual(0, self.window.request_table.rowCount())
-        self.assertEqual('', self.window.fields['customerName'].text())
-        self.assertFalse(self.window.sync_button.isEnabled())
+        self.assertEqual(requests_before, self.window.request_table.rowCount())
+        self.assertEqual(customer_before, self.window.fields['customerName'].text())
+        self.assertTrue(self.window.sync_button.isEnabled())
 
 
 if __name__ == '__main__':
     unittest.main()
+
