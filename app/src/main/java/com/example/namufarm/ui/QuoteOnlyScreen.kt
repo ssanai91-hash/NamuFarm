@@ -16,13 +16,13 @@ import androidx.compose.ui.unit.dp
 import com.example.namufarm.data.WebQuoteRequestEntity
 import com.example.namufarm.data.QuoteEntity
 import com.example.namufarm.quotation.*
+import com.example.namufarm.phone.openSmsComposer
 import com.example.namufarm.ui.components.NamuDialog
 import com.example.namufarm.viewmodel.ManagementViewModel
 import com.example.namufarm.viewmodel.WebInboxState
 import com.example.namufarm.webrequests.WebRequestConnection
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -157,61 +157,55 @@ internal fun QuoteOnlyScreen(viewModel: ManagementViewModel, connection: WebRequ
     }
     readyRequest?.takeIf { editing?.requestId == it.requestId && recordsReady && it.requestId !in confirmedIds }?.let { request ->
         val saved = records.firstOrNull { it.request.requestId == request.requestId && sameServerQuoteRequest(it.request, request) }
+        fun handleAction(draft: SellerQuoteDraft, action: QuoteDelivery, sentVia: String? = null) {
+            if (busy) return
+            busy = true
+            message = if (action == QuoteDelivery.COMPLETE) "서버 견적확정 확인 중…" else "전송 화면 준비 중…"
+            scope.launch {
+                try {
+                    when (action) {
+                        QuoteDelivery.SMS, QuoteDelivery.EMAIL -> {
+                            withContext(Dispatchers.IO) { workflow.prepareExternalDelivery(request, draft, action) }
+                            val body = quoteWorkflowText(request, draft)
+                            // Launch Android activities on the main thread; the seller sends from that app.
+                            if (action == QuoteDelivery.SMS) {
+                                openSmsComposer(context, draft.phone, body)?.let { error(it) }
+                            } else {
+                                QuoteReply.openTextEmail(context, draft.recipient.customerEmail.trim(), body)
+                            }
+                            message = "문자·메일 앱에서 실제 전송을 마친 뒤 ‘견적완료’를 눌러주세요."
+                        }
+                        QuoteDelivery.COMPLETE -> {
+                            withContext(Dispatchers.IO) {
+                                workflow.completeExternal(request, draft,
+                                    sentVia ?: error("실제로 보낸 방법을 선택해주세요."))
+                            }
+                            viewModel.dismissManualQuote(); selectedTab = 1
+                            message = "견적을 확정했습니다."; onSync()
+                        }
+                        else -> error("견적완료로 저장해주세요.")
+                    }
+                } catch (e: CancellationException) { throw e }
+                catch (e: ServerQuoteRequestChanged) {
+                    viewModel.dismissManualQuote(); readyRequest = null
+                    message = e.message; onSync()
+                }
+                catch (e: Exception) { message = "❌ ${e.message ?: "처리 결과를 확인하지 못했습니다. 다시 확인해주세요."}" }
+                finally {
+                    try { records = withContext(Dispatchers.IO) { workflow.records() } }
+                    catch (e: CancellationException) { throw e }
+                    catch (e: Exception) { message = "❌ 저장된 견적 기록을 확인해주세요: ${e.message}" }
+                    finally { busy = false }
+                }
+            }
+        }
         ManualQuoteEditor(request, busy || inbox.busy || deleting, message,
             onDismiss = { if (!busy) { viewModel.dismissManualQuote(); message = null } },
             initialDraft = saved?.draft, draftKey = request.requestId,
             onDeleteRequest = if (saved?.confirmationPending == true) null else ({ onDelete(request.requestId) }),
             verifiedDelivery = saved?.delivery, verifyDelivery = true,
-            onSave = { draft, action ->
-                if (!busy) {
-                    busy = true
-                    message = if (action == QuoteDelivery.COMPLETE) "서버 견적확정 확인 중…" else "고객 전달 처리 중…"
-                    scope.launch {
-                        try {
-                            withContext(Dispatchers.IO) {
-                                when (action) {
-                                    QuoteDelivery.SMS -> workflow.sendSms(request, draft)
-                                    QuoteDelivery.EMAIL -> workflow.sendEmail(request, draft)
-                                    QuoteDelivery.COMPLETE -> workflow.complete(request, draft)
-                                    else -> error("견적완료로 저장해주세요.")
-                                }
-                            }
-                            records = withContext(Dispatchers.IO) { workflow.records() }
-                            if (action == QuoteDelivery.SMS) {
-                                repeat(5) {
-                                    val current = records.first { it.request.requestId == request.requestId }
-                                    if (current.delivery.smsState == "pending") {
-                                        message = "문자 최종 결과확인 중…"
-                                        delay(3000)
-                                        withContext(Dispatchers.IO) { workflow.refreshSms(request.requestId) }
-                                        records = withContext(Dispatchers.IO) { workflow.records() }
-                                    }
-                                }
-                            }
-                            if (action == QuoteDelivery.COMPLETE) {
-                                viewModel.dismissManualQuote(); selectedTab = 1
-                                message = "견적을 확정했습니다."; onSync()
-                            } else {
-                                val delivery = records.first { it.request.requestId == request.requestId }.delivery
-                                message = if (action == QuoteDelivery.SMS && delivery.smsState == "failed")
-                                    "❌ 문자 전송실패: ${delivery.smsStatusMessage.ifBlank { "수신번호와 서버 발송 설정을 확인해주세요." }}"
-                                else "처리 결과를 확인하고 견적완료를 눌러주세요."
-                            }
-                        } catch (e: CancellationException) { throw e }
-                        catch (e: ServerQuoteRequestChanged) {
-                            viewModel.dismissManualQuote(); readyRequest = null
-                            message = e.message; onSync()
-                        }
-                        catch (e: Exception) { message = "❌ ${e.message ?: "처리 결과를 확인하지 못했습니다. 다시 확인해주세요."}" }
-                        finally {
-                            try { records = withContext(Dispatchers.IO) { workflow.records() } }
-                            catch (e: CancellationException) { throw e }
-                            catch (e: Exception) { message = "❌ 저장된 견적 기록을 확인해주세요: ${e.message}" }
-                            finally { busy = false }
-                        }
-                    }
-                }
-            })
+            onSave = { draft, action -> handleAction(draft, action) },
+            onConfirmSent = { draft, method -> handleAction(draft, QuoteDelivery.COMPLETE, method) })
     }
     result?.let { QuoteWorkflowResultDialog(it) { result = null } }
     legacyResult?.let { saved ->
@@ -251,3 +245,4 @@ internal fun QuoteWorkflowResultDialog(saved: QuoteWorkflowRecord, onDismiss: ()
             }
         }
 }
+

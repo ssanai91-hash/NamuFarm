@@ -154,7 +154,8 @@ private fun EditorDialog(
 internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean, message: String?,
     onDismiss: () -> Unit, onSave: (SellerQuoteDraft, QuoteDelivery) -> Unit, initialDraft: SellerQuoteDraft? = null,
     draftKey: String? = request?.requestId, onDeleteRequest: (() -> Unit)? = null,
-    verifiedDelivery: QuoteDeliveryRecord? = null, verifyDelivery: Boolean = false) {
+    verifiedDelivery: QuoteDeliveryRecord? = null, verifyDelivery: Boolean = false,
+    onConfirmSent: ((SellerQuoteDraft, String) -> Unit)? = null) {
     val context = LocalContext.current
     val firstRequest = request != null && initialDraft == null
     val manualEntry = request == null
@@ -238,10 +239,11 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
                 }
             }
             Button(onClick = {
-                if (verifyDelivery) {
+                if (onConfirmSent != null || !verifyDelivery) confirmSent = true
+                else {
                     if (verifiedDelivery?.canComplete(draft) == true) submit(QuoteDelivery.COMPLETE)
                     else deliveryRequired = true
-                } else confirmSent = true
+                }
             }, enabled = !saving,
                 modifier = Modifier.weight(1f).height(if (verifyDelivery) 64.dp else 52.dp),
                 contentPadding = PaddingValues(horizontal = 2.dp),
@@ -553,9 +555,16 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
         confirmButton = { TextButton(onClick = { deliveryRequired = false }) { Text("확인") } })
     if (confirmSent) ConfirmQuoteSentDialog(
         onDismiss = { confirmSent = false },
-        onConfirm = {
+        onConfirm = { method ->
             confirmSent = false
-            submit(QuoteDelivery.COMPLETE)
+            if (onConfirmSent == null) submit(QuoteDelivery.COMPLETE)
+            else try {
+                draft.validate(QuoteDelivery.COMPLETE)
+                error = null
+                onConfirmSent(draft, method)
+            } catch (e: Exception) {
+                error = e.message ?: "견적 내용을 확인해주세요."
+            }
         }
     )
     if (deleteConfirm) AlertDialog(
@@ -613,4 +622,5 @@ private fun ManualField(label: String, value: String, onValue: (String) -> Unit,
     OutlinedTextField(value, { if (keyboard != KeyboardType.Number || it.all(Char::isDigit)) onValue(it.take(if (keyboard == KeyboardType.Number) 10 else limit)) }, label = { Text(label) },
         singleLine = true, enabled = !saving, keyboardOptions = KeyboardOptions(keyboardType = keyboard), modifier = Modifier.fillMaxWidth())
 }
+
 

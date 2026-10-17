@@ -71,7 +71,8 @@ class QuoteWorkflow(
     private val latestRequest: suspend (WebQuoteRequestEntity) -> WebQuoteRequestEntity? = { it }
 ) {
     fun records() = store.records()
-    private suspend fun prepare(request: WebQuoteRequestEntity, draft: SellerQuoteDraft, completing: Boolean = false): QuoteWorkflowRecord {
+    private suspend fun prepare(request: WebQuoteRequestEntity, draft: SellerQuoteDraft,
+        completing: Boolean = false, refreshRequest: Boolean = true): QuoteWorkflowRecord {
         check(request.status == "신규") { "확정견적은 결과 확인만 가능합니다." }
         quoteWorkflowText(request, draft) // Validate the same totals and limits before any state or network write.
         val previous = store.records().firstOrNull { it.request.requestId == request.requestId }
@@ -81,13 +82,40 @@ class QuoteWorkflow(
         }
         check(previous?.confirmationPending != true || completing) { "견적완료 확인 중입니다. 전송 대신 견적완료를 다시 눌러주세요." }
         // Pending completion retries the exact acknowledged input, even after the server moved it.
-        if (previous?.confirmationPending != true) {
+        if (refreshRequest && previous?.confirmationPending != true) {
             val current = latestRequest(request)
             if (current == null || current.status != "신규" || !sameServerQuoteRequest(request, current))
                 throw ServerQuoteRequestChanged()
         }
         return (previous?.copy(request = request, draft = draft) ?: QuoteWorkflowRecord(request, draft)).also(store::save)
     }
+    /** Persist the draft before opening the phone's composer. This never sends or marks it sent. */
+    suspend fun prepareExternalDelivery(request: WebQuoteRequestEntity, draft: SellerQuoteDraft,
+        action: QuoteDelivery): QuoteWorkflowRecord {
+        require(action == QuoteDelivery.SMS || action == QuoteDelivery.EMAIL)
+        draft.validate(action)
+        return prepare(request, draft, refreshRequest = false)
+    }
+
+    /** Only the seller's explicit confirmation can attest delivery through an external app. */
+    suspend fun completeExternal(request: WebQuoteRequestEntity, draft: SellerQuoteDraft,
+        sentVia: String): QuoteWorkflowRecord {
+        require(sentVia in setOf("sms", "email", "both")) { "실제로 보낸 방법을 선택해주세요." }
+        if (sentVia == "email" || sentVia == "both") draft.validate(QuoteDelivery.EMAIL)
+        val record = prepare(request, draft, completing = true)
+        // Retry the existing journal without sending again or changing its delivery evidence.
+        if (record.confirmationPending) return confirm(record)
+        val fingerprint = quoteWorkflowFingerprint(draft)
+        val sentAt = clock()
+        var delivery = record.delivery
+        if (sentVia == "sms" || sentVia == "both") delivery = delivery.copy(
+            smsState = "success", smsMessageId = "", smsFingerprint = fingerprint,
+            smsStatusMessage = "판매자 전송 확인", smsSentAt = sentAt)
+        if (sentVia == "email" || sentVia == "both") delivery = delivery.copy(
+            emailSentAt = sentAt, emailFingerprint = fingerprint)
+        return confirm(record.copy(delivery = delivery))
+    }
+
     suspend fun sendSms(request: WebQuoteRequestEntity, draft: SellerQuoteDraft): QuoteWorkflowRecord {
         var record = prepare(request, draft)
         val fingerprint = quoteWorkflowFingerprint(draft)
@@ -133,10 +161,13 @@ class QuoteWorkflow(
     }
     suspend fun complete(request: WebQuoteRequestEntity, draft: SellerQuoteDraft): QuoteWorkflowRecord {
         val record = prepare(request, draft, completing = true)
-        check(record.delivery.canComplete(draft)) { "문자 또는 메일을 먼저 보내 주세요. 현재 견적의 전송이 완료되어야 합니다." }
+        return confirm(record)
+    }
+    private suspend fun confirm(record: QuoteWorkflowRecord): QuoteWorkflowRecord {
+        check(record.delivery.canComplete(record.draft)) { "문자 또는 메일을 먼저 보내 주세요. 현재 견적의 전송이 완료되어야 합니다." }
         // Crash/network failure leaves this exact input retryable; server confirmation is idempotent.
         store.save(record.copy(confirmationPending = true))
-        confirmRemote(request.requestId, draft)
+        confirmRemote(record.request.requestId, record.draft)
         return record.copy(confirmationPending = false, confirmedAt = clock()).also(store::save)
     }
 }
@@ -159,3 +190,4 @@ fun quoteWorkflowText(request: WebQuoteRequestEntity, draft: SellerQuoteDraft): 
         append("문의 : ${draft.options.issuer.phone}")
     }
 }
+
