@@ -121,7 +121,9 @@ function newSaleSheet_(meta) {
 }
 /** Identity is the order number, never a remembered row position. */
 function saleRecords_() {
-  const sheets=[namedSheet_(SALE_SHEET,SALE_HEADERS,false)];
+  // In two-book mode the order workbook has month tabs only.
+  // Internal event/binding sheets remain in the existing administration workbook.
+  const sheets=twoBookActive_()?[]:[namedSheet_(SALE_SHEET,SALE_HEADERS,false)];
   annualFileEntries_().filter(e=>e.values[0]==='order').forEach(e=>{
     // A failed first-time creation cannot contain accepted sales yet. A READY
     // book, however, must be accessible in full; fail closed on missing tabs.

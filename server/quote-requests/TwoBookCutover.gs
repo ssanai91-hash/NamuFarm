@@ -12,6 +12,66 @@
 function twoBookActive_() {
   return PropertiesService.getScriptProperties().getProperty('TWO_BOOK_MODE')==='two-books-v1';
 }
+
+/**
+ * Owner-only setup for TEST operation: use existing annual quote/order books
+ * without copying or deleting any historical requests or sales.
+ *
+ * Only script properties are switched; SPREADSHEET_ID continues to point to
+ * the existing administration workbook and its private indexes/receipts.
+ * All NEW requests are written into 견적요청 and finalized into 견적확정;
+ * new paid orders go to their 01월~12월 tab in the order workbook.
+ *
+ * Run once from the existing Apps Script editor after updating
+ * TwoBookCutover.gs, AnnualLedgers.gs, and SecureCommerce.gs.
+ */
+function activateExistingTwoBooksForTesting() {
+  return lock_(() => {
+    const props = PropertiesService.getScriptProperties();
+    if (twoBookActive_()) {
+      return {ready:true,alreadyActive:true,
+        quoteReadMode:'annual-two-tabs',year:seoulDay_(Date.now()).slice(0,4)};
+    }
+    assert_(annualLedgersEnabled_() &&
+      props.getProperty('PRIVACY_SETUP')==='1','NOT_READY');
+    const masterId=props.getProperty('SPREADSHEET_ID');
+    assert_(masterId,'NOT_READY');
+    const year=seoulDay_(Date.now()).slice(0,4);
+    const entries=annualFileEntries_();
+    const registry={};
+    entries.filter(e=>e.values[4]==='READY').forEach(e=>{
+      const kind=e.values[0],y=String(e.values[1]),id=e.values[2];
+      assert_((kind==='quote' || kind==='order') &&
+        /^\d{4}$/.test(y) && typeof id==='string' && id &&
+        !registry[kind+':'+y] && id!==masterId,'NOT_READY');
+      const book=SpreadsheetApp.openById(id);
+      assert_(book.getName()==='나무팜_'+(kind==='quote'?'견적':'주문')+'_'+y,'NOT_READY');
+      const names=kind==='quote' ? [TWO_REQUEST_TAB,TWO_CONFIRMED_TAB] :
+        Array.from({length:12},(_,i)=>String(i+1).padStart(2,'0')+'월');
+      const headers=kind==='quote' ? RFQ_HEADERS.concat(RFQ_RECEIPT_HEADERS) : SALE_HEADERS;
+      assert_(book.getSheets().length===names.length,'NOT_READY');
+      names.forEach(name=>{
+        const sheet=book.getSheetByName(name);
+        assert_(sheet &&
+          canonical_(sheet.getRange(1,1,1,headers.length).getValues()[0])===
+          canonical_(headers),'NOT_READY');
+      });
+      registry[kind+':'+y]={id:id};
+    });
+    assert_(registry['quote:'+year] && registry['order:'+year] &&
+      registry['quote:'+year].id!==registry['order:'+year].id,'NOT_READY');
+    // The mode flag is written LAST; an interrupted setup remains in legacy mode.
+    props.setProperty('TWO_BOOK_REGISTRY',JSON.stringify(registry));
+    props.setProperty('LEGACY_SPREADSHEET_ID',masterId);
+    props.setProperty('ORDER_WORKBOOK_ID',registry['order:'+year].id);
+    props.setProperty('TWO_BOOK_MODE','two-books-v1');
+    return {ready:true,year:year,quoteReadMode:'annual-two-tabs',
+      quoteFileId:registry['quote:'+year].id,
+      orderFileId:registry['order:'+year].id,
+      existingBusinessRowsUntouched:true};
+  });
+}
+
 function twoBookCopySheet_(sourceBook,targetBook,name,headers,optional) {
   const original=sourceBook.getSheetByName(name);
   if(!original && optional){

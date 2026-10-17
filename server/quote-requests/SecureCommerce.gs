@@ -49,9 +49,12 @@ function envelope_(value, key) {
     wrappedKey:byteString_(value.wrappedKey,384,384),iv:byteString_(value.iv,12,12),ciphertext:byteString_(value.ciphertext,17,30016)};
 }
 function namedSheet_(name, headers, create) {
-  const props = PropertiesService.getScriptProperties(); const base = props.getProperty('SPREADSHEET_ID'); assert_(base,'NOT_READY');
-  const orderMeta=[SALE_SHEET,SALE_EVENT_SHEET,SALE_HIDDEN_SHEET,SALE_SOURCES].includes(name);
-  const id=twoBookActive_() && orderMeta ? props.getProperty('ORDER_WORKBOOK_ID') : base;
+  const props = PropertiesService.getScriptProperties();
+  // All internal sheets live in the administration book. The quote workbook
+  // has only 견적요청/견적확정; the order workbook has only month tabs.
+  const id=twoBookActive_() ?
+    props.getProperty('LEGACY_SPREADSHEET_ID')||props.getProperty('SPREADSHEET_ID') :
+    props.getProperty('SPREADSHEET_ID');
   assert_(id,'NOT_READY');
   const book = SpreadsheetApp.openById(id); let sheet = book.getSheetByName(name);
   if (!sheet && create) sheet = book.insertSheet(name);
@@ -594,7 +597,10 @@ function hideSale_(body) {
 }
 function hiddenSaleNumbers_() {
   const props=PropertiesService.getScriptProperties();
-  const book=SpreadsheetApp.openById(twoBookActive_()?props.getProperty('ORDER_WORKBOOK_ID'):props.getProperty('SPREADSHEET_ID'));
+  const id=twoBookActive_() ?
+    props.getProperty('LEGACY_SPREADSHEET_ID')||props.getProperty('SPREADSHEET_ID') :
+    props.getProperty('SPREADSHEET_ID');
+  const book=SpreadsheetApp.openById(id);
   const sheet=book.getSheetByName(SALE_HIDDEN_SHEET);
   if(!sheet)return new Set();
   assert_(JSON.stringify(sheet.getRange(1,1,1,2).getValues()[0])===JSON.stringify(SALE_HIDDEN_HEADERS),'NOT_READY');
