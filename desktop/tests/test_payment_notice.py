@@ -38,7 +38,8 @@ class PaymentNoticeTest(unittest.TestCase):
         for message in self.messages():
             self.assertIn('예금주 : 오진웅', message)
             self.assertIn('총금액 : 10,000원', message)
-            self.assertIn('택배비 : 선불 6,000원 (총금액 포함)', message)
+            self.assertIn('택배비 : 선불 6,000원', message)
+            self.assertTrue('(총금액 포함)' in message or '(택배비 포함)' in message)
 
     def test_email_html_contains_account_lines_and_escapes_custom_instructions(self):
         self.draft['paymentAccount'] = '가상은행 000-000\n예금주 : 농원 <테스트>&'

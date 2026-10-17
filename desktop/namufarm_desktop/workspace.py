@@ -2348,20 +2348,25 @@ class SellerWindow(MainWindow):
         sidebar = QFrame()
         sidebar.setObjectName("sidebar")
         self.sidebar = sidebar
-        sidebar.setFixedWidth(220)
+        sidebar.setFixedWidth(286)
         side = QVBoxLayout(sidebar)
-        side.setContentsMargins(12, 20, 12, 16)
+        side.setContentsMargins(12, 16, 12, 14)
         side.setSpacing(8)
-        side.addWidget(label("  namufarm", "brand"))
+        self.brand_panel = QFrame()
+        self.brand_panel.setObjectName("brandPanel")
+        brand_layout = QVBoxLayout(self.brand_panel)
+        brand_layout.setContentsMargins(12, 18, 12, 18)
+        self.brand_label = label("나무팜(주)", "brand")
+        self.brand_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        brand_layout.addWidget(self.brand_label)
+        side.addWidget(self.brand_panel)
         side.addSpacing(6)
         self.nav = []
         for index, (title, _) in enumerate(self.PAGES):
-            if index in (self.PAGE_REQUESTS, self.PAGE_REPORTS):
-                side.addWidget(label("견적 · 주문" if index == self.PAGE_REQUESTS else "운영", "navGroup"))
             widget = NavigationButton(title)
             widget.clicked.connect(lambda checked=False, i=index: self.navigate(i))
             icons = ("requests", "confirmed", "orders", "shipping", "reports", "settings")
-            set_button_icon(widget, icons[index], "#e0ebe3", 20)
+            set_button_icon(widget, icons[index], "#e0ebe3", 22)
             widget.setCheckable(True)
             self.nav.append(widget)
             if index == self.PAGE_REQUESTS:
@@ -2379,6 +2384,22 @@ class SellerWindow(MainWindow):
             else:
                 side.addWidget(widget)
         side.addStretch()
+        self.sidebar_clock = QFrame()
+        self.sidebar_clock.setObjectName("sidebarClock")
+        clock_layout = QVBoxLayout(self.sidebar_clock)
+        clock_layout.setContentsMargins(14, 12, 14, 12)
+        clock_layout.setSpacing(3)
+        self.sidebar_date = label("", "sidebarDate")
+        self.sidebar_time = label("", "sidebarTime")
+        for clock_label in (self.sidebar_date, self.sidebar_time):
+            clock_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            clock_layout.addWidget(clock_label)
+        side.addWidget(self.sidebar_clock)
+        self.update_sidebar_clock()
+        self.sidebar_clock_timer = QTimer(self)
+        self.sidebar_clock_timer.setInterval(1000)
+        self.sidebar_clock_timer.timeout.connect(self.update_sidebar_clock)
+        self.sidebar_clock_timer.start()
         outer.addWidget(sidebar)
         content = QWidget()
         content_layout = QVBoxLayout(content)
@@ -2496,6 +2517,12 @@ class SellerWindow(MainWindow):
             shortcut.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
         self.refresh_workspace()
         self.update_controls()
+
+    def update_sidebar_clock(self):
+        current = datetime.now(SEOUL)
+        weekday = ("월", "화", "수", "목", "금", "토", "일")[current.weekday()]
+        self.sidebar_date.setText(f"{current:%Y.%m.%d} ({weekday})")
+        self.sidebar_time.setText(current.strftime("%H:%M:%S"))
 
     def apply_design_scale(self, large):
         app = QApplication.instance()

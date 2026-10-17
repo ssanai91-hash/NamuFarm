@@ -15,19 +15,23 @@ QWidget{font-family:'Malgun Gothic','NanumGothic',sans-serif;font-size:@body@px;
 QMainWindow,#workspace,QDialog{background:#f4f6f7;}
 #sidebar{background:#193c32;border:0;}
 #sidebar QLabel{color:#c6d9cf;}
-#sidebar #brand{font-size:28px;font-weight:700;color:#fff;}
+#sidebar QFrame#brandPanel{background:#285446;border:1px solid #4a7761;border-radius:10px;}
+#sidebar #brand{font-size:30px;font-weight:700;color:#fff;background:transparent;}
+#sidebar QFrame#sidebarClock{background:#15342b;border:0;border-top:1px solid #4b6d5e;border-radius:8px;}
+#sidebar QLabel#sidebarDate{font-size:18px;color:#d0e0d7;background:transparent;}
+#sidebar QLabel#sidebarTime{font-size:26px;font-weight:600;color:#fff;background:transparent;}
 #sidebar #navFoot{font-size:@small@px;color:#c6d9cf;}
-#sidebar QPushButton{background:transparent;color:#e0ebe3;border:2px solid transparent;border-radius:8px;text-align:left;padding:8px 10px;font-weight:600;}
+#sidebar QPushButton{background:transparent;color:#e0ebe3;border:2px solid transparent;border-radius:8px;text-align:left;padding:10px 14px;font-size:@nav@px;min-height:@navheight@px;max-height:@navheight@px;font-weight:600;}
 #sidebar QPushButton:checked{background:#2e604e;color:#fff;border-left-color:#b6df9a;}
 #sidebar QPushButton:hover{background:#285442;}
 #sidebar QPushButton[keyboardFocus="true"]{border-style:dashed;border-color:#e4d29e;}
 #sidebar QWidget#navRow{background:transparent;}
 #sidebar QLabel#navBadge{background:#c7efad;color:#173b26;border:1px solid #c7efad;border-radius:10px;min-width:24px;padding:3px 6px;font-size:@small@px;font-weight:700;}
-QFrame#pageSummary{background:#dce5f4;border:1px solid #ccd7e8;border-radius:8px;}
-QLabel#summaryTitle{font-size:22px;font-weight:700;color:#24313a;background:transparent;}
-QLabel#summaryCount{font-size:48px;font-weight:700;color:#24313a;background:transparent;}
+QFrame#pageSummary{background:#193c32;border:1px solid #193c32;border-radius:8px;}
+QLabel#summaryTitle{font-size:22px;font-weight:700;color:#fff;background:transparent;}
+QLabel#summaryCount{font-size:48px;font-weight:700;color:#fff;background:transparent;}
 QLabel#summaryCount[longCount="true"]{font-size:32px;}
-QLabel#summaryCountUnit{font-size:22px;font-weight:600;color:#24313a;background:transparent;padding-bottom:6px;}
+QLabel#summaryCountUnit{font-size:22px;font-weight:600;color:#d0e0d7;background:transparent;padding-bottom:6px;}
 QLabel#pageTitle,QLabel#deliveryTitle,QLabel#heroTitle{font-size:24px;font-weight:700;color:#24313a;}
 QLabel#sectionTitle,QLabel#quoteItemsTitle,QLabel#emailSectionTitle{font-size:18px;font-weight:700;}
 QLabel#metricValue,QLabel#quoteTotalValue,QLabel#customerAmountValue{font-size:28px;font-weight:700;color:#2d6a4f;}
@@ -108,9 +112,9 @@ QPushButton#filterTab:checked{background:#e8f2ec;color:#2d6a4f;border-color:#2d6
 QLabel#emptyState{color:#5c6b73;background:transparent;padding:24px;font-size:@body@px;}
 QPushButton#disclosure{text-align:left;background:#f4f6f7;border-color:#ccd5d9;}
 QDialog#quoteEditor QLineEdit[readOnly="true"]{min-height:@readonly@px;max-height:@readonly@px;}
-QLabel#navGroup{font-size:@small@px;color:#a6c2b2;padding:10px 10px 2px;}
 """
     return (css.replace('@body@', str(body)).replace('@small@', str(small))
+            .replace('@nav@', '22' if large else '20').replace('@navheight@', '36' if large else '32')
             .replace('@readonly@', '24' if large else '20'))
 
 
