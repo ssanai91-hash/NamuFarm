@@ -133,11 +133,27 @@ function saleRecords_() {
       sheets.push(sheet);
     }
   });
-  const seen=new Set(),records=[];
+  const seen=new Map(),records=[];
   sheets.forEach(sheet=>namedRows_(sheet,20).forEach((row,index)=>{
     if(row.every(v=>v===''))return;
-    assert_(typeof row[0]==='string' && row[0] && !seen.has(row[0]),'NOT_READY');seen.add(row[0]);
-    records.push({sheet:sheet,row:row,index:index});
+    assert_(typeof row[0]==='string' && row[0],'NOT_READY');
+    const previous=seen.get(row[0]);
+    if(previous){
+      // Before the two-book cutover, a copied order may exist in both the
+      // legacy sales tab and an annual month. Read it once only if both
+      // snapshots match. Sheets can store column K's boolean as text.
+      // Divergent revisions or customer data still fail closed; no writes.
+      assert_(annualLedgersEnabled_() && !twoBookActive_() &&
+        previous.sheet===sheets[0] && sheet!==sheets[0] &&
+        row.length===previous.row.length &&
+        row.every((value,i)=>i===10
+          ? String(value)===String(previous.row[i])
+          : value===previous.row[i]),'NOT_READY');
+      return;
+    }
+    const record={sheet:sheet,row:row,index:index};
+    seen.set(row[0],record);
+    records.push(record);
   }));
   return records;
 }
