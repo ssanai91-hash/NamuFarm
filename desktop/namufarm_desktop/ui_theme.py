@@ -23,6 +23,11 @@ QMainWindow,#workspace,QDialog{background:#f4f6f7;}
 #sidebar QPushButton[keyboardFocus="true"]{border-style:dashed;border-color:#e4d29e;}
 #sidebar QWidget#navRow{background:transparent;}
 #sidebar QLabel#navBadge{background:#c7efad;color:#173b26;border:1px solid #c7efad;border-radius:10px;min-width:24px;padding:3px 6px;font-size:@small@px;font-weight:700;}
+QFrame#pageSummary{background:#dce5f4;border:1px solid #ccd7e8;border-radius:8px;}
+QLabel#summaryTitle{font-size:22px;font-weight:700;color:#24313a;background:transparent;}
+QLabel#summaryCount{font-size:48px;font-weight:700;color:#24313a;background:transparent;}
+QLabel#summaryCount[longCount="true"]{font-size:32px;}
+QLabel#summaryCountUnit{font-size:22px;font-weight:600;color:#24313a;background:transparent;padding-bottom:6px;}
 QLabel#pageTitle,QLabel#deliveryTitle,QLabel#heroTitle{font-size:24px;font-weight:700;color:#24313a;}
 QLabel#sectionTitle,QLabel#quoteItemsTitle,QLabel#emailSectionTitle{font-size:18px;font-weight:700;}
 QLabel#metricValue,QLabel#quoteTotalValue,QLabel#customerAmountValue{font-size:28px;font-weight:700;color:#2d6a4f;}
@@ -121,7 +126,9 @@ QDialog#quoteDeliveryDialog QLabel#deliveryInfoValue{font-size:@body@px;font-wei
 QDialog#quoteDeliveryDialog QLabel#deliverySectionTitle{font-size:@body@px;font-weight:700;}
 QDialog#quoteDeliveryDialog QLabel#quoteStatusBadge{background:#e8f2ec;color:#23593a;border:1px solid #b6d0c1;border-radius:6px;padding:6px 12px;font-size:@caption@px;}
 QDialog#quoteDeliveryDialog QFrame#deliveryShippingStrip{background:#f4f6f7;border:0;border-radius:6px;}
-QDialog#quoteDeliveryDialog QFrame#deliverySectionRule,QDialog#quoteDeliveryDialog QFrame#deliveryVerticalRule{background:#d5dee2;border:0;}
+QDialog#quoteDeliveryDialog QFrame#deliveryVerticalRule{background:#d5dee2;border:0;}
+QDialog#quoteDeliveryDialog QFrame#deliverySectionRule{background:#4d6f61;border:0;}
+QDialog#quoteDeliveryDialog QFrame#deliveryFooter{background:#fff;border:0;border-top:2px solid #4d6f61;}
 QDialog#quoteDeliveryDialog QPushButton{font-size:@body@px;min-height:46px;max-height:46px;padding:0 12px;border-radius:6px;}
 QDialog#quoteDeliveryDialog QPushButton:focus{padding:0 11px;border:2px solid #986000;}
 QDialog#quoteDeliveryDialog QPushButton#smsAction{background:#2d6a4f;color:#fff;border-color:#255a43;}
@@ -137,7 +144,7 @@ QDialog#quoteDeliveryDialog QLineEdit{font-size:@body@px;min-height:24px;max-hei
 QDialog#quoteDeliveryDialog QLineEdit#deliveryShippingFee{min-width:100px;max-width:100px;}
 QDialog#quoteDeliveryDialog QRadioButton{font-size:@body@px;}
 QDialog#quoteDeliveryDialog QTableWidget{font-size:@body@px;border-radius:6px;}
-QDialog#quoteDeliveryDialog QHeaderView::section{font-size:@body@px;}
+QDialog#quoteDeliveryDialog QTableWidget#deliveryItems QHeaderView::section{font-size:@body@px;background:#d7e5df;color:#25483b;}
 """.replace('@body@', str(body)).replace('@caption@', str(caption)).replace('@customer@', '30' if compact else '34').replace('@total@', '34' if compact else '40')
 
 

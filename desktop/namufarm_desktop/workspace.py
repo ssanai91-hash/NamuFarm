@@ -1361,7 +1361,7 @@ class QuoteDeliveryDialog(QDialog):
 
         large = bool(QApplication.instance().property("namufarmLargeFont"))
         self.setStyleSheet(quote_delivery_style(large))
-        fit_window(self, 1140, 760 if not large else 820)
+        fit_window(self, 1140, 800 if not large else 860)
         self.setMinimumSize(900, 600)
 
         layout = QVBoxLayout(self)
@@ -1507,10 +1507,17 @@ class QuoteDeliveryDialog(QDialog):
         shipping_row.addWidget(self.shipping_status, 1)
         content.addWidget(shipping)
 
+        self.delivery_section_gap = QWidget()
+        self.delivery_section_gap.setFixedHeight(28)
+        separator_layout = QVBoxLayout(self.delivery_section_gap)
+        separator_layout.setContentsMargins(0, 0, 0, 0)
         self.delivery_section_rule = QFrame()
         self.delivery_section_rule.setObjectName("deliverySectionRule")
-        self.delivery_section_rule.setFixedHeight(1)
-        content.addWidget(self.delivery_section_rule)
+        self.delivery_section_rule.setFixedHeight(2)
+        separator_layout.addStretch()
+        separator_layout.addWidget(self.delivery_section_rule)
+        separator_layout.addStretch()
+        content.addWidget(self.delivery_section_gap)
 
         # Two task stations: the generated file belongs immediately below its tools.
         tools = QHBoxLayout()
@@ -1588,7 +1595,11 @@ class QuoteDeliveryDialog(QDialog):
         content.addWidget(collapsible("요청사항 · 전달 안내", details))
         content.addStretch(1)
 
-        footer = QHBoxLayout()
+        self.delivery_footer = QFrame()
+        self.delivery_footer.setObjectName("deliveryFooter")
+        self.delivery_footer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        footer = QHBoxLayout(self.delivery_footer)
+        footer.setContentsMargins(0, 12, 0, 0)
         footer.setSpacing(12)
         footer.addStretch()
         close_button = QPushButton("닫기")
@@ -1610,7 +1621,7 @@ class QuoteDeliveryDialog(QDialog):
             action.setMinimumWidth(180)
             footer.addWidget(action)
             set_button_icon(action, "check", "#2d6a4f")
-        layout.addLayout(footer)
+        layout.addWidget(self.delivery_footer)
         set_button_icon(self.sms_button, "message", "#ffffff")
         set_button_icon(self.email_button, "mail")
         set_button_icon(self.generate_quote_button, "document")
@@ -1624,16 +1635,18 @@ class QuoteDeliveryDialog(QDialog):
         super().resizeEvent(event)
         if not hasattr(self, "delivery_scroll"):
             return
-        compact = self.height() < 720
+        compact = self.height() < 780
         if compact == getattr(self, "_delivery_compact", None):
             return
         self._delivery_compact = compact
         large = bool(QApplication.instance().property("namufarmLargeFont"))
         self.setStyleSheet(quote_delivery_style(large, compact))
-        self.layout().setContentsMargins(24, 12 if compact else 20, 24, 12 if compact else 20)
-        self.layout().setSpacing(10 if compact else 14)
-        self.delivery_scroll.widget().layout().setSpacing(6 if compact else 14)
-        self.delivery_header.layout().setContentsMargins(0, 0, 0, 8 if compact else 16)
+        self.layout().setContentsMargins(24, 10 if compact else 20, 24, 10 if compact else 20)
+        self.layout().setSpacing(8 if compact else 14)
+        self.delivery_scroll.widget().layout().setSpacing(4 if compact else 14)
+        self.delivery_section_gap.setFixedHeight(18 if compact else 28)
+        self.delivery_footer.layout().setContentsMargins(0, 6 if compact else 12, 0, 0)
+        self.delivery_header.layout().setContentsMargins(0, 0, 0, 6 if compact else 16)
 
     def quote_number(self):
         return (
@@ -2362,19 +2375,34 @@ class SellerWindow(MainWindow):
         content_layout = QVBoxLayout(content)
         content_layout.setContentsMargins(24, 16, 24, 16)
         content_layout.setSpacing(12)
+        self.other_page_title = label("", "pageTitle")
+        content_layout.addWidget(self.other_page_title)
         header = QHBoxLayout()
-        heading = QVBoxLayout()
-        self.page_title = label("", "pageTitle")
-        heading.addWidget(self.page_title)
-        header.addLayout(heading)
-        header.addStretch()
+        header.setSpacing(20)
+        self.page_summary = QFrame()
+        self.page_summary.setObjectName("pageSummary")
+        self.page_summary.setFixedSize(226, 144)
+        summary_layout = QVBoxLayout(self.page_summary)
+        summary_layout.setContentsMargins(16, 14, 16, 14)
+        summary_layout.setSpacing(8)
+        self.page_title = label("", "summaryTitle")
+        summary_layout.addWidget(self.page_title)
+        summary_layout.addStretch(1)
+        count_row = QHBoxLayout()
+        count_row.setSpacing(8)
+        count_row.addStretch(1)
+        self.page_count_number = label("0", "summaryCount")
+        self.page_count_number.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignBottom)
+        self.page_count_unit = label("건", "summaryCountUnit")
+        count_row.addWidget(self.page_count_number, 0, Qt.AlignmentFlag.AlignBottom)
+        count_row.addWidget(self.page_count_unit, 0, Qt.AlignmentFlag.AlignBottom)
+        summary_layout.addLayout(count_row)
+        header.addWidget(self.page_summary)
         self.sync_button.setText("가져오기")
         set_button_icon(self.sync_button, "refresh")
         self.sync_button.setToolTip("견적요청: 서버 신규 요청 · 확정 견적: 로컬 엑셀 · 판매 전송 대기는 판매관리에서 가져오기. F5")
         self.sync_button.setObjectName("syncSecondary")
         self.sync_button.setMinimumWidth(138)
-
-        content_layout.addLayout(header)
 
         self.server_log_frame = QFrame()
         self.server_log_frame.setObjectName("serverLogFrame")
@@ -2393,7 +2421,8 @@ class SellerWindow(MainWindow):
         self.message.setAccessibleName("연결 및 작업 상태")
         log_layout.addWidget(self.message, 1)
         log_layout.addWidget(self.sync_button)
-        content_layout.addWidget(self.server_log_frame)
+        header.addWidget(self.server_log_frame, 1, Qt.AlignmentFlag.AlignVCenter)
+        content_layout.addLayout(header)
 
         self.stack = QStackedWidget()
         self.stack.addWidget(old_pages[0])
@@ -2494,8 +2523,19 @@ class SellerWindow(MainWindow):
             self.update_page_title(index)
 
     def update_page_title(self, index):
-        count = self.page_counts.get(index)
-        self.page_title.setText(self.PAGES[index][0] + (f" · {count:,}건" if count is not None else ""))
+        count = self.page_counts.get(index, 0)
+        featured = index in (self.PAGE_REQUESTS, self.PAGE_QUOTES, self.PAGE_SALES)
+        self.page_summary.setVisible(featured)
+        self.other_page_title.setVisible(not featured)
+        self.page_title.setText(self.PAGES[index][0])
+        self.other_page_title.setText(self.PAGES[index][0] +
+                                      (f" · {count:,}건" if index in self.page_counts else ""))
+        self.page_count_number.setText(f"{count:,}")
+        self.page_count_number.setProperty("longCount", count >= 100000)
+        self.page_count_number.style().unpolish(self.page_count_number)
+        self.page_count_number.style().polish(self.page_count_number)
+        self.page_summary.setAccessibleName(f"{self.PAGES[index][0]} {count:,}건")
+        self.page_count_number.setToolTip(f"현재 목록 {count:,}건")
 
     def refresh_requests(self):
         super().refresh_requests()

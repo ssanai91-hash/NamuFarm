@@ -55,3 +55,36 @@ class QuoteStorageUiTest(QtTestCase):
             (manager.sync if sales else manager.sync_requests).assert_called()
             manager.sync.reset_mock()
             manager.sync_requests.reset_mock()
+
+    def test_summary_count_follows_quote_filter_and_sales_search(self):
+        data = demo_data()
+        second = copy.deepcopy(data['confirmedQuotes'][0])
+        second['id'] = '00000000-0000-4000-8000-000000000099'
+        second['quoteStatus'] = '견적발송완료'
+        data['confirmedQuotes'].append(second)
+        self.window.apply_view(data)
+        self.window.navigate(self.window.PAGE_QUOTES)
+        self.assertEqual('2', self.window.page_count_number.text())
+        self.window.set_draft_filter('견적발송완료')
+        self.assertEqual('1', self.window.page_count_number.text())
+        self.assertEqual(1, len(self.window.draft_rows))
+        self.window.navigate(self.window.PAGE_SALES)
+        self.window.sale_search.setText('does-not-exist')
+        self.assertEqual('0', self.window.page_count_number.text())
+        self.assertEqual([], self.window.sale_rows)
+        self.window.sale_search.clear()
+        self.assertEqual(str(len(data['sales'])), self.window.page_count_number.text())
+
+    def test_summary_navigation_preserves_other_page_headings(self):
+        self.window.apply_view(demo_data())
+        self.window.show()
+        for index in (self.window.PAGE_REQUESTS, self.window.PAGE_QUOTES, self.window.PAGE_SALES):
+            self.window.navigate(index)
+            self.assertTrue(self.window.page_summary.isVisible())
+            self.assertFalse(self.window.other_page_title.isVisible())
+            self.assertEqual(self.window.PAGES[index][0], self.window.page_title.text())
+        for index in (self.window.PAGE_SHIPPING, self.window.PAGE_REPORTS, self.window.PAGE_SETTINGS):
+            self.window.navigate(index)
+            self.assertFalse(self.window.page_summary.isVisible())
+            self.assertTrue(self.window.other_page_title.isVisible())
+            self.assertTrue(self.window.other_page_title.text().startswith(self.window.PAGES[index][0]))
