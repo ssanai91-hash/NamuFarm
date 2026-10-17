@@ -23,7 +23,7 @@ from .ui_theme import (align_table, fit_window, scroll_dialog, scroll_page, work
 from .ui_icons import set_button_icon
 from .app import MainWindow, Task, table, fill_table, money, timestamp
 from .commerce import (ISSUER, new_draft, draft_amounts, validate_draft, quote_html, quote_document_html, shipping_html,
-                       shipping_problem, parse_tracking_csv, tracking_number)
+                       shipping_problem, parse_tracking_csv, tracking_number, payment_account_text, payment_notice)
 from .domain import SEOUL, profit, require
 from .errors import UserError
 from .shipping_excel import shipping_xls, parse_tracking_xls, export_orders, UPLOAD_SHEET
@@ -352,7 +352,7 @@ def render_official_quote_image(draft):
     line(226, notes_top, 226, bottom)
     fitted_text((left, notes_top, 200, bottom - notes_top), "중요사항", 18, False)
 
-    payment = draft.get("paymentAccount", "").strip() or "농협 328-12-035671 오진웅"
+    payment = payment_account_text(draft)
     shipping_note = (
         f"택배비 선불 {int(draft.get('shippingFee', 0) or 0):,}원 (총금액 포함)"
         if draft.get("isPrepaid")
@@ -931,6 +931,8 @@ class QuoteSmsDialog(QDialog):
             f"총금액 : {total:,}원",
             shipping,
             "",
+            payment_notice(self.draft),
+            "",
             "견적 확인 후 문의사항이 있으시면 연락 부탁드립니다.",
             "010-4446-0304 / 043-732-0980",
         ])
@@ -1216,6 +1218,8 @@ class QuoteEmailDialog(QDialog):
             "",
             f"총금액 : {total:,}원",
             shipping_line,
+            "",
+            payment_notice(self.draft),
             "",
             "===========================",
             "",
@@ -1755,6 +1759,8 @@ class QuoteDeliveryDialog(QDialog):
                 f"품목: {items}",
                 f"총금액: {amount:,}원",
                 shipping,
+                "",
+                payment_notice(self.draft),
                 "",
                 "확인 후 문의사항이 있으시면 연락 부탁드립니다.",
             ]

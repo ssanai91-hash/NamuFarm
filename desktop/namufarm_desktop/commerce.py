@@ -11,8 +11,22 @@ from .domain import EDITABLE, SEOUL, integer, metadata, now_ms, require, valid_i
 
 ISSUER = {"businessName": "나무팜농원", "businessNumber": "213-94-24363", "representative": "오진웅",
           "address": "충북 옥천군 동이면 금강로 185", "phone": "043-732-0980", "businessType": "", "category": ""}
+PAYMENT_BANK_ACCOUNT = "농협 328-12-035671"
+PAYMENT_ACCOUNT_HOLDER = "오진웅"
 TRACKING_PREFIX = "[로젠택배 송장] "
 EXPORT_HEADERS = ("주문번호", "수하인명", "수하인전화", "우편번호", "수하인주소", "상세주소", "품목명", "수량", "배송메모", "운임구분", "송장번호")
+
+
+def payment_account_text(draft):
+    """Use the quote's own account instructions, falling back to the existing farm account."""
+    return draft.get("paymentAccount", "").strip() or f"{PAYMENT_BANK_ACCOUNT} {PAYMENT_ACCOUNT_HOLDER}"
+
+
+def payment_notice(draft):
+    account = payment_account_text(draft)
+    if account == f"{PAYMENT_BANK_ACCOUNT} {PAYMENT_ACCOUNT_HOLDER}":
+        return f"입금계좌 : {PAYMENT_BANK_ACCOUNT}\n예금주 : {PAYMENT_ACCOUNT_HOLDER}"
+    return f"입금계좌 안내 : {account}"
 
 
 def new_draft(request=None):
@@ -331,7 +345,7 @@ def official_quote_html(draft):
         if draft.get("isPrepaid")
         else f"택배비 후불 · 선불 시 {int(draft.get('shippingFee', 0) or 0):,}원"
     )
-    payment = draft.get("paymentAccount", "").strip() or "농협 328-12-035671 오진웅"
+    payment = payment_account_text(draft)
     note = draft.get("note", "").strip() or "별도 요청사항 없음"
     fax = "732-0981"
 
