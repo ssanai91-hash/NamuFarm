@@ -2416,6 +2416,10 @@ class SellerWindow(MainWindow):
         self.server_log_frame = QFrame()
         self.server_log_frame.setObjectName("serverLogFrame")
         self.server_log_frame.setProperty("state", "idle")
+        self.server_log_frame.setProperty("pulse", False)
+        self.status_pulse_timer = QTimer(self)
+        self.status_pulse_timer.setInterval(550)
+        self.status_pulse_timer.timeout.connect(self.pulse_status_background)
         log_layout = QHBoxLayout(self.server_log_frame)
         log_layout.setContentsMargins(12, 8, 12, 8)
         log_layout.setSpacing(12)
@@ -2430,7 +2434,7 @@ class SellerWindow(MainWindow):
         self.message.setAccessibleName("연결 및 작업 상태")
         log_layout.addWidget(self.message, 1)
         log_layout.addWidget(self.sync_button)
-        header.addWidget(self.server_log_frame, 1, Qt.AlignmentFlag.AlignVCenter)
+        header.addWidget(self.server_log_frame, 1, Qt.AlignmentFlag.AlignBottom)
         content_layout.addLayout(header)
 
         self.stack = QStackedWidget()
@@ -2513,8 +2517,23 @@ class SellerWindow(MainWindow):
             self.set_status_state("working", "처리 중")
 
     def set_status_state(self, state, title):
+        self.status_pulse_timer.stop()
         self.status_title.setText(title)
         self.server_log_frame.setProperty("state", state)
+        self.server_log_frame.setProperty("pulse", False)
+        self.repaint_status_background()
+        if state == "working":
+            self.status_pulse_timer.start()
+
+    def pulse_status_background(self):
+        if self.server_log_frame.property("state") != "working":
+            self.status_pulse_timer.stop()
+            return
+        self.server_log_frame.setProperty(
+            "pulse", not bool(self.server_log_frame.property("pulse")))
+        self.repaint_status_background()
+
+    def repaint_status_background(self):
         self.server_log_frame.style().unpolish(self.server_log_frame)
         self.server_log_frame.style().polish(self.server_log_frame)
         self.server_log_frame.update()
@@ -2581,9 +2600,10 @@ class SellerWindow(MainWindow):
         layout = QVBoxLayout(page)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(10)
-        self.draft_filter = "전체"
+        self.draft_filter = "견적확정"
         filters, self.draft_filters = self.filter_buttons(
-            (("전체", "전체"), ("전달 대기", "견적확정"), ("발송 완료", "견적발송완료")), self.set_draft_filter)
+            (("전체", "전체"), ("견적 대기", "견적확정"), ("발송 완료", "견적발송완료")), self.set_draft_filter)
+        self.draft_filters["견적확정"].setChecked(True)
         layout.addLayout(filters)
         self.draft_table = table(["견적번호", "상태", "작성일", "고객명", "연락처", "메일", "공식견적서", "품목", "판매금액", "자료 위치"])
         self.draft_sort_descending = False
@@ -2919,7 +2939,7 @@ class SellerWindow(MainWindow):
             reverse=self.draft_sort_descending,
         )
         for value, widget in self.draft_filters.items():
-            title = {"전체": "전체", "견적확정": "전달 대기", "견적발송완료": "발송 완료"}[value]
+            title = {"전체": "전체", "견적확정": "견적 대기", "견적발송완료": "발송 완료"}[value]
             count = len(draft_pairs) if value == "전체" else sum(status == value for _draft, status in draft_pairs)
             widget.setText(f"{title} {count:,}")
             widget.setChecked(value == self.draft_filter)

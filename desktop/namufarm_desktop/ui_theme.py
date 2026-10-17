@@ -36,11 +36,14 @@ QLabel#infoValue,QLabel#customerMetricValue,QLabel#deliveryShippingTitle,QLabel#
 QFrame#card,QFrame#hero,QFrame#deliveryInfoCard,QFrame#quoteItemsCard,QFrame#requestNoteCard,QFrame#customerSummaryCard,QFrame#customerInfoCard,QFrame#customerFinanceCard,QFrame#emailAddressCard{background:#fff;border:1px solid #ccd5d9;border-radius:12px;}
 QLabel#notice,QLabel#deliveryNotice,QLabel#emailSendStatus,QLabel#smsSendStatus{background:#eef3f1;color:#38564b;border:1px solid #ccd5d9;border-radius:8px;padding:12px;}
 QFrame#serverLogFrame{background:#fff;border:1px solid #ccd5d9;border-radius:8px;}
-QFrame#serverLogFrame[state="error"]{background:#fff1eb;border-color:#b9654e;}
 QFrame#serverLogFrame[state="working"]{background:#fff7e4;border-color:#b08b3e;}
+QFrame#serverLogFrame[state="working"][pulse="true"]{background:#ffe4aa;border-color:#c18d29;}
+QFrame#serverLogFrame[state="success"]{background:#e4efff;border-color:#719bd2;}
+QFrame#serverLogFrame[state="error"]{background:#fce9e6;border-color:#bf685e;}
 QLabel#serverLogTitle{font-size:@small@px;font-weight:700;color:#38564b;}
 QLabel#serverLogText{font-size:@body@px;color:#24313a;background:transparent;}
-QFrame#serverLogFrame[state="error"] QLabel{color:#923c28;}
+QFrame#serverLogFrame[state="success"] QLabel{color:#24548b;}
+QFrame#serverLogFrame[state="error"] QLabel{color:#9e3228;}
 QPushButton{background:#fff;color:#24313a;border:1px solid #7f8e95;border-radius:8px;min-height:24px;max-height:24px;padding:9px 14px;font-weight:600;}
 QPushButton:hover{background:#edf3ef;border-color:#4b805d;}
 QPushButton:pressed{background:#dcebe2;}
