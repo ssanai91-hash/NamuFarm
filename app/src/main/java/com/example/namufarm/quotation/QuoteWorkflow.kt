@@ -66,6 +66,7 @@ class QuoteWorkflow(
 ) {
     fun records() = store.records()
     private fun prepare(request: WebQuoteRequestEntity, draft: SellerQuoteDraft): QuoteWorkflowRecord {
+        check(request.status == "신규") { "확정견적은 결과 확인만 가능합니다." }
         quoteWorkflowText(request, draft) // Validate the same totals and limits before any state or network write.
         val previous = store.records().firstOrNull { it.request.requestId == request.requestId }
         check(previous?.confirmedAt?.let { it > 0 } != true) { "확정견적은 결과 확인만 가능합니다." }

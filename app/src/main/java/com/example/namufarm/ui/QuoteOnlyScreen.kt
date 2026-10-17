@@ -37,6 +37,7 @@ internal fun QuoteOnlyScreen(viewModel: ManagementViewModel, connection: WebRequ
     val workflow = remember(store, connection) { QuoteWorkflow(store, connection::quoteAction, connection::confirmQuote) }
     val management by viewModel.uiState.collectAsState()
     val scope = rememberCoroutineScope()
+    var recordsReady by remember { mutableStateOf(false) }
     var records by remember { mutableStateOf(emptyList<QuoteWorkflowRecord>()) }
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
@@ -51,6 +52,7 @@ internal fun QuoteOnlyScreen(viewModel: ManagementViewModel, connection: WebRequ
     LaunchedEffect(workflow) {
         try { records = withContext(Dispatchers.IO) { workflow.records() } }
         catch (e: Exception) { message = "저장된 견적 기록 확인이 필요합니다: ${e.message}" }
+        finally { recordsReady = true }
     }
     LaunchedEffect(inbox.deleteFeedback) {
         val feedback = inbox.deleteFeedback
@@ -61,6 +63,15 @@ internal fun QuoteOnlyScreen(viewModel: ManagementViewModel, connection: WebRequ
     }
     val confirmed = records.filter { it.confirmedAt > 0 }.sortedByDescending { it.confirmedAt }
     val confirmedIds = confirmed.map { it.request.requestId }.toSet()
+    LaunchedEffect(editing, recordsReady) {
+        if (recordsReady && editing != null && (editing.status != "신규" || editing.requestId in confirmedIds)) {
+            result = confirmed.firstOrNull { it.request.requestId == editing.requestId }
+            if (result == null) legacyResult = management.quotesByRequest[editing.requestId]
+            if (result == null && legacyResult == null) message = "이 휴대폰에 확정 결과가 없습니다. 견적을 확정한 기기에서 확인해주세요."
+            selectedTab = 1
+            viewModel.dismissManualQuote()
+        }
+    }
     val pending = records.filter { it.confirmationPending }.map { it.request }
     val requests = (pending + inbox.requests.filter { it.status == "신규" })
         .distinctBy { it.requestId }.filter { it.requestId !in confirmedIds }.sortedByDescending { it.sequence }
@@ -124,7 +135,7 @@ internal fun QuoteOnlyScreen(viewModel: ManagementViewModel, connection: WebRequ
             }
         }
     }
-    editing?.takeIf { it.requestId !in confirmedIds }?.let { request ->
+    editing?.takeIf { recordsReady && it.status == "신규" && it.requestId !in confirmedIds }?.let { request ->
         val saved = records.firstOrNull { it.request.requestId == request.requestId }
         ManualQuoteEditor(request, busy || inbox.busy || deleting, message,
             onDismiss = { if (!busy) { viewModel.dismissManualQuote(); message = null } },

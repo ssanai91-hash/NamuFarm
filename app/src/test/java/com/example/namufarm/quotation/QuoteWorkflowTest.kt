@@ -108,4 +108,14 @@ class QuoteWorkflowTest {
         assertTrue(store.records().isEmpty())
     }
 
+    @Test fun alreadyConfirmedRequestsCannotEnterAnyWriteAction() = runBlocking {
+        val store = MemoryStore()
+        val workflow = QuoteWorkflow(store, { _, _ -> error("must not send") }, { _, _ -> error("must not confirm") })
+        val confirmed = request.copy(status = "견적확정")
+        assertThrows(IllegalStateException::class.java) { runBlocking { workflow.sendSms(confirmed, draft) } }
+        assertThrows(IllegalStateException::class.java) { runBlocking { workflow.sendEmail(confirmed, draft) } }
+        assertThrows(IllegalStateException::class.java) { runBlocking { workflow.complete(confirmed, draft) } }
+        assertTrue(store.records().isEmpty())
+    }
+
 }

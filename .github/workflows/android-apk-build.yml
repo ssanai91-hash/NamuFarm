@@ -1,6 +1,8 @@
 name: Android APK Build
 
 on:
+  push:
+    branches: [ "main" ]
   workflow_dispatch:
     inputs:
       apk_type:
@@ -17,7 +19,10 @@ permissions:
 
 jobs:
   apk:
-    name: Build ${{ inputs.apk_type }} APK
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[build apk]')
+    name: Build ${{ inputs.apk_type || 'release' }} APK
+    env:
+      APK_TYPE: ${{ github.event_name == 'push' && 'release' || inputs.apk_type }}
     runs-on: ubuntu-latest
     timeout-minutes: 50
     permissions:
@@ -79,7 +84,7 @@ jobs:
       # Use the same permanent release certificate as the existing Android CI.
       # Never put the keystore or its passwords into the repository or artifacts.
       - name: Prepare existing release signing
-        if: inputs.apk_type == 'release'
+        if: env.APK_TYPE == 'release'
         id: signing
         env:
           SIGNING_BASE64: ${{ secrets.NAMUFARM_KEYSTORE_BASE64 }}
@@ -95,15 +100,15 @@ jobs:
           fi
 
       - name: Build debug APK
-        if: inputs.apk_type == 'debug'
+        if: env.APK_TYPE == 'debug'
         run: ./gradlew --no-daemon :app:assembleDebug
 
       # Offline credential tests only; no server requests or order/message trials.
-      - name: Verify connection credential preservation
-        run: ./gradlew --no-daemon :app:testDebugUnitTest --tests com.example.namufarm.webrequests.WebRequestSettingsTest
+      - name: Verify quote workflow and connection credential preservation
+        run: ./gradlew --no-daemon :app:testDebugUnitTest --tests com.example.namufarm.webrequests.WebRequestSettingsTest --tests com.example.namufarm.quotation.QuoteWorkflowTest --tests com.example.namufarm.ui.QuoteWorkflowUiTest
 
       - name: Build signed release APK
-        if: inputs.apk_type == 'release'
+        if: env.APK_TYPE == 'release'
         env:
           NAMUFARM_KEYSTORE: ${{ runner.temp }}/namufarm-release.jks
           NAMUFARM_STORE_PASSWORD: ${{ secrets.NAMUFARM_STORE_PASSWORD }}
@@ -114,7 +119,7 @@ jobs:
       - name: Upload debug APK (testing only)
         id: debug_artifact
         continue-on-error: true
-        if: inputs.apk_type == 'debug'
+        if: env.APK_TYPE == 'debug'
         uses: actions/upload-artifact@v4
         with:
           name: NamuFarm-Debug-APK
@@ -123,7 +128,7 @@ jobs:
           retention-days: 7
 
       - name: Save test APK as a draft release if artifact upload fails
-        if: inputs.apk_type == 'debug' && steps.debug_artifact.outcome == 'failure'
+        if: env.APK_TYPE == 'debug' && steps.debug_artifact.outcome == 'failure'
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -144,7 +149,7 @@ jobs:
       - name: Upload signed release APK
         id: release_artifact
         continue-on-error: true
-        if: inputs.apk_type == 'release'
+        if: env.APK_TYPE == 'release'
         uses: actions/upload-artifact@v4
         with:
           name: NamuFarm-Signed-APK
@@ -154,7 +159,7 @@ jobs:
 
       # Draft only: retains repository visibility and never publishes a release.
       - name: Save signed APK as a draft release if artifact upload fails
-        if: inputs.apk_type == 'release' && steps.release_artifact.outcome == 'failure'
+        if: env.APK_TYPE == 'release' && steps.release_artifact.outcome == 'failure'
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -175,4 +180,5 @@ jobs:
       - name: Remove temporary signing file
         if: always()
         run: rm -f "$RUNNER_TEMP/namufarm-release.jks"
+
 

@@ -121,13 +121,22 @@ test('quote email can attach generated official PDF',()=>{
   assert.equal(f.mail[0].attachments[0].mime,'application/pdf');
   assert.equal(Buffer.from(f.mail[0].attachments[0].bytes).toString(),pdf.toString());
 });
-test('quote email cannot send before quote confirmation',()=>{
+test('new request email sends without confirming and paid requests remain blocked',()=>{
   const f=fixture();f.submit();
-  assert.throws(()=>f.context.sendQuoteEmail_({
+  const original=JSON.stringify(f.cells[1]);
+  const body={
     requestId:f.request.requestId,recipientEmail:'buyer@example.com',senderName:'나무팜농원',
     quoteNumber:'NAMU-20261011-0001',subject:'견적 안내',
     bodyText:'견적 안내입니다.',bodyHtml:'<p>견적 안내입니다.</p>'
-  }));
+  };
+  const sent=f.context.sendQuoteEmail_(body);
+  assert.equal(sent.sent,true);
+  assert.equal(f.mail.length,1);
+  assert.equal(f.context.quoteRequestStatus_(f.request.requestId),'신규');
+  assert.equal(JSON.stringify(f.cells[1]),original);
+  f.cells[1][9]='입금확인';
+  assert.throws(()=>f.context.sendQuoteEmail_(body));
+  assert.equal(f.mail.length,1);
 });
 
 
