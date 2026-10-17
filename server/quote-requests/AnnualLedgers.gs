@@ -146,9 +146,8 @@ function saleRecords_() {
       assert_(annualLedgersEnabled_() && !twoBookActive_() &&
         previous.sheet===sheets[0] && sheet!==sheets[0] &&
         row.length===previous.row.length &&
-        row.every((value,i)=>i===10
-          ? String(value)===String(previous.row[i])
-          : value===previous.row[i]),'NOT_READY');
+        JSON.stringify(row.map((value,i)=>i===10?String(value):value))===
+          JSON.stringify(previous.row.map((value,i)=>i===10?String(value):value)),'NOT_READY');
       return;
     }
     const record={sheet:sheet,row:row,index:index};
