@@ -126,15 +126,19 @@ QDialog#quoteWorkbench QLabel{font-size:@body@px;background:transparent;border:0
 QDialog#quoteWorkbench QFrame#workbenchHeader{background:#193c32;border:0;}
 QDialog#quoteWorkbench QLabel#workbenchBrand{font-size:20px;font-weight:600;color:#e3eee8;}
 QDialog#quoteWorkbench QLabel#workbenchTitle{font-size:@title@px;font-weight:700;color:#ffffff;}
-QDialog#quoteWorkbench QLabel#workbenchReference{font-size:@caption@px;color:#e3eee8;}
+QDialog#quoteWorkbench QLabel#workbenchReference{font-size:@caption@px;font-weight:700;color:#e3eee8;}
+QDialog#quoteWorkbench QFrame#workbenchBrandRule{background:#64927c;border:0;}
 QDialog#quoteWorkbench QScrollArea#workbenchCustomerScroll{border:0;border-right:1px solid #bfd5c9;background:#edf4ef;}
 QDialog#quoteWorkbench QWidget#workbenchCustomerRail{background:#edf4ef;}
 QDialog#quoteWorkbench QLabel#workbenchSectionTitle{font-size:@section@px;font-weight:700;color:#193c32;}
+QDialog#quoteWorkbench QLabel#workbenchCustomerTitle{font-size:22px;font-weight:700;color:#193c32;}
 QDialog#quoteWorkbench QLabel#workbenchCaption{font-size:@caption@px;font-weight:600;color:#52645c;}
-QDialog#quoteWorkbench QLabel#workbenchCustomerName{font-size:28px;font-weight:700;color:#193c32;}
-QDialog#quoteWorkbench QLabel#workbenchInfo{font-size:@body@px;color:#24313a;}
-QDialog#quoteWorkbench QLabel#workbenchFormal{font-size:@caption@px;background:#e4ece7;color:#52645c;border-radius:6px;padding:8px 12px;}
-QDialog#quoteWorkbench QLabel#workbenchFormal[requested="true"]{background:#ffe2a5;color:#6b480d;}
+QDialog#quoteWorkbench QTextBrowser#workbenchCustomerName{background:transparent;border:0;padding:0;font-size:28px;font-weight:700;color:#193c32;}
+QDialog#quoteWorkbench QTextBrowser#workbenchInfo{background:transparent;border:0;padding:0;font-size:@body@px;color:#24313a;}
+QDialog#quoteWorkbench QTextBrowser#workbenchReceipt{background:transparent;border:0;padding:0;font-size:@body@px;font-weight:700;color:#24313a;}
+QDialog#quoteWorkbench QFrame#workbenchFormal{background:#e4ece7;border:0;border-radius:6px;}
+QDialog#quoteWorkbench QFrame#workbenchFormal[requested="true"]{background:#ffe2a5;}
+QDialog#quoteWorkbench QLabel#workbenchFormalText{font-size:16px;font-weight:600;color:#79521a;}
 QDialog#quoteWorkbench QFrame#workbenchCustomerRule{background:#c5d9ce;border:0;}
 QDialog#quoteWorkbench QTableWidget#workbenchItems{background:#ffffff;alternate-background-color:#f0f6f2;color:#24313a;font-size:@body@px;border:1px solid #cfddd4;border-radius:6px;selection-background-color:#e0eee5;selection-color:#193c32;}
 QDialog#quoteWorkbench QTableWidget#workbenchItems::item{padding:4px 12px;border-bottom:1px solid #e0e9e3;}

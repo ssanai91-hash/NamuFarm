@@ -1,4 +1,4 @@
-"""Small, original line icons rendered locally; no external icon/font dependency."""
+"""Local line icons and vendored Material Symbols; no network/font dependency."""
 from functools import lru_cache
 
 from PySide6.QtCore import QByteArray, QSize, Qt
@@ -27,11 +27,20 @@ PATHS = {
 }
 
 
+# Google Material Symbols Rounded (Apache-2.0), vendored unmodified.
+# Upstream: https://github.com/google/material-design-icons/tree/master/symbols/web
+# License: docs/licenses/material-design-icons-LICENSE.txt
+MATERIAL_SVGS = {'person': '<svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 -960 960 960" width="24"><path d="M480-480q-66 0-113-47t-47-113q0-66 47-113t113-47q66 0 113 47t47 113q0 66-47 113t-113 47ZM160-240v-32q0-34 17.5-62.5T224-378q62-31 126-46.5T480-440q66 0 130 15.5T736-378q29 15 46.5 43.5T800-272v32q0 33-23.5 56.5T720-160H240q-33 0-56.5-23.5T160-240Z"/></svg>', 'leaf': '<svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 -960 960 960" width="24"><path d="M450-80q-33 0-66.5-7.5T315-109q12-121 70-226t149-185q-110 56-190.5 148T231-162q-4-3-7.5-6.5L216-176q-47-47-71.5-105T120-402q0-68 27-130t75-110q70-70 173.5-98T675-760q26 1 48 11.5t39 27.5q17 17 27 39.5t12 48.5q6 180-21 281t-96 170q-49 49-109.5 75.5T450-80Z"/></svg>', 'calculator': '<svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 -960 960 960" width="24"><path d="M320-320v50q0 13 8.5 21.5T350-240q13 0 21.5-8.5T380-270v-50h50q13 0 21.5-8.5T460-350q0-13-8.5-21.5T430-380h-50v-50q0-13-8.5-21.5T350-460q-13 0-21.5 8.5T320-430v50h-50q-13 0-21.5 8.5T240-350q0 13 8.5 21.5T270-320h50Zm230 50h140q13 0 21.5-8.5T720-300q0-13-8.5-21.5T690-330H550q-13 0-21.5 8.5T520-300q0 13 8.5 21.5T550-270Zm0-100h140q13 0 21.5-8.5T720-400q0-13-8.5-21.5T690-430H550q-13 0-21.5 8.5T520-400q0 13 8.5 21.5T550-370Zm70-208 35 35q9 9 21 9t21-9q8-8 8.5-20.5T698-585l-36-37 35-35q9-9 9-21t-9-21q-9-9-21-9t-21 9l-35 35-35-35q-9-9-21-9t-21 9q-9 9-9 21t9 21l35 35-36 37q-8 9-8 21t9 21q9 9 21 9t21-9l35-35Zm-340-14h140q13 0 21.5-8.5T450-622q0-13-8.5-21.5T420-652H280q-13 0-21.5 8.5T250-622q0 13 8.5 21.5T280-592Zm-80 472q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h560q33 0 56.5 23.5T840-760v560q0 33-23.5 56.5T760-120H200Z"/></svg>'}
+
+
 @lru_cache(maxsize=96)
 def ui_icon(name, color="#24313A"):
-    svg = (f'<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" '
-           f'viewBox="0 0 24 24" fill="none" stroke="{color}" stroke-width="1.7" '
-           f'stroke-linecap="round" stroke-linejoin="round">{PATHS[name]}</svg>')
+    if name in MATERIAL_SVGS:
+        svg = MATERIAL_SVGS[name].replace('<svg ', f'<svg fill="{color}" ', 1)
+    else:
+        svg = (f'<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" '
+               f'viewBox="0 0 24 24" fill="none" stroke="{color}" stroke-width="1.7" '
+               f'stroke-linecap="round" stroke-linejoin="round">{PATHS[name]}</svg>')
     renderer = QSvgRenderer(QByteArray(svg.encode()))
     icon = QIcon()
     for size in (18, 20, 24, 36, 40, 48):

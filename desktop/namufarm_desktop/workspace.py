@@ -9,7 +9,7 @@ from html import escape as html_escape
 
 from PySide6.QtCore import QSettings, Qt, QUrl, QSaveFile, QIODevice, QTimer, Signal, Slot, QRectF
 from PySide6.QtGui import (QColor, QDesktopServices, QFont, QFontMetricsF, QImage, QIntValidator,
-    QKeySequence, QPainter, QPdfWriter, QPen, QPixmap, QShortcut, QTextDocument, QPageSize)
+    QKeySequence, QPainter, QPdfWriter, QPen, QPixmap, QShortcut, QTextDocument, QTextOption, QPageSize)
 from PySide6.QtPrintSupport import QPrinter, QPrintDialog
 from PySide6.QtWidgets import (QApplication, QButtonGroup, QCheckBox, QComboBox, QDialog, QDoubleSpinBox, QFileDialog, QFormLayout,
     QFrame, QGridLayout, QGroupBox, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QListWidget,
@@ -20,7 +20,7 @@ from . import __version__
 from .ui_theme import (align_table, fit_window, scroll_dialog, scroll_page, workspace_style,
                        CustomerDelegate, StatusDelegate, customer_reference, CompactDateDelegate,
                        NavigationButton, size_table_to_rows, collapsible, quote_delivery_style, quote_workbench_style)
-from .ui_icons import set_button_icon
+from .ui_icons import set_button_icon, ui_icon
 from .app import MainWindow, Task, table, fill_table, money, timestamp
 from .commerce import (ISSUER, new_draft, draft_amounts, validate_draft, quote_html, quote_document_html, shipping_html,
                        shipping_problem, parse_tracking_csv, tracking_number, payment_account_text, payment_notice)
@@ -492,6 +492,31 @@ def print_document(parent, html, filename):
     dialog.exec()
 
 
+class CustomerInfoValue(QTextBrowser):
+    """Selectable plain customer text that also wraps long e-mail/receipt tokens."""
+    def __init__(self, text, object_name):
+        super().__init__()
+        self.setObjectName(object_name)
+        self.setFrameShape(QFrame.Shape.NoFrame)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        self.setOpenLinks(False)
+        self.document().setDocumentMargin(0)
+        option = self.document().defaultTextOption()
+        option.setWrapMode(QTextOption.WrapMode.WrapAtWordBoundaryOrAnywhere)
+        self.document().setDefaultTextOption(option)
+        self.setPlainText(text)
+        self.setFixedHeight(self.fontMetrics().height() + 2)
+
+    def text(self):
+        return self.toPlainText()
+
+    def heightForWidth(self, width):
+        self.document().setTextWidth(max(1, width))
+        return int(self.document().size().height()) + 2
+
+
 class QuoteDialog(QDialog):
     """Website requests use a minimal price-only quote editor."""
     def __init__(self, draft, parent=None, request_status=''):
@@ -605,6 +630,27 @@ class QuoteDialog(QDialog):
         self.fields = {}
         self.cost = QCheckBox()
 
+        self.workbench_icons = []
+
+        def workbench_icon(name, size=28, color="#193c32"):
+            icon = QLabel()
+            icon.setObjectName("workbenchIcon")
+            icon.setProperty("iconName", name)
+            icon.setFixedSize(size, size)
+            icon.setPixmap(ui_icon(name, color).pixmap(size, size))
+            self.workbench_icons.append(icon)
+            return icon
+
+        def section_heading(title, icon_name, size=28):
+            section = QWidget()
+            row = QHBoxLayout(section)
+            row.setContentsMargins(0, 0, 0, 0)
+            row.setSpacing(10)
+            row.addWidget(workbench_icon(icon_name, size))
+            row.addWidget(label(title, "workbenchSectionTitle"))
+            row.addStretch(1)
+            return section
+
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
@@ -614,7 +660,12 @@ class QuoteDialog(QDialog):
         heading = QHBoxLayout(header)
         heading.setContentsMargins(24, 18, 24, 18)
         heading.setSpacing(20)
+        heading.addWidget(workbench_icon("leaf", 40, "#91d39d"))
         heading.addWidget(label("나무팜(주)", "workbenchBrand"))
+        brand_rule = QFrame()
+        brand_rule.setObjectName("workbenchBrandRule")
+        brand_rule.setFixedSize(1, 30)
+        heading.addWidget(brand_rule)
         heading.addWidget(label("견적 작업대", "workbenchTitle"))
         heading.addStretch(1)
         reference = label("견적번호  " + str(self.draft.get("requestReceiptNumber") or self.draft.get("sourceRequestId", "")),
@@ -633,64 +684,83 @@ class QuoteDialog(QDialog):
         self.customer_scroll.setObjectName("workbenchCustomerScroll")
         self.customer_scroll.setWidgetResizable(True)
         self.customer_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.customer_scroll.setMinimumWidth(270)
+        self.customer_scroll.setMinimumWidth(342)
         rail = QWidget()
         rail.setObjectName("workbenchCustomerRail")
         customer = QVBoxLayout(rail)
         customer.setContentsMargins(24, 24, 24, 20)
         customer.setSpacing(18)
-        customer.addWidget(label("고객 정보", "workbenchSectionTitle"))
         formal = bool(self.draft.get("formalQuoteRequested"))
-        formal_label = label("공식 견적서 요청" if formal else "공식 견적서 미요청", "workbenchFormal", True)
-        formal_label.setProperty("requested", formal)
-        customer.addWidget(formal_label)
+        customer_header = QHBoxLayout()
+        customer_header.setSpacing(8)
+        self.workbench_customer_heading = QWidget()
+        customer_title = QHBoxLayout(self.workbench_customer_heading)
+        customer_title.setContentsMargins(0, 0, 0, 0)
+        customer_title.setSpacing(8)
+        customer_title.addWidget(workbench_icon("person", 36))
+        customer_title.addWidget(label("고객 정보", "workbenchCustomerTitle"))
+        customer_header.addWidget(self.workbench_customer_heading)
+        customer_header.addStretch(1)
+        self.workbench_formal_banner = QFrame()
+        self.workbench_formal_banner.setObjectName("workbenchFormal")
+        self.workbench_formal_banner.setProperty("requested", formal)
+        formal_row = QHBoxLayout(self.workbench_formal_banner)
+        formal_row.setContentsMargins(8, 8, 8, 8)
+        formal_row.setSpacing(6)
+        formal_row.addWidget(workbench_icon("document", 18, "#79521a" if formal else "#52645c"))
+        formal_row.addWidget(label("공식 견적서 요청" if formal else "공식 견적서 미요청", "workbenchFormalText"))
+        customer_header.addWidget(self.workbench_formal_banner)
+        customer.addLayout(customer_header)
         self.customer_values = {}
+        self.customer_captions = {}
         identity = QGridLayout()
-        identity.setHorizontalSpacing(16)
+        identity.setHorizontalSpacing(12)
         identity.setVerticalSpacing(18)
         identity.setColumnStretch(1, 1)
         self.workbench_identity = identity
 
-        def customer_row(grid, row, title, value):
-            grid.addWidget(label(title, "workbenchCaption"), row, 0, Qt.AlignmentFlag.AlignTop)
-            text = label(str(value or "미입력"), "workbenchCustomerName" if title == "고객명" else "workbenchInfo", True)
+        def customer_row(row, title, value):
+            caption = label(title, "workbenchCaption")
+            identity.addWidget(caption, row, 0, Qt.AlignmentFlag.AlignVCenter)
+            self.customer_captions[title] = caption
+            value_style = ("workbenchCustomerName" if title == "고객명" else
+                           "workbenchReceipt" if title == "견적번호" else "workbenchInfo")
+            text = CustomerInfoValue(str(value or "미입력"), value_style)
             text.setMinimumWidth(0)
             text.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
+            text_policy = text.sizePolicy()
+            text_policy.setHeightForWidth(True)
+            text.setSizePolicy(text_policy)
             text.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
             text.setAccessibleName(title)
             text.setToolTip(str(value or "미입력"))
-            grid.addWidget(text, row, 1)
+            identity.addWidget(text, row, 1, Qt.AlignmentFlag.AlignVCenter)
             self.customer_values[title] = text
 
         for row, (title, value) in enumerate((("고객명", self.draft.get("customerName")),
                                              ("연락처", self.draft.get("customerPhone")),
                                              ("이메일", self.draft.get("customerEmail")),
                                              ("지역", self.draft.get("requestRegion")))):
-            customer_row(identity, row, title, value)
-        customer.addLayout(identity)
+            customer_row(row, title, value)
         customer_rule = QFrame()
         customer_rule.setObjectName("workbenchCustomerRule")
         customer_rule.setFixedHeight(1)
-        customer.addWidget(customer_rule)
-        document = QGridLayout()
-        document.setHorizontalSpacing(12)
-        document.setVerticalSpacing(18)
-        document.setColumnStretch(1, 1)
-        self.workbench_document = document
+        identity.addWidget(customer_rule, 4, 0, 1, 2)
+        customer_row(5, "견적번호", self.draft.get("requestReceiptNumber") or self.draft.get("sourceRequestId"))
         channel = {"sms": "문자", "email": "이메일", "both": "문자 + 이메일"}.get(self.draft.get("quoteReplyChannel", "sms"), "문자")
         if formal:
-            customer_row(document, 0, "견적서 수신인", self.draft.get("quoteRecipientName") or self.draft.get("customerName"))
-        customer_row(document, 1 if formal else 0, "수신 방법", channel)
-        customer.addLayout(document)
+            customer_row(6, "견적서 수신인", self.draft.get("quoteRecipientName") or self.draft.get("customerName"))
+        customer_row(7 if formal else 6, "수신 방법", channel)
+        customer.addLayout(identity)
         customer.addStretch(1)
         self.customer_scroll.setWidget(rail)
-        body.addWidget(self.customer_scroll, 3)
+        body.addWidget(self.customer_scroll, 33)
 
         right = QWidget()
         content = QVBoxLayout(right)
         content.setContentsMargins(24, 24, 24, 20)
         content.setSpacing(14)
-        content.addWidget(label("견적 품목", "workbenchSectionTitle"))
+        content.addWidget(section_heading("견적 품목", "leaf", 36))
         # Logical indices stay stable for collection; visual order puts price before amount.
         self.items = table(["묘목명", "수량", "판매 금액", "판매 단가"])
         self.items.setObjectName("workbenchItems")
@@ -698,7 +768,7 @@ class QuoteDialog(QDialog):
         self.items.horizontalHeader().setFixedHeight(52 if large else 48)
         self.items.verticalHeader().setMinimumSectionSize(72 if large else 64)
         self.items.verticalHeader().setDefaultSectionSize(72 if large else 64)
-        self.items.set_column_layout(((0, 3, 150), (1, 1, 70), (3, 3, 230), (2, 2, 120)))
+        self.items.set_column_layout(((0, 3, 140), (1, 1, 62), (3, 3, 225), (2, 2, 110)))
         self.items.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Ignored)
         self.items.itemChanged.connect(self.recalculate)
         content.addWidget(self.items, 1)
@@ -712,6 +782,7 @@ class QuoteDialog(QDialog):
         summary = QHBoxLayout(self.workbench_summary)
         summary.setContentsMargins(20, 16, 20, 16)
         summary.setSpacing(16)
+        summary.addWidget(workbench_icon("calculator", 52))
         summary.addWidget(label("합계", "workbenchSumTitle"))
         self.amount_detail = label("", "workbenchAmountDetail", True)
         summary.addWidget(self.amount_detail, 1)
@@ -720,14 +791,14 @@ class QuoteDialog(QDialog):
         summary.addWidget(self.total)
         content.addWidget(self.workbench_summary)
         content.addStretch()
-        body.addWidget(right, 7)
+        body.addWidget(right, 67)
         root.addLayout(body, 1)
 
         self.workbench_note_area = QWidget()
         notes = QVBoxLayout(self.workbench_note_area)
         notes.setContentsMargins(24, 14, 24, 14)
         notes.setSpacing(8)
-        notes.addWidget(label("요청사항", "workbenchSectionTitle"))
+        notes.addWidget(section_heading("요청사항", "document", 32))
         self.note = QPlainTextEdit(self.draft.get("note", ""))
         self.note.setReadOnly(True)
         self.note.setFixedHeight(70 if large else 62)
@@ -774,13 +845,23 @@ class QuoteDialog(QDialog):
         self.note.setFixedHeight(62 if compact else 70 if QApplication.instance().property("namufarmLargeFont") else 62)
         self.workbench_footer.layout().setContentsMargins(24, 8 if compact else 14, 24, 8 if compact else 14)
         customer = self.customer_scroll.widget().layout()
-        customer.setContentsMargins(16 if compact else 24, 12 if compact else 24, 16 if compact else 24, 12 if compact else 20)
-        customer.setSpacing(12 if compact else 18)
-        self.workbench_identity.setVerticalSpacing(12 if compact else 18)
-        self.workbench_document.setVerticalSpacing(12 if compact else 18)
+        customer.setContentsMargins(16 if compact else 24, 8 if compact else 24, 16 if compact else 24, 8 if compact else 20)
+        customer.setSpacing(8 if compact else 18)
+        self.workbench_identity.setVerticalSpacing(5 if compact else 18)
 
     def fit_workbench_rows(self):
         large = bool(QApplication.instance().property("namufarmLargeFont"))
+        # Bound long e-mail/receipt values to the rail and wrap without altering copied text.
+        # A shared caption width keeps both groups on the same value-column axis.
+        caption_width = max(caption.sizeHint().width() for caption in self.customer_captions.values())
+        for caption in self.customer_captions.values():
+            caption.setFixedWidth(caption_width)
+        margins = self.customer_scroll.widget().layout().contentsMargins()
+        value_width = max(60, self.customer_scroll.viewport().width() - margins.left() - margins.right()
+                          - caption_width - self.workbench_identity.horizontalSpacing())
+        for value in self.customer_values.values():
+            value.setMaximumWidth(value_width)
+            value.setFixedHeight(value.heightForWidth(value_width))
         base = 72 if large else 64
         # Enlarge a short list to balance the composition; long lists keep dense rows.
         row_height = min(110, base + max(0, self.height() - 740) * 3 // 10) if self.items.rowCount() <= 4 else base

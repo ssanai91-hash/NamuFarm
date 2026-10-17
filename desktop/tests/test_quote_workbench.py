@@ -45,7 +45,7 @@ class QuoteWorkbenchTest(QtTestCase):
         self.assertEqual('54,000원', dialog.total.text())
         self.assertEqual(0, dialog.items.verticalScrollBar().maximum())
         self.assertEqual(0, dialog.items.horizontalScrollBar().maximum())
-        self.assertAlmostEqual(.3, dialog.customer_scroll.width() / dialog.width(), delta=.02)
+        self.assertAlmostEqual(.33, dialog.customer_scroll.width() / dialog.width(), delta=.02)
         rule_y = dialog.workbench_total_rule.mapTo(dialog, QPoint()).y()
         self.assertGreater(rule_y, dialog.items.mapTo(dialog, QPoint()).y() + dialog.items.height())
         self.assertLess(rule_y + dialog.workbench_total_rule.height(),
@@ -75,6 +75,37 @@ class QuoteWorkbenchTest(QtTestCase):
         self.assertEqual('문자 + 이메일', dialog.customer_values['수신 방법'].text())
         self.assertEqual(0, result['shippingFee'])
         self.assertFalse(result['isPrepaid'])
+
+    def test_customer_header_icons_alignment_and_bold_receipt_match_selected_design(self):
+        dialog = self.dialog()
+        heading = dialog.workbench_customer_heading
+        banner = dialog.workbench_formal_banner
+        self.assertEqual(heading.geometry().center().y(), banner.geometry().center().y())
+        self.assertGreater(banner.x(), heading.geometry().right())
+        self.assertLessEqual(banner.geometry().right(), dialog.customer_scroll.viewport().width())
+        value_columns = {value.x() for value in dialog.customer_values.values()}
+        self.assertEqual(1, len(value_columns))
+        self.assertTrue(dialog.customer_values['견적번호'].font().bold())
+        self.assertTrue(dialog.findChild(type(dialog.customer_captions['고객명']), 'workbenchReference').font().bold())
+        names = [icon.property('iconName') for icon in dialog.workbench_icons]
+        self.assertIn('person', names)
+        self.assertIn('leaf', names)
+        self.assertIn('calculator', names)
+        self.assertIn('document', names)
+        self.assertTrue(all(not icon.pixmap().isNull() for icon in dialog.workbench_icons))
+
+    def test_long_customer_values_wrap_without_changing_their_copyable_text(self):
+        self.app.setProperty('namufarmLargeFont', True)
+        self.app.setStyleSheet(workspace_style(True))
+        dialog = self.dialog(size=(1100, 680))
+        for key in ('이메일', '견적번호'):
+            value = dialog.customer_values[key]
+            self.assertGreater(value.height(), value.fontMetrics().height())
+            self.assertEqual(self.draft['customerEmail' if key == '이메일' else 'requestReceiptNumber'], value.text())
+            cursor = value.textCursor()
+            cursor.select(cursor.SelectionType.Document)
+            self.assertEqual(value.text(), cursor.selectedText())
+            self.assertLessEqual(value.geometry().right(), dialog.customer_scroll.viewport().width())
 
     def test_small_large_font_window_keeps_actions_and_price_controls_visible(self):
         self.app.setProperty('namufarmLargeFont', True)
