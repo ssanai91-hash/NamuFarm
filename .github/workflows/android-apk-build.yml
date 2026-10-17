@@ -118,7 +118,7 @@ jobs:
           name: NamuFarm-Debug-APK
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 7
 
       - name: Upload signed release APK
         id: release_artifact
@@ -129,7 +129,7 @@ jobs:
           name: NamuFarm-Signed-APK
           path: app/build/outputs/apk/release/*.apk
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 7
 
       # Draft only: retains repository visibility and never publishes a release.
       - name: Save signed APK as a draft release if artifact upload fails
@@ -154,3 +154,4 @@ jobs:
       - name: Remove temporary signing file
         if: always()
         run: rm -f "$RUNNER_TEMP/namufarm-release.jks"
+

@@ -5,6 +5,20 @@ on:
     branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
+  workflow_dispatch:
+    inputs:
+      upload_ui_previews:
+        description: 'Save UI previews for review (3 days)'
+        type: boolean
+        default: false
+      build_signed_apk:
+        description: 'Build and save a signed APK (7 days)'
+        type: boolean
+        default: false
+
+concurrency:
+  group: android-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -121,19 +135,26 @@ jobs:
 
       - name: Upload UI previews and test results
         continue-on-error: true
-        if: always()
+        id: review_artifact
+        if: failure() || (github.event_name == 'workflow_dispatch' && inputs.upload_ui_previews)
         uses: actions/upload-artifact@v4
         with:
           name: namufarm-ui-review
+          retention-days: 3
+          if-no-files-found: ignore
           path: |
             app/build/outputs/ui-previews/*.png
             app/build/outputs/quote-previews/*
             app/build/reports/tests/testDebugUnitTest/
 
+      - name: Report diagnostic upload failure
+        if: always() && steps.review_artifact.outcome == 'failure'
+        run: echo "::warning::Diagnostic upload failed. Check the upload log for storage quota or network errors; test results above are independent."
+
       # Debug APKs are for tests only. Ephemeral runner signing keys are never distributed.
       - name: Prepare persistent release signing
         id: signing
-        if: success() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: success() && github.event_name == 'workflow_dispatch' && inputs.build_signed_apk && github.ref == 'refs/heads/main'
         env:
           SIGNING_BASE64: ${{ secrets.NAMUFARM_KEYSTORE_BASE64 }}
           NAMUFARM_STORE_PASSWORD: ${{ secrets.NAMUFARM_STORE_PASSWORD }}
@@ -158,6 +179,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: namufarm-release-apk
+          retention-days: 7
           path: app/build/outputs/apk/release/*.apk
           if-no-files-found: error
 
@@ -184,4 +206,5 @@ jobs:
       - name: Remove temporary release keystore
         if: always()
         run: rm -f "$RUNNER_TEMP/namufarm-release.jks"
+
 

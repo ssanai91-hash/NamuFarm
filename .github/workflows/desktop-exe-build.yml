@@ -43,7 +43,7 @@ jobs:
             desktop/dist/NamuFarm-PC.exe
             desktop/README.md
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 7
       - name: Save Windows EXE as a draft release if artifact upload fails
         if: steps.windows_artifact.outcome == 'failure'
         env:
@@ -53,4 +53,5 @@ jobs:
           $tag = "desktop-exe-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
           gh release create $tag desktop/dist/NamuFarm-PC.exe desktop/README.md --draft --target $env:GITHUB_SHA --title "NamuFarm-PC $($env:GITHUB_SHA.Substring(0,7))" --notes "Manual Windows executable build. Source commit: $env:GITHUB_SHA."
           if ($LASTEXITCODE -ne 0) { throw "Could not save Windows EXE draft release." }
+
 
