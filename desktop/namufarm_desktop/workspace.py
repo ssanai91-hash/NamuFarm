@@ -2639,6 +2639,7 @@ class SellerWindow(MainWindow):
                 side.addWidget(widget)
         side.addStretch()
         self.new_quote_button = button("+ 전화 견적", self.add_manual_quote)
+        self.new_quote_button.setObjectName("phoneQuote")
         side.addWidget(self.new_quote_button)
         outer.addWidget(sidebar)
         content = QWidget()
@@ -2651,10 +2652,6 @@ class SellerWindow(MainWindow):
         heading.addWidget(self.page_title)
         header.addLayout(heading)
         header.addStretch()
-        self.compact_status = button("연결 안내", self.show_status_details)
-        self.compact_status.setObjectName("compactStatus")
-        self.compact_status.setMaximumWidth(140)
-        header.addWidget(self.compact_status)
         self.global_search = QLineEdit()
         self.global_search.setPlaceholderText("주문 검색   Ctrl+K")
         self.global_search.setMinimumWidth(130)
@@ -2666,7 +2663,6 @@ class SellerWindow(MainWindow):
         self.sync_button.setText("↻  서버 동기화")
         self.sync_button.setObjectName("syncSecondary")
         self.sync_button.setMinimumWidth(138)
-        header.addWidget(self.sync_button)
 
         content_layout.addLayout(header)
 
@@ -2686,8 +2682,7 @@ class SellerWindow(MainWindow):
         self.message.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         self.message.setAccessibleName("연결 및 작업 상태")
         log_layout.addWidget(self.message, 1)
-        self.status_details_button = button("자세히 보기", self.show_status_details)
-        log_layout.addWidget(self.status_details_button)
+        log_layout.addWidget(self.sync_button)
         content_layout.addWidget(self.server_log_frame)
 
         self.stack = QStackedWidget()
@@ -2705,7 +2700,7 @@ class SellerWindow(MainWindow):
         outer.addWidget(content, 1)
         old_root.deleteLater()
         self.manual_quote_button = button("전화 견적 추가", self.add_manual_quote)
-        # The same action is already available in the persistent page header.
+        # The same action is already available at the bottom of the sidebar.
         self.manual_quote_button.setParent(self)
         self.manual_quote_button.hide()
         self.request_quote_button = button("견적 작성", self.quote_request, True)
@@ -2729,7 +2724,6 @@ class SellerWindow(MainWindow):
         request_layout.insertWidget(0, self.request_count)
         self.request_actions.removeWidget(self.request_quote_button)
         self.request_actions.insertWidget(2, self.request_quote_button)
-        self.message.changed.connect(self.refresh_status_summary)
         self.ui_settings = QSettings("NamuFarm", "NamuFarmDesktop")
         self.large_font_check.setChecked(self.ui_settings.value("ui/largeFont", False, type=bool))
         self.large_font_check.toggled.connect(self.apply_design_scale)
@@ -2777,15 +2771,6 @@ class SellerWindow(MainWindow):
             if hasattr(widget, "fit_columns"):
                 widget.fit_columns()
 
-    def show_status_details(self):
-        dialog = QMessageBox(self)
-        dialog.setWindowTitle("연결 및 작업 안내")
-        dialog.setIcon(QMessageBox.Icon.Information)
-        dialog.setText(getattr(self.message, "details", self.message.text()))
-        dialog.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        dialog.setStandardButtons(QMessageBox.StandardButton.Ok)
-        dialog.exec()
-
     def show_request_details(self):
         index = self.request_table.currentRow()
         if not 0 <= index < len(self.request_rows):
@@ -2832,7 +2817,6 @@ class SellerWindow(MainWindow):
         self.server_log_frame.style().unpolish(self.server_log_frame)
         self.server_log_frame.style().polish(self.server_log_frame)
         self.server_log_frame.update()
-        self.refresh_status_summary()
 
     def build_dashboard(self):
         page = QWidget()
@@ -2909,16 +2893,6 @@ class SellerWindow(MainWindow):
             else:
                 self.show_order(record["metadata"]["orderNumber"])
                 self.open_customer_order()
-
-    def refresh_status_summary(self):
-        if not hasattr(self, "compact_status"):
-            return
-        pending = len(self.data.get("pending", []))
-        state = self.server_log_frame.property("state")
-        self.server_log_frame.setVisible(state in ("error", "working") or bool(pending))
-        self.compact_status.setText("처리 실패 · 안내" if state == "error" else "처리 중" if state == "working"
-                                    else f"전송 대기 {pending}건" if pending else self.status_title.text())
-        self.compact_status.setToolTip(getattr(self.message, "details", self.message.text()))
 
     def refresh_requests(self):
         super().refresh_requests()
@@ -3276,7 +3250,6 @@ class SellerWindow(MainWindow):
         else:
             self.draft_selection_status.setText("견적을 선택하면 다음 작업을 확인할 수 있습니다.")
             self.draft_delete.setToolTip("삭제할 PC 견적을 선택하세요.")
-        self.refresh_status_summary()
         self.export_button.setEnabled(paired)
         self.import_button.setEnabled(paired)
         self.print_button.setEnabled(ready and not self.data["pending"])

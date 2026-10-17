@@ -1,7 +1,7 @@
 """Shared desktop presentation; no storage or network operations."""
 import re
 
-from PySide6.QtCore import QEvent, Qt, Signal, QRectF
+from PySide6.QtCore import QEvent, Qt, QRectF
 from PySide6.QtGui import QColor, QPainter
 from PySide6.QtWidgets import (QApplication, QHeaderView, QLabel, QScrollArea,
                                QSizePolicy, QTableWidget, QVBoxLayout, QWidget,
@@ -20,6 +20,10 @@ QMainWindow,#workspace,QDialog{background:#f3f5f1;}
 #sidebar QPushButton{background:transparent;color:#e0ebe3;border:2px solid transparent;border-radius:8px;text-align:left;padding:9px 10px;font-weight:600;}
 #sidebar QPushButton:checked{background:#2e604e;color:#fff;border-left-color:#b6df9a;}
 #sidebar QPushButton:hover{background:#285442;}
+#sidebar QPushButton#phoneQuote{background:#2e604e;color:#fff;border:2px solid #b6df9a;border-radius:8px;text-align:center;}
+#sidebar QPushButton#phoneQuote:hover{background:#3b755e;border-color:#e1f2d2;}
+#sidebar QPushButton#phoneQuote:focus{border-style:dashed;border-color:#e4d29e;}
+#sidebar QPushButton#phoneQuote:disabled{background:#285442;color:#a6b9ac;border-color:#648774;}
 #sidebar QPushButton:focus{border-style:dashed;border-color:#e4d29e;}
 #sidebar QWidget#navRow{background:transparent;}
 #sidebar QLabel#navBadge{background:#c7efad;color:#173b26;border:1px solid #c7efad;border-radius:10px;min-width:24px;padding:3px 6px;font-size:@small@px;font-weight:700;}
@@ -88,15 +92,12 @@ QLabel#quoteFileName{background:#eef2eb;color:#4f6257;border:1px solid #cdd9ce;b
 #unitPriceEditor QLineEdit:focus{padding:1px 4px;}
 QPushButton#filterTab:checked{background:#dcebdd;color:#194d3a;border-color:#286547;}
 QLabel#navGroup{font-size:@small@px;color:#a6c2b2;padding:10px 10px 2px;}
-QPushButton#compactStatus{font-size:@small@px;padding:5px 8px;min-height:28px;}
 """
     return css.replace('@body@', str(body)).replace('@small@', str(small))
 
 
 class StatusMessage(QLabel):
     """Readable status with the complete original message available as details."""
-    changed = Signal()
-
     def __init__(self, text='', parent=None):
         super().__init__(parent)
         self.setText(text)
@@ -108,7 +109,6 @@ class StatusMessage(QLabel):
             summary = '서버 업데이트가 필요합니다. 자세히 보기에서 연결 안내를 확인해주세요.'
         super().setText(summary)
         self.setToolTip(self.details)
-        self.changed.emit()
 
 
 class CustomerDelegate(QStyledItemDelegate):
