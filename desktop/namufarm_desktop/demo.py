@@ -43,7 +43,8 @@ def demo_data():
                          "items": [dict(species=species[index], specification="H 1.2m", quantity=quantities[index])], "message": "출고 가능 일정 문의 (예시)", "formalQuoteRequested": True}})
     draft = new_draft(requests[0])
     draft["items"][0].update(unitPrice=18000, unitCost=9000)
-    return {"requests": requests, "sales": sales, "drafts": [draft], "pending": [], "paired": False}
+    return {"requests": requests, "sales": sales, "drafts": [],
+            "confirmedQuotes": [{**draft, "quoteStatus": "견적확정"}], "pending": [], "paired": False}
 
 
 def show_demo(window):

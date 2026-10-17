@@ -27,6 +27,7 @@ class Manager:
         self.request_snapshot = False
         self.quote_read_mode = None
         self.copy_error = ""
+        self.inbox_requests = []  # Server results from this session only.
 
     @property
     def using_default_server(self):
@@ -40,17 +41,102 @@ class Manager:
         self.request_snapshot = False
         self.quote_read_mode = None
         self.copy_error = ""
+        self.inbox_requests = []
         return self.view()
 
     @property
     def request_copy_path(self):
         return self.vault.path.with_name("나무팜-견적요청.xlsx")
 
-    def connect(self):
+    @property
+    def confirmed_quotes_path(self):
+        return self.vault.path.with_name("나무팜-확정견적.xlsx")
+
+    def _local_quotes(self):
+        from .confirmed_excel import read_confirmed_quotes, write_confirmed_quotes
+        if not self.confirmed_quotes_path.exists():
+            require(not self.vault.preference("confirmed_excel_initialized", False),
+                    "확정 견적 엑셀을 찾을 수 없습니다. 기존 파일을 원래 위치로 복원해주세요.")
+            # One-time migration only of this PC's already confirmed drafts.
+            # Never manufacture quotes from server-only rows or unconfirmed drafts.
+            states = {r["requestId"]: r.get("status") for r in self.vault.rows("requests")}
+            quotes = []
+            for draft in self.vault.preference("drafts", []):
+                status = states.get(draft.get("sourceRequestId")) if draft.get("sourceRequestId") else draft.get("manualStatus")
+                if status in ("견적확정", "견적발송완료"):
+                    quotes.append({**copy.deepcopy(draft), "quoteStatus": status})
+            write_confirmed_quotes(self.confirmed_quotes_path, quotes)
+        quotes = read_confirmed_quotes(self.confirmed_quotes_path)
+        self.vault.save_preference("confirmed_excel_initialized", True)
+        return quotes
+
+    def _store_local_quote(self, draft, status):
+        from .confirmed_excel import write_confirmed_quotes
+        quotes = self._local_quotes()
+        updated = {**copy.deepcopy(draft), "quoteStatus": status}
+        quotes = [d for d in quotes if d["id"] != draft["id"] and
+                  not (draft.get("sourceRequestId") and d.get("sourceRequestId") == draft["sourceRequestId"])]
+        write_confirmed_quotes(self.confirmed_quotes_path, [updated, *quotes])
+
+    def _finish_quote_write(self):
+        """An acknowledged server write survives a locked Excel file or a restart."""
+        pending = self.vault.preference("quote_write_pending")
+        if pending and pending.get("acknowledged"):
+            self._store_local_quote(pending["draft"], pending["status"])
+            self.vault.save_preference("quote_write_pending", None)
+
+    def _resume_quote_write(self):
+        pending = self.vault.preference("quote_write_pending")
+        if not pending:
+            return
+        if not pending.get("acknowledged"):
+            try:
+                response = self.api.call(pending["action"], **pending["payload"])
+            except ConflictError:
+                self.vault.save_preference("quote_write_pending", None)
+                raise UserError("서버의 견적 상태가 변경되어 확정하지 못했습니다. 가져오기로 요청을 다시 확인해주세요.") from None
+            source = pending["draft"]["sourceRequestId"]
+            require(response.get("updated") is True and response.get("requestId") == source
+                    and response.get("status") == pending["status"],
+                    "견적 상태 저장을 확인하지 못했습니다. 가져오기로 같은 견적을 다시 확인해주세요.")
+            pending["acknowledged"] = True
+            self.vault.save_preference("quote_write_pending", pending)
+            self.inbox_requests = [r for r in self.inbox_requests if r["requestId"] != source]
+        self._finish_quote_write()
+
+    def _write_quote_state(self, draft, status, action, payload):
+        require(self.credentials.get("paired") is True, "PC를 먼저 연결해주세요.")
+        # Check that the existing book is readable before changing the server.
+        self._local_quotes()
+        self.verify_server()
+        pending = self.vault.preference("quote_write_pending")
+        if pending:
+            require(pending.get("action") == action and pending.get("payload") == payload,
+                    "확인 대기 중인 견적이 있습니다. 먼저 가져오기로 저장을 완료해주세요.")
+        else:
+            self.vault.save_preference("quote_write_pending", {
+                "draft": copy.deepcopy(draft), "status": status,
+                "action": action, "payload": payload, "acknowledged": False})
+        try:
+            self._resume_quote_write()
+        except OSError:
+            # Server acknowledgement is already durable; view exposes the Excel warning.
+            pass
+        return self.local_copy_view()
+
+    def _confirmed_source(self, draft):
+        quote = next((d for d in self._local_quotes() if d["id"] == draft["id"] and
+                      d["sourceRequestId"] == draft.get("sourceRequestId")), None)
+        require(quote is not None and quote["quoteStatus"] in ("견적확정", "견적발송완료"),
+                "로컬 엑셀의 확정 견적을 선택해주세요.")
+        return quote
+
+    def connect(self, include_sales=False):
         """Enroll this PC with the configured server without asking for a key or file."""
+        pull = self.sync if include_sales else self.sync_requests
         if self.credentials.get("paired") is True:
             try:
-                return self.sync()
+                return pull()
             except AuthenticationError:
                 # A restored vault can outlive the server's device registry.
                 # Reuse its token and pending event IDs on this same server.
@@ -68,7 +154,7 @@ class Manager:
         self.vault.save_credentials(credentials)
         self.credentials = credentials
         self.api.connection_key = ""
-        return self.sync()
+        return pull()
 
     def connect_key(self, password, url=None, api_factory=ScriptApi):
         from .connection import connection_input
@@ -108,7 +194,7 @@ class Manager:
             self.copy_error = ""
         except OSError:
             self.copy_error = "앱 동기화 완료. 엑셀 사본 갱신은 실패했습니다. 열린 파일을 닫고 다시 동기화해주세요."
-        value["copyError"] = self.copy_error
+        value["copyError"] = " · ".join(filter(None, (value.get("copyError"), self.copy_error)))
         return value
 
     def verify_server(self):
@@ -141,27 +227,64 @@ class Manager:
 
     def view(self):
         self.vault.purge()
-        requests = self.vault.rows("requests")
+        requests = self.inbox_requests
         sales = self.vault.rows("sales")
         decoded_requests = [{**r, "personal": self.decode_request(r)} for r in requests]
         decoded_sales = []
+        sale_error = ""
         for row in sales:
-            private = self.decode_sale(row)
-            decoded_sales.append({**row, "private": private})
-        drafts = self.vault.preference("drafts", [])
-        # Drafts contain personal data and follow the 30-day unpurchased retention rule.
-        deleted = set(self.vault.snapshot_marker()["deletedRequests"])
-        active = [d for d in drafts if d["createdAt"] > now_ms() - 30 * 86400000 and d["sourceRequestId"] not in deleted
+            try:
+                private = self.decode_sale(row)
+                decoded_sales.append({**row, "private": private})
+            except UserError:
+                sale_error = "일부 로컬 판매자료를 읽지 못했습니다. 판매관리에서 가져오기 또는 이전 자료 복원을 확인해주세요."
+        quote_error = ""
+        quotes = []
+        try:
+            self._finish_quote_write()
+            quotes = self._local_quotes()
+        except (UserError, OSError) as error:
+            quote_error = (str(error) if isinstance(error, UserError) else
+                           "서버 저장 확인 후 확정 견적 엑셀 갱신 대기 중입니다. 열린 엑셀을 닫고 가져오기를 눌러주세요.")
+            try:
+                quotes = self._local_quotes()
+            except (UserError, OSError):
+                pass
+        active = [d for d in quotes if d["quoteStatus"] in ("견적확정", "견적발송완료")
                   and not any(r["metadata"]["orderNumber"] == "PC_" + d["id"] for r in sales)]
-        if active != drafts:
-            self.vault.save_preference("drafts", active)
+        drafts = self.vault.preference("drafts", [])
+        active_drafts = [d for d in drafts if d["createdAt"] > now_ms() - 30 * 86400000
+                         and not any(r["metadata"]["orderNumber"] == "PC_" + d["id"] for r in sales)]
+        if active_drafts != drafts:
+            self.vault.save_preference("drafts", active_drafts)
+        drafts = active_drafts
+        pending = self.vault.pending()
+        recovery = self.vault.preference("quote_write_pending")
+        if recovery:
+            pending = [*pending, {"id": recovery["draft"]["id"], "action": "quote_write"}]
         return {"requests": sorted(decoded_requests, key=lambda r: r["sequence"], reverse=True),
                 "sales": sorted(decoded_sales, key=lambda r: r["sequence"], reverse=True),
-                "drafts": active, "pending": self.vault.pending(), "paired": self.credentials.get("paired") is True}
+                "drafts": drafts, "confirmedQuotes": active, "quoteRecovery": recovery,
+                "copyError": " · ".join(filter(None, (quote_error, sale_error))), "pending": pending,
+                "paired": self.credentials.get("paired") is True}
 
     def save_draft(self, draft):
+        try:
+            return self._save_draft(draft)
+        except OSError:
+            raise UserError("확정 견적 엑셀을 갱신하지 못했습니다. 열린 엑셀을 닫고 다시 저장해주세요.") from None
+
+    def _save_draft(self, draft):
         validate_draft(draft)
+        require(not self.vault.preference("quote_write_pending"), "먼저 가져오기로 견적 저장 확인을 완료해주세요.")
         require(not any(r["metadata"]["orderNumber"] == "PC_" + draft["id"] for r in self.vault.rows("sales")), "구매 확정된 견적은 수정할 수 없습니다.")
+        local = next((d for d in self._local_quotes() if d["id"] == draft["id"]), None)
+        if local:
+            self._store_local_quote(draft, local["quoteStatus"])
+            return self.view()
+        if not draft.get("sourceRequestId") and draft.get("manualStatus") in ("견적확정", "견적발송완료"):
+            self._store_local_quote(draft, draft["manualStatus"])
+            return self.view()
         drafts = self.view()["drafts"]
         require(draft["createdAt"] > now_ms() - 30 * 86400000, "30일이 지난 견적은 새로 작성해주세요.")
         drafts = [d for d in drafts if d["id"] != draft["id"]]
@@ -173,47 +296,35 @@ class Manager:
         validate_draft(draft)
         source = draft.get("sourceRequestId", "")
         require(valid_id(source), "홈페이지 견적 요청에서 작성한 견적만 견적확정으로 처리할 수 있습니다.")
-        request = next((r for r in self.vault.rows("requests") if r["requestId"] == source), None)
-        require(request is not None, "견적 요청을 다시 동기화해주세요.")
-        require(request.get("status", "신규") in ("신규", "견적확정"), "이미 판매 단계로 진행된 견적 요청입니다.")
-        self.save_draft(draft)
-        self.verify_server()
-        response = self.api.call("save_quote_pricing", requestId=source,
-                                 quotePricing={
-                                     "items": [{"species": item["species"],
-                                                "specification": item.get("specification", ""),
-                                                "quantity": item["quantity"],
-                                                "unitPrice": item["unitPrice"]}
-                                               for item in draft["items"]],
-                                     "isPrepaid": draft["isPrepaid"],
-                                     "shippingFee": draft["shippingFee"],
-                                     "taxAmount": draft["taxAmount"]
-                                 })
-        require(response.get("updated") is True and response.get("requestId") == source
-                and response.get("status") == "견적확정", "견적확정 상태 저장을 확인하지 못했습니다.")
-        return self.sync_requests()
+        pending = self.vault.preference("quote_write_pending")
+        request = next((r for r in self.inbox_requests if r["requestId"] == source), None)
+        require((request is not None and request.get("status", "신규") == "신규") or
+                (pending is not None and pending["draft"]["sourceRequestId"] == source),
+                "가져오기로 서버의 견적요청을 다시 확인해주세요.")
+        pricing = {"items": [{"species": item["species"], "specification": item.get("specification", ""),
+                              "quantity": item["quantity"], "unitPrice": item["unitPrice"]}
+                             for item in draft["items"]],
+                   "isPrepaid": draft["isPrepaid"], "shippingFee": draft["shippingFee"], "taxAmount": draft["taxAmount"]}
+        require(len(pricing["items"]) <= 50 and all(i["quantity"] <= 1000000 for i in pricing["items"]),
+                "견적은 최대 50품목, 품목별 수량은 1,000,000주까지 입력해주세요.")
+        require(sum(i["quantity"] * i["unitPrice"] for i in pricing["items"]) +
+                (draft["shippingFee"] if draft["isPrepaid"] else 0) + draft["taxAmount"] <= 2147483647,
+                "세액을 포함한 견적 총액이 저장 범위를 초과합니다.")
+        require(len(canonical(pricing).encode("utf-8")) <= 60000, "견적 품목이나 규격을 줄여주세요.")
+        return self._write_quote_state(draft, "견적확정", "save_quote_pricing",
+                                       {"requestId": source, "quotePricing": pricing})
 
     def mark_quote_sent(self, draft):
         validate_draft(draft)
+        local = self._confirmed_source(draft)
         source = draft.get("sourceRequestId", "")
         if not source:
-            require(draft.get("manualStatus") == "견적확정",
-                    "전화 견적은 견적확정 상태에서 발송완료로 변경해주세요.")
-            updated = copy.deepcopy(draft)
-            updated["manualStatus"] = "견적발송완료"
-            return self.save_draft(updated)
-
-        require(valid_id(source), "홈페이지 견적 요청에서 작성한 견적만 견적발송완료로 처리할 수 있습니다.")
-        request = next((r for r in self.vault.rows("requests") if r["requestId"] == source), None)
-        require(request is not None, "견적 요청을 다시 동기화해주세요.")
-        require(request.get("status", "신규") in ("견적확정", "견적발송완료"),
-                "견적확정 상태에서 발송완료로 변경해주세요.")
-        self.save_draft(draft)
-        self.verify_server()
-        response = self.api.call("update_request_status", requestId=source, status="견적발송완료")
-        require(response.get("updated") is True and response.get("requestId") == source
-                and response.get("status") == "견적발송완료", "견적발송완료 상태 저장을 확인하지 못했습니다.")
-        return self.sync_requests()
+            updated = {**copy.deepcopy(draft), "manualStatus": "견적발송완료"}
+            self._store_local_quote(updated, "견적발송완료")
+            return self.view()
+        require(local["quoteStatus"] in ("견적확정", "견적발송완료"))
+        return self._write_quote_state(draft, "견적발송완료", "update_request_status",
+                                       {"requestId": source, "status": "견적발송완료"})
 
     def quote_delivery_state(self, identifier):
         require(valid_id(identifier), "견적 식별자를 확인해주세요.")
@@ -272,9 +383,8 @@ class Manager:
         recipient_digits = "".join(ch for ch in recipient if ch.isdigit())
         source = draft.get("sourceRequestId", "")
         if source:
-            request = next((r for r in self.vault.rows("requests") if r["requestId"] == source), None)
-            require(request is not None, "견적 요청을 다시 동기화해주세요.")
-            require(request.get("status", "신규") in ("견적확정", "견적발송완료"),
+            quote = self._confirmed_source(draft)
+            require(quote["quoteStatus"] in ("견적확정", "견적발송완료"),
                     "견적확정 이후에 문자를 전송해주세요.")
         result = self.api.call("send_quote_sms", requestId=source, recipientPhone=recipient, text=text.strip())
         require(result.get("sent") is True and result.get("recipientPhone") == recipient_digits,
@@ -345,9 +455,8 @@ class Manager:
 
         source = draft.get("sourceRequestId", "")
         if source:
-            request = next((r for r in self.vault.rows("requests") if r["requestId"] == source), None)
-            require(request is not None, "견적 요청을 다시 동기화해주세요.")
-            require(request.get("status", "신규") in ("견적확정", "견적발송완료"),
+            quote = self._confirmed_source(draft)
+            require(quote["quoteStatus"] in ("견적확정", "견적발송완료"),
                     "견적확정 이후에 메일을 전송해주세요.")
         result = self.api.call("send_quote_email", requestId=source, recipientEmail=recipient,
                                senderName=draft.get("issuer", {}).get("businessName") or "나무팜농원",
@@ -400,7 +509,10 @@ class Manager:
 
     def delete_draft(self, identifier):
         require(valid_id(identifier))
-        self.vault.save_preference("drafts", [d for d in self.view()["drafts"] if d["id"] != identifier])
+        from .confirmed_excel import write_confirmed_quotes
+        require(not self.vault.preference("quote_write_pending"), "먼저 가져오기로 견적 저장을 완료해주세요.")
+        write_confirmed_quotes(self.confirmed_quotes_path, [d for d in self._local_quotes() if d["id"] != identifier])
+        self.vault.save_preference("drafts", [d for d in self.vault.preference("drafts", []) if d["id"] != identifier])
         return self.view()
 
     def confirm_draft(self, draft):
@@ -411,16 +523,12 @@ class Manager:
         require(not any(r["metadata"]["orderNumber"] == number for r in snapshot["sales"]),
                 "이미 판매 · 고객 관리로 이동한 견적입니다.")
         source = draft["sourceRequestId"]
+        local = self._confirmed_source(draft)
+        require(local["quoteStatus"] == "견적발송완료",
+                "먼저 고객에게 견적을 발송하고 견적발송완료로 처리해주세요.")
         if source:
-            request = next((r for r in snapshot["requests"] if r["requestId"] == source), None)
-            require(request is not None, "접수된 문의가 삭제·만료되었습니다.")
-            require(request.get("status", "신규") == "견적발송완료",
-                    "먼저 고객에게 견적을 발송하고 견적발송완료로 처리해주세요.")
             require(not any(r["private"]["order"].get("sourceRequestId") == source for r in snapshot["sales"]),
                     "이미 판매 · 고객 관리로 이동한 문의입니다.")
-        else:
-            require(draft.get("manualStatus") == "견적발송완료",
-                    "전화 견적도 고객에게 전달한 뒤 견적발송완료 상태에서 입금확인해주세요.")
 
         self.save_draft(draft)
         order = order_from_draft(draft)
@@ -516,7 +624,7 @@ class Manager:
                     "발행 견적서와 판매 기록이 일치하지 않습니다.")
         return private
 
-    def _pages(self, action, field):
+    def _pages(self, action, field, inbox_only=False):
         rows, cursor, references, deleted = [], 0, set(), set()
         snapshot_id, total, watermark, received = None, None, None, 0
         snapshot = field == "requests" and self.request_snapshot
@@ -556,6 +664,8 @@ class Manager:
                         raise UserError("접수 날짜를 확인할 수 없습니다.") from None
                     require(reference not in references)
                     references.add(reference)
+                    if inbox_only and row.get("status", "신규") != "신규":
+                        continue
                     if row.get("expired") or row["expiresAt"] <= now_ms():
                         deleted.add(reference)
                         continue
@@ -583,21 +693,8 @@ class Manager:
         requests, request_cursor, deleted = self._pages("list_requests", "requests")
         sales, sale_cursor, _ = self._pages("list_sales", "sales")
         old = self.vault.snapshot_marker()
-        # Only a complete verified snapshot from a different annual quote store
-        # supersedes request deletion markers inherited from legacy storage.
-        switching_to_two_tabs = (self.request_snapshot and
-            self.quote_read_mode == "annual-two-tabs" and
-            old.get("quoteReadMode") != "annual-two-tabs")
-        if self.request_snapshot and not switching_to_two_tabs:
-            require(not (set(old["deletedRequests"]) & {r["requestId"] for r in requests}), "삭제된 요청이 다시 나타났습니다.")
-            require(request_cursor >= old["requests"], "서버 순번이 이전보다 작아 기존 기록을 유지합니다.")
-            deleted |= set(old["deletedRequests"])
-        require((switching_to_two_tabs or request_cursor >= old["requests"]) and sale_cursor >= old["sales"],
-                "서버 순번이 이전보다 작아 기존 기록을 유지합니다.")
-        if not switching_to_two_tabs:
-            require(set(old["deletedRequests"]) <= deleted, "삭제된 문의가 서버에 다시 나타나 기존 기록을 유지합니다.")
-        request_ids = {r["requestId"] for r in requests} | deleted
-        require(self.request_snapshot or all(r["requestId"] in request_ids for r in self.vault.rows("requests")), "서버 문의 목록 일부가 누락되어 기존 기록을 유지합니다.")
+        # Request data is a fresh authoritative server view, independent of local history.
+        require(sale_cursor >= old["sales"], "서버 판매 순번이 이전보다 작아 기존 기록을 유지합니다.")
         sale_ids = {r["metadata"]["orderNumber"] for r in sales}
         require(all(r["metadata"]["orderNumber"] in sale_ids or sale_expired(r["metadata"], now_ms())
                     for r in self.vault.rows("sales")), "서버 판매 목록 일부가 누락되어 기존 기록을 유지합니다.")
@@ -617,30 +714,48 @@ class Manager:
             else:
                 require(response.get("closed") is True and response.get("requestId") == payload["requestId"],
                         "문의 삭제 응답을 확인하지 못했습니다. 전송 대기를 유지합니다.")
+            if operation["action"] == "save_sale":
+                number = payload["metadata"]["orderNumber"]
+                quote = next((d for d in self._local_quotes() if number == "PC_" + d["id"]), None) if number.startswith("PC_") else None
+                if quote and quote["quoteStatus"] != "입금확인":
+                    self.vault.save_preference("quote_write_pending", {
+                        "draft": quote, "status": "입금확인", "acknowledged": True})
+            else:
+                self.inbox_requests = [r for r in self.inbox_requests if r["requestId"] != payload["requestId"]]
             self.vault.acknowledge(operation["id"])
 
     def sync_requests(self):
         require(self.credentials.get("paired") is True, "PC를 먼저 연결해주세요.")
         self.verify_server()
-        requests, cursor, deleted = self._pages("list_requests", "requests")
-        ids = {r["requestId"] for r in requests} | deleted
-        require(self.request_snapshot or all(r["requestId"] in ids for r in self.vault.rows("requests")),
-                "서버 문의 목록 일부가 누락되어 기존 기록을 유지합니다.")
-        old = self.vault.snapshot_marker()
-        switching_to_two_tabs = (self.request_snapshot and
-            self.quote_read_mode == "annual-two-tabs" and
-            old.get("quoteReadMode") != "annual-two-tabs")
-        if self.request_snapshot and not switching_to_two_tabs:
-            require(not (set(old["deletedRequests"]) & {r["requestId"] for r in requests}), "삭제된 요청이 다시 나타났습니다.")
-            require(cursor >= old["requests"], "서버 순번이 이전보다 작아 기존 기록을 유지합니다.")
-            deleted |= set(old["deletedRequests"])
+        recovery_error = ""
+        try:
+            self._resume_quote_write()
+        except OSError:
+            pass
+        except AuthenticationError:
+            raise
+        except UserError as error:
+            recovery_error = str(error)
+        # A pending deletion may be retried without touching an unrelated sale edit.
+        if any(op["action"] == "close_request" for op in self.vault.pending()):
+            try:
+                self.flush()
+            except AuthenticationError:
+                raise
+            except UserError as error:
+                recovery_error = str(error)
+        requests, cursor, deleted = self._pages("list_requests", "requests", inbox_only=True)
         self.vault.replace_requests(requests, cursor, deleted,
-                                    quote_read_mode=self.quote_read_mode)
-        return self.local_copy_view()
+                                    quote_read_mode=self.quote_read_mode, authoritative=True)
+        self.inbox_requests = [r for r in requests if r.get("status", "신규") == "신규"]
+        value = self.local_copy_view()
+        value["copyError"] = " · ".join(filter(None, (value.get("copyError"), recovery_error)))
+        return value
 
     def sync(self):
         require(self.credentials.get("paired") is True, "PC를 먼저 연결해주세요.")
         self.verify_server()
+        self._resume_quote_write()
         self.flush()
         requests, sales, marker = self._fetch_verified_snapshot()
         previous = {r["metadata"]["orderNumber"]: r for r in self.vault.rows("sales")}
@@ -653,6 +768,7 @@ class Manager:
                 for key in ("items", "orderNumber", "orderDate", "purchasedAt", "totalQty", "totalPrice", "taxAmount", "shippingFee", "isPrepaid"):
                     require(canonical(row["metadata"][key]) == canonical(old["metadata"][key]), "판매 원본 금액이나 품목이 변경되었습니다.")
         self.vault.replace_snapshot(requests, sales, marker)
+        self.inbox_requests = [r for r in requests if r.get("status", "신규") == "신규"]
         return self.local_copy_view()
 
     def save_sale(self, number, expected_revision, fields, target=None):
@@ -674,7 +790,7 @@ class Manager:
 
     def close_request(self, request_id):
         require(valid_id(request_id))
-        require(any(r["requestId"] == request_id for r in self.vault.rows("requests")), "먼저 문의를 다시 조회해주세요.")
+        require(any(r["requestId"] == request_id for r in self.inbox_requests), "먼저 문의를 다시 조회해주세요.")
         require(self.credentials.get("paired") is True, "PC를 먼저 연결해주세요.")
         self.vault.queue({"id": str(uuid.uuid4()), "action": "close_request", "payload": {"requestId": request_id}})
         self.verify_server()

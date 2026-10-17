@@ -1,7 +1,6 @@
 """FHD seller workspace, built on the existing verified sync controller."""
 import copy
 import json
-import uuid
 import tempfile
 from datetime import datetime
 from importlib.resources import files as package_files
@@ -2472,7 +2471,7 @@ class SellerWindow(MainWindow):
         header.addStretch()
         self.sync_button.setText("가져오기")
         set_button_icon(self.sync_button, "refresh")
-        self.sync_button.setToolTip("최신 자료를 가져오고 전송 대기 중인 변경사항도 서버에 반영합니다. F5")
+        self.sync_button.setToolTip("견적요청: 서버 신규 요청 · 확정 견적: 로컬 엑셀 · 판매 전송 대기는 판매관리에서 가져오기. F5")
         self.sync_button.setObjectName("syncSecondary")
         self.sync_button.setMinimumWidth(138)
 
@@ -2928,20 +2927,19 @@ class SellerWindow(MainWindow):
         self.stack.setEnabled(self.task is None)
         self.request_quote_button.setEnabled(ready and self.request_table.currentRow() >= 0)
         selected_draft = self.draft_table.currentRow()
-        self.draft_open.setEnabled(ready and 0 <= selected_draft < len(self.draft_rows))
+        self.draft_open.setEnabled(ready and not self.data.get("quoteRecovery")
+                                   and 0 <= selected_draft < len(self.draft_rows))
         self.draft_delete.setEnabled(
             ready and 0 <= selected_draft < len(self.draft_rows)
-            and self.draft_rows[selected_draft]["id"] not in getattr(self, "cloud_quote_ids", set())
+            and not self.data.get("quoteRecovery")
         )
         if 0 <= selected_draft < len(self.draft_rows):
             draft = self.draft_rows[selected_draft]
             status = self.draft_statuses[selected_draft]
-            server_copy = draft["id"] in getattr(self, "cloud_quote_ids", set())
             action = "문자·메일 전달" if status == "견적확정" else "입금 확인" if status == "견적발송완료" else "견적 확인"
             self.draft_selection_status.setText(
-                f"{draft['customerName']} · 다음 작업: {action}" +
-                (" · 서버 조회 자료는 여기서 삭제할 수 없습니다." if server_copy else ""))
-            self.draft_delete.setToolTip("서버 조회 자료는 삭제 대상이 아닙니다." if server_copy else "선택한 PC 견적 삭제")
+                f"{draft['customerName']} · 다음 작업: {action}")
+            self.draft_delete.setToolTip("선택한 견적을 로컬 엑셀에서 삭제")
         else:
             self.draft_selection_status.setText("견적을 선택하면 다음 작업을 확인할 수 있습니다.")
             self.draft_delete.setToolTip("삭제할 PC 견적을 선택하세요.")
@@ -2966,31 +2964,8 @@ class SellerWindow(MainWindow):
             self.refresh_request_notifications()
 
     def refresh_workspace(self):
-        request_status = {r["requestId"]: r.get("status", "신규") for r in self.data["requests"]}
-        draft_pairs = []
-        local_sources = set()
-        for draft in self.data.get("drafts", []):
-            source = draft.get("sourceRequestId", "")
-            status = request_status.get(source, "상태확인") if source else draft.get("manualStatus", "수기견적")
-            if source and status not in ("견적확정", "견적발송완료"):
-                continue
-            draft_pairs.append((draft, status))
-            if source:
-                local_sources.add(source)
-        # The server's confirmed tab is authoritative even when a quote was
-        # finalized on Android and this PC never created a local draft.
-        # Build a display-only copy; do not save or replace existing PC drafts.
-        self.cloud_quote_ids = set()
-        for request in self.data["requests"]:
-            status = request.get("status", "신규")
-            if status not in ("견적확정", "견적발송완료") or request["requestId"] in local_sources:
-                continue
-            draft = new_draft(request)
-            draft["id"] = str(uuid.uuid5(uuid.NAMESPACE_URL, "namufarm:quote:" + request["requestId"]))
-            draft["createdAt"] = int(datetime.fromisoformat(
-                request["createdAt"].replace("Z", "+00:00")).timestamp() * 1000)
-            self.cloud_quote_ids.add(draft["id"])
-            draft_pairs.append((draft, status))
+        # This category is backed only by the local confirmed-quotes workbook.
+        draft_pairs = [(draft, draft["quoteStatus"]) for draft in self.data.get("confirmedQuotes", [])]
         draft_pairs.sort(
             key=lambda pair: draft_quote_sort_key(pair[0]),
             reverse=self.draft_sort_descending,
@@ -3018,9 +2993,9 @@ class SellerWindow(MainWindow):
             "요청" if d.get("formalQuoteRequested") else "—",
             ", ".join(f"{i['species']} {i['quantity']:,}주" for i in d["items"]),
             money(draft_amounts(d)["total"]),
-            "서버 조회" if d["id"] in self.cloud_quote_ids else "PC 보관",
+            "로컬 엑셀",
         ) for d, status in draft_pairs])
-        self.draft_table.set_empty_message("선택한 상태의 견적이 없습니다.\n전체 목록 또는 가져오기를 확인하세요.")
+        self.draft_table.set_empty_message("선택한 상태의 견적이 없습니다.\n이 PC에서 확정한 견적이 로컬 엑셀에 표시됩니다.")
         center_table_columns(self.draft_table, (0, 1, 2, 3, 4, 6, 8))
         customer_reference(self.draft_table, 3, 0)
         self.draft_table.clearSelection()
@@ -3030,7 +3005,7 @@ class SellerWindow(MainWindow):
             self.draft_table.selectRow(restored)
         self.draft_table.blockSignals(False)
         self.set_page_count(self.PAGE_QUOTES, len(draft_pairs))
-        self.draft_table.horizontalHeaderItem(9).setToolTip("서버 조회: 이 PC에 저장한 견적이 없어 서버 자료로 표시 · PC 보관: 이 PC에 저장된 견적")
+        self.draft_table.horizontalHeaderItem(9).setToolTip("이 PC의 나무팜-확정견적.xlsx에서 불러온 견적")
         self.refresh_sales()
         self.refresh_shipping()
 
@@ -3279,13 +3254,18 @@ class SellerWindow(MainWindow):
             else:
                 QMessageBox.information(self, "판매 기록 확인", "판매 상태로 진행된 요청입니다. 판매 · 고객 관리에서 확인해주세요.")
             return
-        existing = next((d for d in self.data.get("drafts", []) if d["sourceRequestId"] == request["requestId"]), None)
+        recovery = self.data.get("quoteRecovery")
+        existing = recovery["draft"] if recovery and recovery["draft"]["sourceRequestId"] == request["requestId"] else next(
+            (d for d in self.data.get("drafts", []) if d["sourceRequestId"] == request["requestId"]), None)
         draft = copy.deepcopy(existing) if existing else new_draft(request)
         draft["requestReceiptNumber"] = request.get("receiptNumber") or request["requestId"]
         draft["customerEmail"] = request["personal"].get("customerEmail", "")
         self.edit_quote(draft=draft, request_status=status)
 
     def open_draft(self, *args):
+        if self.data.get("quoteRecovery"):
+            QMessageBox.information(self, "견적 저장 확인", "먼저 가져오기로 견적 저장 확인을 완료해주세요.")
+            return
         index = self.draft_table.currentRow()
         if not 0 <= index < len(self.draft_rows):
             return
@@ -3335,10 +3315,7 @@ class SellerWindow(MainWindow):
         index = self.draft_table.currentRow()
         if not self.manager or not 0 <= index < len(self.draft_rows):
             return
-        if self.draft_rows[index]["id"] in getattr(self, "cloud_quote_ids", set()):
-            QMessageBox.information(self, "서버 견적", "서버에서 불러온 견적은 PC 임시 견적 삭제 대상이 아닙니다.")
-            return
-        if QMessageBox.question(self, "견적 삭제", "선택한 PC 견적을 삭제할까요?", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No) == QMessageBox.StandardButton.Yes:
+        if QMessageBox.question(self, "견적 삭제", "선택한 견적을 로컬 엑셀에서 삭제할까요? 서버의 견적 상태는 유지됩니다.", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No) == QMessageBox.StandardButton.Yes:
             identifier = self.draft_rows[index]["id"]
             self.run_job("견적 삭제 중…", lambda: self.manager.delete_draft(identifier), self.draft_deleted)
 
@@ -3471,8 +3448,16 @@ class SellerWindow(MainWindow):
             self.navigate(self.PAGE_REQUESTS)
 
     def manual_sync(self):
-        if not getattr(self, "demo_mode", False):
-            super().manual_sync()
+        if getattr(self, "demo_mode", False) or not self.manager or not self.allow_discard():
+            return
+        include_sales = self.stack.currentIndex() in (self.PAGE_SALES, self.PAGE_SHIPPING, self.PAGE_REPORTS)
+        self.run_job("SYNC  >  서버 동기화 중…",
+                     lambda: self.manager.connect(include_sales=include_sales))
+
+    def auto_sync(self):
+        if self.manager and self.data["paired"] and self.auto_check.isChecked() and not self.task and not self.dirty and not self.conflict:
+            pull = self.manager.sync if self.stack.currentIndex() in (self.PAGE_SALES, self.PAGE_SHIPPING, self.PAGE_REPORTS) else self.manager.sync_requests
+            self.run_job("AUTO SYNC  >  서버 동기화 중…", pull)
 
 
 

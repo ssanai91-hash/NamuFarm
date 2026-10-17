@@ -259,7 +259,7 @@ class MainWindow(QMainWindow):
         self.apply_view(data)
         self.message.setStyleSheet("")
         self.message.setText(
-            "READY  >  연결 정보 복원됨 · ‘서버 동기화’를 눌러 최신 견적요청을 가져오세요."
+            "READY  >  연결 정보 복원됨 · ‘가져오기’를 눌러 최신 견적요청을 확인하세요."
             if data["paired"] else
             "서버 연결 또는 지금 동기화를 누르면 암호 없이 연결됩니다."
         )
@@ -289,7 +289,7 @@ class MainWindow(QMainWindow):
         self.report_button.setEnabled(paired)
         self.resolve_button.setEnabled(paired and pending and self.conflict)
         self.connection_status.setText("연결 정보 저장됨" if self.data["paired"] else "서버 연결 필요")
-        self.pending_status.setText(f"전송 대기 {len(self.data['pending']):,}건 · 가져오기로 재시도하세요." if pending else "전송 대기 0건")
+        self.pending_status.setText(f"전송 대기 {len(self.data['pending']):,}건 · 해당 업무 화면에서 가져오기로 재시도하세요." if pending else "전송 대기 0건")
 
     def allow_discard(self):
         if not self.dirty:
@@ -303,7 +303,7 @@ class MainWindow(QMainWindow):
 
     def auto_sync(self):
         if self.manager and self.data["paired"] and self.auto_check.isChecked() and not self.task and not self.dirty and not self.conflict:
-            self.run_job("AUTO SYNC  >  서버 동기화 중…", self.manager.sync)
+            self.run_job("AUTO SYNC  >  서버 동기화 중…", self.manager.sync_requests)
 
     def apply_view(self, value):
         self.data = value
