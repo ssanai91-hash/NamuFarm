@@ -1368,8 +1368,19 @@ class QuoteDeliveryDialog(QDialog):
 
         large = bool(QApplication.instance().property("namufarmLargeFont"))
         self.setStyleSheet(quote_delivery_style(large))
-        fit_window(self, 1140, 800 if not large else 860)
-        self.setMinimumSize(900, 600)
+        # Use the parent's monitor and leave room for the native title bar/taskbar.
+        screen = parent.screen() if parent is not None else self.screen()
+        if screen is None:
+            screen = QApplication.primaryScreen()
+        if screen is not None:
+            available = screen.availableGeometry()
+            width = min(1140, max(480, available.width() - 40))
+            height = min(int(available.height() * 0.95), available.height() - 48)
+            self.setMinimumSize(min(900, width), min(600, height))
+            self.resize(width, height)
+        else:
+            fit_window(self, 1140, 800 if not large else 860)
+            self.setMinimumSize(900, 600)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 20, 24, 20)
@@ -1385,16 +1396,14 @@ class QuoteDeliveryDialog(QDialog):
         identity = QVBoxLayout()
         identity.setSpacing(10)
         name_row = QHBoxLayout()
-        name_row.setSpacing(16)
-        name = label(self.draft.get("customerName") or "고객명 미입력", "deliveryCustomer", True)
+        name_row.setSpacing(12)
+        customer_caption = QLabel("고객명")
+        customer_caption.setObjectName("deliveryCaption")
+        name_row.addWidget(customer_caption)
+        name = label(self.draft.get("customerName") or "미입력", "deliveryCustomer", True)
         name.setMinimumWidth(0)
         name.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
         name_row.addWidget(name)
-        status = QLabel(self.request_status)
-        status.setObjectName("quoteStatusBadge")
-        status.setFixedHeight(38)
-        status.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        name_row.addWidget(status)
         name_row.addStretch(1)
         identity.addLayout(name_row)
         reference = label("견적번호  " + self.quote_number(), "deliveryReference", True)
@@ -1479,8 +1488,14 @@ class QuoteDeliveryDialog(QDialog):
             font.setBold(True)
             self.items.item(row, 0).setFont(font)
         self.items.set_column_layout(((0, 3.6, 220), (1, 1.2, 100), (2, 1.8, 140), (3, 2, 150)))
-        size_table_to_rows(self.items, 4)
-        content.addWidget(self.items)
+        # Grow the table with the window instead of capping it at four rows.
+        # On shorter screens only the list scrolls; the delivery tools stay in view.
+        table_header = self.items.horizontalHeader().height()
+        row_height = self.items.verticalHeader().defaultSectionSize()
+        self.items.setMinimumHeight(table_header + row_height + 4)
+        self.items.setMaximumHeight(table_header + max(1, self.items.rowCount()) * row_height + 4)
+        self.items.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Ignored)
+        content.addWidget(self.items, 1)
 
         shipping = QFrame()
         shipping.setObjectName("deliveryShippingStrip")
@@ -1600,7 +1615,7 @@ class QuoteDeliveryDialog(QDialog):
                        "문자 또는 메일로 실제 견적 전달을 마친 뒤 견적발송완료를 눌러주세요.")
         details_layout.addWidget(label(notice_text, "deliveryCaption", True))
         content.addWidget(collapsible("요청사항 · 전달 안내", details))
-        content.addStretch(1)
+        content.addStretch()
 
         self.delivery_footer = QFrame()
         self.delivery_footer.setObjectName("deliveryFooter")

@@ -4,8 +4,8 @@ os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 import uuid
 from unittest.mock import Mock, patch
 
-from PySide6.QtCore import QPoint, Qt
-from PySide6.QtWidgets import QDialog, QMessageBox
+from PySide6.QtCore import QPoint, QRect, Qt
+from PySide6.QtWidgets import QDialog, QLabel, QMessageBox, QWidget
 from namufarm_desktop.commerce import new_draft
 from namufarm_desktop.ui_theme import workspace_style
 from namufarm_desktop.workspace import QuoteDeliveryDialog
@@ -64,6 +64,41 @@ class DeliveryRedesignTest(QtTestCase):
         self.assertLess(dialog.sent_button.mapTo(dialog, QPoint()).y() + dialog.sent_button.height(), dialog.height())
         self.assertFalse(dialog.email_button.isEnabled())
         self.assertFalse(dialog.payment_button.isVisible())
+
+    def test_initial_height_uses_parent_monitor_work_area(self):
+        parent = QWidget()
+        for area in (QRect(1920, 0, 1920, 1040), QRect(0, 0, 1366, 728)):
+            screen = Mock()
+            screen.availableGeometry.return_value = area
+            with self.subTest(area=area), patch.object(parent, 'screen', return_value=screen):
+                dialog = QuoteDeliveryDialog(self.draft, '견적확정', parent=parent)
+                self.assertEqual(min(int(area.height() * .95), area.height() - 48), dialog.height())
+                self.assertEqual(min(1140, area.width() - 40), dialog.width())
+                self.assertLess(dialog.height(), area.height())
+                dialog.deleteLater()
+
+    def test_list_grows_with_window_without_hiding_delivery_actions(self):
+        self.draft['items'] *= 5
+        dialog = self.dialog()
+        short_height = dialog.items.height()
+        self.assertEqual(0, dialog.delivery_scroll.verticalScrollBar().maximum())
+        self.assertGreater(dialog.items.verticalScrollBar().maximum(), 0)
+        dialog.resize(1140, 988)
+        for _ in range(6):
+            self.app.processEvents()
+        self.assertGreater(dialog.items.height(), short_height)
+        self.assertEqual(0, dialog.items.verticalScrollBar().maximum())
+        self.assertEqual(0, dialog.delivery_scroll.verticalScrollBar().maximum())
+        texts = [label.text() for label in dialog.findChildren(QLabel)]
+        self.assertIn('고객명', texts)
+        self.assertIn(self.draft['customerName'], texts)
+        self.assertNotIn('견적확정', texts)
+        dialog.resize(1100, 660)
+        for _ in range(6):
+            self.app.processEvents()
+        self.assertEqual(0, dialog.delivery_scroll.verticalScrollBar().maximum())
+        self.assertLessEqual(dialog.items.height(), short_height)
+        self.assertLess(dialog.sent_button.mapTo(dialog, QPoint()).y() + dialog.sent_button.height(), dialog.height())
 
     def test_sms_gets_current_shipping_and_does_not_implicitly_complete_quote(self):
         manager = Mock()

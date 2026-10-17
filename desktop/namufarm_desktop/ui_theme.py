@@ -131,7 +131,6 @@ QDialog#quoteDeliveryDialog QLabel#deliveryReference{font-size:@body@px;color:#5
 QDialog#quoteDeliveryDialog QLabel#deliveryCaption,QDialog#quoteDeliveryDialog QLabel#deliveryPdfName{font-size:@caption@px;color:#5c6b73;}
 QDialog#quoteDeliveryDialog QLabel#deliveryInfoValue{font-size:@body@px;font-weight:600;}
 QDialog#quoteDeliveryDialog QLabel#deliverySectionTitle{font-size:@body@px;font-weight:700;}
-QDialog#quoteDeliveryDialog QLabel#quoteStatusBadge{background:#e8f2ec;color:#23593a;border:1px solid #b6d0c1;border-radius:6px;padding:6px 12px;font-size:@caption@px;}
 QDialog#quoteDeliveryDialog QFrame#deliveryShippingStrip{background:#f4f6f7;border:0;border-radius:6px;}
 QDialog#quoteDeliveryDialog QFrame#deliveryVerticalRule{background:#d5dee2;border:0;}
 QDialog#quoteDeliveryDialog QFrame#deliverySectionRule{background:#4d6f61;border:0;}
