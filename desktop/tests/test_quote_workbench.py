@@ -2,7 +2,7 @@
 import copy
 import os
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from PySide6.QtCore import QPoint, Qt
 from PySide6.QtWidgets import QDialog, QMessageBox
@@ -31,8 +31,8 @@ class QuoteWorkbenchTest(QtTestCase):
         for _ in range(8):
             self.app.processEvents()
 
-    def dialog(self, status='신규', size=(1280, 900)):
-        dialog = QuoteDialog(self.draft, request_status=status)
+    def dialog(self, status='신규', size=(1280, 900), manager=None):
+        dialog = QuoteDialog(self.draft, request_status=status, manager=manager)
         dialog.resize(*size)
         dialog.show()
         self.settle()
@@ -73,7 +73,7 @@ class QuoteWorkbenchTest(QtTestCase):
         self.assertTrue(dialog.note.isReadOnly())
         self.assertEqual('가상 수신인', dialog.customer_values['견적서 수신인'].text())
         self.assertEqual('문자 + 이메일', dialog.customer_values['수신 방법'].text())
-        self.assertEqual(0, result['shippingFee'])
+        self.assertEqual(6000, result['shippingFee'])
         self.assertFalse(result['isPrepaid'])
 
     def test_customer_header_icons_alignment_and_bold_receipt_match_selected_design(self):
@@ -141,3 +141,65 @@ class QuoteWorkbenchTest(QtTestCase):
         self.assertEqual('합계 54,000원', dialog.total.text())
         dialog.items.item(0, 2).setText('11')
         self.assertEqual('합계 56,000원', dialog.total.text())
+
+    def test_integrated_shipping_pdf_and_price_edits_use_one_current_quote(self):
+        manager = Mock()
+        manager.quote_delivery_state.return_value = {}
+        dialog = self.dialog(size=(1280, 988), manager=manager)
+        self.assertEqual(0, dialog.workbench_scroll.verticalScrollBar().maximum())
+        dialog.shipping_prepaid.setChecked(True)
+        self.assertEqual('60,000원', dialog.total.text())
+        dialog.generate_quote_button.click()
+        path = dialog.generated_quote_path
+        self.addCleanup(dialog.cleanup_generated_quote)
+        self.assertTrue(path.is_file())
+        self.assertTrue(path.read_bytes().startswith(b'%PDF'))
+        self.assertEqual(path.name, dialog.quote_file_label.text())
+        self.assertEqual(6000, dialog.draft['shippingFee'])
+        self.assertTrue(dialog.draft['isPrepaid'])
+        manager.confirm_quote.assert_not_called()
+        manager.save_draft.assert_not_called()
+        dialog.set_unit_price(0, 2500)
+        self.assertEqual('65,000원', dialog.total.text())
+        self.assertFalse(path.exists())
+        self.assertFalse(dialog.preview_quote_button.isEnabled())
+        dialog.generate_quote_button.click()
+        path = dialog.generated_quote_path
+        dialog.shipping_fee.setText('7000')
+        self.assertFalse(path.exists())
+        self.assertEqual('66,000원', dialog.total.text())
+        dialog.shipping_cod.setChecked(True)
+        self.assertEqual('59,000원', dialog.total.text())
+
+    def test_integrated_channel_dialogs_receive_current_inputs_and_pdf_attachment(self):
+        manager = Mock()
+        manager.quote_delivery_state.return_value = {}
+        dialog = self.dialog(manager=manager)
+        self.addCleanup(dialog.cleanup_generated_quote)
+        dialog.shipping_prepaid.setChecked(True)
+        dialog.shipping_fee.setText('7000')
+        sms = Mock(delivery_state={'smsState': 'pending'})
+        sms.exec.return_value = QDialog.DialogCode.Rejected
+        with patch('namufarm_desktop.workspace.QuoteSmsDialog', return_value=sms) as factory:
+            dialog.sms_button.click()
+        sent = factory.call_args.args[0]
+        self.assertEqual(7000, sent['shippingFee'])
+        self.assertTrue(sent['isPrepaid'])
+        self.assertEqual('문자 결과확인', dialog.sms_status_badge.text())
+        dialog.generate_quote_button.click()
+        attachment = dialog.generated_quote_path
+        mail = Mock(delivery_state={'emailSentAt': 1})
+        mail.exec.return_value = QDialog.DialogCode.Accepted
+        with patch('namufarm_desktop.workspace.QMessageBox.question', return_value=QMessageBox.StandardButton.Yes), \
+             patch('namufarm_desktop.workspace.QuoteEmailDialog', return_value=mail) as factory:
+            dialog.email_button.click()
+        self.assertEqual(attachment, factory.call_args.kwargs['attachment_path'])
+        self.assertEqual(7000, factory.call_args.args[0]['shippingFee'])
+        self.assertEqual('', dialog.mode)
+        manager.confirm_quote.assert_not_called()
+        with patch('namufarm_desktop.workspace.QMessageBox.question', return_value=QMessageBox.StandardButton.Yes):
+            dialog.confirm_button.click()
+        self.assertEqual('finalize', dialog.mode)
+        self.assertEqual(7000, dialog.draft['shippingFee'])
+        self.assertTrue(dialog.draft['isPrepaid'])
+        self.assertFalse(attachment.exists())

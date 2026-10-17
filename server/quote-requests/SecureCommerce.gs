@@ -447,7 +447,7 @@ function authorizeQuoteMail() {
 function sendQuoteEmail_(body) {
   assert_(body && typeof body==='object');
   const requestId=String(body.requestId||'');
-  if(requestId)assert_(['견적확정','견적발송완료'].includes(quoteRequestStatus_(requestId)),'CONFLICT');
+  if(requestId)assert_(['신규','견적확정','견적발송완료'].includes(quoteRequestStatus_(requestId)),'CONFLICT');
   const recipient=text_(body.recipientEmail,254,3);
   assert_(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient));
   const senderName=text_(body.senderName||'나무팜농원',50,1);
@@ -517,7 +517,7 @@ function quoteSmsReason_(code) {
 function sendQuoteSms_(body) {
   assert_(body && typeof body==='object');
   const requestId=String(body.requestId||'');
-  if(requestId)assert_(['견적확정','견적발송완료'].includes(quoteRequestStatus_(requestId)),'CONFLICT');
+  if(requestId)assert_(['신규','견적확정','견적발송완료'].includes(quoteRequestStatus_(requestId)),'CONFLICT');
   const recipientPhone=String(body.recipientPhone||'').replace(/\D/g,'');
   assert_(/^0\d{8,10}$/.test(recipientPhone),'INVALID');
   const message=text_(body.text,1000,1);

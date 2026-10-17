@@ -375,6 +375,22 @@ class Manager:
                 "configured": result.get("configured") is True,
                 "senderPhone": str(result.get("senderPhone") or "")}
 
+    def _prepare_quote_delivery(self, draft):
+        """Allow delivery from a current request without advancing its quote state."""
+        source = draft.get("sourceRequestId", "")
+        if not source:
+            return
+        local = next((q for q in self._local_quotes() if q["id"] == draft["id"]), None)
+        if local:
+            self._confirmed_source(draft)
+            return
+        request = next((r for r in self.inbox_requests if r["requestId"] == source), None)
+        require(request is not None and request.get("status", "신규") == "신규",
+                "가져오기로 서버의 견적요청을 다시 확인해주세요.")
+        # Keep the sent input/identifier recoverable on reopen, even if sending fails.
+        # Confirmed Excel and server status are changed only by confirm_quote().
+        self.save_draft(draft)
+
     def send_quote_sms(self, draft, text):
         validate_draft(draft)
         require(isinstance(text, str) and 1 <= len(text.strip()) <= 1000, "문자 내용을 1~1,000자로 입력해주세요.")
@@ -382,10 +398,7 @@ class Manager:
         require(recipient, "고객 연락처가 입력되지 않았습니다.")
         recipient_digits = "".join(ch for ch in recipient if ch.isdigit())
         source = draft.get("sourceRequestId", "")
-        if source:
-            quote = self._confirmed_source(draft)
-            require(quote["quoteStatus"] in ("견적확정", "견적발송완료"),
-                    "견적확정 이후에 문자를 전송해주세요.")
+        self._prepare_quote_delivery(draft)
         result = self.api.call("send_quote_sms", requestId=source, recipientPhone=recipient, text=text.strip())
         require(result.get("sent") is True and result.get("recipientPhone") == recipient_digits,
                 "문자 전송 접수를 확인하지 못했습니다.")
@@ -454,10 +467,7 @@ class Manager:
             attachment_base64 = base64.b64encode(path.read_bytes()).decode("ascii")
 
         source = draft.get("sourceRequestId", "")
-        if source:
-            quote = self._confirmed_source(draft)
-            require(quote["quoteStatus"] in ("견적확정", "견적발송완료"),
-                    "견적확정 이후에 메일을 전송해주세요.")
+        self._prepare_quote_delivery(draft)
         result = self.api.call("send_quote_email", requestId=source, recipientEmail=recipient,
                                senderName=draft.get("issuer", {}).get("businessName") or "나무팜농원",
                                quoteNumber=draft.get("requestReceiptNumber") or ("PCQ_" + draft["id"][:8]),

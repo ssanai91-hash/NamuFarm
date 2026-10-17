@@ -122,6 +122,7 @@ def quote_workbench_style(large=False):
     """Selected forest-green quotation workbench; scoped away from other dialogs."""
     return """
 QDialog#quoteWorkbench{background:#ffffff;color:#24313a;}
+QDialog#quoteWorkbench QWidget#workbenchBody{background:#ffffff;}
 QDialog#quoteWorkbench QLabel{font-size:@body@px;background:transparent;border:0;padding:0;color:#24313a;}
 QDialog#quoteWorkbench QFrame#workbenchHeader{background:#193c32;border:0;}
 QDialog#quoteWorkbench QLabel#workbenchBrand{font-size:20px;font-weight:600;color:#e3eee8;}
@@ -159,6 +160,20 @@ QDialog#quoteWorkbench QPushButton{font-size:@body@px;min-height:46px;max-height
 QDialog#quoteWorkbench QPushButton#primary{background:#25634b;color:#ffffff;border:1px solid #20553f;font-weight:700;}
 QDialog#quoteWorkbench QPushButton#primary:hover{background:#194c37;}
 QDialog#quoteWorkbench QPushButton#primary:disabled{background:#e1e9e4;color:#6a7b71;border-color:#bdcec3;}
+QDialog#quoteWorkbench QFrame#workbenchShipping{background:#f2f5f3;border:0;border-radius:6px;}
+QDialog#quoteWorkbench QLabel#deliverySectionTitle{font-size:18px;font-weight:700;color:#193c32;}
+QDialog#quoteWorkbench QLabel#deliveryCaption,QDialog#quoteWorkbench QLabel#deliveryPdfName{font-size:16px;color:#52645c;}
+QDialog#quoteWorkbench QRadioButton{font-size:18px;}
+QDialog#quoteWorkbench QLineEdit{font-size:18px;min-height:24px;max-height:24px;padding:6px 8px;}
+QDialog#quoteWorkbench QPushButton#smsAction{background:#25634b;color:#ffffff;}
+QDialog#quoteWorkbench QPushButton#smsAction:hover{background:#194c37;}
+QDialog#quoteWorkbench QPushButton#smsAction:disabled{background:#e1e9e4;color:#6a7b71;border-color:#bdcec3;}
+QDialog#quoteWorkbench QPushButton#pdfAction,QDialog#quoteWorkbench QPushButton#smsAction,QDialog#quoteWorkbench QPushButton#mailAction{font-size:18px;padding:0 8px;}
+QDialog#quoteWorkbench QLabel#channelStatusBadge{font-size:14px;background:#f1f4f2;border-radius:5px;padding:2px 6px;color:#52645c;}
+QDialog#quoteWorkbench QLabel#channelStatusBadge[state="success"]{background:#e2efe5;color:#23603b;}
+QDialog#quoteWorkbench QLabel#channelStatusBadge[state="failed"]{background:#fbe5e2;color:#a13d32;}
+QDialog#quoteWorkbench QLabel#channelStatusBadge[state="pending"]{background:#fff3d8;color:#78520d;}
+QDialog#quoteWorkbench QFrame#deliveryVerticalRule{background:#c5d9ce;border:0;}
 """.replace('@body@', '22' if large else '20').replace('@caption@', '20' if large else '18').replace('@title@', '32' if large else '30').replace('@section@', '26' if large else '24').replace('@total@', '40' if large else '36')
 
 
