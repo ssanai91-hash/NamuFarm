@@ -112,6 +112,8 @@ jobs:
         run: ./gradlew --no-daemon :app:assembleRelease
 
       - name: Upload debug APK (testing only)
+        id: debug_artifact
+        continue-on-error: true
         if: inputs.apk_type == 'debug'
         uses: actions/upload-artifact@v4
         with:
@@ -119,6 +121,25 @@ jobs:
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 7
+
+      - name: Save test APK as a draft release if artifact upload fails
+        if: inputs.apk_type == 'debug' && steps.debug_artifact.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          apks=(app/build/outputs/apk/debug/*.apk)
+          if [ "${#apks[@]}" -ne 1 ]; then
+            echo "::error::Expected exactly one debug APK."
+            exit 1
+          fi
+          tag="android-debug-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          gh release create "$tag" "${apks[0]}" --draft \
+            --target "$GITHUB_SHA" --title "Test-only debug APK ${GITHUB_SHA:0:7}" \
+            --notes "Testing only. Ephemeral debug certificate; cannot update the permanently signed seller app. Source commit: $GITHUB_SHA."
+          echo "Saved test APK in draft release: $tag" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload signed release APK
         id: release_artifact
