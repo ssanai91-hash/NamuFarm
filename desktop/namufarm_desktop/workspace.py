@@ -2578,7 +2578,7 @@ class SellerWindow(MainWindow):
         self.request_nav_badge = None
         self.tray_icon = None
         super().__init__(vault_path)
-        self.setWindowTitle("나무팜 판매관리 | NamuFarm Seller")
+        self.setWindowTitle(f"나무팜 판매관리 | Ver {__version__}")
         self.setMinimumSize(1000, 620)
         fit_window(self, 1920, 1080)
         self.setStyleSheet(STYLE)
@@ -2609,7 +2609,7 @@ class SellerWindow(MainWindow):
         side.setContentsMargins(12, 20, 12, 16)
         side.setSpacing(6)
         side.addWidget(label("  namufarm", "brand"))
-        side.addWidget(label(f"  나피 · Ver. {__version__}", "navFoot"))
+        side.addWidget(label("  나피", "navFoot"))
         side.addSpacing(6)
         self.nav = []
         for index, (title, _) in enumerate(self.PAGES):
@@ -2638,6 +2638,8 @@ class SellerWindow(MainWindow):
             else:
                 side.addWidget(widget)
         side.addStretch()
+        self.new_quote_button = button("+ 전화 견적", self.add_manual_quote)
+        side.addWidget(self.new_quote_button)
         outer.addWidget(sidebar)
         content = QWidget()
         content_layout = QVBoxLayout(content)
@@ -2666,8 +2668,6 @@ class SellerWindow(MainWindow):
         self.sync_button.setMinimumWidth(138)
         header.addWidget(self.sync_button)
 
-        self.new_quote_button = button("+ 전화 견적", self.add_manual_quote)
-        header.addWidget(self.new_quote_button)
         content_layout.addLayout(header)
 
         self.server_log_frame = QFrame()
