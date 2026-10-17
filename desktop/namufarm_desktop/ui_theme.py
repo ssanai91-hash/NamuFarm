@@ -118,6 +118,46 @@ QDialog#quoteEditor QLineEdit[readOnly="true"]{min-height:@readonly@px;max-heigh
             .replace('@readonly@', '24' if large else '20'))
 
 
+def quote_workbench_style(large=False):
+    """Selected forest-green quotation workbench; scoped away from other dialogs."""
+    return """
+QDialog#quoteWorkbench{background:#ffffff;color:#24313a;}
+QDialog#quoteWorkbench QLabel{font-size:@body@px;background:transparent;border:0;padding:0;color:#24313a;}
+QDialog#quoteWorkbench QFrame#workbenchHeader{background:#193c32;border:0;}
+QDialog#quoteWorkbench QLabel#workbenchBrand{font-size:20px;font-weight:600;color:#e3eee8;}
+QDialog#quoteWorkbench QLabel#workbenchTitle{font-size:@title@px;font-weight:700;color:#ffffff;}
+QDialog#quoteWorkbench QLabel#workbenchReference{font-size:@caption@px;color:#e3eee8;}
+QDialog#quoteWorkbench QScrollArea#workbenchCustomerScroll{border:0;border-right:1px solid #bfd5c9;background:#edf4ef;}
+QDialog#quoteWorkbench QWidget#workbenchCustomerRail{background:#edf4ef;}
+QDialog#quoteWorkbench QLabel#workbenchSectionTitle{font-size:@section@px;font-weight:700;color:#193c32;}
+QDialog#quoteWorkbench QLabel#workbenchCaption{font-size:@caption@px;font-weight:600;color:#52645c;}
+QDialog#quoteWorkbench QLabel#workbenchCustomerName{font-size:28px;font-weight:700;color:#193c32;}
+QDialog#quoteWorkbench QLabel#workbenchInfo{font-size:@body@px;color:#24313a;}
+QDialog#quoteWorkbench QLabel#workbenchFormal{font-size:@caption@px;background:#e4ece7;color:#52645c;border-radius:6px;padding:8px 12px;}
+QDialog#quoteWorkbench QLabel#workbenchFormal[requested="true"]{background:#ffe2a5;color:#6b480d;}
+QDialog#quoteWorkbench QFrame#workbenchCustomerRule{background:#c5d9ce;border:0;}
+QDialog#quoteWorkbench QTableWidget#workbenchItems{background:#ffffff;alternate-background-color:#f0f6f2;color:#24313a;font-size:@body@px;border:1px solid #cfddd4;border-radius:6px;selection-background-color:#e0eee5;selection-color:#193c32;}
+QDialog#quoteWorkbench QTableWidget#workbenchItems::item{padding:4px 12px;border-bottom:1px solid #e0e9e3;}
+QDialog#quoteWorkbench QTableWidget#workbenchItems QHeaderView::section{background:#2c6852;color:#ffffff;font-size:@body@px;font-weight:700;padding:8px 10px;border:0;border-right:1px solid #548470;}
+QDialog#quoteWorkbench QWidget#unitPriceEditor{background:transparent;}
+QDialog#quoteWorkbench QWidget#unitPriceEditor QPushButton{min-height:0;max-height:42px;padding:0;border:1px solid #a8bcb0;border-radius:6px;background:#f7faf8;color:#193c32;font-size:22px;}
+QDialog#quoteWorkbench QWidget#unitPriceEditor QPushButton:hover{background:#dcece2;}
+QDialog#quoteWorkbench QWidget#unitPriceEditor QLineEdit{min-height:0;max-height:42px;padding:0 8px;border:1px solid #a8bcb0;border-radius:6px;background:#ffffff;font-size:@body@px;}
+QDialog#quoteWorkbench QWidget#unitPriceEditor QLineEdit:focus{max-height:40px;border:2px solid #a36d17;padding:0 7px;}
+QDialog#quoteWorkbench QFrame#workbenchTotalRule{background:#245f46;border:0;}
+QDialog#quoteWorkbench QFrame#workbenchSummary{background:#edf4ef;border:0;border-radius:8px;}
+QDialog#quoteWorkbench QLabel#workbenchSumTitle{font-size:26px;font-weight:700;color:#193c32;}
+QDialog#quoteWorkbench QLabel#workbenchAmountDetail{font-size:@caption@px;color:#52645c;}
+QDialog#quoteWorkbench QLabel#workbenchTotal{font-size:@total@px;font-weight:700;color:#193c32;}
+QDialog#quoteWorkbench QPlainTextEdit{font-size:@body@px;background:#ffffff;border:1px solid #b8c9bf;border-radius:6px;padding:8px 12px;}
+QDialog#quoteWorkbench QFrame#workbenchFooter{background:#ffffff;border:0;border-top:1px solid #cfddd4;}
+QDialog#quoteWorkbench QPushButton{font-size:@body@px;min-height:46px;max-height:46px;padding:0 18px;border-radius:6px;}
+QDialog#quoteWorkbench QPushButton#primary{background:#25634b;color:#ffffff;border:1px solid #20553f;font-weight:700;}
+QDialog#quoteWorkbench QPushButton#primary:hover{background:#194c37;}
+QDialog#quoteWorkbench QPushButton#primary:disabled{background:#e1e9e4;color:#6a7b71;border-color:#bdcec3;}
+""".replace('@body@', '22' if large else '20').replace('@caption@', '20' if large else '18').replace('@title@', '32' if large else '30').replace('@section@', '26' if large else '24').replace('@total@', '40' if large else '36')
+
+
 def quote_delivery_style(large=False, compact=False):
     """Scoped to the selected quotation dialog; other workspace screens keep their theme."""
     body, caption = (20, 18) if large else (18, 16)

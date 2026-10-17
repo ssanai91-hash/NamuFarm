@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (QApplication, QButtonGroup, QCheckBox, QComboBox,
 from . import __version__
 from .ui_theme import (align_table, fit_window, scroll_dialog, scroll_page, workspace_style,
                        CustomerDelegate, StatusDelegate, customer_reference, CompactDateDelegate,
-                       NavigationButton, size_table_to_rows, collapsible, quote_delivery_style)
+                       NavigationButton, size_table_to_rows, collapsible, quote_delivery_style, quote_workbench_style)
 from .ui_icons import set_button_icon
 from .app import MainWindow, Task, table, fill_table, money, timestamp
 from .commerce import (ISSUER, new_draft, draft_amounts, validate_draft, quote_html, quote_document_html, shipping_html,
@@ -494,164 +494,300 @@ def print_document(parent, html, filename):
 
 class QuoteDialog(QDialog):
     """Website requests use a minimal price-only quote editor."""
-    def __init__(self, draft, parent=None, request_status=""):
+    def __init__(self, draft, parent=None, request_status=''):
         super().__init__(parent)
-        self.draft, self.mode, self.request_status = copy.deepcopy(draft), "", request_status
-        self.simple_request = bool(draft.get("sourceRequestId"))
-        self.setWindowTitle("견적 작업대")
-        self.setObjectName("quoteEditor")
-        self.resize(1160 if self.simple_request else 1280, 760 if self.simple_request else 840)
+        self.draft, self.mode, self.request_status = (copy.deepcopy(draft), '', request_status)
+        self.simple_request = bool(draft.get('sourceRequestId'))
+        self.setWindowTitle('견적 작업대')
+        self.setObjectName('quoteEditor')
+        if self.simple_request:
+            self.build_request_workbench()
+            return
+        self.resize(1280, 840)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(20, 16, 20, 16)
         layout.setSpacing(8)
-
         head = QHBoxLayout()
-        head.addWidget(label("견적 작업대", "pageTitle"))
+        head.addWidget(label('견적 작업대', 'pageTitle'))
         head.addStretch()
         layout.addLayout(head)
-
         split = QSplitter()
         self.fields = {}
-        if self.simple_request:
-            info = QWidget()
-            form = QFormLayout(info)
-            form.setContentsMargins(0, 0, 0, 0)
-            form.setVerticalSpacing(4)
-            form.setFormAlignment(Qt.AlignmentFlag.AlignTop)
-            for title, value in (("견적번호", draft.get("requestReceiptNumber", "") or draft.get("sourceRequestId", "")),
-                                 ("고객명", draft.get("customerName", "")),
-                                 ("연락처", draft.get("customerPhone", "")),
-                                 ("이메일", draft.get("customerEmail", "") or "미입력"),
-                                 ("지역", draft.get("requestRegion", ""))):
-                field = QLineEdit(str(value))
-                field.setReadOnly(True)
-                field.setAccessibleName(title)
-                field.setToolTip(str(value))
-                field.setCursorPosition(0)
-                form.addRow(title, field)
-
-            formal = bool(draft.get("formalQuoteRequested", False))
-            formal_value = QLineEdit("요청" if formal else "미요청")
-            formal_value.setReadOnly(True)
-            form.addRow("공식 견적서", formal_value)
-            if formal:
-                recipient = QLineEdit(draft.get("quoteRecipientName", "") or draft.get("customerName", ""))
-                recipient.setReadOnly(True)
-                form.addRow("견적서 수신인", recipient)
-                channel = {"sms": "문자", "email": "이메일", "both": "문자 + 이메일"}.get(
-                    draft.get("quoteReplyChannel", "sms"), "문자"
-                )
-                reply = QLineEdit(channel)
-                reply.setReadOnly(True)
-                form.addRow("수신 방법", reply)
-            self.note = QPlainTextEdit(draft.get("note", ""))
-            self.note.setReadOnly(True)
-            self.note.setFixedHeight(64 if draft.get("note") else 44)
-            info_scroll = QScrollArea()
-            info_scroll.setWidgetResizable(True)
-            info_scroll.setWidget(info)
-            info_scroll.setMinimumWidth(330)
-            info_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-            split.addWidget(info_scroll)
-            self.cost = QCheckBox()
-        else:
-            info = QWidget()
-            form = QFormLayout(info)
-            form.setContentsMargins(0, 0, 0, 0)
-            form.setVerticalSpacing(4)
-            form.setFormAlignment(Qt.AlignmentFlag.AlignTop)
-            for key, title in (("customerName", "고객명"), ("customerPhone", "연락처"), ("customerEmail", "이메일"),
-                               ("receiverName", "수령인"), ("zipNo", "우편번호"), ("roadAddress", "도로명 주소"), ("detailAddress", "상세 주소"),
-                               ("validUntil", "견적 유효기간"), ("paymentAccount", "입금계좌 안내")):
-                field = QLineEdit(str(draft.get(key, "")))
-                field.setPlaceholderText(title)
-                field.setAccessibleName(title)
-                field.setToolTip(str(value))
-                field.setCursorPosition(0)
-                self.fields[key] = field
-                form.addRow(title, field)
-            self.note = QPlainTextEdit(draft.get("note", ""))
-            self.note.setMaximumHeight(95)
-            form.addRow("고객·배송 메모", self.note)
-            self.prepaid = QCheckBox("선불 배송비를 합계에 포함")
-            self.prepaid.setChecked(draft["isPrepaid"])
-            form.addRow(self.prepaid)
-            for key, title in (("shippingFee", "배송비 (원)"), ("taxAmount", "세액 (원)")):
-                field = QLineEdit(str(draft[key]))
-                self.fields[key] = field
-                field.textChanged.connect(self.recalculate)
-                form.addRow(title, field)
-            self.cost = QCheckBox("입력한 매입 원가를 확인했습니다")
-            self.cost.setChecked(draft["costConfirmed"])
-            form.addRow(self.cost)
-            self.prepaid.toggled.connect(self.recalculate)
-            scroll = QScrollArea()
-            scroll.setWidgetResizable(True)
-            scroll.setWidget(info)
-            split.addWidget(scroll)
-
+        info = QWidget()
+        form = QFormLayout(info)
+        form.setContentsMargins(0, 0, 0, 0)
+        form.setVerticalSpacing(4)
+        form.setFormAlignment(Qt.AlignmentFlag.AlignTop)
+        for key, title in (('customerName', '고객명'), ('customerPhone', '연락처'), ('customerEmail', '이메일'), ('receiverName', '수령인'), ('zipNo', '우편번호'), ('roadAddress', '도로명 주소'), ('detailAddress', '상세 주소'), ('validUntil', '견적 유효기간'), ('paymentAccount', '입금계좌 안내')):
+            field = QLineEdit(str(draft.get(key, '')))
+            field.setPlaceholderText(title)
+            field.setAccessibleName(title)
+            field.setToolTip(str(draft.get(key, '')))
+            field.setCursorPosition(0)
+            self.fields[key] = field
+            form.addRow(title, field)
+        self.note = QPlainTextEdit(draft.get('note', ''))
+        self.note.setMaximumHeight(95)
+        form.addRow('고객·배송 메모', self.note)
+        self.prepaid = QCheckBox('선불 배송비를 합계에 포함')
+        self.prepaid.setChecked(draft['isPrepaid'])
+        form.addRow(self.prepaid)
+        for key, title in (('shippingFee', '배송비 (원)'), ('taxAmount', '세액 (원)')):
+            field = QLineEdit(str(draft[key]))
+            self.fields[key] = field
+            field.textChanged.connect(self.recalculate)
+            form.addRow(title, field)
+        self.cost = QCheckBox('입력한 매입 원가를 확인했습니다')
+        self.cost.setChecked(draft['costConfirmed'])
+        form.addRow(self.cost)
+        self.prepaid.toggled.connect(self.recalculate)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setWidget(info)
+        split.addWidget(scroll)
         right = QWidget()
         content = QVBoxLayout(right)
         content.setContentsMargins(12, 0, 0, 0)
         content.setSpacing(8)
-        content.addWidget(label("견적 품목", "sectionTitle"))
-        if self.simple_request:
-            self.items = table(["묘목명", "수량", "판매 금액", "판매 단가"])
-        else:
-            content.addWidget(label("수기 견적 품목으로 등록합니다. 휴대폰 재고 수량은 차감하지 않습니다.", "muted", True))
-            self.items = table(["묘목명", "규격", "수량", "판매 단가", "매입 단가", "판매 금액"])
+        content.addWidget(label('견적 품목', 'sectionTitle'))
+        content.addWidget(label('수기 견적 품목으로 등록합니다. 휴대폰 재고 수량은 차감하지 않습니다.', 'muted', True))
+        self.items = table(['묘목명', '규격', '수량', '판매 단가', '매입 단가', '판매 금액'])
         self.items.setEditTriggers(self.items.EditTrigger.DoubleClicked | self.items.EditTrigger.EditKeyPressed | self.items.EditTrigger.AnyKeyPressed)
         self.items.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         polish_table(self.items)
-        if self.simple_request:
-            self.items.set_column_layout(((0, 3), (1, 1), (3, 2.8), (2, 2)))
-        else:
-            self.items.set_column_layout(((0, 3), (1, 1.6), (2, 1), (3, 1.5), (4, 1.5), (5, 1.8)))
+        self.items.set_column_layout(((0, 3), (1, 1.6), (2, 1), (3, 1.5), (4, 1.5), (5, 1.8)))
         self.items.itemChanged.connect(self.recalculate)
         content.addWidget(self.items)
-
-        if not self.simple_request:
-            actions = QHBoxLayout()
-            actions.addWidget(button("+ 품목 추가", self.add_item))
-            actions.addWidget(button("선택 품목 삭제", self.remove_item))
-            actions.addStretch()
-            content.addLayout(actions)
-
-        self.total = label("", "metricValue", True)
+        actions = QHBoxLayout()
+        actions.addWidget(button('+ 품목 추가', self.add_item))
+        actions.addWidget(button('선택 품목 삭제', self.remove_item))
+        actions.addStretch()
+        content.addLayout(actions)
+        self.total = label('', 'metricValue', True)
         content.addWidget(self.total)
-        self.amount_detail = label("", "muted", True)
+        self.amount_detail = label('', 'muted', True)
         content.addWidget(self.amount_detail)
         split.addWidget(right)
-        split.setSizes([360 if self.simple_request else 420, 760 if self.simple_request else 780])
+        split.setSizes([420, 780])
         layout.addWidget(split, 1)
-
-        if self.simple_request:
-            request_title = label("요청사항", "sectionTitle")
-            layout.addWidget(request_title)
-            layout.addWidget(self.note)
-
         footer = QHBoxLayout()
-        if not self.simple_request:
-            footer.addWidget(button("발행자 정보", self.edit_issuer))
-            footer.addWidget(button("견적안 미리보기 / PDF", self.preview))
+        footer.addWidget(button('발행자 정보', self.edit_issuer))
+        footer.addWidget(button('견적안 미리보기 / PDF', self.preview))
         footer.addStretch()
-        footer.addWidget(button("닫기", self.reject))
-        if self.simple_request:
-            self.confirm_button = button("견적 확정", lambda: self.finish("finalize"), True)
-            self.confirm_button.setEnabled(request_status in ("", "신규"))
-            set_button_icon(self.confirm_button, "check", "#ffffff")
-            footer.addWidget(self.confirm_button)
-        else:
-            footer.addWidget(button("입금확인 · 판매 등록", lambda: self.finish("confirm"), True))
+        footer.addWidget(button('닫기', self.reject))
+        footer.addWidget(button('입금확인 · 판매 등록', lambda: self.finish('confirm'), True))
         layout.addLayout(footer)
         scroll_dialog(self, layout)
-
-        for item in draft["items"]:
+        for item in draft['items']:
             self.add_item(item)
-        if not draft["items"] and not self.simple_request:
+        if not draft['items']:
             self.add_item()
         self.recalculate()
         self.initial = self.raw_state()
+
+    def build_request_workbench(self):
+        """Forest-green customer rail and a wide price-entry workspace."""
+        self.setObjectName("quoteWorkbench")
+        self.setSizeGripEnabled(True)
+        large = bool(QApplication.instance().property("namufarmLargeFont"))
+        self.setStyleSheet(quote_workbench_style(large))
+        screen = self.parentWidget().screen() if self.parentWidget() else self.screen()
+        screen = screen or QApplication.primaryScreen()
+        if screen:
+            available = screen.availableGeometry()
+            width = min(1280, max(480, available.width() - 40))
+            height = min(900, int(available.height() * .95), available.height() - 48)
+            self.setMinimumSize(min(960, width), min(600, height))
+            self.resize(width, height)
+        else:
+            self.resize(1280, 900)
+            self.setMinimumSize(960, 600)
+        self.fields = {}
+        self.cost = QCheckBox()
+
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+        header = QFrame()
+        header.setObjectName("workbenchHeader")
+        header.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        heading = QHBoxLayout(header)
+        heading.setContentsMargins(24, 18, 24, 18)
+        heading.setSpacing(20)
+        heading.addWidget(label("나무팜(주)", "workbenchBrand"))
+        heading.addWidget(label("견적 작업대", "workbenchTitle"))
+        heading.addStretch(1)
+        reference = label("견적번호  " + str(self.draft.get("requestReceiptNumber") or self.draft.get("sourceRequestId", "")),
+                          "workbenchReference", True)
+        reference.setMinimumWidth(0)
+        reference.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        reference.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        reference.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        heading.addWidget(reference, 1)
+        root.addWidget(header)
+
+        body = QHBoxLayout()
+        body.setContentsMargins(0, 0, 0, 0)
+        body.setSpacing(0)
+        self.customer_scroll = QScrollArea()
+        self.customer_scroll.setObjectName("workbenchCustomerScroll")
+        self.customer_scroll.setWidgetResizable(True)
+        self.customer_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.customer_scroll.setMinimumWidth(270)
+        rail = QWidget()
+        rail.setObjectName("workbenchCustomerRail")
+        customer = QVBoxLayout(rail)
+        customer.setContentsMargins(24, 24, 24, 20)
+        customer.setSpacing(18)
+        customer.addWidget(label("고객 정보", "workbenchSectionTitle"))
+        formal = bool(self.draft.get("formalQuoteRequested"))
+        formal_label = label("공식 견적서 요청" if formal else "공식 견적서 미요청", "workbenchFormal", True)
+        formal_label.setProperty("requested", formal)
+        customer.addWidget(formal_label)
+        self.customer_values = {}
+        identity = QGridLayout()
+        identity.setHorizontalSpacing(16)
+        identity.setVerticalSpacing(18)
+        identity.setColumnStretch(1, 1)
+        self.workbench_identity = identity
+
+        def customer_row(grid, row, title, value):
+            grid.addWidget(label(title, "workbenchCaption"), row, 0, Qt.AlignmentFlag.AlignTop)
+            text = label(str(value or "미입력"), "workbenchCustomerName" if title == "고객명" else "workbenchInfo", True)
+            text.setMinimumWidth(0)
+            text.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
+            text.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+            text.setAccessibleName(title)
+            text.setToolTip(str(value or "미입력"))
+            grid.addWidget(text, row, 1)
+            self.customer_values[title] = text
+
+        for row, (title, value) in enumerate((("고객명", self.draft.get("customerName")),
+                                             ("연락처", self.draft.get("customerPhone")),
+                                             ("이메일", self.draft.get("customerEmail")),
+                                             ("지역", self.draft.get("requestRegion")))):
+            customer_row(identity, row, title, value)
+        customer.addLayout(identity)
+        customer_rule = QFrame()
+        customer_rule.setObjectName("workbenchCustomerRule")
+        customer_rule.setFixedHeight(1)
+        customer.addWidget(customer_rule)
+        document = QGridLayout()
+        document.setHorizontalSpacing(12)
+        document.setVerticalSpacing(18)
+        document.setColumnStretch(1, 1)
+        self.workbench_document = document
+        channel = {"sms": "문자", "email": "이메일", "both": "문자 + 이메일"}.get(self.draft.get("quoteReplyChannel", "sms"), "문자")
+        if formal:
+            customer_row(document, 0, "견적서 수신인", self.draft.get("quoteRecipientName") or self.draft.get("customerName"))
+        customer_row(document, 1 if formal else 0, "수신 방법", channel)
+        customer.addLayout(document)
+        customer.addStretch(1)
+        self.customer_scroll.setWidget(rail)
+        body.addWidget(self.customer_scroll, 3)
+
+        right = QWidget()
+        content = QVBoxLayout(right)
+        content.setContentsMargins(24, 24, 24, 20)
+        content.setSpacing(14)
+        content.addWidget(label("견적 품목", "workbenchSectionTitle"))
+        # Logical indices stay stable for collection; visual order puts price before amount.
+        self.items = table(["묘목명", "수량", "판매 금액", "판매 단가"])
+        self.items.setObjectName("workbenchItems")
+        polish_table(self.items)
+        self.items.horizontalHeader().setFixedHeight(52 if large else 48)
+        self.items.verticalHeader().setMinimumSectionSize(72 if large else 64)
+        self.items.verticalHeader().setDefaultSectionSize(72 if large else 64)
+        self.items.set_column_layout(((0, 3, 150), (1, 1, 70), (3, 3, 230), (2, 2, 120)))
+        self.items.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Ignored)
+        self.items.itemChanged.connect(self.recalculate)
+        content.addWidget(self.items, 1)
+        self.workbench_total_rule = QFrame()
+        self.workbench_total_rule.setObjectName("workbenchTotalRule")
+        self.workbench_total_rule.setFixedHeight(3)
+        content.addWidget(self.workbench_total_rule)
+        self.workbench_summary = QFrame()
+        self.workbench_summary.setObjectName("workbenchSummary")
+        self.workbench_summary.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        summary = QHBoxLayout(self.workbench_summary)
+        summary.setContentsMargins(20, 16, 20, 16)
+        summary.setSpacing(16)
+        summary.addWidget(label("합계", "workbenchSumTitle"))
+        self.amount_detail = label("", "workbenchAmountDetail", True)
+        summary.addWidget(self.amount_detail, 1)
+        self.total = label("", "workbenchTotal")
+        self.total.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        summary.addWidget(self.total)
+        content.addWidget(self.workbench_summary)
+        content.addStretch()
+        body.addWidget(right, 7)
+        root.addLayout(body, 1)
+
+        self.workbench_note_area = QWidget()
+        notes = QVBoxLayout(self.workbench_note_area)
+        notes.setContentsMargins(24, 14, 24, 14)
+        notes.setSpacing(8)
+        notes.addWidget(label("요청사항", "workbenchSectionTitle"))
+        self.note = QPlainTextEdit(self.draft.get("note", ""))
+        self.note.setReadOnly(True)
+        self.note.setFixedHeight(70 if large else 62)
+        self.note.setPlaceholderText("요청사항 없음")
+        self.note.setAccessibleName("고객 요청사항")
+        notes.addWidget(self.note)
+        root.addWidget(self.workbench_note_area)
+
+        self.workbench_footer = QFrame()
+        self.workbench_footer.setObjectName("workbenchFooter")
+        footer = QHBoxLayout(self.workbench_footer)
+        footer.setContentsMargins(24, 14, 24, 14)
+        footer.setSpacing(12)
+        footer.addStretch(1)
+        self.close_button = button("닫기", self.reject)
+        self.close_button.setMinimumWidth(120)
+        footer.addWidget(self.close_button)
+        self.confirm_button = button("견적 확정", lambda: self.finish("finalize"), True)
+        self.confirm_button.setMinimumWidth(200)
+        self.confirm_button.setEnabled(self.request_status in ("", "신규"))
+        set_button_icon(self.confirm_button, "check", "#ffffff")
+        footer.addWidget(self.confirm_button)
+        root.addWidget(self.workbench_footer)
+        for item in self.draft["items"]:
+            self.add_item(item)
+        row_height = self.items.verticalHeader().defaultSectionSize()
+        table_header = self.items.horizontalHeader().height()
+        self.items.setMinimumHeight(table_header + row_height + 4)
+        self.items.setMaximumHeight(table_header + max(1, self.items.rowCount()) * row_height + 4)
+        self.recalculate()
+        self.initial = self.raw_state()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if not hasattr(self, "workbench_note_area"):
+            return
+        QTimer.singleShot(0, self.fit_workbench_rows)
+        compact = self.height() < 760
+        if compact == getattr(self, "_workbench_compact", None):
+            return
+        self._workbench_compact = compact
+        self.workbench_note_area.layout().setContentsMargins(24, 6 if compact else 14, 24, 6 if compact else 14)
+        self.workbench_note_area.layout().setSpacing(4 if compact else 8)
+        self.note.setFixedHeight(62 if compact else 70 if QApplication.instance().property("namufarmLargeFont") else 62)
+        self.workbench_footer.layout().setContentsMargins(24, 8 if compact else 14, 24, 8 if compact else 14)
+        customer = self.customer_scroll.widget().layout()
+        customer.setContentsMargins(16 if compact else 24, 12 if compact else 24, 16 if compact else 24, 12 if compact else 20)
+        customer.setSpacing(12 if compact else 18)
+        self.workbench_identity.setVerticalSpacing(12 if compact else 18)
+        self.workbench_document.setVerticalSpacing(12 if compact else 18)
+
+    def fit_workbench_rows(self):
+        large = bool(QApplication.instance().property("namufarmLargeFont"))
+        base = 72 if large else 64
+        # Enlarge a short list to balance the composition; long lists keep dense rows.
+        row_height = min(110, base + max(0, self.height() - 740) * 3 // 10) if self.items.rowCount() <= 4 else base
+        for row in range(self.items.rowCount()):
+            self.items.setRowHeight(row, row_height)
+        header = self.items.horizontalHeader().height()
+        self.items.setMaximumHeight(header + max(1, self.items.rowCount()) * row_height + 4)
 
     def add_item(self, item=None):
         item = item if isinstance(item, dict) else {"species": "", "specification": "", "quantity": 1, "unitPrice": 0, "unitCost": 0}
@@ -664,8 +800,15 @@ class QuoteDialog(QDialog):
                 cell = QTableWidgetItem(str(value))
                 cell.setTextAlignment((Qt.AlignmentFlag.AlignLeft if column == 0 else Qt.AlignmentFlag.AlignRight) | Qt.AlignmentFlag.AlignVCenter)
                 cell.setFlags(cell.flags() & ~Qt.ItemFlag.ItemIsEditable)
+                if column == 0:
+                    font = cell.font()
+                    font.setBold(True)
+                    cell.setFont(font)
+                elif column == 1:
+                    cell.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
                 self.items.setItem(index, column, cell)
             price_editor = UnitPriceEditor(item["unitPrice"], self.items)
+            price_editor.input.setFixedHeight(44)
             price_editor.changed.connect(self.recalculate)
             self.items.setCellWidget(index, 3, price_editor)
             self.items.setRowHeight(index, max(self.items.verticalHeader().defaultSectionSize(), 60))
@@ -755,7 +898,7 @@ class QuoteDialog(QDialog):
                     self.items.item(row, 5).setText(f"{item['quantity'] * item['unitPrice']:,}")
             self.items.blockSignals(False)
             amount = draft_amounts(draft)
-            self.total.setText(f"합계 {amount['total']:,}원")
+            self.total.setText(f"{amount['total']:,}원" if self.simple_request else f"합계 {amount['total']:,}원")
             if self.simple_request:
                 self.amount_detail.setText(
                     f"총 수량 {amount['quantity']:,}주 · 묘목 금액 {amount['supply']:,}원"
