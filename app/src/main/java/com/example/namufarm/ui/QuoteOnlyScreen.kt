@@ -181,7 +181,7 @@ internal fun QuoteOnlyScreen(viewModel: ManagementViewModel, connection: WebRequ
                     when (action) {
                         QuoteDelivery.SMS, QuoteDelivery.EMAIL -> {
                             withContext(Dispatchers.IO) { workflow.prepareExternalDelivery(request, draft, action) }
-                            val body = quoteWorkflowText(request, draft)
+                            val body = quoteWorkflowText(request, draft, action)
                             // Launch Android activities on the main thread; the seller sends from that app.
                             if (action == QuoteDelivery.SMS) {
                                 openSmsComposer(context, draft.phone, body)?.let { error(it) }

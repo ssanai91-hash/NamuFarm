@@ -147,7 +147,7 @@ class QuoteWorkflow(
     suspend fun sendEmail(request: WebQuoteRequestEntity, draft: SellerQuoteDraft): QuoteWorkflowRecord {
         draft.validate(QuoteDelivery.EMAIL)
         val record = prepare(request, draft)
-        val text = quoteWorkflowText(request, draft)
+        val text = quoteWorkflowText(request, draft, QuoteDelivery.EMAIL)
         val html = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
             .replace("\n", "<br>")
         val recipient = draft.recipient.customerEmail.trim()
@@ -172,22 +172,54 @@ class QuoteWorkflow(
     }
 }
 
-fun quoteWorkflowText(request: WebQuoteRequestEntity, draft: SellerQuoteDraft): String {
+fun quoteWorkflowText(request: WebQuoteRequestEntity, draft: SellerQuoteDraft,
+    channel: QuoteDelivery = QuoteDelivery.SMS): String {
     val lines = draft.validate(QuoteDelivery.COMPLETE)
     val total = lines.sumOf { it.orderQty.toLong() * it.retailPrice } + draft.shipping() +
         if (draft.recipient.formalQuoteRequested) draft.options.taxAmount() else 0L
     require(lines.all { it.orderQty <= 1_000_000 }) { "품목별 수량은 1,000,000주 이하여야 합니다." }
     require(total in 0..Int.MAX_VALUE.toLong()) { "세액을 포함한 총금액이 저장 범위를 넘습니다." }
-    return buildString {
-        appendLine("${draft.recipient.customerName}님, 안녕하세요. 나무팜농원입니다.")
-        appendLine("견적번호 : ${request.receiptNumber.ifBlank { request.requestId }}")
-        lines.forEach { line ->
-            appendLine("${line.speciesName} ${line.orderQty}주 × ${"%,d".format(line.retailPrice)}원 = ${"%,d".format(line.orderQty.toLong() * line.retailPrice)}원")
-        }
-        appendLine(if (draft.prepaid) "택배비 : 선불 ${"%,d".format(draft.shipping())}원" else "택배비 : 후불 (합계 미포함)")
-        appendLine("총금액 : ${"%,d".format(total)}원")
-        appendLine("입금계좌 / 예금주 : ${draft.options.account}")
-        append("문의 : ${draft.options.issuer.phone}")
+    fun number(value: Long) = "%,d".format(java.util.Locale.KOREA, value)
+    val customer = draft.recipient.customerName.ifBlank { "고객" }
+    val quoteNumber = request.receiptNumber.ifBlank { request.requestId }
+    val separator = "-".repeat(53)
+    val items = lines.flatMapIndexed { index, line ->
+        listOf("품목${index + 1} : ${line.speciesName} ${number(line.orderQty.toLong())}주",
+            "판매금액 : ${number(line.orderQty.toLong() * line.retailPrice)}원", "")
     }
+    val shippingFee = if (draft.prepaid) draft.shipping() else
+        draft.fee.toIntOrNull()?.coerceAtLeast(0) ?: 0
+    val shippingLine = if (draft.prepaid) "택배비 : 선불 ${number(shippingFee.toLong())}원" else
+        "택배비 : 후불 / 선불 시 ${number(shippingFee.toLong())}원"
+    val account = draft.options.account.trim()
+    val payment = when (account) {
+        "", "농협 328-12-035671 / 오진웅", "농협 328-12-035671 오진웅" ->
+            "입금계좌 : 농협 328-12-035671\n예금주 : 오진웅"
+        else -> "입금계좌 안내 : $account"
+    }
+    // Match Napi's existing SMS and email templates, including spacing and signatures.
+    val message = if (channel == QuoteDelivery.EMAIL) {
+        listOf(
+            "${customer}님, 안녕하세요.", "",
+            "나무팜농원입니다.", "요청하신 묘목 견적을 안내드립니다.", "",
+            separator, "", "견적번호 : $quoteNumber", ""
+        ) + items + listOf(
+            shippingLine,
+            if (draft.prepaid) "총금액 : ${number(total)}원  (총금액 포함)" else "총금액 : ${number(total)}원",
+            "", payment, "", separator, "",
+            "견적 내용을 확인하시고 궁금하신 사항은 편하게 연락 부탁드립니다.",
+            "감사합니다.", "", "나무팜농원", "010-4446-0304 / 043-732-0980"
+        )
+    } else {
+        listOf(
+            "${customer}님, 안녕하세요.", "",
+            "나무팜농원입니다.", "", "요청하신 묘목 견적을 안내드립니다.", "",
+            separator, "견적번호 : $quoteNumber", ""
+        ) + items + listOf(
+            shippingLine,
+            if (draft.prepaid) "총금액 : ${number(total)}원 (택배비 포함)" else "총금액 : ${number(total)}원",
+            separator, "", payment, "", "감사합니다."
+        )
+    }
+    return message.joinToString("\n").trim()
 }
-

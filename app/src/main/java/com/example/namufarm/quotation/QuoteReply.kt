@@ -22,7 +22,7 @@ object QuoteReply {
     fun textEmailIntent(email: String, body: String): Intent {
         require(email.isNotBlank() && validQuoteEmail(email)) { "이메일 주소를 확인해주세요." }
         require(body.isNotBlank()) { "견적 내용을 확인해주세요." }
-        val subject = "[나무팜] 요청하신 견적 안내"
+        val subject = "묘목 견적 안내"
         // URI fields are supported by mail apps that ignore SENDTO extras.
         return Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:${Uri.encode(email)}?subject=${Uri.encode(subject)}&body=${Uri.encode(body)}")).apply {
             putExtra(Intent.EXTRA_EMAIL, arrayOf(email)); putExtra(Intent.EXTRA_SUBJECT, subject); putExtra(Intent.EXTRA_TEXT, body)
