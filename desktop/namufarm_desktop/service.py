@@ -60,7 +60,7 @@ class Manager:
                 "운영 Apps Script 배포가 이전 인증 방식입니다. 기존 서버의 Code.gs와 SecureCommerce.gs를 최신 main 코드로 교체하고, 동일 배포 ID의 새 버전으로 업데이트해주세요. 기존 자료는 유지됩니다.")
         result = self.api.call("connect_app", authMode="auto-v1", label="나무팜 PC")
         require(result.get("paired") is True and result.get("authMode") == "auto-v1",
-                "구글시트 서버에 자동 연결 기능을 배포해주세요.")
+                "서버에 자동 연결 기능을 배포해주세요.")
         credentials = {**self.credentials, "paired": True, "url": self.api.url}
         credentials.pop("connectionKey", None)
         credentials.pop("connectionKeyUrl", None)
@@ -115,7 +115,7 @@ class Manager:
         info = self.api.info()
         require(info.get("version") == 5 and info.get("connectionMode") == "device-auth"
                 and info.get("customerDataReady") is True,
-                "구글시트 서버를 API v5로 업데이트해주세요. 기존 자료는 보존됩니다.")
+                "서버를 API v5로 업데이트해주세요. 기존 자료는 보존됩니다.")
         require(info.get("requestDeletionSync") is True,
                 "PC 삭제 동기화를 지원하는 서버 코드로 Apps Script 배포를 업데이트해주세요.")
         self.request_snapshot = info.get("requestSnapshot") is True

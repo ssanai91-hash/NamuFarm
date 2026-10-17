@@ -77,9 +77,9 @@ class ScriptApi:
                     raise ConflictError("앱이나 다른 PC에서 먼저 수정했습니다. 전송 대기를 확인해주세요.")
                 if code == "UNAUTHORIZED":
                     raise AuthenticationError(f"{label} 중 기기 연결을 확인하지 못했습니다. ‘서버 동기화’를 눌러 다시 연결해주세요.")
-                messages = {"NOT_READY": "구글시트 서버 설정과 배포 버전을 확인해주세요.",
+                messages = {"NOT_READY": "서버 설정과 배포 버전을 확인해주세요.",
                             "DEVICE_LIMIT": "서버 기기 등록 한도에 도달했습니다. 서버 관리자에게 문의해주세요.",
-                            "UPGRADE_REQUIRED": "앱과 구글시트 서버를 최신 버전으로 업데이트해주세요.",
+                            "UPGRADE_REQUIRED": "앱과 서버를 최신 버전으로 업데이트해주세요.",
                             "INVALID_ACTION": "현재 연결된 Apps Script /exec 배포가 이전 버전입니다. 기존 웹앱을 새 버전으로 다시 배포해주세요.",
                             "UNAVAILABLE": "Apps Script 실행 중 오류가 발생했습니다. Apps Script의 실행 기록에서 실패 원인을 확인해주세요.",
                             "INVALID": "입력값과 앱·서버 버전을 확인해주세요.", "BUSY": "서버가 처리 중입니다. 잠시 후 동기화해주세요."}
@@ -102,7 +102,7 @@ class ScriptApi:
     def info(self):
         result = self._send()
         if result.get("service") != "namufarm-quote-requests" or result.get("version") != 5:
-            raise UserError("구글시트 서버를 나무팜 API v5로 업데이트해주세요.")
+            raise UserError("서버를 나무팜 API v5로 업데이트해주세요.")
         return result
 
     def call(self, action, **fields):

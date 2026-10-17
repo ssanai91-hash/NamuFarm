@@ -154,7 +154,7 @@ class MainWindow(QMainWindow):
         self.sync_button.clicked.connect(self.manual_sync)
         top.addWidget(self.sync_button)
         layout.addLayout(top)
-        self.message = StatusMessage("PC를 연결하면 구글시트에 저장된 요청·판매 기록을 조회합니다.")
+        self.message = StatusMessage("PC를 연결하면 서버에 저장된 요청·판매 기록을 조회합니다.")
         self.message.setWordWrap(True)
         layout.addWidget(self.message)
         self.tabs = QTabWidget()
@@ -296,7 +296,7 @@ class MainWindow(QMainWindow):
 
     def manual_sync(self):
         if self.manager and self.allow_discard():
-            self.run_job("SYNC  >  구글시트 서버 동기화 중…",
+            self.run_job("SYNC  >  서버 동기화 중…",
                          self.manager.connect)
 
     def auto_sync(self):
