@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (QApplication, QButtonGroup, QCheckBox, QComboBox,
 from . import __version__
 from .ui_theme import (align_table, fit_window, scroll_dialog, scroll_page, workspace_style,
                        CustomerDelegate, StatusDelegate, customer_reference, CompactDateDelegate,
-                       NavigationButton, size_table_to_rows, collapsible)
+                       NavigationButton, size_table_to_rows, collapsible, quote_delivery_style)
 from .ui_icons import set_button_icon
 from .app import MainWindow, Task, table, fill_table, money, timestamp
 from .commerce import (ISSUER, new_draft, draft_amounts, validate_draft, quote_html, quote_document_html, shipping_html,
@@ -1359,387 +1359,281 @@ class QuoteDeliveryDialog(QDialog):
         self.setWindowTitle("견적 전달")
         self.setSizeGripEnabled(True)
 
-        screen = parent.screen() if parent is not None and hasattr(parent, "screen") else QApplication.primaryScreen()
-        available = screen.availableGeometry() if screen else None
-        if available:
-            width = min(1240, max(1080, int(available.width() * 0.84)))
-            height = min(980, max(860, int(available.height() * 0.94)))
-            width = min(width, max(900, available.width() - 30))
-            height = min(height, max(760, available.height() - 30))
-            self.resize(width, height)
-        else:
-            self.resize(1180, 940)
+        large = bool(QApplication.instance().property("namufarmLargeFont"))
+        self.setStyleSheet(quote_delivery_style(large))
+        fit_window(self, 1140, 760 if not large else 820)
+        self.setMinimumSize(900, 600)
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 16, 20, 16)
-        layout.setSpacing(12)
+        layout.setContentsMargins(24, 20, 24, 20)
+        layout.setSpacing(14)
 
-        # ─────────────────────────────
-        # Header
-        # ─────────────────────────────
-        head = QHBoxLayout()
-        head.setSpacing(12)
-
-        title_box = QVBoxLayout()
-        title_box.setSpacing(3)
-
-        title = label(self.draft.get("customerName") or "고객명 미입력", "deliveryTitle", True)
-
-        subtitle = label("견적 " + self.quote_number(), "deliverySubtitle", True)
-
-        title_box.addWidget(title)
-        title_box.addWidget(subtitle)
-
-        head.addLayout(title_box)
-        head.addStretch()
-
-        delivery_badges = QVBoxLayout()
-        delivery_badges.setSpacing(4)
-        self.sms_status_badge = QLabel()
-        self.email_status_badge = QLabel()
-        for badge in (self.sms_status_badge, self.email_status_badge):
-            badge.setObjectName("channelStatusBadge")
-            badge.setMinimumWidth(110)
-            badge.setFixedHeight(30)
-            badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            delivery_badges.addWidget(badge)
-        self.update_delivery_badges()
-        head.addLayout(delivery_badges)
-
+        header = QFrame()
+        self.delivery_header = header
+        header.setObjectName("deliveryHeader")
+        header.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        head = QHBoxLayout(header)
+        head.setContentsMargins(0, 0, 0, 16)
+        head.setSpacing(24)
+        identity = QVBoxLayout()
+        identity.setSpacing(10)
+        name_row = QHBoxLayout()
+        name_row.setSpacing(16)
+        name = label(self.draft.get("customerName") or "고객명 미입력", "deliveryCustomer", True)
+        name.setMinimumWidth(0)
+        name.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
+        name_row.addWidget(name)
         status = QLabel(self.request_status)
         status.setObjectName("quoteStatusBadge")
+        status.setFixedHeight(38)
         status.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        status.setMinimumWidth(140)
-        status.setFixedHeight(32)
+        name_row.addWidget(status)
+        name_row.addStretch(1)
+        identity.addLayout(name_row)
+        reference = label("견적번호  " + self.quote_number(), "deliveryReference", True)
+        reference.setMinimumWidth(0)
+        reference.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        reference.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        identity.addWidget(reference)
+        head.addLayout(identity, 1)
 
-        summary_head = QVBoxLayout()
-        summary_head.addWidget(status)
-        head.addLayout(summary_head)
-        layout.addLayout(head)
+        total = QVBoxLayout()
+        total.setSpacing(2)
+        caption = QLabel("총 견적금액")
+        caption.setObjectName("deliveryCaption")
+        caption.setAlignment(Qt.AlignmentFlag.AlignRight)
+        self.total_value = QLabel()
+        self.total_value.setObjectName("deliveryTotal")
+        self.total_value.setAlignment(Qt.AlignmentFlag.AlignRight)
+        self.shipping_total_hint = QLabel()
+        self.shipping_total_hint.setObjectName("deliveryCaption")
+        self.shipping_total_hint.setAlignment(Qt.AlignmentFlag.AlignRight)
+        total.addWidget(caption)
+        total.addWidget(self.total_value)
+        total.addWidget(self.shipping_total_hint)
+        head.addLayout(total)
+        layout.addWidget(header)
 
-        # ─────────────────────────────
-        # Customer / quote summary
-        # ─────────────────────────────
-        info_card = QFrame()
-        info_card.setObjectName("deliveryInfoCard")
+        # The business footer stays visible; long item lists and expanded notes scroll.
+        self.delivery_scroll = QScrollArea()
+        self.delivery_scroll.setWidgetResizable(True)
+        self.delivery_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        body = QWidget()
+        body.setObjectName("deliveryBody")
+        content = QVBoxLayout(body)
+        content.setContentsMargins(0, 0, 0, 0)
+        content.setSpacing(14)
+        self.delivery_scroll.setWidget(body)
+        layout.addWidget(self.delivery_scroll, 1)
 
-        info = QGridLayout(info_card)
-        info.setContentsMargins(20, 16, 20, 16)
-        info.setHorizontalSpacing(28)
-        info.setVerticalSpacing(9)
-
-        channel = {
-            "sms": "문자",
-            "email": "이메일",
-            "both": "문자 + 이메일",
-        }.get(
-            self.draft.get("quoteReplyChannel", "sms"),
-            "문자",
-        )
-
-        summary = (
-            ("연락처", self.draft.get("customerPhone", "")),
-            ("메일", self.draft.get("customerEmail") or "미입력"),
-            (
-                "공식견적서",
-                "요청"
-                if self.draft.get("formalQuoteRequested")
-                else "미요청",
-            ),
-            ("수신방법", channel),
-        )
-
+        info = QHBoxLayout()
+        info.setSpacing(24)
+        channel = {"sms": "문자", "email": "이메일", "both": "문자 + 이메일"}.get(
+            self.draft.get("quoteReplyChannel", "sms"), "문자")
+        summary = (("연락처", self.draft.get("customerPhone", "")),
+                   ("이메일", self.draft.get("customerEmail") or "이메일 없음"),
+                   ("수신방법", channel),
+                   ("공식견적서", "요청" if self.draft.get("formalQuoteRequested") else "미요청"))
         for index, (caption, value) in enumerate(summary):
-            column = (index % 2) * 2
-            row = index // 2
+            if index:
+                divider = QFrame()
+                divider.setObjectName("deliveryVerticalRule")
+                divider.setFixedWidth(1)
+                info.addWidget(divider)
+            column = QVBoxLayout()
+            column.setSpacing(6)
+            title = QLabel(caption)
+            title.setObjectName("deliveryCaption")
+            text = label(str(value), "deliveryInfoValue", True)
+            text.setMinimumWidth(0)
+            text.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+            text.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+            column.addWidget(title)
+            column.addWidget(text)
+            info.addLayout(column, 1)
+        content.addLayout(info)
 
-            caption_label = QLabel(caption)
-            caption_label.setObjectName("infoCaption")
-
-            value_label = label(str(value), "infoValue", True)
-            value_label.setMinimumWidth(0)
-            value_label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
-            value_label.setObjectName("infoValue")
-            value_label.setTextInteractionFlags(
-                Qt.TextInteractionFlag.TextSelectableByMouse
-            )
-
-            info.addWidget(caption_label, row, column)
-            info.addWidget(value_label, row, column + 1)
-
-        info.setColumnStretch(1, 1)
-        info.setColumnStretch(3, 1)
-
-        layout.addWidget(info_card)
-
-        # ─────────────────────────────
-        # Quote items — main area
-        # ─────────────────────────────
-        items_card = QFrame()
-        items_card.setObjectName("quoteItemsCard")
-
-        items_layout = QVBoxLayout(items_card)
-        items_layout.setContentsMargins(16, 12, 16, 12)
-        items_layout.setSpacing(10)
-
-        items_head = QHBoxLayout()
-
-        items_title_box = QVBoxLayout()
-        items_title_box.setSpacing(2)
-
-        items_title = QLabel("견적 품목")
-        items_title.setObjectName("quoteItemsTitle")
-
-        items_title_box.addWidget(items_title)
-
-        items_head.addLayout(items_title_box)
-        items_head.addStretch()
-
-        count = sum(
-            int(item.get("quantity", 0))
-            for item in self.draft.get("items", [])
-        )
-
-        count_label = QLabel(
-            f"{len(self.draft.get('items', []))}개 품목 · 총 {count:,}주"
-        )
-        count_label.setObjectName("quoteItemsHint")
-        items_head.addWidget(count_label)
-
-        items_layout.addLayout(items_head)
-
-        self.items = table(
-            ["묘목명", "수량", "판매 단가", "판매 금액"]
-        )
+        self.items = table(["묘목명", "수량", "판매 단가", "판매 금액"])
         self.items.setObjectName("deliveryItems")
         self.items.setAlternatingRowColors(True)
         self.items.setShowGrid(True)
         polish_table(self.items)
-
-        header = self.items.horizontalHeader()
-        header.setStretchLastSection(False)
-        header.setSectionResizeMode(
-            0,
-            QHeaderView.ResizeMode.Stretch,
-        )
-        header.setSectionResizeMode(
-            1,
-            QHeaderView.ResizeMode.Fixed,
-        )
-        header.setSectionResizeMode(
-            2,
-            QHeaderView.ResizeMode.Fixed,
-        )
-        header.setSectionResizeMode(
-            3,
-            QHeaderView.ResizeMode.Fixed,
-        )
-
-        self.items.setColumnWidth(1, 130)
-        self.items.setColumnWidth(2, 170)
-        self.items.setColumnWidth(3, 180)
-
-        rows = []
-
-        for item in self.draft.get("items", []):
-            quantity = int(item["quantity"])
-            unit_price = int(item["unitPrice"])
-            amount = quantity * unit_price
-
-            rows.append(
-                (
-                    item["species"],
-                    f"{quantity:,}주",
-                    f"{unit_price:,}원",
-                    f"{amount:,}원",
-                )
-            )
-
+        self.items.horizontalHeader().setFixedHeight(48 if large else 44)
+        self.items.verticalHeader().setMinimumSectionSize(60 if large else 52)
+        self.items.verticalHeader().setDefaultSectionSize(60 if large else 52)
+        rows = [(item["species"], f"{int(item['quantity']):,}주", f"{int(item['unitPrice']):,}원",
+                 f"{int(item['quantity']) * int(item['unitPrice']):,}원") for item in self.draft.get("items", [])]
         fill_table(self.items, rows)
-        center_table_columns(self.items, (1, 2, 3))
-
-        # 묘목명은 왼쪽 정렬 + 약간 강조
+        center_table_columns(self.items, (0, 1, 2, 3))
         for row in range(self.items.rowCount()):
-            cell = self.items.item(row, 0)
-            if cell:
-                font = cell.font()
-                font.setBold(True)
-                cell.setFont(font)
-                cell.setTextAlignment(
-                    Qt.AlignmentFlag.AlignLeft
-                    | Qt.AlignmentFlag.AlignVCenter
-                )
-
+            for column in range(self.items.columnCount()):
+                self.items.item(row, column).setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            font = self.items.item(row, 0).font()
+            font.setBold(True)
+            self.items.item(row, 0).setFont(font)
+        self.items.set_column_layout(((0, 3.6, 220), (1, 1.2, 100), (2, 1.8, 140), (3, 2, 150)))
         size_table_to_rows(self.items, 4)
-        items_layout.addWidget(self.items)
+        content.addWidget(self.items)
 
-        # Shipping decision belongs to the delivery stage, after item prices are confirmed.
-        shipping_card = QFrame()
-        shipping_card.setObjectName("deliveryShippingCard")
-        shipping_layout = QHBoxLayout(shipping_card)
-        shipping_layout.setContentsMargins(16, 10, 16, 10)
-        shipping_layout.setSpacing(12)
-
-        shipping_title = QLabel("택배비용")
-        shipping_title.setObjectName("deliveryShippingTitle")
-        shipping_layout.addWidget(shipping_title)
-
+        shipping = QFrame()
+        shipping.setObjectName("deliveryShippingStrip")
+        shipping.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        shipping_row = QHBoxLayout(shipping)
+        shipping_row.setContentsMargins(16, 10, 16, 10)
+        shipping_row.setSpacing(14)
+        shipping_title = QLabel("택배비")
+        shipping_title.setObjectName("deliverySectionTitle")
+        shipping_row.addWidget(shipping_title)
         self.shipping_cod = QRadioButton("후불")
         self.shipping_prepaid = QRadioButton("선불")
         self.shipping_prepaid.setChecked(bool(self.draft.get("isPrepaid")))
         self.shipping_cod.setChecked(not bool(self.draft.get("isPrepaid")))
-        shipping_layout.addWidget(self.shipping_cod)
-        shipping_layout.addWidget(self.shipping_prepaid)
-
-        shipping_layout.addSpacing(12)
-        self.shipping_fee_label = QLabel("선불 금액")
-        self.shipping_fee_label.setObjectName("deliveryShippingFeeLabel")
-        shipping_layout.addWidget(self.shipping_fee_label)
-
+        shipping_row.addWidget(self.shipping_cod)
+        shipping_row.addWidget(self.shipping_prepaid)
+        self.shipping_fee_label = QLabel("금액")
+        self.shipping_fee_label.setObjectName("deliveryCaption")
+        shipping_row.addWidget(self.shipping_fee_label)
         self.shipping_fee = QLineEdit(str(int(self.draft.get("shippingFee", 0) or 6000)))
         self.shipping_fee.setObjectName("deliveryShippingFee")
         self.shipping_fee.setValidator(QIntValidator(0, 2147483647, self.shipping_fee))
         self.shipping_fee.setAlignment(Qt.AlignmentFlag.AlignRight)
-        shipping_layout.addWidget(self.shipping_fee)
-
+        self.shipping_fee.setFixedWidth(120)
+        self.shipping_fee.setAccessibleName("선불 택배비 금액")
+        shipping_row.addWidget(self.shipping_fee)
+        shipping_row.addWidget(QLabel("원"))
         self.shipping_status = QLabel()
-        self.shipping_status.setObjectName("deliveryShippingStatus")
-        shipping_layout.addWidget(self.shipping_status, 1)
+        self.shipping_status.setObjectName("deliveryCaption")
+        self.shipping_status.setWordWrap(True)
+        shipping_row.addWidget(self.shipping_status, 1)
+        content.addWidget(shipping)
 
-        items_layout.addWidget(shipping_card)
+        self.delivery_section_rule = QFrame()
+        self.delivery_section_rule.setObjectName("deliverySectionRule")
+        self.delivery_section_rule.setFixedHeight(1)
+        content.addWidget(self.delivery_section_rule)
 
-        # Total amount band
-        total_band = QFrame()
-        total_band.setObjectName("quoteTotalBand")
-
-        total_layout = QHBoxLayout(total_band)
-        total_layout.setContentsMargins(20, 12, 20, 12)
-
-        total_caption = QLabel("총금액")
-        total_caption.setObjectName("quoteTotalCaption")
-
-        self.total_value = QLabel()
-        self.total_value.setObjectName("quoteTotalValue")
-
-        total_layout.addWidget(total_caption)
-        total_layout.addStretch()
-        total_layout.addWidget(self.total_value)
-
-        items_layout.addWidget(total_band)
-
-        self.shipping_cod.toggled.connect(self.recalculate_shipping)
-        self.shipping_prepaid.toggled.connect(self.recalculate_shipping)
-        self.shipping_fee.textChanged.connect(self.recalculate_shipping)
-        self.recalculate_shipping()
-
-        layout.addWidget(items_card)
+        # Two task stations: the generated file belongs immediately below its tools.
+        tools = QHBoxLayout()
+        tools.setSpacing(24)
+        document = QVBoxLayout()
+        document.setSpacing(8)
+        document.addWidget(label("공식견적서", "deliverySectionTitle"))
+        document_hint = label("고객 요청에 따른 공식견적서를 생성합니다.", "deliveryCaption", True)
+        document_hint.setFixedHeight(28)
+        document.addWidget(document_hint)
+        document_buttons = QHBoxLayout()
+        document_buttons.setSpacing(12)
+        self.generate_quote_button = QPushButton("공식견적서 생성")
+        self.generate_quote_button.setObjectName("pdfAction")
+        self.generate_quote_button.clicked.connect(self.generate_official_quote)
+        self.preview_quote_button = QPushButton("미리보기")
+        self.preview_quote_button.setObjectName("pdfAction")
+        self.preview_quote_button.setEnabled(False)
+        self.preview_quote_button.clicked.connect(self.preview_official_quote)
+        document_buttons.addWidget(self.generate_quote_button, 1)
+        document_buttons.addWidget(self.preview_quote_button, 1)
+        document.addLayout(document_buttons)
+        self.quote_file_label = label("공식 견적서 미생성", "deliveryPdfName", True)
+        self.quote_file_label.setMinimumWidth(0)
+        self.quote_file_label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        self.quote_file_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        self.quote_file_label.setAccessibleName("생성된 공식견적서 PDF 파일명")
+        document.addWidget(self.quote_file_label)
+        tools.addLayout(document, 1)
+        divider = QFrame()
+        divider.setObjectName("deliveryVerticalRule")
+        divider.setFixedWidth(1)
+        tools.addWidget(divider)
+        delivery = QVBoxLayout()
+        delivery.setSpacing(8)
+        delivery.addWidget(label("고객 전달", "deliverySectionTitle"))
+        badges = QHBoxLayout()
+        badges.setSpacing(8)
+        self.sms_status_badge = QLabel()
+        self.email_status_badge = QLabel()
+        for badge in (self.sms_status_badge, self.email_status_badge):
+            badge.setObjectName("channelStatusBadge")
+            badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            badge.setFixedHeight(28)
+            badges.addWidget(badge)
+        badges.addStretch()
+        self.update_delivery_badges()
+        delivery.addLayout(badges)
+        send_buttons = QHBoxLayout()
+        send_buttons.setSpacing(12)
+        self.sms_button = QPushButton("문자 보내기")
+        self.sms_button.setObjectName("smsAction")
+        self.sms_button.clicked.connect(self.open_sms)
+        self.sms_button.setEnabled(bool(self.draft.get("customerPhone")))
+        self.email_button = QPushButton("메일 보내기")
+        self.email_button.setObjectName("mailAction")
+        self.email_button.clicked.connect(self.open_email)
+        self.email_button.setEnabled(bool(self.draft.get("customerEmail")))
+        send_buttons.addWidget(self.sms_button, 1)
+        send_buttons.addWidget(self.email_button, 1)
+        delivery.addLayout(send_buttons)
+        delivery.addStretch()
+        tools.addLayout(delivery, 1)
+        content.addLayout(tools)
 
         details = QWidget()
         details_layout = QVBoxLayout(details)
         details_layout.setContentsMargins(0, 0, 0, 0)
         if self.draft.get("note"):
             details_layout.addWidget(label(self.draft["note"], "infoValue", True))
+        notice_text = ("실제 고객 입금을 확인한 뒤 입금확인을 눌러 판매관리로 이동하세요."
+                       if self.request_status == "견적발송완료" else
+                       "문자 또는 메일로 실제 견적 전달을 마친 뒤 견적발송완료를 눌러주세요.")
+        details_layout.addWidget(label(notice_text, "deliveryCaption", True))
+        content.addWidget(collapsible("요청사항 · 전달 안내", details))
+        content.addStretch(1)
 
-        # Delivery notice
-        # ─────────────────────────────
-        if self.request_status == "견적발송완료":
-            notice_text = (
-                "견적 전달이 완료된 건입니다. 실제 고객 입금을 확인하면 입금확인을 눌러 "
-                "판매 · 고객 관리로 이동하세요. 입금 전에는 견적 작업대에 그대로 유지됩니다."
-            )
-        elif self.draft.get("formalQuoteRequested"):
-            notice_text = (
-                "공식 견적서 요청 건입니다. "
-                "견적서를 확인한 뒤 문자 또는 메일로 전달하세요. "
-                "실제 발송이 끝난 후 견적발송완료를 눌러주세요."
-            )
-        else:
-            notice_text = (
-                "고객에게 실제 견적 전달을 마친 뒤 견적발송완료를 눌러주세요. "
-                "그 다음 고객 입금을 확인하면 판매 · 고객 관리 단계로 이동합니다."
-            )
-
-        notice = QLabel(notice_text)
-        notice.setObjectName("deliveryNotice")
-        notice.setWordWrap(True)
-
-        details_layout.addWidget(notice)
-        layout.addWidget(collapsible("요청사항 · 전달 안내", details))
-
-        # ─────────────────────────────
-        # Action buttons
-        # ─────────────────────────────
-        actions = QHBoxLayout()
-        actions.setSpacing(8)
-
-        self.sms_button = QPushButton("문자 보내기")
-        self.sms_button.setObjectName("smsAction")
-        self.sms_button.clicked.connect(self.open_sms)
-        self.sms_button.setEnabled(
-            bool(self.draft.get("customerPhone"))
-        )
-
-        self.email_button = QPushButton("메일 보내기")
-        self.email_button.setObjectName("mailAction")
-        self.email_button.clicked.connect(self.open_email)
-        self.email_button.setEnabled(
-            bool(self.draft.get("customerEmail"))
-        )
-
-        self.generate_quote_button = QPushButton("공식견적서 생성")
-        self.generate_quote_button.setObjectName("pdfAction")
-        self.generate_quote_button.clicked.connect(self.generate_official_quote)
-
-        self.preview_quote_button = QPushButton("미리보기")
-        self.preview_quote_button.setObjectName("pdfAction")
-        self.preview_quote_button.setEnabled(False)
-        self.preview_quote_button.clicked.connect(self.preview_official_quote)
-
-        self.quote_file_label = QLabel("공식 견적서 미생성")
-        self.quote_file_label.setObjectName("quoteFileName")
-
+        footer = QHBoxLayout()
+        footer.setSpacing(12)
+        footer.addStretch()
         close_button = QPushButton("닫기")
         close_button.setObjectName("closeAction")
+        close_button.setMinimumWidth(100)
         close_button.clicked.connect(self.reject)
-
+        footer.addWidget(close_button)
         self.sent_button = QPushButton("견적발송완료")
         self.sent_button.setObjectName("sentAction")
         self.sent_button.clicked.connect(self.mark_sent)
         self.sent_button.setVisible(self.request_status == "견적확정")
         self.sent_button.setEnabled(self.request_status == "견적확정")
-
         self.payment_button = QPushButton("입금확인")
         self.payment_button.setObjectName("sentAction")
         self.payment_button.clicked.connect(self.confirm_payment)
         self.payment_button.setVisible(self.request_status == "견적발송완료")
         self.payment_button.setEnabled(self.request_status == "견적발송완료")
-
-        actions.addWidget(label("고객 전달", "muted"))
-        actions.addWidget(self.sms_button)
-        actions.addWidget(self.email_button)
-        actions.addWidget(self.generate_quote_button)
-        actions.addWidget(self.preview_quote_button)
-        actions.addStretch()
-        finish_actions = QHBoxLayout()
-        finish_actions.setSpacing(12)
-        self.quote_file_label.setWordWrap(True)
-        self.quote_file_label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
-        finish_actions.addWidget(self.quote_file_label, 1)
-        finish_actions.addWidget(close_button)
-        finish_actions.addWidget(self.sent_button)
-        finish_actions.addWidget(self.payment_button)
-        footer = QVBoxLayout()
-        footer.setSpacing(8)
-        footer.addLayout(actions)
-        footer.addLayout(finish_actions)
+        for action in (self.sent_button, self.payment_button):
+            action.setMinimumWidth(180)
+            footer.addWidget(action)
+            set_button_icon(action, "check", "#2d6a4f")
         layout.addLayout(footer)
-        self.items.set_column_layout(((0, 3.6), (1, 1.2), (2, 1.8), (3, 2)))
-        set_button_icon(self.sms_button, "message")
+        set_button_icon(self.sms_button, "message", "#ffffff")
         set_button_icon(self.email_button, "mail")
         set_button_icon(self.generate_quote_button, "document")
-        set_button_icon(self.sent_button, "check", "#ffffff")
-        set_button_icon(self.payment_button, "check", "#ffffff")
-        scroll_dialog(self, layout)
+        set_button_icon(self.preview_quote_button, "document")
+        self.shipping_cod.toggled.connect(self.recalculate_shipping)
+        self.shipping_prepaid.toggled.connect(self.recalculate_shipping)
+        self.shipping_fee.textChanged.connect(self.recalculate_shipping)
+        self.recalculate_shipping()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if not hasattr(self, "delivery_scroll"):
+            return
+        compact = self.height() < 720
+        if compact == getattr(self, "_delivery_compact", None):
+            return
+        self._delivery_compact = compact
+        large = bool(QApplication.instance().property("namufarmLargeFont"))
+        self.setStyleSheet(quote_delivery_style(large, compact))
+        self.layout().setContentsMargins(24, 12 if compact else 20, 24, 12 if compact else 20)
+        self.layout().setSpacing(10 if compact else 14)
+        self.delivery_scroll.widget().layout().setSpacing(6 if compact else 14)
+        self.delivery_header.layout().setContentsMargins(0, 0, 0, 8 if compact else 16)
 
     def quote_number(self):
         return (
@@ -1765,7 +1659,8 @@ class QuoteDeliveryDialog(QDialog):
         self.sms_status_badge.style().polish(self.sms_status_badge)
 
         email_done = bool(self.delivery_state.get("emailSentAt"))
-        self.email_status_badge.setText("메일 전송완료" if email_done else "메일 미전송")
+        self.email_status_badge.setText("메일 전송완료" if email_done else
+                                       "메일 미전송" if self.draft.get("customerEmail") else "이메일 없음")
         self.email_status_badge.setProperty("done", email_done)
         self.email_status_badge.setProperty("state", "success" if email_done else "idle")
         self.email_status_badge.style().unpolish(self.email_status_badge)
@@ -1788,7 +1683,9 @@ class QuoteDeliveryDialog(QDialog):
             self.preview_quote_button.setEnabled(False)
             self.generate_quote_button.setText("공식견적서 생성")
             self.quote_file_label.setText("공식 견적서 미생성")
+            self.quote_file_label.setToolTip("")
         prepaid = self.shipping_prepaid.isChecked()
+        self.shipping_total_hint.setText("택배비 선불 · 포함" if prepaid else "택배비 후불 · 별도")
         self.shipping_fee.setEnabled(prepaid)
         self.shipping_fee_label.setEnabled(prepaid)
         try:
@@ -1798,11 +1695,11 @@ class QuoteDeliveryDialog(QDialog):
             self.total_value.setText(f"{amounts['total']:,}원")
             if self.draft["isPrepaid"]:
                 self.shipping_status.setText(
-                    f"선불 {self.draft['shippingFee']:,}원 · 묘목금액 {item_total:,}원에 포함"
+                    "선불 · 총금액에 포함"
                 )
             else:
                 self.shipping_status.setText(
-                    f"후불 · 총금액 미포함 · 선불 시 {self.draft['shippingFee']:,}원"
+                    "후불 · 총금액에 미포함"
                 )
         except UserError:
             self.total_value.setText("금액 확인 필요")
@@ -1898,6 +1795,7 @@ class QuoteDeliveryDialog(QDialog):
         path = self.generated_quote_path
         self.generated_quote_image = None
         self.generated_quote_path = None
+        self.quote_file_label.setToolTip("")
         if path:
             try:
                 Path(path).unlink(missing_ok=True)
@@ -1916,7 +1814,8 @@ class QuoteDeliveryDialog(QDialog):
             self.generated_quote_path = path
             self.preview_quote_button.setEnabled(True)
             self.generate_quote_button.setText("공식견적서 재생성")
-            self.quote_file_label.setText(f"공식 견적서 생성완료 : {filename}")
+            self.quote_file_label.setText(filename)
+            self.quote_file_label.setToolTip(filename)
         except (UserError, OSError) as error:
             self.cleanup_generated_quote()
             self.preview_quote_button.setEnabled(False)

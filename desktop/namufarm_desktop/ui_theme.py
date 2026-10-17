@@ -106,6 +106,41 @@ QLabel#navGroup{font-size:@small@px;color:#a6c2b2;padding:10px 10px 2px;}
             .replace('@readonly@', '24' if large else '20'))
 
 
+def quote_delivery_style(large=False, compact=False):
+    """Scoped to the selected quotation dialog; other workspace screens keep their theme."""
+    body, caption = (20, 18) if large else (18, 16)
+    return """
+QDialog#quoteDeliveryDialog,QWidget#deliveryBody{background:#ffffff;}
+QDialog#quoteDeliveryDialog QLabel{font-size:@body@px;background:transparent;border:0;padding:0;}
+QDialog#quoteDeliveryDialog QFrame#deliveryHeader{border:0;border-bottom:2px solid #2d6a4f;}
+QDialog#quoteDeliveryDialog QLabel#deliveryCustomer{font-size:@customer@px;font-weight:700;color:#24313a;}
+QDialog#quoteDeliveryDialog QLabel#deliveryTotal{font-size:@total@px;font-weight:700;color:#2d6a4f;}
+QDialog#quoteDeliveryDialog QLabel#deliveryReference{font-size:@body@px;color:#5c6b73;}
+QDialog#quoteDeliveryDialog QLabel#deliveryCaption,QDialog#quoteDeliveryDialog QLabel#deliveryPdfName{font-size:@caption@px;color:#5c6b73;}
+QDialog#quoteDeliveryDialog QLabel#deliveryInfoValue{font-size:@body@px;font-weight:600;}
+QDialog#quoteDeliveryDialog QLabel#deliverySectionTitle{font-size:@body@px;font-weight:700;}
+QDialog#quoteDeliveryDialog QLabel#quoteStatusBadge{background:#e8f2ec;color:#23593a;border:1px solid #b6d0c1;border-radius:6px;padding:6px 12px;font-size:@caption@px;}
+QDialog#quoteDeliveryDialog QFrame#deliveryShippingStrip{background:#f4f6f7;border:0;border-radius:6px;}
+QDialog#quoteDeliveryDialog QFrame#deliverySectionRule,QDialog#quoteDeliveryDialog QFrame#deliveryVerticalRule{background:#d5dee2;border:0;}
+QDialog#quoteDeliveryDialog QPushButton{font-size:@body@px;min-height:46px;max-height:46px;padding:0 12px;border-radius:6px;}
+QDialog#quoteDeliveryDialog QPushButton:focus{padding:0 11px;border:2px solid #986000;}
+QDialog#quoteDeliveryDialog QPushButton#smsAction{background:#2d6a4f;color:#fff;border-color:#255a43;}
+QDialog#quoteDeliveryDialog QPushButton#smsAction:hover{background:#1f573b;}
+QDialog#quoteDeliveryDialog QPushButton#smsAction:disabled{background:#e1e9e4;color:#677970;border-color:#c4d2c9;}
+QDialog#quoteDeliveryDialog QPushButton#sentAction{background:#fff;color:#2d6a4f;border:1px solid #2d6a4f;}
+QDialog#quoteDeliveryDialog QPushButton#sentAction:hover{background:#edf4ef;}
+QDialog#quoteDeliveryDialog QLabel#channelStatusBadge{font-size:@caption@px;background:#f1f4f5;border:0;border-radius:6px;padding:2px 8px;color:#5c6b73;}
+QDialog#quoteDeliveryDialog QLabel#channelStatusBadge[state="pending"]{background:#fff3d8;color:#78520d;}
+QDialog#quoteDeliveryDialog QLabel#channelStatusBadge[state="failed"]{background:#fbe5e2;color:#a13d32;}
+QDialog#quoteDeliveryDialog QLabel#channelStatusBadge[state="success"]{background:#e8f2ec;color:#23603b;}
+QDialog#quoteDeliveryDialog QLineEdit{font-size:@body@px;min-height:24px;max-height:24px;padding:9px 10px;border-radius:6px;}
+QDialog#quoteDeliveryDialog QLineEdit#deliveryShippingFee{min-width:100px;max-width:100px;}
+QDialog#quoteDeliveryDialog QRadioButton{font-size:@body@px;}
+QDialog#quoteDeliveryDialog QTableWidget{font-size:@body@px;border-radius:6px;}
+QDialog#quoteDeliveryDialog QHeaderView::section{font-size:@body@px;}
+""".replace('@body@', str(body)).replace('@caption@', str(caption)).replace('@customer@', '30' if compact else '34').replace('@total@', '34' if compact else '40')
+
+
 class StatusMessage(QLabel):
     """Readable status with the complete original message available as details."""
     def __init__(self, text='', parent=None):
