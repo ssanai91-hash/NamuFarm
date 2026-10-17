@@ -29,7 +29,10 @@ data class WebQuoteEnvelope(
     val keyRegistered: Boolean? = null, val keyId: String? = null, val encryptionReady: Boolean? = null,
     val closed: Boolean? = null, val updated: Boolean? = null, val hidden: Boolean? = null,
     val requestId: String? = null, val status: String? = null,
-    val snapshotId: String? = null, val total: Int? = null, val watermark: Long? = null
+    val snapshotId: String? = null, val total: Int? = null, val watermark: Long? = null,
+    val sent: Boolean? = null, val recipientPhone: String? = null, val recipientEmail: String? = null,
+    val messageId: String? = null, val checked: Boolean? = null, val state: String? = null,
+    val statusCode: String? = null, val statusMessage: String? = null
 )
 data class WebQuoteRemote(
     val requestId: String? = null, val sequence: Long? = null, val createdAt: String? = null,
@@ -149,6 +152,7 @@ object WebQuoteValidator {
     }
     private fun text(value: String?, max: Int, min: Int): String = checkNotNull(value).also { check(it.length in min..max && it == it.trim()) { "견적에 저장된 글자 형식을 확인해주세요." } }
 }
+
 
 
 

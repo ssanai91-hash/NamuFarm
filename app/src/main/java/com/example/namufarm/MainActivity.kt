@@ -36,8 +36,7 @@ import com.example.namufarm.data.SyncManager
 import com.example.namufarm.data.local.LocalDataSource
 import com.example.namufarm.data.repository.NamuFarmRepository
 import com.example.namufarm.data.remote.RetrofitClient
-import com.example.namufarm.ui.ManagementModeScreen
-import com.example.namufarm.ui.SellingModeScreen
+import com.example.namufarm.ui.QuoteOnlyScreen
 import com.example.namufarm.ui.IncomingCallAssistDialog
 import com.example.namufarm.phone.CallAssistRequest
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -85,7 +84,8 @@ class MainActivity : ComponentActivity() {
 
         viewModel = ViewModelProvider(this, factory)[ManagementViewModel::class.java]
 
-        val webInbox = ViewModelProvider(this, WebInboxViewModelFactory(WebRequestConnection(this, repository)))[WebInboxViewModel::class.java]
+        val quoteConnection = WebRequestConnection(this, repository)
+        val webInbox = ViewModelProvider(this, WebInboxViewModelFactory(quoteConnection))[WebInboxViewModel::class.java]
 
         setContent {
             NamuFarmTheme {
@@ -130,27 +130,12 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                     composable("selling") {
-                        SellingModeScreen(
-                            viewModel = viewModel,
-                            onNavigateToManagement = { navController.navigate("management") },
-                            onCallAssist = { showCallAssist = true },
-                            onWebInbox = { webInbox.refresh() },
-                            onWebSettings = { connectionOnly = true; showWebInbox = true },
-                            webRequests = webState.requests, webBusy = webState.busy,
-                            onRequest = { request -> if (!uiState.isSavingQuote) { viewModel.useWebRequestForQuote(request); webInbox.read(request.requestId) } },
-                            onQuoteConfirmed = webInbox::confirm,
-                            onQuoteSentStatus = webInbox::markSentNow,
-                            onDeleteRequest = webInbox::close,
-                            deleteFeedback = webState.deleteFeedback,
-                            webUnread = webState.unread
-                        )
+                        QuoteOnlyScreen(viewModel, quoteConnection, webState,
+                            onSync = webInbox::refresh,
+                            onSettings = { connectionOnly = true; showWebInbox = true },
+                            onRead = webInbox::read, onDelete = webInbox::close)
                     }
-                    composable("management") {
-                        ManagementModeScreen(
-                            viewModel = viewModel,
-                            onBack = { navController.popBackStack() }
-                        )
-                    }
+
                 }
                 LaunchedEffect(webState.message, showWebInbox, webRequestId) {
                     if (!showWebInbox && webRequestId == null) webState.message?.let {
@@ -306,4 +291,5 @@ fun SplashScreen(onTimeout: () -> Unit) {
         }
     }
 }
+
 

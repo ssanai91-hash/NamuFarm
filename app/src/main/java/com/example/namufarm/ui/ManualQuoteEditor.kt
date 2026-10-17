@@ -153,7 +153,8 @@ private fun EditorDialog(
 @Composable
 internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean, message: String?,
     onDismiss: () -> Unit, onSave: (SellerQuoteDraft, QuoteDelivery) -> Unit, initialDraft: SellerQuoteDraft? = null,
-    draftKey: String? = request?.requestId, onDeleteRequest: (() -> Unit)? = null) {
+    draftKey: String? = request?.requestId, onDeleteRequest: (() -> Unit)? = null,
+    verifiedDelivery: QuoteDeliveryRecord? = null, verifyDelivery: Boolean = false) {
     val context = LocalContext.current
     val firstRequest = request != null && initialDraft == null
     val manualEntry = request == null
@@ -171,6 +172,7 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
     var discard by remember { mutableStateOf(false) }
     var deleteConfirm by remember { mutableStateOf(false) }
     var confirmSent by remember { mutableStateOf(false) }
+    var deliveryRequired by remember { mutableStateOf(false) }
     val initial = remember(draftKey) {
         initialDraft ?: SellerQuoteDraft.from(request, QuoteIssuerSettings(context).load())
     }
@@ -216,21 +218,32 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
                 }
             }
             Button(onClick = { submit(QuoteDelivery.SMS) }, enabled = !saving,
-                modifier = Modifier.width(64.dp).height(52.dp),
+                modifier = Modifier.width(64.dp).height(if (verifyDelivery) 64.dp else 52.dp),
                 contentPadding = PaddingValues(0.dp),
                 shape = RoundedCornerShape(13.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = editorGreen)) {
-                Text("문자", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    if (verifyDelivery) Text((verifiedDelivery ?: QuoteDeliveryRecord()).smsLabel(draft).replace("결과확인 중", "확인중").replace("재전송 필요", "재전송"), fontSize = 12.sp)
+                    Text("문자", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                }
             }
             Button(onClick = { submit(QuoteDelivery.EMAIL) }, enabled = !saving,
-                modifier = Modifier.width(64.dp).height(52.dp),
+                modifier = Modifier.width(64.dp).height(if (verifyDelivery) 64.dp else 52.dp),
                 contentPadding = PaddingValues(0.dp),
                 shape = RoundedCornerShape(13.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3563A8))) {
-                Text("메일", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    if (verifyDelivery) Text((verifiedDelivery ?: QuoteDeliveryRecord()).emailLabel(draft).replace("재전송 필요", "재전송"), fontSize = 12.sp)
+                    Text("메일", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                }
             }
-            Button(onClick = { confirmSent = true }, enabled = !saving,
-                modifier = Modifier.weight(1f).height(52.dp),
+            Button(onClick = {
+                if (verifyDelivery) {
+                    if (verifiedDelivery?.canComplete(draft) == true) submit(QuoteDelivery.COMPLETE)
+                    else deliveryRequired = true
+                } else confirmSent = true
+            }, enabled = !saving,
+                modifier = Modifier.weight(1f).height(if (verifyDelivery) 64.dp else 52.dp),
                 contentPadding = PaddingValues(horizontal = 2.dp),
                 shape = RoundedCornerShape(13.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC8641F))) {
@@ -534,6 +547,10 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
         title = { Text("고객 요청사항") },
         text = { Text(request?.message.orEmpty()) },
         confirmButton = { TextButton(onClick = { messageExpanded = false }) { Text("닫기") } })
+    if (deliveryRequired) AlertDialog(onDismissRequest = { deliveryRequired = false },
+        title = { Text("고객 전달 확인") },
+        text = { Text("문자 또는 메일을 먼저 보내 주세요. 현재 견적의 전송이 완료되어야 견적완료할 수 있습니다. 문자 결과확인 중이면 문자 버튼을 눌러 최종 결과를 확인해주세요.") },
+        confirmButton = { TextButton(onClick = { deliveryRequired = false }) { Text("확인") } })
     if (confirmSent) ConfirmQuoteSentDialog(
         onDismiss = { confirmSent = false },
         onConfirm = {
@@ -596,3 +613,4 @@ private fun ManualField(label: String, value: String, onValue: (String) -> Unit,
     OutlinedTextField(value, { if (keyboard != KeyboardType.Number || it.all(Char::isDigit)) onValue(it.take(if (keyboard == KeyboardType.Number) 10 else limit)) }, label = { Text(label) },
         singleLine = true, enabled = !saving, keyboardOptions = KeyboardOptions(keyboardType = keyboard), modifier = Modifier.fillMaxWidth())
 }
+

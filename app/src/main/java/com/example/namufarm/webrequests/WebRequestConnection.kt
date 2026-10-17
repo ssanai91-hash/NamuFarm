@@ -82,6 +82,13 @@ class WebRequestConnection(context: Context, private val repository: NamuFarmRep
             bytes.fill(0)
         } finally { password.fill('\u0000') }
     }
+    suspend fun quoteAction(action: String, fields: Map<String, Any>): com.example.namufarm.data.remote.WebQuoteEnvelope {
+        check(paired) { "서버를 먼저 연결해주세요." }
+        require(action in setOf("send_quote_sms", "quote_sms_status", "send_quote_email"))
+        val response = api.request(settings.url, fields + mapOf("action" to action, "deviceToken" to settings.deviceToken))
+        WebQuoteValidator.checkResponse(response)
+        return response
+    }
     suspend fun confirmQuote(id: String, draft: com.example.namufarm.quotation.SellerQuoteDraft) {
         check(paired)
         val quotePricing = mapOf<String, Any>(
@@ -127,6 +134,7 @@ internal fun readLegacyWebRequest(outer: com.example.namufarm.data.remote.WebQuo
     if (!keys.initialized || keys.keyId() != envelope.keyId) throw com.example.namufarm.data.remote.LegacyRequestKeyUnavailable()
     return com.google.gson.Gson().fromJson(keys.open(envelope, "quote", checkNotNull(outer.requestId)), com.example.namufarm.data.remote.WebQuoteRemote::class.java)
 }
+
 
 
 

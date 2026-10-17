@@ -154,7 +154,7 @@ jobs:
       # Debug APKs are for tests only. Ephemeral runner signing keys are never distributed.
       - name: Prepare persistent release signing
         id: signing
-        if: success() && github.event_name == 'workflow_dispatch' && inputs.build_signed_apk && github.ref == 'refs/heads/main'
+        if: success() && github.ref == 'refs/heads/main' && ((github.event_name == 'workflow_dispatch' && inputs.build_signed_apk) || (github.event_name == 'push' && contains(github.event.head_commit.message, '[build apk]')))
         env:
           SIGNING_BASE64: ${{ secrets.NAMUFARM_KEYSTORE_BASE64 }}
           NAMUFARM_STORE_PASSWORD: ${{ secrets.NAMUFARM_STORE_PASSWORD }}
@@ -206,5 +206,6 @@ jobs:
       - name: Remove temporary release keystore
         if: always()
         run: rm -f "$RUNNER_TEMP/namufarm-release.jks"
+
 
 
