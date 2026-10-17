@@ -2609,7 +2609,6 @@ class SellerWindow(MainWindow):
         side.setContentsMargins(12, 20, 12, 16)
         side.setSpacing(6)
         side.addWidget(label("  namufarm", "brand"))
-        side.addWidget(label("  나피", "navFoot"))
         side.addSpacing(6)
         self.nav = []
         for index, (title, _) in enumerate(self.PAGES):
@@ -2696,7 +2695,6 @@ class SellerWindow(MainWindow):
         for index in range(self.stack.count()):
             self.stack.widget(index).setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Ignored)
         content_layout.addWidget(self.stack, 1)
-        content_layout.addWidget(self.summary)
         outer.addWidget(content, 1)
         old_root.deleteLater()
         self.manual_quote_button = button("전화 견적 추가", self.add_manual_quote)
@@ -2842,20 +2840,10 @@ class SellerWindow(MainWindow):
         self.work_table.itemDoubleClicked.connect(self.open_work_order)
         box.addWidget(self.work_table, 1)
         work_actions = QHBoxLayout()
-        work_actions.addWidget(label("요청 접수 · 견적 전달 · 출고 준비 순으로 표시합니다.", "muted"), 1)
+        work_actions.addStretch()
         work_actions.addWidget(button("선택 업무 열기", self.open_selected_work, True))
         box.addLayout(work_actions)
         layout.addWidget(frame, 1)
-        bottom = QHBoxLayout()
-        bottom.addWidget(label("이번 달 배송완료 매출", "muted"))
-        revenue = label("—", "infoValue")
-        self.metrics.append(revenue)
-        bottom.addWidget(revenue)
-        bottom.addWidget(button("매출 보기", lambda: self.navigate(5)))
-        bottom.addStretch()
-        self.health = label("", "muted", True)
-        bottom.addWidget(self.health)
-        layout.addLayout(bottom)
         return page
 
     def open_priority(self, target):
@@ -3274,9 +3262,6 @@ class SellerWindow(MainWindow):
         sales = self.data["sales"]
         self.metrics[0].setText(f"{sum(r.get('status','신규') == '신규' for r in self.data['requests']):,}건")
         self.metrics[2].setText(f"{sum(r['metadata']['status'] in ('입금확인','구매확정') for r in sales):,}건")
-        month = datetime.now(SEOUL).strftime("%Y-%m")
-        completed = [r for r in sales if r["metadata"]["status"] in ("배송완료","판매완료") and timestamp(r["metadata"]["completedAt"]).startswith(month)]
-        self.metrics[3].setText(money(sum(r["metadata"]["totalPrice"] for r in completed)))
         request_status = {r["requestId"]: r.get("status", "신규") for r in self.data["requests"]}
         draft_pairs = []
         local_sources = set()
@@ -3343,9 +3328,6 @@ class SellerWindow(MainWindow):
         self.draft_table.blockSignals(False)
         self.draft_count.setText(f"확정 견적 {len(draft_pairs):,}건")
         self.draft_table.horizontalHeaderItem(9).setToolTip("서버 조회: 이 PC에 저장한 견적이 없어 서버 자료로 표시 · PC 보관: 이 PC에 저장된 견적")
-        pending = len(self.data["pending"])
-        self.health.setText(f"전송 대기 {pending}건 · 서버 동기화 필요" if pending else
-                            "연결 정보 저장됨" if self.data["paired"] else "연결 · 설정에서 PC를 연결하세요.")
         self.refresh_sales()
         self.refresh_shipping()
 

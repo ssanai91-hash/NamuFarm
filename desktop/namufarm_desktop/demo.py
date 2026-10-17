@@ -52,5 +52,4 @@ def show_demo(window):
     window.manager = SimpleNamespace(api=SimpleNamespace(url=DEFAULT_URL))
     window.apply_view(demo_data())
     window.message.setText("미리보기 모드 · 모든 고객·주소·금액·송장번호는 예시입니다. 운영 시트에 연결하거나 저장하지 않습니다.")
-    window.health.setText("읽기 전용 미리보기\n실제 업무는 프로그램을 다시 실행해 연결하세요.")
     window.navigate(0)
