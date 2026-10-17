@@ -17,7 +17,7 @@ QMainWindow,#workspace,QDialog{background:#f3f5f1;}
 #sidebar QLabel{color:#c6d9cf;}
 #sidebar #brand{font-size:28px;font-weight:700;color:#fff;}
 #sidebar #navFoot{font-size:@small@px;color:#c6d9cf;}
-#sidebar QPushButton{background:transparent;color:#e0ebe3;border:2px solid transparent;border-radius:8px;text-align:left;padding:9px 10px;font-weight:600;}
+#sidebar QPushButton{background:transparent;color:#e0ebe3;border:2px solid transparent;border-radius:8px;text-align:left;padding:8px 10px;font-weight:600;}
 #sidebar QPushButton:checked{background:#2e604e;color:#fff;border-left-color:#b6df9a;}
 #sidebar QPushButton:hover{background:#285442;}
 #sidebar QPushButton:focus{border-style:dashed;border-color:#e4d29e;}
@@ -36,22 +36,27 @@ QFrame#serverLogFrame[state="working"]{background:#fff7e4;border-color:#b08b3e;}
 QLabel#serverLogTitle{font-size:@small@px;font-weight:700;color:#365c42;}
 QLabel#serverLogText{font-size:@body@px;color:#263e35;background:transparent;}
 QFrame#serverLogFrame[state="error"] QLabel{color:#923c28;}
-QPushButton{background:#fff;color:#263e35;border:1px solid #9caf9f;border-radius:8px;min-height:24px;padding:9px 14px;font-weight:600;}
+QPushButton{background:#fff;color:#263e35;border:1px solid #9caf9f;border-radius:8px;min-height:24px;max-height:24px;padding:9px 14px;font-weight:600;}
 QPushButton:hover{background:#eaf1e7;border-color:#4b805d;}
 QPushButton:pressed{background:#d8e6d6;}
 QPushButton:focus{border:2px solid #986000;padding:8px 13px;}
 QPushButton:disabled{background:#ecefea;color:#68756b;border:1px solid #cbd5ca;}
-QPushButton#primary,QPushButton#syncPrimary,QPushButton#sentAction,QPushButton#emailSendPrimary,QPushButton#smsSendPrimary{background:#286547;color:#fff;border:1px solid #235b40;min-height:28px;}
+QPushButton#primary,QPushButton#syncPrimary,QPushButton#sentAction,QPushButton#emailSendPrimary,QPushButton#smsSendPrimary{background:#286547;color:#fff;border:1px solid #235b40;}
 QPushButton#primary:hover,QPushButton#syncPrimary:hover,QPushButton#sentAction:hover,QPushButton#emailSendPrimary:hover,QPushButton#smsSendPrimary:hover{background:#1f573b;}
 QPushButton#primary:pressed,QPushButton#syncPrimary:pressed,QPushButton#sentAction:pressed,QPushButton#emailSendPrimary:pressed,QPushButton#smsSendPrimary:pressed{background:#16472e;}
 QPushButton#primary:focus,QPushButton#syncPrimary:focus,QPushButton#sentAction:focus,QPushButton#emailSendPrimary:focus,QPushButton#smsSendPrimary:focus{border:2px solid #ad7400;}
 QPushButton#primary:disabled,QPushButton#syncPrimary:disabled,QPushButton#sentAction:disabled,QPushButton#emailSendPrimary:disabled,QPushButton#smsSendPrimary:disabled{background:#d8e2d8;color:#546458;border-color:#bcccbc;}
 QPushButton#danger{background:#fff5f1;color:#a33827;border-color:#c78370;}
-QPushButton#requestDelete{background:#b33f32;color:#fff;border:1px solid #9b3429;}
-QPushButton#requestDelete:hover{background:#9e3328;border-color:#86291f;}
-QPushButton#requestDelete:pressed{background:#86291f;}
-QPushButton#requestDelete:focus{border:2px solid #f1b391;}
-QPushButton#requestDelete:disabled{background:#c98379;color:#fff;border-color:#ba7269;}
+QPushButton#requestDelete{background:#f9e6e2;color:#9b3529;border:1px solid #d7aaa2;}
+QPushButton#requestDelete:hover{background:#f2d5ce;border-color:#bd7a6e;}
+QPushButton#requestDelete:pressed{background:#eac2b8;}
+QPushButton#requestDelete:focus{border:2px solid #a33827;}
+QPushButton#requestDelete:disabled{background:#f1e7e4;color:#8a706a;border-color:#d7c3bd;}
+QPushButton#requestQuote{background:#e4f0e4;color:#23593a;border:1px solid #a8c6ab;}
+QPushButton#requestQuote:hover{background:#d3e6d4;border-color:#6b9d74;}
+QPushButton#requestQuote:pressed{background:#bdd9c0;}
+QPushButton#requestQuote:focus{border:2px solid #286547;}
+QPushButton#requestQuote:disabled{background:#edf2eb;color:#758173;border-color:#cbd5ca;}
 QPushButton#danger:hover{background:#f8e4de;}
 QPushButton#danger:focus{border:2px solid #a33827;}
 QLineEdit,QComboBox,QDateEdit,QDoubleSpinBox,QSpinBox,QPlainTextEdit{background:#fff;border:1px solid #9caf9f;border-radius:8px;padding:9px 10px;selection-background-color:#c7dfd0;selection-color:#173b2e;}
