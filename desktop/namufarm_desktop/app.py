@@ -164,7 +164,7 @@ class MainWindow(QMainWindow):
         self.build_reports()
         self.build_connection()
         self.timer = QTimer(self)
-        self.timer.setInterval(60000)
+        self.timer.setInterval(10 * 60 * 1000)
         self.timer.timeout.connect(self.auto_sync)
         self.timer.start()
         self.update_controls()
@@ -631,7 +631,7 @@ class MainWindow(QMainWindow):
         self.copy_button = QPushButton("로컬 엑셀 사본 열기")
         self.copy_button.clicked.connect(self.open_request_copy)
         local_layout.addWidget(self.copy_button, 0, Qt.AlignmentFlag.AlignLeft)
-        self.auto_check = QCheckBox("60초마다 자동 동기화 · 수정 중에는 입력내용 유지")
+        self.auto_check = QCheckBox("10분마다 자동 동기화 · 수정 중에는 입력내용 유지")
         self.auto_check.setChecked(True)
         self.large_font_check = QCheckBox("큰 글씨로 보기")
         local_layout.addWidget(self.auto_check)
@@ -737,7 +737,7 @@ def main():
     window.show()
     if "--self-check" in sys.argv:
         app.processEvents()
-        require(window.stack.count() == 7, "PC 화면 초기화에 실패했습니다.")
+        require(window.stack.count() == len(window.PAGES), "PC 화면 초기화에 실패했습니다.")
         from importlib.resources import files
         stamp = files("namufarm_desktop").joinpath("assets", "quote_stamp.png").read_bytes()
         require(stamp.startswith(b"\x89PNG\r\n\x1a\n"), "공식 견적서 직인 이미지를 확인해주세요.")

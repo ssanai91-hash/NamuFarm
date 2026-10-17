@@ -2568,7 +2568,8 @@ class ShippingExportDialog(QDialog):
 
 
 class SellerWindow(MainWindow):
-    PAGES = (("오늘의 업무", "OVERVIEW"), ("견적요청", "INBOX"), ("확정 견적", "QUOTATIONS"),
+    PAGE_REQUESTS, PAGE_QUOTES, PAGE_SALES, PAGE_SHIPPING, PAGE_REPORTS, PAGE_SETTINGS = range(6)
+    PAGES = (("견적요청", "INBOX"), ("확정 견적", "QUOTATIONS"),
              ("판매관리", "ORDERS"), ("배송 · 송장", "FULFILLMENT"), ("매출 · 이익", "REPORTS"), ("연결 · 설정", "SETTINGS"))
 
     def __init__(self, vault_path=None):
@@ -2612,17 +2613,17 @@ class SellerWindow(MainWindow):
         side.addSpacing(6)
         self.nav = []
         for index, (title, _) in enumerate(self.PAGES):
-            if index in (1, 5):
-                side.addWidget(label("견적 · 주문" if index == 1 else "운영", "navGroup"))
+            if index in (self.PAGE_REQUESTS, self.PAGE_REPORTS):
+                side.addWidget(label("견적 · 주문" if index == self.PAGE_REQUESTS else "운영", "navGroup"))
             widget = button(title, lambda checked=False, i=index: self.navigate(i))
-            icons = (QStyle.StandardPixmap.SP_ComputerIcon, QStyle.StandardPixmap.SP_FileDialogDetailedView,
+            icons = (QStyle.StandardPixmap.SP_FileDialogDetailedView,
                      QStyle.StandardPixmap.SP_FileDialogContentsView, QStyle.StandardPixmap.SP_DirHomeIcon,
                      QStyle.StandardPixmap.SP_DriveNetIcon, QStyle.StandardPixmap.SP_FileDialogInfoView,
                      QStyle.StandardPixmap.SP_FileDialogListView)
             widget.setIcon(self.style().standardIcon(icons[index]))
             widget.setCheckable(True)
             self.nav.append(widget)
-            if index == 1:
+            if index == self.PAGE_REQUESTS:
                 nav_row = QWidget()
                 nav_row.setObjectName("navRow")
                 nav_layout = QHBoxLayout(nav_row)
@@ -2651,14 +2652,6 @@ class SellerWindow(MainWindow):
         heading.addWidget(self.page_title)
         header.addLayout(heading)
         header.addStretch()
-        self.global_search = QLineEdit()
-        self.global_search.setPlaceholderText("주문 검색   Ctrl+K")
-        self.global_search.setMinimumWidth(130)
-        self.global_search.setMaximumWidth(220)
-        self.global_search.setAccessibleName("판매관리 주문 검색")
-        self.global_search.returnPressed.connect(self.search_all)
-        header.addWidget(self.global_search)
-
         self.sync_button.setText("↻  서버 동기화")
         self.sync_button.setObjectName("syncSecondary")
         self.sync_button.setMinimumWidth(138)
@@ -2685,7 +2678,6 @@ class SellerWindow(MainWindow):
         content_layout.addWidget(self.server_log_frame)
 
         self.stack = QStackedWidget()
-        self.stack.addWidget(self.build_dashboard())
         self.stack.addWidget(old_pages[0])
         self.stack.addWidget(self.build_drafts())
         self.stack.addWidget(self.build_customer_management())
@@ -2745,8 +2737,7 @@ class SellerWindow(MainWindow):
             self.tray_icon.show()
 
         self.workspace_ready = True
-        self.navigate(0)
-        QShortcut(QKeySequence("Ctrl+K"), self, activated=self.global_search.setFocus)
+        self.navigate(self.PAGE_REQUESTS)
         QShortcut(QKeySequence("Ctrl+N"), self, activated=self.add_manual_quote)
         QShortcut(QKeySequence("F5"), self, activated=self.manual_sync)
         for widget, action in ((self.request_table, self.show_request_details),
@@ -2815,72 +2806,6 @@ class SellerWindow(MainWindow):
         self.server_log_frame.style().unpolish(self.server_log_frame)
         self.server_log_frame.style().polish(self.server_log_frame)
         self.server_log_frame.update()
-
-    def build_dashboard(self):
-        page = QWidget()
-        layout = QVBoxLayout(page)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(12)
-        metrics = QHBoxLayout()
-        self.metrics = []
-        for title, target in (("새 요청", 1), ("전달 대기", 2), ("출고 대기", 4)):
-            frame, box = card(title)
-            value = label("—", "metricValue")
-            self.metrics.append(value)
-            row = QHBoxLayout()
-            row.addWidget(value, 1)
-            row.addWidget(button("열기 →", lambda checked=False, i=target: self.open_priority(i)))
-            box.addLayout(row)
-            metrics.addWidget(frame, 1)
-        layout.addLayout(metrics)
-        frame, box = card("지금 처리할 업무")
-        self.work_table = table(["고객 / 번호", "품목", "금액", "다음 할 일"])
-        self.work_table.set_column_layout(((0, 2.5), (1, 3), (2, 1.5), (3, 2.5)))
-        self.work_table.setItemDelegateForColumn(0, CustomerDelegate(self.work_table))
-        self.work_table.itemDoubleClicked.connect(self.open_work_order)
-        box.addWidget(self.work_table, 1)
-        work_actions = QHBoxLayout()
-        work_actions.addStretch()
-        work_actions.addWidget(button("선택 업무 열기", self.open_selected_work, True))
-        box.addLayout(work_actions)
-        layout.addWidget(frame, 1)
-        return page
-
-    def open_priority(self, target):
-        if target == 1:
-            self.request_search.clear()
-        elif target == 2:
-            self.set_draft_filter("견적확정")
-        elif target == 4:
-            self.shipping_search.clear()
-            self.shipping_filter.setCurrentIndex(0)
-        self.navigate(target)
-
-    def open_selected_work(self):
-        if not self.allow_discard():
-            return
-        self.dirty = False
-        index = self.work_table.currentRow()
-        if 0 <= index < len(self.work_rows):
-            kind, record = self.work_rows[index]
-            if kind == "request":
-                self.request_search.setText(record.get("receiptNumber") or record["requestId"])
-                self.navigate(1)
-                found = next((i for i, request in enumerate(self.request_rows)
-                              if request["requestId"] == record["requestId"]), None)
-                if found is not None:
-                    self.request_table.selectRow(found)
-                    self.quote_request()
-            elif kind == "quote":
-                self.set_draft_filter("견적확정")
-                self.navigate(2)
-                found = next((i for i, d in enumerate(self.draft_rows) if d["id"] == record["id"]), None)
-                if found is not None:
-                    self.draft_table.selectRow(found)
-                    self.open_draft()
-            else:
-                self.show_order(record["metadata"]["orderNumber"])
-                self.open_customer_order()
 
     def refresh_requests(self):
         super().refresh_requests()
@@ -3078,7 +3003,7 @@ class SellerWindow(MainWindow):
         self.page_title.setText(self.PAGES[index][0])
         for i, widget in enumerate(self.nav):
             widget.setChecked(i == index)
-        if index == 1 and self.workspace_ready:
+        if index == self.PAGE_REQUESTS and self.workspace_ready:
             self.mark_requests_seen()
 
     def request_sequence_max(self):
@@ -3173,7 +3098,7 @@ class SellerWindow(MainWindow):
             if not self.isActiveWindow():
                 QApplication.alert(self, 5000)
 
-        if self.stack.currentIndex() == 1:
+        if self.stack.currentIndex() == self.PAGE_REQUESTS:
             self.mark_requests_seen()
         else:
             self.update_request_badge(state)
@@ -3182,7 +3107,7 @@ class SellerWindow(MainWindow):
         self.showNormal()
         self.raise_()
         self.activateWindow()
-        self.navigate(1)
+        self.navigate(self.PAGE_REQUESTS)
 
     def job_finished(self, task, value, error, conflict, on_success):
         super().job_finished(task, value, error, conflict, on_success)
@@ -3199,15 +3124,6 @@ class SellerWindow(MainWindow):
                 self._request_arrival_notice + ("  |  " + current if current else "")
             )
             self._request_arrival_notice = ""
-
-    def search_all(self):
-        if not self.allow_discard():
-            return
-        self.dirty = False
-        self.sale_search.setText(self.global_search.text())
-        self.state_filter.setCurrentIndex(0)
-        self.refresh_sales()
-        self.navigate(3)
 
     def update_controls(self):
         super().update_controls()
@@ -3259,9 +3175,6 @@ class SellerWindow(MainWindow):
             self.refresh_request_notifications()
 
     def refresh_workspace(self):
-        sales = self.data["sales"]
-        self.metrics[0].setText(f"{sum(r.get('status','신규') == '신규' for r in self.data['requests']):,}건")
-        self.metrics[2].setText(f"{sum(r['metadata']['status'] in ('입금확인','구매확정') for r in sales):,}건")
         request_status = {r["requestId"]: r.get("status", "신규") for r in self.data["requests"]}
         draft_pairs = []
         local_sources = set()
@@ -3291,8 +3204,6 @@ class SellerWindow(MainWindow):
             key=lambda pair: draft_quote_sort_key(pair[0]),
             reverse=self.draft_sort_descending,
         )
-        self.refresh_work_queue(draft_pairs)
-        self.metrics[1].setText(f"{sum(status == '견적확정' for _draft, status in draft_pairs):,}건")
         for value, widget in self.draft_filters.items():
             title = {"전체": "전체", "견적확정": "전달 대기", "견적발송완료": "발송 완료"}[value]
             count = len(draft_pairs) if value == "전체" else sum(status == value for _draft, status in draft_pairs)
@@ -3330,35 +3241,6 @@ class SellerWindow(MainWindow):
         self.draft_table.horizontalHeaderItem(9).setToolTip("서버 조회: 이 PC에 저장한 견적이 없어 서버 자료로 표시 · PC 보관: 이 PC에 저장된 견적")
         self.refresh_sales()
         self.refresh_shipping()
-
-    def refresh_work_queue(self, draft_pairs):
-        requests = [("request", r) for r in self.data["requests"] if r.get("status", "신규") == "신규"]
-        quotes = [("quote", d) for d, status in draft_pairs if status == "견적확정"]
-        orders = [("sale", r) for r in self.data["sales"] if r["metadata"]["status"] in ("입금확인", "구매확정")]
-        # Include every pending record; the table owns the single scroll area.
-        self.work_rows = requests + quotes + orders
-        rows, references = [], []
-        for kind, record in self.work_rows:
-            if kind == "request":
-                personal = record["personal"]
-                name, items, amount, step = personal["customerName"], personal["items"], "단가 입력 전", "판매 단가 입력 · 견적 확정"
-                reference = record.get("receiptNumber") or record["requestId"]
-            elif kind == "quote":
-                name, items, amount, step = record["customerName"], record["items"], money(draft_amounts(record)["total"]), "견적 전달"
-                reference = draft_quote_number(record)
-            else:
-                order = record["private"]["order"]
-                name, items = order.get("customerName") or order["orderNumber"], record["metadata"]["items"]
-                amount = money(order["totalPrice"] + order["taxAmount"])
-                step = shipping_problem(order) or ("로젠 송장 등록" if not tracking_number(order) else "출고 · 배송 확인")
-                reference = order["orderNumber"]
-            rows.append((name, ", ".join(f"{item['species']} {item['quantity']:,}주" for item in items), amount, step))
-            references.append(reference)
-        fill_table(self.work_table, rows)
-        for index, reference in enumerate(references):
-            cell = self.work_table.item(index, 0)
-            cell.setData(Qt.ItemDataRole.UserRole, reference)
-            cell.setToolTip(cell.text() + "\n" + reference)
 
     def refresh_sales(self):
         if not getattr(self, "workspace_ready", False):
@@ -3517,7 +3399,7 @@ class SellerWindow(MainWindow):
     def customer_order_saved(self, value):
         self.apply_view(value)
         self.message.setText("판매 · 고객 관리 내용을 운영 시트에 저장했습니다.")
-        self.navigate(3)
+        self.navigate(self.PAGE_SALES)
 
     def refresh_shipping(self):
         if not hasattr(self, "shipping_table"):
@@ -3576,14 +3458,14 @@ class SellerWindow(MainWindow):
     def manual_quote_added(self, value):
         self.apply_view(value)
         self.message.setText("전화 견적을 추가했습니다. 견적 작업대에서 문자·메일·공식견적서 전달을 진행하세요.")
-        self.navigate(2)
+        self.navigate(self.PAGE_QUOTES)
 
     def edit_quote(self, checked=False, draft=None, request_status=""):
         if getattr(self, "demo_mode", False) or not self.manager or self.task or not self.allow_discard():
             return
         self.dirty = False
         dialog = QuoteDialog(draft or new_draft(), self, request_status=request_status)
-        # Modal input is protected from the 60-second refresh timer as well.
+        # Modal input is protected from the 10-minute refresh timer as well.
         self.timer.stop()
         result = dialog.exec()
         self.timer.start()
@@ -3598,17 +3480,17 @@ class SellerWindow(MainWindow):
     def quote_confirmed(self, value):
         self.apply_view(value)
         self.message.setText("입금확인으로 판매 등록했습니다. 배송을 준비하세요.")
-        self.navigate(3)
+        self.navigate(self.PAGE_SALES)
 
     def quote_finalized(self, value):
         self.apply_view(value)
         self.message.setText("견적을 확정했습니다. 확정 견적에서 문자·메일 등 후속 작업을 진행하세요.")
-        self.navigate(2)
+        self.navigate(self.PAGE_QUOTES)
 
     def draft_deleted(self, value):
         self.apply_view(value)
         self.message.setText("선택한 견적을 삭제했습니다.")
-        self.navigate(2)
+        self.navigate(self.PAGE_QUOTES)
 
     def quote_request(self, *args):
         index = self.request_table.currentRow()
@@ -3673,7 +3555,7 @@ class SellerWindow(MainWindow):
     def quote_sent(self, value):
         self.apply_view(value)
         self.message.setText("견적발송완료로 저장했습니다. 고객 회신과 입금 여부를 확인하세요.")
-        self.navigate(2)
+        self.navigate(self.PAGE_QUOTES)
 
     def remove_draft(self):
         index = self.draft_table.currentRow()
@@ -3686,9 +3568,6 @@ class SellerWindow(MainWindow):
             identifier = self.draft_rows[index]["id"]
             self.run_job("견적 삭제 중…", lambda: self.manager.delete_draft(identifier), self.draft_deleted)
 
-    def open_work_order(self, item):
-        self.open_selected_work()
-
     def show_order(self, number):
         if not self.allow_discard():
             return
@@ -3698,7 +3577,7 @@ class SellerWindow(MainWindow):
         self.refresh_sales()
         if self.sale_rows:
             self.sale_table.selectRow(0)
-        self.navigate(3)
+        self.navigate(self.PAGE_SALES)
 
     def edit_shipping_order(self):
         rows = self.selected_shipping()
@@ -3815,7 +3694,7 @@ class SellerWindow(MainWindow):
     def accept_manager(self, result):
         super().accept_manager(result)
         if self.workspace_ready:
-            self.navigate(0 if self.data["paired"] else 6)
+            self.navigate(self.PAGE_REQUESTS)
 
     def manual_sync(self):
         if not getattr(self, "demo_mode", False):
