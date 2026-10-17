@@ -12,13 +12,14 @@ from PySide6.QtCore import QSettings, Qt, QUrl, QSaveFile, QIODevice, QTimer, Si
 from PySide6.QtGui import (QColor, QDesktopServices, QFont, QFontMetricsF, QImage, QIntValidator,
     QKeySequence, QPainter, QPdfWriter, QPen, QPixmap, QShortcut, QTextDocument, QPageSize)
 from PySide6.QtPrintSupport import QPrinter, QPrintDialog
-from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDialog, QDoubleSpinBox, QFileDialog, QFormLayout,
+from PySide6.QtWidgets import (QApplication, QButtonGroup, QCheckBox, QComboBox, QDialog, QDoubleSpinBox, QFileDialog, QFormLayout,
     QFrame, QGridLayout, QGroupBox, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QListWidget,
     QMessageBox, QPlainTextEdit, QPushButton, QRadioButton, QScrollArea, QSplitter, QStackedWidget,
     QSizePolicy, QStyle, QSystemTrayIcon, QTableWidget, QTableWidgetItem, QTextBrowser, QVBoxLayout, QWidget, QSpinBox)
 
 from . import __version__
-from .ui_theme import align_table, fit_window, scroll_dialog, scroll_page, workspace_style
+from .ui_theme import (align_table, fit_window, scroll_dialog, scroll_page, workspace_style,
+                       CustomerDelegate, StatusDelegate, customer_reference)
 from .app import MainWindow, Task, table, fill_table, money, timestamp
 from .commerce import (ISSUER, new_draft, new_manual_draft, draft_amounts, validate_draft, quote_html, quote_document_html, shipping_html,
                        shipping_problem, parse_tracking_csv, tracking_number)
@@ -31,6 +32,7 @@ STYLE = workspace_style()
 
 def label(text, name="", wrap=False):
     widget = QLabel(text)
+    widget.setTextFormat(Qt.TextFormat.PlainText)
     widget.setObjectName(name)
     widget.setWordWrap(wrap)
     return widget
@@ -78,7 +80,7 @@ class UnitPriceEditor(QWidget):
         super().__init__(parent)
         self.setObjectName("unitPriceEditor")
         row = QHBoxLayout(self)
-        row.setContentsMargins(4, 2, 4, 2)
+        row.setContentsMargins(4, 0, 4, 0)
         row.setSpacing(5)
 
         self.minus = QPushButton("-")
@@ -689,7 +691,6 @@ class QuoteDialog(QDialog):
         head = QHBoxLayout()
         head.addWidget(label("견적 작업대", "pageTitle"))
         head.addStretch()
-        head.addWidget(label(("홈페이지 요청 · " + (request_status or "신규")) if self.simple_request else "PC 수기 견적", "muted"))
         layout.addLayout(head)
 
         split = QSplitter()
@@ -697,35 +698,33 @@ class QuoteDialog(QDialog):
         if self.simple_request:
             info = QWidget()
             form = QFormLayout(info)
+            form.setFormAlignment(Qt.AlignmentFlag.AlignTop)
+            form.setVerticalSpacing(10)
             for title, value in (("견적번호", draft.get("requestReceiptNumber", "") or draft.get("sourceRequestId", "")),
                                  ("고객명", draft.get("customerName", "")),
                                  ("연락처", draft.get("customerPhone", "")),
                                  ("이메일", draft.get("customerEmail", "") or "미입력"),
                                  ("지역", draft.get("requestRegion", ""))):
-                field = QLineEdit(str(value))
-                field.setReadOnly(True)
+                field = label(str(value or "미입력"), "infoValue", True)
+                field.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
                 field.setAccessibleName(title)
                 form.addRow(title, field)
 
             formal = bool(draft.get("formalQuoteRequested", False))
-            formal_value = QLineEdit("요청" if formal else "미요청")
-            formal_value.setReadOnly(True)
+            formal_value = label("요청" if formal else "미요청", "infoValue")
             form.addRow("공식 견적서", formal_value)
             if formal:
-                recipient = QLineEdit(draft.get("quoteRecipientName", "") or draft.get("customerName", ""))
-                recipient.setReadOnly(True)
+                recipient = label(draft.get("quoteRecipientName", "") or draft.get("customerName", ""), "infoValue", True)
                 form.addRow("견적서 수신인", recipient)
                 channel = {"sms": "문자", "email": "이메일", "both": "문자 + 이메일"}.get(
                     draft.get("quoteReplyChannel", "sms"), "문자"
                 )
-                reply = QLineEdit(channel)
-                reply.setReadOnly(True)
+                reply = label(channel, "infoValue")
                 form.addRow("수신 방법", reply)
             self.note = QPlainTextEdit(draft.get("note", ""))
             self.note.setReadOnly(True)
             self.note.setMinimumHeight(82)
             self.note.setMaximumHeight(110)
-            form.addRow(label("고객이 요청한 품목과 수량을 확인하고 판매 단가를 입력하세요.", "muted", True))
             info_scroll = QScrollArea()
             info_scroll.setWidgetResizable(True)
             info_scroll.setWidget(info)
@@ -766,7 +765,6 @@ class QuoteDialog(QDialog):
         content = QVBoxLayout(right)
         content.addWidget(label("견적 품목", "sectionTitle"))
         if self.simple_request:
-            content.addWidget(label("수량은 홈페이지 요청값입니다. 판매 단가를 입력하면 판매 금액을 계산합니다.", "muted", True))
             self.items = table(["묘목명", "수량", "판매 금액", "판매 단가"])
         else:
             content.addWidget(label("수기 견적 품목으로 등록합니다. 휴대폰 재고 수량은 차감하지 않습니다.", "muted", True))
@@ -807,7 +805,6 @@ class QuoteDialog(QDialog):
             footer.addWidget(button("견적안 미리보기 / PDF", self.preview))
         footer.addStretch()
         footer.addWidget(button("닫기", self.reject))
-        footer.addWidget(button("임시저장", lambda: self.finish("save")))
         if self.simple_request:
             self.confirm_button = button("견적 확정", lambda: self.finish("finalize"), True)
             self.confirm_button.setEnabled(request_status in ("", "신규"))
@@ -839,6 +836,7 @@ class QuoteDialog(QDialog):
             price_editor = UnitPriceEditor(item["unitPrice"], self.items)
             price_editor.changed.connect(self.recalculate)
             self.items.setCellWidget(index, 3, price_editor)
+            self.items.setRowHeight(index, max(self.items.verticalHeader().defaultSectionSize(), 60))
         else:
             for column, key in enumerate(("species", "specification", "quantity", "unitPrice", "unitCost")):
                 cell = QTableWidgetItem(str(item[key]))
@@ -966,8 +964,9 @@ class QuoteDialog(QDialog):
 
     def finish(self, mode):
         try:
+            require(mode in ("finalize", "confirm"), "견적 확정 또는 판매 등록을 선택해주세요.")
             draft = self.collect()
-            if mode == "finalize" and QMessageBox.question(self, "견적 확정", "판매 단가와 합계를 확인했나요?\n확정하면 온라인 요청 상태가 '견적확정'으로 바뀌고 견적 작업대로 이동합니다.", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
+            if mode == "finalize" and QMessageBox.question(self, "견적 확정", "판매 단가와 합계를 확인했나요?\n확정하면 온라인 요청 상태가 '견적확정'으로 바뀌고 확정 견적으로 이동합니다.", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
                 return
             if mode == "confirm" and QMessageBox.question(self, "입금확인", "고객의 구매와 입금을 확인했나요?\n품목·수량·금액은 판매 등록 후 변경할 수 없습니다.", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
                 return
@@ -1552,13 +1551,9 @@ class QuoteDeliveryDialog(QDialog):
         title_box = QVBoxLayout()
         title_box.setSpacing(3)
 
-        title = QLabel("견적 전달")
-        title.setObjectName("deliveryTitle")
+        title = label(self.draft.get("customerName") or "고객명 미입력", "deliveryTitle", True)
 
-        subtitle = QLabel(
-            "확정된 견적을 확인하고 문자·메일·견적서로 고객에게 전달합니다."
-        )
-        subtitle.setObjectName("deliverySubtitle")
+        subtitle = label("견적 " + self.quote_number(), "deliverySubtitle", True)
 
         title_box.addWidget(title)
         title_box.addWidget(subtitle)
@@ -1583,7 +1578,11 @@ class QuoteDeliveryDialog(QDialog):
         status.setAlignment(Qt.AlignmentFlag.AlignCenter)
         status.setFixedSize(176, 52)
 
-        head.addWidget(status)
+        summary_head = QVBoxLayout()
+        summary_head.addWidget(status)
+        self.header_amount = label(money(draft_amounts(self.draft)["total"]), "infoValue")
+        summary_head.addWidget(self.header_amount)
+        head.addLayout(summary_head)
         layout.addLayout(head)
 
         # ─────────────────────────────
@@ -1910,6 +1909,7 @@ class QuoteDeliveryDialog(QDialog):
         self.payment_button.setVisible(self.request_status == "견적발송완료")
         self.payment_button.setEnabled(self.request_status == "견적발송완료")
 
+        actions.addWidget(label("고객 전달", "muted"))
         actions.addWidget(self.sms_button)
         actions.addWidget(self.email_button)
         actions.addWidget(self.generate_quote_button)
@@ -1921,6 +1921,7 @@ class QuoteDeliveryDialog(QDialog):
         self.quote_file_label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         finish_actions.addWidget(self.quote_file_label, 1)
         finish_actions.addWidget(close_button)
+        finish_actions.addWidget(label("업무 단계", "muted"))
         finish_actions.addWidget(self.sent_button)
         finish_actions.addWidget(self.payment_button)
         footer = QVBoxLayout()
@@ -1986,6 +1987,7 @@ class QuoteDeliveryDialog(QDialog):
             item_total = sum(int(item["quantity"]) * int(item["unitPrice"]) for item in self.draft.get("items", []))
             amounts = draft_amounts(self.draft)
             self.total_value.setText(f"{amounts['total']:,}원")
+            self.header_amount.setText(self.total_value.text())
             if self.draft["isPrepaid"]:
                 self.shipping_status.setText(
                     f"선불 {self.draft['shippingFee']:,}원 · 묘목금액 {item_total:,}원에 포함"
@@ -1996,6 +1998,7 @@ class QuoteDeliveryDialog(QDialog):
                 )
         except UserError:
             self.total_value.setText("금액 확인 필요")
+            self.header_amount.setText(self.total_value.text())
             self.shipping_status.setText("택배비 금액을 확인해주세요.")
 
     def persist_shipping(self):
@@ -2223,14 +2226,16 @@ class CustomerOrderDialog(QDialog):
 
         header = QHBoxLayout()
         title_box = QVBoxLayout()
-        title_box.addWidget(label("고객 관리", "deliveryTitle"))
-        title_box.addWidget(label("입금확인 이후 고객정보 · 배송정보 · 원가를 확인하고 다음 업무를 처리합니다.",
-                                  "deliverySubtitle", True))
+        title_box.addWidget(label(self.order.get("customerName") or "고객명 미입력", "deliveryTitle", True))
+        title_box.addWidget(label("주문 " + self.meta["orderNumber"], "deliverySubtitle", True))
         header.addLayout(title_box)
         header.addStretch()
         status = QLabel(customer_status_text(self.meta["status"]))
         status.setObjectName("customerStatusBadge")
-        header.addWidget(status, 0, Qt.AlignmentFlag.AlignTop)
+        record_status = QVBoxLayout()
+        record_status.addWidget(status)
+        record_status.addWidget(label(money(self.meta["totalPrice"] + self.meta.get("taxAmount", 0)), "infoValue"))
+        header.addLayout(record_status)
         layout.addLayout(header)
 
         summary = QFrame()
@@ -2347,6 +2352,9 @@ class CustomerOrderDialog(QDialog):
 
         self.quote_print = button("확정 견적서 출력", self.print_quote)
         self.quote_print.setEnabled(bool(self.row["private"].get("quoteDocumentJson")))
+        finance_layout.addWidget(label("연결 견적 · " + (self.order.get("sourceQuoteNumber") or "번호 없음"), "customerMetricCaption", True))
+        if not self.row["private"].get("quoteDocumentJson"):
+            self.quote_print.setToolTip("이 주문에 보관된 확정 견적서가 없습니다.")
         finance_layout.addWidget(self.quote_print)
         finance_layout.addStretch()
         body.addWidget(finance_card, 2)
@@ -2383,11 +2391,17 @@ class CustomerOrderDialog(QDialog):
         self.delivery_button.setEnabled(self.meta["status"] in ("입금확인", "구매확정", "배송확인"))
 
         actions.addWidget(self.cancel_order_button)
-        actions.addStretch()
+        self.edit_state = label("PC에 불러온 기록", "muted")
+        actions.addWidget(self.edit_state, 1)
         actions.addWidget(close_button)
         actions.addWidget(self.save_button)
         actions.addWidget(self.delivery_button)
         layout.addLayout(actions)
+        for field in (*self.customer_fields.values(), self.cost_total, self.expense_total):
+            field.textChanged.connect(lambda _text: self.edit_state.setText("수정 중 · 저장 필요"))
+        self.note.textChanged.connect(lambda: self.edit_state.setText("수정 중 · 저장 필요"))
+        self.commission.valueChanged.connect(lambda _value: self.edit_state.setText("수정 중 · 저장 필요"))
+        self.cost_confirmed.toggled.connect(lambda _value: self.edit_state.setText("수정 중 · 저장 필요"))
         scroll_dialog(self, layout)
 
     def collect_fields(self):
@@ -2551,7 +2565,7 @@ class ShippingExportDialog(QDialog):
 
 
 class SellerWindow(MainWindow):
-    PAGES = (("오늘의 업무", "OVERVIEW"), ("견적요청", "INBOX"), ("견적확정", "QUOTATIONS"),
+    PAGES = (("오늘의 업무", "OVERVIEW"), ("견적요청", "INBOX"), ("확정 견적", "QUOTATIONS"),
              ("판매관리", "ORDERS"), ("배송 · 송장", "FULFILLMENT"), ("매출 · 이익", "REPORTS"), ("연결 · 설정", "SETTINGS"))
 
     def __init__(self, vault_path=None):
@@ -2593,10 +2607,17 @@ class SellerWindow(MainWindow):
         side.setSpacing(6)
         side.addWidget(label("  namufarm", "brand"))
         side.addWidget(label(f"  나피 · Ver. {__version__}", "navFoot"))
-        side.addSpacing(12)
+        side.addSpacing(6)
         self.nav = []
         for index, (title, _) in enumerate(self.PAGES):
-            widget = button(f"{index+1:02d}   {title}", lambda checked=False, i=index: self.navigate(i))
+            if index in (1, 5):
+                side.addWidget(label("견적 · 주문" if index == 1 else "운영", "navGroup"))
+            widget = button(title, lambda checked=False, i=index: self.navigate(i))
+            icons = (QStyle.StandardPixmap.SP_ComputerIcon, QStyle.StandardPixmap.SP_FileDialogDetailedView,
+                     QStyle.StandardPixmap.SP_FileDialogContentsView, QStyle.StandardPixmap.SP_DirHomeIcon,
+                     QStyle.StandardPixmap.SP_DriveNetIcon, QStyle.StandardPixmap.SP_FileDialogInfoView,
+                     QStyle.StandardPixmap.SP_FileDialogListView)
+            widget.setIcon(self.style().standardIcon(icons[index]))
             widget.setCheckable(True)
             self.nav.append(widget)
             if index == 1:
@@ -2617,27 +2638,28 @@ class SellerWindow(MainWindow):
         outer.addWidget(sidebar)
         content = QWidget()
         content_layout = QVBoxLayout(content)
-        content_layout.setContentsMargins(24, 20, 24, 16)
-        content_layout.setSpacing(16)
+        content_layout.setContentsMargins(20, 14, 20, 12)
+        content_layout.setSpacing(10)
         header = QHBoxLayout()
         heading = QVBoxLayout()
-        self.page_eyebrow = label("", "eyebrow")
         self.page_title = label("", "pageTitle")
-        heading.addWidget(self.page_eyebrow)
         heading.addWidget(self.page_title)
         header.addLayout(heading)
         header.addStretch()
-        header.addWidget(label(datetime.now(SEOUL).strftime("%Y.%m.%d"), "muted"))
+        self.compact_status = button("연결 안내", self.show_status_details)
+        self.compact_status.setObjectName("compactStatus")
+        self.compact_status.setMaximumWidth(140)
+        header.addWidget(self.compact_status)
         self.global_search = QLineEdit()
-        self.global_search.setPlaceholderText("고객 · 주문 검색   Ctrl+K")
-        self.global_search.setMinimumWidth(160)
-        self.global_search.setMaximumWidth(260)
-        self.global_search.setAccessibleName("고객과 주문 검색")
+        self.global_search.setPlaceholderText("주문 검색   Ctrl+K")
+        self.global_search.setMinimumWidth(130)
+        self.global_search.setMaximumWidth(220)
+        self.global_search.setAccessibleName("판매관리 주문 검색")
         self.global_search.returnPressed.connect(self.search_all)
         header.addWidget(self.global_search)
 
         self.sync_button.setText("↻  서버 동기화")
-        self.sync_button.setObjectName("syncPrimary")
+        self.sync_button.setObjectName("syncSecondary")
         self.sync_button.setMinimumWidth(138)
         header.addWidget(self.sync_button)
 
@@ -2666,11 +2688,11 @@ class SellerWindow(MainWindow):
         content_layout.addWidget(self.server_log_frame)
 
         self.stack = QStackedWidget()
-        self.stack.addWidget(scroll_page(self.build_dashboard()))
+        self.stack.addWidget(self.build_dashboard())
         self.stack.addWidget(old_pages[0])
         self.stack.addWidget(self.build_drafts())
         self.stack.addWidget(self.build_customer_management())
-        self.stack.addWidget(scroll_page(self.build_shipping()))
+        self.stack.addWidget(self.build_shipping())
         self.stack.addWidget(scroll_page(old_pages[2]))
         self.stack.addWidget(old_pages[3])
         for index in range(self.stack.count()):
@@ -2697,7 +2719,14 @@ class SellerWindow(MainWindow):
         self.request_table.setWordWrap(False)
         self.request_table.setTextElideMode(Qt.TextElideMode.ElideRight)
         self.request_table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Fixed)
-        self.request_table.set_column_layout(((0, 2.1), (3, 1.6), (4, 1.7), (8, 2.8), (1, 1.7), (7, 1.1)))
+        self.request_table.set_column_layout(((3, 2.7), (4, 1.8), (8, 3), (1, 1.8), (7, 1.3)))
+        self.request_table.setItemDelegateForColumn(3, CustomerDelegate(self.request_table))
+        request_layout = old_pages[0].layout()
+        self.request_count = label("견적요청 0건", "sectionTitle")
+        request_layout.insertWidget(0, self.request_count)
+        self.request_actions.removeWidget(self.request_quote_button)
+        self.request_actions.insertWidget(2, self.request_quote_button)
+        self.message.changed.connect(self.refresh_status_summary)
         self.ui_settings = QSettings("NamuFarm", "NamuFarmDesktop")
         self.large_font_check.setChecked(self.ui_settings.value("ui/largeFont", False, type=bool))
         self.large_font_check.toggled.connect(self.apply_design_scale)
@@ -2800,78 +2829,152 @@ class SellerWindow(MainWindow):
         self.server_log_frame.style().unpolish(self.server_log_frame)
         self.server_log_frame.style().polish(self.server_log_frame)
         self.server_log_frame.update()
+        self.refresh_status_summary()
 
     def build_dashboard(self):
         page = QWidget()
         layout = QVBoxLayout(page)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(20)
-        hero = QFrame()
-        hero.setObjectName("hero")
-        row = QHBoxLayout(hero)
-        row.setContentsMargins(26, 23, 26, 23)
-        left = QVBoxLayout()
-        left.addWidget(label("좋은 나무, 빈틈없는 판매 관리", "heroTitle"))
-        self.hero_subtitle = label("새 견적부터 마지막 출고까지, 오늘 처리할 일을 확인하세요.", "muted")
-        left.addWidget(self.hero_subtitle)
-        row.addLayout(left)
-        row.addStretch()
-        row.addWidget(button("출고 대기 확인 →", lambda: self.navigate(4), True))
-        layout.addWidget(hero)
+        layout.setSpacing(12)
         metrics = QHBoxLayout()
-        metrics.setSpacing(16)
         self.metrics = []
-        for title, subtitle, target in (("새 견적 요청", "온라인 접수함", 1), ("견적 작업대", "확정 · 발송 관리", 2), ("출고 대기", "입금확인 · 배송완료 전", 4), ("이번 달 배송완료 매출", "공급가 기준 · 한국 시간", 5)):
+        for title, target in (("새 요청", 1), ("전달 대기", 2), ("출고 대기", 4)):
             frame, box = card(title)
             value = label("—", "metricValue")
             self.metrics.append(value)
-            box.addWidget(value)
-            box.addWidget(label(subtitle, "muted"))
-            link = button("자세히 보기  →", lambda checked=False, i=target: self.navigate(i))
-            box.addWidget(link)
+            row = QHBoxLayout()
+            row.addWidget(value, 1)
+            row.addWidget(button("열기 →", lambda checked=False, i=target: self.open_priority(i)))
+            box.addLayout(row)
             metrics.addWidget(frame, 1)
         layout.addLayout(metrics)
-        bottom = QHBoxLayout()
-        bottom.setSpacing(20)
-        frame, box = card("먼저 처리할 주문")
-        box.addWidget(label("입금 · 주소 · 송장 준비 상태를 확인하고 다음 업무로 이동하세요.", "muted"))
-        self.work_table = table(["고객 / 주문", "품목", "결제금액", "다음 할 일"])
+        frame, box = card("지금 처리할 업무")
+        self.work_table = table(["고객 / 번호", "품목", "금액", "다음 할 일"])
+        self.work_table.set_column_layout(((0, 2.5), (1, 3), (2, 1.5), (3, 2.5)))
+        self.work_table.setItemDelegateForColumn(0, CustomerDelegate(self.work_table))
         self.work_table.itemDoubleClicked.connect(self.open_work_order)
-        box.addWidget(self.work_table)
-        box.addWidget(button("전체 주문 보기 →", lambda: self.navigate(3)), 0, Qt.AlignmentFlag.AlignRight)
-        bottom.addWidget(frame, 3)
-        frame, box = card("판매 업무 흐름")
-        for n, title, description in (("01", "견적 작성", "접수 요청을 더블클릭해 수량·단가를 확정하세요."),
-                                       ("02", "견적확정", "확정된 견적의 문자·메일·PDF 전달과 고객 회신을 관리하세요."),
-                                       ("03", "입금확인 · 출고", "입금을 확인한 주문의 로젠 송장과 배송을 준비하세요."),
-                                       ("04", "배송완료 / 구매취소", "최종 상태를 확정해 매출과 업무를 정리하세요.")):
-            box.addWidget(label(n + "   " + title, "sectionTitle"))
-            box.addWidget(label(description, "muted", True))
-        box.addStretch()
-        self.health = label("보관함을 열면 운영 기록이 표시됩니다.", "notice", True)
-        box.addWidget(self.health)
-        bottom.addWidget(frame, 1)
-        layout.addLayout(bottom, 1)
+        box.addWidget(self.work_table, 1)
+        work_actions = QHBoxLayout()
+        work_actions.addWidget(label("요청 접수 · 견적 전달 · 출고 준비 순으로 표시합니다.", "muted"), 1)
+        work_actions.addWidget(button("선택 업무 열기", self.open_selected_work, True))
+        box.addLayout(work_actions)
+        layout.addWidget(frame, 1)
+        bottom = QHBoxLayout()
+        bottom.addWidget(label("이번 달 배송완료 매출", "muted"))
+        revenue = label("—", "infoValue")
+        self.metrics.append(revenue)
+        bottom.addWidget(revenue)
+        bottom.addWidget(button("매출 보기", lambda: self.navigate(5)))
+        bottom.addStretch()
+        self.health = label("", "muted", True)
+        bottom.addWidget(self.health)
+        layout.addLayout(bottom)
         return page
+
+    def open_priority(self, target):
+        if target == 1:
+            self.request_search.clear()
+        elif target == 2:
+            self.set_draft_filter("견적확정")
+        elif target == 4:
+            self.shipping_search.clear()
+            self.shipping_filter.setCurrentIndex(0)
+        self.navigate(target)
+
+    def open_selected_work(self):
+        if not self.allow_discard():
+            return
+        self.dirty = False
+        index = self.work_table.currentRow()
+        if 0 <= index < len(self.work_rows):
+            kind, record = self.work_rows[index]
+            if kind == "request":
+                self.request_search.setText(record.get("receiptNumber") or record["requestId"])
+                self.navigate(1)
+                found = next((i for i, request in enumerate(self.request_rows)
+                              if request["requestId"] == record["requestId"]), None)
+                if found is not None:
+                    self.request_table.selectRow(found)
+                    self.quote_request()
+            elif kind == "quote":
+                self.set_draft_filter("견적확정")
+                self.navigate(2)
+                found = next((i for i, d in enumerate(self.draft_rows) if d["id"] == record["id"]), None)
+                if found is not None:
+                    self.draft_table.selectRow(found)
+                    self.open_draft()
+            else:
+                self.show_order(record["metadata"]["orderNumber"])
+                self.open_customer_order()
+
+    def refresh_status_summary(self):
+        if not hasattr(self, "compact_status"):
+            return
+        pending = len(self.data.get("pending", []))
+        state = self.server_log_frame.property("state")
+        self.server_log_frame.setVisible(state in ("error", "working") or bool(pending))
+        self.compact_status.setText("처리 실패 · 안내" if state == "error" else "처리 중" if state == "working"
+                                    else f"전송 대기 {pending}건" if pending else self.status_title.text())
+        self.compact_status.setToolTip(getattr(self.message, "details", self.message.text()))
+
+    def refresh_requests(self):
+        super().refresh_requests()
+        if hasattr(self, "request_count"):
+            self.request_count.setText(f"견적요청 {len(self.request_rows):,}건")
+            customer_reference(self.request_table, 3, 0)
+
+    def filter_buttons(self, choices, callback):
+        row = QHBoxLayout()
+        group = QButtonGroup(self)
+        group.setExclusive(True)
+        buttons = {}
+        for title, value in choices:
+            item = button(title, lambda checked=False, v=value: callback(v))
+            item.setObjectName("filterTab")
+            item.setCheckable(True)
+            group.addButton(item)
+            buttons[value] = item
+            row.addWidget(item)
+        next(iter(buttons.values())).setChecked(True)
+        row.addStretch()
+        return row, buttons
+
+    def set_draft_filter(self, value):
+        self.draft_filter = value
+        self.refresh_workspace()
+
+    def set_sales_filter(self, value):
+        self.state_filter.setCurrentText(value)
+
 
     def build_drafts(self):
         page = QWidget()
         layout = QVBoxLayout(page)
-        layout.addWidget(label("고객에게 전달할 견적을 선택하세요.", "sectionTitle"))
-        layout.addWidget(label("견적확정 → 발송완료 → 입금확인 순서로 진행합니다. 메일·요청사항은 선택 견적 열기에서 확인하세요.", "muted", True))
-        self.draft_table = table(["견적번호", "상태", "작성일", "고객명", "연락처", "메일", "공식견적서", "품목", "판매금액"])
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(10)
+        self.draft_count = label("확정 견적 0건", "sectionTitle")
+        layout.addWidget(self.draft_count)
+        self.draft_filter = "전체"
+        filters, self.draft_filters = self.filter_buttons(
+            (("전체", "전체"), ("전달 대기", "견적확정"), ("발송 완료", "견적발송완료")), self.set_draft_filter)
+        layout.addLayout(filters)
+        self.draft_table = table(["견적번호", "상태", "작성일", "고객명", "연락처", "메일", "공식견적서", "품목", "판매금액", "자료 위치"])
         self.draft_sort_descending = False
         header = self.draft_table.horizontalHeader()
         header.setStretchLastSection(False)
         header.setSortIndicatorShown(True)
-        header.setSortIndicator(0, Qt.SortOrder.AscendingOrder)
+        header.setSortIndicator(3, Qt.SortOrder.AscendingOrder)
+        self.draft_table.horizontalHeaderItem(3).setText("고객 / 견적번호 ↕")
+        self.draft_table.horizontalHeaderItem(3).setToolTip("클릭하면 견적번호 순서를 바꿉니다.")
         header.sectionClicked.connect(self.sort_drafts_by_header)
         header.setMinimumSectionSize(70)
         for column, width in enumerate((190, 115, 145, 100, 135, 220, 105, 320, 120)):
             header.setSectionResizeMode(column, QHeaderView.ResizeMode.Interactive)
             self.draft_table.setColumnWidth(column, width)
         header.setSectionResizeMode(7, QHeaderView.ResizeMode.Stretch)
-        self.draft_table.set_column_layout(((0, 2.1), (1, 1.5), (3, 1.6), (4, 1.7), (7, 2.7), (8, 1.7)))
+        self.draft_table.set_column_layout(((3, 2.8), (1, 1.8), (7, 3), (8, 1.7), (9, 1.5)))
+        self.draft_table.setItemDelegateForColumn(3, CustomerDelegate(self.draft_table))
+        self.draft_table.setItemDelegateForColumn(1, StatusDelegate(self.draft_table))
         self.draft_table.itemSelectionChanged.connect(self.update_controls)
         self.draft_table.itemDoubleClicked.connect(self.open_draft)
         layout.addWidget(self.draft_table)
@@ -2879,18 +2982,19 @@ class SellerWindow(MainWindow):
         self.draft_delete = button("선택 견적 삭제", self.remove_draft)
         self.draft_delete.setObjectName("danger")
         self.draft_open = button("선택 견적 열기", self.open_draft, True)
+        self.draft_selection_status = label("견적을 선택하세요.", "muted", True)
+        bar.addWidget(self.draft_selection_status, 1)
         bar.addWidget(self.draft_delete)
-        bar.addStretch()
         bar.addWidget(self.draft_open)
         layout.addLayout(bar)
         return page
 
     def sort_drafts_by_header(self, section):
-        if section != 0:
+        if section not in (0, 3):
             return
         self.draft_sort_descending = not self.draft_sort_descending
         self.draft_table.horizontalHeader().setSortIndicator(
-            0,
+            3,
             Qt.SortOrder.DescendingOrder if self.draft_sort_descending else Qt.SortOrder.AscendingOrder,
         )
         self.refresh_workspace()
@@ -2900,22 +3004,23 @@ class SellerWindow(MainWindow):
         layout = QVBoxLayout(page)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(12)
-        layout.addWidget(label("입금확인 이후 고객 · 배송 · 판매 상태를 관리하세요.", "sectionTitle"))
-        layout.addWidget(label(
-            "입금확인 → 배송완료 순서로 관리합니다. 주소·메일·수령인은 고객 관리 열기에서 확인하세요.",
-            "muted", True
-        ))
+        self.sale_count = label("판매관리 0건", "sectionTitle")
+        layout.addWidget(self.sale_count)
 
         bar = QHBoxLayout()
         self.sale_search = QLineEdit()
         self.sale_search.setPlaceholderText("주문번호 · 고객명 · 연락처 · 이메일 · 수령인 · 주소 · 품목 검색")
         self.sale_search.textChanged.connect(self.refresh_sales)
         self.state_filter = QComboBox()
+        self.state_filter.setParent(page)
         self.state_filter.addItems(["전체 상태", "입금확인", "배송완료", "구매취소"])
         self.state_filter.currentIndexChanged.connect(self.refresh_sales)
         bar.addWidget(self.sale_search, 1)
-        bar.addWidget(self.state_filter)
+        self.state_filter.hide()
         layout.addLayout(bar)
+        filters, self.sales_filters = self.filter_buttons(
+            (("전체", "전체 상태"), ("입금확인", "입금확인"), ("배송완료", "배송완료"), ("구매취소", "구매취소")), self.set_sales_filter)
+        layout.addLayout(filters)
 
         self.sale_table = table([
             "주문번호", "상태", "주문일", "고객명", "연락처", "이메일",
@@ -2931,7 +3036,9 @@ class SellerWindow(MainWindow):
         self.sale_table.setWordWrap(False)
         self.sale_table.setTextElideMode(Qt.TextElideMode.ElideRight)
         self.sale_table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Fixed)
-        self.sale_table.set_column_layout(((0, 1.9), (3, 1.6), (4, 1.7), (8, 2.6), (9, 1.7), (1, 1.4), (2, 1.7)))
+        self.sale_table.set_column_layout(((3, 2.6), (4, 1.7), (8, 2.8), (9, 1.7), (1, 1.6), (2, 1.8)))
+        self.sale_table.setItemDelegateForColumn(3, CustomerDelegate(self.sale_table))
+        self.sale_table.setItemDelegateForColumn(1, StatusDelegate(self.sale_table))
         self.sale_table.itemSelectionChanged.connect(self.select_sale)
         self.sale_table.itemDoubleClicked.connect(self.open_customer_order)
         layout.addWidget(self.sale_table, 1)
@@ -2947,8 +3054,9 @@ class SellerWindow(MainWindow):
     def build_shipping(self):
         page = QWidget()
         layout = QVBoxLayout(page)
-        layout.addWidget(label("출고 준비부터 송장번호까지 한 번에", "sectionTitle"))
-        layout.addWidget(label("① 입금확인 주문 선택 · 로젠 XLS 저장  →  ② 로젠에 불러오기 · 송장 일괄 출력  →  ③ 송장번호 가져오기", "muted", True))
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(8)
+        layout.addWidget(label("1. 주문 선택", "sectionTitle"))
         bar = QHBoxLayout()
         self.shipping_search = QLineEdit()
         self.shipping_search.setPlaceholderText("주문번호 · 수령인 · 주소 · 송장번호 검색")
@@ -2963,6 +3071,7 @@ class SellerWindow(MainWindow):
         self.shipping_table = table(["주문번호", "수령인", "연락처", "배송주소", "수량", "배송 준비", "송장번호"])
         self.shipping_table.setSelectionMode(self.shipping_table.SelectionMode.ExtendedSelection)
         self.shipping_table.itemSelectionChanged.connect(self.select_shipping)
+        self.shipping_table.set_column_layout(((0, 1.8), (1, 1.4), (3, 2.8), (4, 1), (5, 1.8), (6, 1.8)))
         layout.addWidget(self.shipping_table, 1)
         selection = QHBoxLayout()
         selection.addWidget(button("목록 전체 선택", self.shipping_table.selectAll))
@@ -2971,7 +3080,7 @@ class SellerWindow(MainWindow):
         layout.addLayout(selection)
         self.shipping_status = label("주문을 선택하세요. Ctrl 또는 Shift로 여러 주문을 선택할 수 있습니다.", "muted", True)
         layout.addWidget(self.shipping_status)
-        panel, box = card("송장번호 등록 · 출력")
+        panel, box = card("3. 송장번호 반영 · 확인")
         line = QHBoxLayout()
         self.tracking_input = QLineEdit()
         self.tracking_input.setPlaceholderText("로젠에서 발급받은 송장번호 11자리")
@@ -2982,24 +3091,26 @@ class SellerWindow(MainWindow):
         line.addWidget(self.tracking_save)
         line.addWidget(self.shipping_edit)
         box.addLayout(line)
-        box.addWidget(label("송장번호는 기존 암호화 배송 메모에 함께 저장되어 휴대폰 수정 후에도 유지됩니다.", "muted", True))
         actions = QHBoxLayout()
         self.export_button = button("선택 주문 로젠 XLS 저장", self.export_shipping, True)
         self.import_button = button("송장 XLS / CSV 가져오기", self.import_shipping)
         self.print_button = button("송장번호 · 출고 확인서 출력", self.print_shipping)
-        actions.addWidget(self.export_button)
+        preparation = QHBoxLayout()
+        preparation.addWidget(label("2. 송장 준비", "sectionTitle"))
+        preparation.addWidget(self.export_button)
+        preparation.addStretch()
+        layout.addLayout(preparation)
         actions.addWidget(self.import_button)
         actions.addStretch()
         actions.addWidget(self.print_button)
         box.addLayout(actions)
         layout.addWidget(panel)
-        layout.addWidget(label("택배 부착용 운송장은 로젠 프로그램에서 출력합니다. 나무팜은 첨부 로젠 양식의 XLS 파일로 주문을 전달합니다.", "muted", True))
+        self.export_button.setToolTip("선택 주문을 로젠 XLS로 저장하고 로젠 프로그램에 불러와 운송장을 출력하세요.")
         return page
 
     def navigate(self, index):
         self.stack.setCurrentIndex(index)
         self.page_title.setText(self.PAGES[index][0])
-        self.page_eyebrow.setText("NAMUFARM  /  " + self.PAGES[index][1])
         for i, widget in enumerate(self.nav):
             widget.setChecked(i == index)
         if index == 1 and self.workspace_ready:
@@ -3150,6 +3261,19 @@ class SellerWindow(MainWindow):
             ready and 0 <= selected_draft < len(self.draft_rows)
             and self.draft_rows[selected_draft]["id"] not in getattr(self, "cloud_quote_ids", set())
         )
+        if 0 <= selected_draft < len(self.draft_rows):
+            draft = self.draft_rows[selected_draft]
+            status = self.draft_statuses[selected_draft]
+            server_copy = draft["id"] in getattr(self, "cloud_quote_ids", set())
+            action = "문자·메일 전달" if status == "견적확정" else "입금 확인" if status == "견적발송완료" else "견적 확인"
+            self.draft_selection_status.setText(
+                f"{draft['customerName']} · 다음 작업: {action}" +
+                (" · 서버 조회 자료는 여기서 삭제할 수 없습니다." if server_copy else ""))
+            self.draft_delete.setToolTip("서버 조회 자료는 삭제 대상이 아닙니다." if server_copy else "선택한 PC 견적 삭제")
+        else:
+            self.draft_selection_status.setText("견적을 선택하면 다음 작업을 확인할 수 있습니다.")
+            self.draft_delete.setToolTip("삭제할 PC 견적을 선택하세요.")
+        self.refresh_status_summary()
         self.export_button.setEnabled(paired)
         self.import_button.setEnabled(paired)
         self.print_button.setEnabled(ready and not self.data["pending"])
@@ -3173,18 +3297,10 @@ class SellerWindow(MainWindow):
     def refresh_workspace(self):
         sales = self.data["sales"]
         self.metrics[0].setText(f"{sum(r.get('status','신규') == '신규' for r in self.data['requests']):,}건")
-        self.metrics[1].setText(f"{sum(r.get('status') in ('견적확정','견적발송완료') for r in self.data['requests']):,}건")
         self.metrics[2].setText(f"{sum(r['metadata']['status'] in ('입금확인','구매확정') for r in sales):,}건")
         month = datetime.now(SEOUL).strftime("%Y-%m")
         completed = [r for r in sales if r["metadata"]["status"] in ("배송완료","판매완료") and timestamp(r["metadata"]["completedAt"]).startswith(month)]
         self.metrics[3].setText(money(sum(r["metadata"]["totalPrice"] for r in completed)))
-        self.work_rows = [r for r in sales if r["metadata"]["status"] in ("구매확정", "입금확인")][:12]
-        rows = []
-        for r in self.work_rows:
-            order = r["private"]["order"]
-            step = shipping_problem(order) or ("로젠 송장 등록" if not tracking_number(order) else "출고 · 배송 확인")
-            rows.append((order.get("customerName") or order["orderNumber"], ", ".join(i["species"] for i in r["metadata"]["items"]), money(order["totalPrice"] + order["taxAmount"]), step))
-        fill_table(self.work_table, rows)
         request_status = {r["requestId"]: r.get("status", "신규") for r in self.data["requests"]}
         draft_pairs = []
         local_sources = set()
@@ -3214,9 +3330,21 @@ class SellerWindow(MainWindow):
             key=lambda pair: draft_quote_sort_key(pair[0]),
             reverse=self.draft_sort_descending,
         )
+        self.refresh_work_queue(draft_pairs)
+        self.metrics[1].setText(f"{sum(status == '견적확정' for _draft, status in draft_pairs):,}건")
+        for value, widget in self.draft_filters.items():
+            title = {"전체": "전체", "견적확정": "전달 대기", "견적발송완료": "발송 완료"}[value]
+            count = len(draft_pairs) if value == "전체" else sum(status == value for _draft, status in draft_pairs)
+            widget.setText(f"{title} {count:,}")
+            widget.setChecked(value == self.draft_filter)
+        previous_index = self.draft_table.currentRow()
+        previous_rows = getattr(self, "draft_rows", [])
+        previous_id = previous_rows[previous_index]["id"] if 0 <= previous_index < len(previous_rows) else None
+        draft_pairs = [(draft, status) for draft, status in draft_pairs
+                       if self.draft_filter == "전체" or status == self.draft_filter]
         self.draft_rows = [draft for draft, _status in draft_pairs]
         self.draft_statuses = [status for _draft, status in draft_pairs]
-        self.metrics[1].setText(f"{len(draft_pairs):,}건")
+        self.draft_table.blockSignals(True)
         fill_table(self.draft_table, [(
             draft_quote_number(d),
             status,
@@ -3227,12 +3355,52 @@ class SellerWindow(MainWindow):
             "요청" if d.get("formalQuoteRequested") else "—",
             ", ".join(f"{i['species']} {i['quantity']:,}주" for i in d["items"]),
             money(draft_amounts(d)["total"]),
+            "서버 조회" if d["id"] in self.cloud_quote_ids else "PC 보관",
         ) for d, status in draft_pairs])
         center_table_columns(self.draft_table, (0, 1, 2, 3, 4, 6, 8))
+        customer_reference(self.draft_table, 3, 0)
+        self.draft_table.clearSelection()
+        self.draft_table.setCurrentCell(-1, -1)
+        restored = next((i for i, draft in enumerate(self.draft_rows) if draft["id"] == previous_id), None)
+        if restored is not None:
+            self.draft_table.selectRow(restored)
+        self.draft_table.blockSignals(False)
+        self.draft_count.setText(f"확정 견적 {len(draft_pairs):,}건")
+        self.draft_table.horizontalHeaderItem(9).setToolTip("서버 조회: 이 PC에 저장한 견적이 없어 서버 자료로 표시 · PC 보관: 이 PC에 저장된 견적")
         pending = len(self.data["pending"])
-        self.health.setText(f"전송 대기 {pending}건\n동기화하여 저장 여부를 확인하세요." if pending else "운영 시트 연결됨\n수정 중에는 자동 새로고침을 멈춥니다." if self.data["paired"] else "연결 · 설정에서 보관함을 열고\nPC를 연결해주세요.")
+        self.health.setText(f"전송 대기 {pending}건 · 서버 동기화 필요" if pending else
+                            "연결 정보 저장됨" if self.data["paired"] else "연결 · 설정에서 PC를 연결하세요.")
         self.refresh_sales()
         self.refresh_shipping()
+
+    def refresh_work_queue(self, draft_pairs):
+        requests = [("request", r) for r in self.data["requests"] if r.get("status", "신규") == "신규"]
+        quotes = [("quote", d) for d, status in draft_pairs if status == "견적확정"]
+        orders = [("sale", r) for r in self.data["sales"] if r["metadata"]["status"] in ("입금확인", "구매확정")]
+        # Include every pending record; the table owns the single scroll area.
+        self.work_rows = requests + quotes + orders
+        rows, references = [], []
+        for kind, record in self.work_rows:
+            if kind == "request":
+                personal = record["personal"]
+                name, items, amount, step = personal["customerName"], personal["items"], "단가 입력 전", "판매 단가 입력 · 견적 확정"
+                reference = record.get("receiptNumber") or record["requestId"]
+            elif kind == "quote":
+                name, items, amount, step = record["customerName"], record["items"], money(draft_amounts(record)["total"]), "견적 전달"
+                reference = draft_quote_number(record)
+            else:
+                order = record["private"]["order"]
+                name, items = order.get("customerName") or order["orderNumber"], record["metadata"]["items"]
+                amount = money(order["totalPrice"] + order["taxAmount"])
+                step = shipping_problem(order) or ("로젠 송장 등록" if not tracking_number(order) else "출고 · 배송 확인")
+                reference = order["orderNumber"]
+            rows.append((name, ", ".join(f"{item['species']} {item['quantity']:,}주" for item in items), amount, step))
+            references.append(reference)
+        fill_table(self.work_table, rows)
+        for index, reference in enumerate(references):
+            cell = self.work_table.item(index, 0)
+            cell.setData(Qt.ItemDataRole.UserRole, reference)
+            cell.setToolTip(cell.text() + "\n" + reference)
 
     def refresh_sales(self):
         if not getattr(self, "workspace_ready", False):
@@ -3244,6 +3412,11 @@ class SellerWindow(MainWindow):
         )
         query = self.sale_search.text().strip().casefold()
         wanted = self.state_filter.currentText()
+        for value, widget in self.sales_filters.items():
+            count = sum(value == "전체 상태" or customer_status_text(row["metadata"]["status"]) == value
+                        for row in self.data.get("sales", []))
+            widget.setText(f"{'전체' if value == '전체 상태' else value} {count:,}")
+            widget.setChecked(value == wanted)
 
         status_priority = {"입금확인": 0, "배송완료": 1, "구매취소": 2}
         rows = []
@@ -3309,6 +3482,7 @@ class SellerWindow(MainWindow):
         self.sale_table.blockSignals(True)
         fill_table(self.sale_table, table_rows)
         center_table_columns(self.sale_table, (0, 1, 2, 3, 4, 6, 9))
+        customer_reference(self.sale_table, 3, 0)
         self.sale_table.clearSelection()
         self.sale_table.setCurrentCell(-1, -1)
         self.sale_table.blockSignals(False)
@@ -3328,6 +3502,9 @@ class SellerWindow(MainWindow):
             f"목록 {len(self.sale_rows):,}건 · 입금확인 주문을 우선 표시합니다."
             if self.sale_rows else "조건에 맞는 판매·고객 기록이 없습니다."
         )
+        self.sale_count.setText(f"판매관리 {len(self.sale_rows):,}건")
+        if self.selected_sale:
+            self.select_sale()
         self.update_controls()
 
     def select_sale(self):
@@ -3340,7 +3517,9 @@ class SellerWindow(MainWindow):
             self.customer_list_status.setText(
                 f"{self.selected_sale['metadata']['orderNumber']} · "
                 f"{order.get('customerName','')} · "
-                f"{customer_status_text(self.selected_sale['metadata']['status'])}"
+                f"{customer_status_text(self.selected_sale['metadata']['status'])} · "
+                + ("다음 작업: 배송정보 · 송장 준비" if customer_status_text(self.selected_sale['metadata']['status']) == "입금확인"
+                   else "완료 내역 확인")
             )
         else:
             self.customer_list_status.setText("주문을 선택하세요.")
@@ -3417,7 +3596,8 @@ class SellerWindow(MainWindow):
             return
         selected = self.selected_shipping()
         self.tracking_input.setText(tracking_number(selected[0]["private"]["order"]) if len(selected) == 1 else "")
-        self.shipping_status.setText(f"선택 {len(selected)}건 / 목록 {len(self.shipping_rows)}건 · 여러 주문은 Ctrl 또는 Shift로 선택하세요.")
+        self.shipping_status.setText(f"선택 {len(selected)}건 / 목록 {len(self.shipping_rows)}건 · " +
+                                     ("로젠 XLS 저장 또는 송장번호 반영을 진행하세요." if selected else "송장을 준비할 주문을 선택하세요. Ctrl·Shift로 여러 건을 선택할 수 있습니다."))
 
     def add_manual_quote(self, *args):
         if getattr(self, "demo_mode", False) or not self.manager or self.task or not self.allow_discard():
@@ -3456,10 +3636,6 @@ class SellerWindow(MainWindow):
             self.run_job("입금확인 내역을 운영 시트에 저장 중…", lambda: self.manager.confirm_draft(draft), self.quote_confirmed)
         elif mode == "finalize":
             self.run_job("견적확정 상태를 운영 시트에 저장 중…", lambda: self.manager.confirm_quote(draft), self.quote_finalized)
-        else:
-            online_request = bool(draft.get("sourceRequestId"))
-            self.run_job("견적을 임시저장 중…", lambda: self.manager.save_draft(draft),
-                         lambda value: self.draft_saved(value, online_request))
 
     def quote_confirmed(self, value):
         self.apply_view(value)
@@ -3468,13 +3644,8 @@ class SellerWindow(MainWindow):
 
     def quote_finalized(self, value):
         self.apply_view(value)
-        self.message.setText("견적을 확정했습니다. 견적 작업대에서 문자·메일 등 후속 작업을 진행하세요.")
+        self.message.setText("견적을 확정했습니다. 확정 견적에서 문자·메일 등 후속 작업을 진행하세요.")
         self.navigate(2)
-
-    def draft_saved(self, value, online_request=False):
-        self.apply_view(value)
-        self.message.setText("견적을 이 PC에 임시저장했습니다. 단가를 확인한 뒤 견적을 확정하세요.")
-        self.navigate(1 if online_request else 2)
 
     def draft_deleted(self, value):
         self.apply_view(value)
@@ -3558,7 +3729,7 @@ class SellerWindow(MainWindow):
             self.run_job("견적 삭제 중…", lambda: self.manager.delete_draft(identifier), self.draft_deleted)
 
     def open_work_order(self, item):
-        self.show_order(self.work_rows[item.row()]["metadata"]["orderNumber"])
+        self.open_selected_work()
 
     def show_order(self, number):
         if not self.allow_discard():

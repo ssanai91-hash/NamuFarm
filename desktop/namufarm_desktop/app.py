@@ -284,7 +284,7 @@ class MainWindow(QMainWindow):
         self.resolve_button.setEnabled(paired and pending and self.conflict)
         self.summary.setText(f"문의 {len(self.data['requests'])}건 · 판매 {len(self.data['sales'])}건 · 전송 대기 {len(self.data['pending'])}건" if self.manager else "PC 자료 준비 중")
         self.connection_status.setText("연결 정보 저장됨" if self.data["paired"] else "서버 연결 필요")
-        self.pending_status.setText("전송 대기는 암호화해 보관합니다. '지금 동기화'로 재시도하세요." if pending else "전송 대기 없음")
+        self.pending_status.setText(f"전송 대기 {len(self.data['pending']):,}건 · 서버 동기화로 재시도하세요." if pending else "전송 대기 0건")
 
     def allow_discard(self):
         if not self.dirty:
@@ -597,15 +597,17 @@ class MainWindow(QMainWindow):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         content = QWidget()
+        content.setMaximumWidth(1040)
+        scroll.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
         layout = QVBoxLayout(content)
         layout.setContentsMargins(0, 0, 12, 0)
-        layout.setSpacing(24)
+        layout.setSpacing(14)
 
         status = QGroupBox("서버 연결 상태")
         status_layout = QVBoxLayout(status)
-        status_layout.setSpacing(12)
+        status_layout.setSpacing(8)
         self.connection_status = QLabel("서버 연결 필요")
-        self.last_sync_label = QLabel("이번 실행에서 동기화한 기록이 없습니다.")
+        self.last_sync_label = QLabel("마지막 동기화 성공 · 이번 실행에서 확인 전")
         self.last_sync_label.setObjectName("muted")
         self.last_sync_label.setWordWrap(True)
         self.pending_status = QLabel("전송 대기 없음")

@@ -1,9 +1,11 @@
 """Shared desktop presentation; no storage or network operations."""
 import re
 
-from PySide6.QtCore import QEvent, Qt
+from PySide6.QtCore import QEvent, Qt, Signal, QRectF
+from PySide6.QtGui import QColor, QPainter
 from PySide6.QtWidgets import (QApplication, QHeaderView, QLabel, QScrollArea,
-                               QSizePolicy, QTableWidget, QVBoxLayout, QWidget)
+                               QSizePolicy, QTableWidget, QVBoxLayout, QWidget,
+                               QStyledItemDelegate, QStyleOptionViewItem, QStyle)
 
 
 def workspace_style(large=False):
@@ -16,9 +18,9 @@ QMainWindow,#workspace,QDialog{background:#f3f5f1;}
 #sidebar #brand{font-size:28px;font-weight:700;color:#fff;}
 #sidebar #navFoot{font-size:@small@px;color:#c6d9cf;}
 #sidebar QPushButton{background:transparent;color:#e0ebe3;border:2px solid transparent;border-radius:8px;text-align:left;padding:9px 10px;font-weight:600;}
-#sidebar QPushButton:checked{background:#2e604e;color:#fff;border-color:#74a589;}
+#sidebar QPushButton:checked{background:#2e604e;color:#fff;border-left-color:#b6df9a;}
 #sidebar QPushButton:hover{background:#285442;}
-#sidebar QPushButton:focus{border-color:#fff;}
+#sidebar QPushButton:focus{border-style:dashed;border-color:#e4d29e;}
 #sidebar QWidget#navRow{background:transparent;}
 #sidebar QLabel#navBadge{background:#c7efad;color:#173b26;border:1px solid #c7efad;border-radius:10px;min-width:24px;padding:3px 6px;font-size:@small@px;font-weight:700;}
 QLabel#pageTitle,QLabel#deliveryTitle,QLabel#heroTitle{font-size:28px;font-weight:700;color:#193d2e;}
@@ -56,7 +58,7 @@ QTableWidget{background:#fff;alternate-background-color:#f1f6ef;border:1px solid
 QTableWidget:focus{border:2px solid #286547;}
 QTableWidget::item{padding:8px;border:0;border-bottom:1px solid #dce6da;}
 QTableWidget::item:selected{background:#c7dfd0;color:#173b2e;border-bottom:2px solid #286547;}
-QHeaderView::section{background:#2f5d3a;color:#fff;border:0;border-right:1px solid #78967f;padding:10px 8px;font-weight:700;}
+QHeaderView::section{background:#e8eee8;color:#304a3b;border:0;border-right:1px solid #cdd9ce;border-bottom:1px solid #b9cbbb;padding:9px 8px;font-weight:700;}
 QGroupBox{background:#fff;border:1px solid #cdd9ce;border-radius:12px;margin-top:22px;padding:20px;font-weight:600;}
 QGroupBox::title{subcontrol-origin:margin;left:16px;padding:0 6px;}
 QScrollArea{border:0;background:transparent;}
@@ -80,14 +82,21 @@ QFrame#deliveryShippingCard,QFrame#quoteTotalBand{background:#eaf2e7;border:1px 
 QLabel#deliveryShippingStatus{font-size:@small@px;color:#4f6257;}
 QLineEdit#deliveryShippingFee{min-width:100px;max-width:160px;}
 QLabel#quoteFileName{background:#eef2eb;color:#4f6257;border:1px solid #cdd9ce;border-radius:8px;padding:8px 10px;font-size:@small@px;}
-#unitPriceEditor QPushButton{padding:2px;min-height:36px;}
-#unitPriceEditor QLineEdit{padding:5px;min-height:30px;}
+#unitPriceEditor QPushButton{padding:0;min-height:0;max-height:44px;}
+#unitPriceEditor QPushButton:focus{padding:0;}
+#unitPriceEditor QLineEdit{padding:2px 5px;min-height:0;max-height:44px;}
+#unitPriceEditor QLineEdit:focus{padding:1px 4px;}
+QPushButton#filterTab:checked{background:#dcebdd;color:#194d3a;border-color:#286547;}
+QLabel#navGroup{font-size:@small@px;color:#a6c2b2;padding:10px 10px 2px;}
+QPushButton#compactStatus{font-size:@small@px;padding:5px 8px;min-height:28px;}
 """
     return css.replace('@body@', str(body)).replace('@small@', str(small))
 
 
 class StatusMessage(QLabel):
     """Readable status with the complete original message available as details."""
+    changed = Signal()
+
     def __init__(self, text='', parent=None):
         super().__init__(parent)
         self.setText(text)
@@ -99,6 +108,71 @@ class StatusMessage(QLabel):
             summary = '서버 업데이트가 필요합니다. 자세히 보기에서 연결 안내를 확인해주세요.'
         super().setText(summary)
         self.setToolTip(self.details)
+        self.changed.emit()
+
+
+class CustomerDelegate(QStyledItemDelegate):
+    """Customer first, stable receipt/order number on a second line."""
+    def paint(self, painter, option, index):
+        secondary = index.data(Qt.ItemDataRole.UserRole)
+        if not secondary:
+            return super().paint(painter, option, index)
+        opt = QStyleOptionViewItem(option)
+        self.initStyleOption(opt, index)
+        primary = opt.text
+        opt.text = ''
+        style = opt.widget.style() if opt.widget else QApplication.style()
+        style.drawControl(QStyle.ControlElement.CE_ItemViewItem, opt, painter, opt.widget)
+        painter.save()
+        rect = option.rect.adjusted(8, 3, -8, -3)
+        font = option.font
+        font.setBold(True)
+        painter.setFont(font)
+        painter.setPen(QColor('#173b2e'))
+        top = QRectF(rect.x(), rect.y(), rect.width(), rect.height() / 2)
+        painter.drawText(top, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                         painter.fontMetrics().elidedText(primary, Qt.TextElideMode.ElideRight, rect.width()))
+        font.setBold(False)
+        font.setPixelSize(16 if QApplication.instance().property('namufarmLargeFont') else 14)
+        painter.setFont(font)
+        painter.setPen(QColor('#4f6257'))
+        bottom = top.translated(0, rect.height() / 2)
+        painter.drawText(bottom, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                         painter.fontMetrics().elidedText(str(secondary), Qt.TextElideMode.ElideRight, rect.width()))
+        painter.restore()
+
+
+class StatusDelegate(QStyledItemDelegate):
+    def paint(self, painter, option, index):
+        opt = QStyleOptionViewItem(option)
+        self.initStyleOption(opt, index)
+        text = opt.text
+        opt.text = ''
+        style = opt.widget.style() if opt.widget else QApplication.style()
+        style.drawControl(QStyle.ControlElement.CE_ItemViewItem, opt, painter, opt.widget)
+        pending = text in ('견적확정', '입금확인', '신규')
+        canceled = text == '구매취소'
+        background, foreground = (('#fff0d2', '#735016') if pending else
+                                  ('#f4e4e0', '#903c2d') if canceled else ('#e2eddf', '#23593a'))
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(background))
+        rect = option.rect.adjusted(6, 10, -6, -10)
+        painter.drawRoundedRect(rect, 6, 6)
+        painter.setPen(QColor(foreground))
+        painter.setFont(option.font)
+        painter.drawText(rect, Qt.AlignmentFlag.AlignCenter,
+                         painter.fontMetrics().elidedText(text, Qt.TextElideMode.ElideRight, max(1, rect.width()-8)))
+        painter.restore()
+
+
+def customer_reference(widget, customer_column, reference_column):
+    for row in range(widget.rowCount()):
+        customer, reference = widget.item(row, customer_column), widget.item(row, reference_column)
+        if customer is not None and reference is not None:
+            customer.setData(Qt.ItemDataRole.UserRole, reference.text())
+            customer.setToolTip(customer.text() + '\n' + reference.text())
 
 
 class DataTable(QTableWidget):
