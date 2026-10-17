@@ -6,7 +6,7 @@ from unittest.mock import Mock, patch
 
 from PySide6.QtCore import QPoint, Qt
 from PySide6.QtWidgets import QDialog, QMessageBox
-from namufarm_desktop.commerce import new_draft
+from namufarm_desktop.commerce import new_draft, quote_delivery_fingerprint
 from namufarm_desktop.ui_theme import workspace_style
 from namufarm_desktop.workspace import QuoteDialog
 from qt_support import QtTestCase
@@ -126,6 +126,8 @@ class QuoteWorkbenchTest(QtTestCase):
         dialog = self.dialog(size=(1000, 620))
         self.assertGreater(dialog.items.verticalScrollBar().maximum(), 0)
         self.assertEqual(0, dialog.items.horizontalScrollBar().maximum())
+        dialog.workbench_scroll.ensureWidgetVisible(dialog.confirm_button)
+        self.settle()
         for action in (dialog.close_button, dialog.confirm_button):
             self.assertGreaterEqual(action.height(), 44)
             self.assertLess(action.mapTo(dialog, QPoint()).y() + action.height(), dialog.height())
@@ -135,6 +137,7 @@ class QuoteWorkbenchTest(QtTestCase):
 
     def test_finalize_still_requires_confirmation_and_existing_status_gate(self):
         dialog = self.dialog()
+        dialog.delivery_state = {'emailSentAt': 1, 'emailQuoteFingerprint': quote_delivery_fingerprint(dialog.collect())}
         with patch('namufarm_desktop.workspace.QMessageBox.question', return_value=QMessageBox.StandardButton.No):
             dialog.confirm_button.click()
         self.assertEqual('', dialog.mode)
@@ -197,10 +200,10 @@ class QuoteWorkbenchTest(QtTestCase):
         sent = factory.call_args.args[0]
         self.assertEqual(7000, sent['shippingFee'])
         self.assertTrue(sent['isPrepaid'])
-        self.assertEqual('문자 결과확인', dialog.sms_status_badge.text())
+        self.assertEqual('결과확인', dialog.sms_status_badge.text())
         dialog.generate_quote_button.click()
         attachment = dialog.generated_quote_path
-        mail = Mock(delivery_state={'emailSentAt': 1})
+        mail = Mock(delivery_state={'emailSentAt': 1, 'emailQuoteFingerprint': quote_delivery_fingerprint(dialog.collect())})
         mail.exec.return_value = QDialog.DialogCode.Accepted
         with patch('namufarm_desktop.workspace.QMessageBox.question', return_value=QMessageBox.StandardButton.Yes), \
              patch('namufarm_desktop.workspace.QuoteEmailDialog', return_value=mail) as factory:
@@ -215,3 +218,65 @@ class QuoteWorkbenchTest(QtTestCase):
         self.assertEqual(7000, dialog.draft['shippingFee'])
         self.assertTrue(dialog.draft['isPrepaid'])
         self.assertFalse(attachment.exists())
+
+    def test_completion_blocks_unsent_pending_failed_and_old_delivery(self):
+        dialog = self.dialog()
+        fingerprint = quote_delivery_fingerprint(dialog.collect())
+        for state in ({}, {'smsState': 'pending', 'smsMessageId': 'fixture', 'smsQuoteFingerprint': fingerprint},
+                      {'smsState': 'failed', 'smsQuoteFingerprint': fingerprint},
+                      {'smsState': 'success'}, {'emailSentAt': 1},
+                      {'emailSentAt': 1, 'emailQuoteFingerprint': 'older-quote'}):
+            with self.subTest(state=state):
+                dialog.delivery_state = state
+                with patch('namufarm_desktop.workspace.QMessageBox.warning') as warning, \
+                     patch('namufarm_desktop.workspace.QMessageBox.question') as question:
+                    dialog.confirm_button.click()
+                warning.assert_called_once()
+                self.assertIn('먼저 보내', warning.call_args.args[2])
+                question.assert_not_called()
+                self.assertEqual('', dialog.mode)
+                self.assertTrue(dialog.isVisible())
+
+    def test_either_successful_channel_allows_completion_but_edits_require_resending(self):
+        for channel in ('sms', 'email'):
+            with self.subTest(channel=channel):
+                dialog = self.dialog()
+                fingerprint = quote_delivery_fingerprint(dialog.collect())
+                state = {channel + 'QuoteFingerprint': fingerprint}
+                state.update({'smsState': 'success'} if channel == 'sms' else {'emailSentAt': 1})
+                dialog.delivery_state = state
+                dialog.update_delivery_badges()
+                badge = dialog.sms_status_badge if channel == 'sms' else dialog.email_status_badge
+                self.assertEqual('전송완료', badge.text())
+                dialog.set_unit_price(0, 2500)
+                self.assertEqual('재전송', badge.text())
+                with patch('namufarm_desktop.workspace.QMessageBox.warning') as warning:
+                    dialog.confirm_button.click()
+                warning.assert_called_once()
+                dialog.shipping_prepaid.setChecked(True)
+                dialog.shipping_fee.setText('7000')
+                state[channel + 'QuoteFingerprint'] = quote_delivery_fingerprint(dialog.collect())
+                dialog.update_delivery_badges()
+                with patch('namufarm_desktop.workspace.QMessageBox.question', return_value=QMessageBox.StandardButton.Yes):
+                    dialog.confirm_button.click()
+                self.assertEqual('finalize', dialog.mode)
+                self.assertEqual(QDialog.DialogCode.Accepted, dialog.result())
+
+    def test_inline_status_and_completion_share_a_taller_row_with_close_only_in_footer(self):
+        dialog = self.dialog(size=(1280, 988))
+        summary_bottom = dialog.workbench_summary.mapTo(dialog, QPoint()).y() + dialog.workbench_summary.height()
+        rule_y = dialog.workbench_delivery_rule.mapTo(dialog, QPoint()).y()
+        self.assertGreater(rule_y, summary_bottom)
+        self.assertGreater(dialog.sms_button.mapTo(dialog, QPoint()).y(), rule_y + 30)
+        self.assertTrue(dialog.sms_button.isAncestorOf(dialog.sms_status_badge))
+        self.assertTrue(dialog.email_button.isAncestorOf(dialog.email_status_badge))
+        actions = (dialog.sms_button, dialog.email_button, dialog.confirm_button)
+        self.assertEqual(1, len({a.mapTo(dialog, QPoint()).y() for a in actions}))
+        self.assertEqual(1, len({a.height() for a in actions}))
+        self.assertGreaterEqual(dialog.sms_button.height(), 64)
+        self.assertLess(dialog.sms_button.x(), dialog.email_button.x())
+        self.assertLess(dialog.email_button.x(), dialog.confirm_button.x())
+        self.assertFalse(dialog.workbench_footer.isAncestorOf(dialog.confirm_button))
+        self.assertTrue(dialog.workbench_footer.isAncestorOf(dialog.close_button))
+        self.assertEqual(0, dialog.workbench_scroll.horizontalScrollBar().maximum())
+        self.assertEqual(0, dialog.workbench_scroll.verticalScrollBar().maximum())

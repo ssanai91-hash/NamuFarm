@@ -1,9 +1,10 @@
 """Run actual Apps Script delivery endpoints against isolated Sheet/provider fixtures."""
+import copy
 import tempfile
 import unittest
 from pathlib import Path
 
-from namufarm_desktop.commerce import new_draft
+from namufarm_desktop.commerce import new_draft, quote_delivery_fingerprint
 from namufarm_desktop.errors import UserError, NetworkError
 from namufarm_desktop.service import Manager
 from namufarm_desktop.store import Vault
@@ -46,6 +47,8 @@ class RequestDeliveryTest(unittest.TestCase):
                                                '<p>37,000원 택배비 포함</p>', attachment_path=pdf)
         self.assertEqual(pdf.name, result['attachmentName'])
         self.assertGreater(result['delivery']['emailSentAt'], 0)
+        self.assertEqual(quote_delivery_fingerprint(self.draft), result['delivery']['emailQuoteFingerprint'])
+        self.assertEqual(result['delivery'], Manager(self.vault, self.api).quote_delivery_state(self.draft['id']))
         self.assert_request_still_new()
         view = self.manager.confirm_quote(self.draft)
         self.assertEqual(1, len(view['confirmedQuotes']))
@@ -62,6 +65,13 @@ class RequestDeliveryTest(unittest.TestCase):
         self.assert_request_still_new()
         state = self.manager.refresh_quote_sms_status(self.draft['id'])
         self.assertEqual('success', state['smsState'])
+        self.assertEqual(quote_delivery_fingerprint(self.draft), state['smsQuoteFingerprint'])
+        edited = copy.deepcopy(self.draft)
+        edited['shippingFee'] += 1000
+        self.assertNotEqual(quote_delivery_fingerprint(edited), state['smsQuoteFingerprint'])
+        edited = copy.deepcopy(self.draft)
+        edited['items'][0]['unitPrice'] += 500
+        self.assertNotEqual(quote_delivery_fingerprint(edited), state['smsQuoteFingerprint'])
         self.assert_request_still_new()
 
     def test_stale_requests_are_blocked_and_failed_delivery_preserves_recovery_inputs(self):

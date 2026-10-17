@@ -2,6 +2,8 @@
 import copy
 import csv
 import io
+import hashlib
+import json
 import re
 import uuid
 from datetime import datetime, timedelta
@@ -27,6 +29,18 @@ def payment_notice(draft):
     if account == f"{PAYMENT_BANK_ACCOUNT} {PAYMENT_ACCOUNT_HOLDER}":
         return f"입금계좌 : {PAYMENT_BANK_ACCOUNT}\n예금주 : {PAYMENT_ACCOUNT_HOLDER}"
     return f"입금계좌 안내 : {account}"
+
+
+def quote_delivery_fingerprint(draft):
+    """Bind a successful delivery to the customer and quotation that was sent."""
+    keys = ("id", "sourceRequestId", "requestReceiptNumber", "customerName", "customerPhone",
+            "customerEmail", "note", "issuer", "paymentAccount", "isPrepaid", "shippingFee", "taxAmount")
+    value = {key: draft.get(key) for key in keys}
+    value["items"] = [{key: item.get(key, "" if key in ("species", "specification") else 0)
+                       for key in ("species", "specification", "quantity", "unitPrice")}
+                      for item in draft.get("items", [])]
+    return hashlib.sha256(json.dumps(value, sort_keys=True, ensure_ascii=False,
+                                     separators=(",", ":")).encode("utf-8")).hexdigest()
 
 
 def new_draft(request=None):

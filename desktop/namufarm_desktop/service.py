@@ -10,7 +10,7 @@ from .crypto import canonical, digest, customer_digest, SellerKey
 from .domain import (changed, integer, metadata, now_ms, require, valid_id, validate_metadata, validate_request, sale_expired)
 from .errors import AuthenticationError, UserError, ConflictError
 from .commerce import (validate_draft, order_from_draft, quote_document, tracking_fields,
-                       tracking_number, normalize_tracking)
+                       tracking_number, normalize_tracking, quote_delivery_fingerprint)
 
 
 class Manager:
@@ -346,7 +346,9 @@ class Manager:
                 "smsStatusMessage": str(value.get("smsStatusMessage", "") or ""),
                 "smsUpdatedAt": int(value.get("smsUpdatedAt", 0) or 0),
                 "emailTo": str(value.get("emailTo", "") or ""),
-                "senderEmail": str(value.get("senderEmail", "") or "")}
+                "senderEmail": str(value.get("senderEmail", "") or ""),
+                "smsQuoteFingerprint": str(value.get("smsQuoteFingerprint", "") or ""),
+                "emailQuoteFingerprint": str(value.get("emailQuoteFingerprint", "") or "")}
 
     def _save_quote_delivery_state(self, identifier, state):
         require(valid_id(identifier), "견적 식별자를 확인해주세요.")
@@ -407,6 +409,7 @@ class Manager:
                       "senderPhone": result.get("senderPhone", ""),
                       "smsMessageId": result.get("messageId", ""),
                       "smsState": "pending",
+                      "smsQuoteFingerprint": quote_delivery_fingerprint(draft),
                       "smsStatusCode": str(result.get("statusCode", "") or "2000"),
                       "smsStatusMessage": str(result.get("statusMessage", "") or "문자 발송을 접수했습니다."),
                       "smsUpdatedAt": now_ms()})
@@ -478,7 +481,8 @@ class Manager:
         if attachment_name:
             require(result.get("attachmentName") == attachment_name, "공식견적서 첨부 전송을 확인하지 못했습니다.")
         delivery = self._mark_quote_channel_sent(draft["id"], "email", emailTo=recipient,
-                                                 senderEmail=result.get("senderEmail", ""))
+                                                 senderEmail=result.get("senderEmail", ""),
+                                                 emailQuoteFingerprint=quote_delivery_fingerprint(draft))
         return {"delivery": delivery, "senderEmail": result.get("senderEmail", ""),
                 "attachmentName": result.get("attachmentName", ""),
                 "sentAt": result.get("sentAt", ""), "remainingDailyQuota": result.get("remainingDailyQuota", 0)}

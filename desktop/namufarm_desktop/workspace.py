@@ -23,7 +23,7 @@ from .ui_theme import (align_table, fit_window, scroll_dialog, scroll_page, work
 from .ui_icons import set_button_icon, ui_icon
 from .app import MainWindow, Task, table, fill_table, money, timestamp
 from .commerce import (ISSUER, new_draft, draft_amounts, validate_draft, quote_html, quote_document_html, shipping_html,
-                       shipping_problem, parse_tracking_csv, tracking_number, payment_account_text, payment_notice)
+                       shipping_problem, parse_tracking_csv, tracking_number, payment_account_text, payment_notice, quote_delivery_fingerprint)
 from .domain import SEOUL, profit, require
 from .errors import UserError
 from .shipping_excel import shipping_xls, parse_tracking_xls, export_orders, UPLOAD_SHEET
@@ -537,6 +537,34 @@ class CustomerInfoValue(QTextBrowser):
         return int(self.document().size().height()) + 2
 
 
+class DeliveryActionButton(QPushButton):
+    """Keyboard-accessible channel action with its status inside the left edge."""
+    def __init__(self, title, icon, name, parent=None):
+        super().__init__(parent)
+        self.setObjectName(name)
+        self.setAccessibleName(title)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        row = QHBoxLayout(self)
+        row.setContentsMargins(8, 0, 8, 0)
+        row.setSpacing(6)
+        self.status_badge = label("", "channelStatusBadge")
+        self.status_badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.status_badge.setFixedHeight(28)
+        row.addWidget(self.status_badge)
+        row.addStretch(1)
+        symbol = QLabel()
+        symbol.setFixedSize(18, 18)
+        symbol.setPixmap(ui_icon(icon, "#ffffff" if name == "smsAction" else "#24313a").pixmap(18, 18))
+        row.addWidget(symbol)
+        self.title_label = label(title, "deliveryActionTitle")
+        row.addWidget(self.title_label)
+        row.addStretch(1)
+        for child in (self.status_badge, symbol, self.title_label):
+            child.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self.setMinimumWidth(0)
+
+
 class QuoteDeliveryTools:
     """Shared document and channel actions for editing and confirmed quotations."""
 
@@ -580,31 +608,42 @@ class QuoteDeliveryTools:
             tools.addWidget(divider)
         else:
             document_content.addLayout(document)
+        integrated = compact and document_content is not None
+        self.integrated_delivery = integrated
         delivery = QVBoxLayout()
-        delivery.setSpacing(8)
+        delivery.setSpacing(12 if integrated else 8)
         delivery.addWidget(label("고객 전달", "deliverySectionTitle"))
-        badges = QHBoxLayout()
-        badges.setSpacing(8)
-        self.sms_status_badge = QLabel()
-        self.email_status_badge = QLabel()
-        for badge in (self.sms_status_badge, self.email_status_badge):
-            badge.setObjectName("channelStatusBadge")
-            badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            badge.setFixedHeight(28)
-            badges.addWidget(badge)
-        badges.addStretch()
-        self.update_delivery_badges()
-        delivery.addLayout(badges)
         send_buttons = QHBoxLayout()
+        self.delivery_send_layout = send_buttons
         send_buttons.setSpacing(12)
-        self.sms_button = QPushButton("문자 보내기")
-        self.sms_button.setObjectName("smsAction")
+        if integrated:
+            self.sms_button = DeliveryActionButton("문자 보내기", "message", "smsAction")
+            self.email_button = DeliveryActionButton("메일 보내기", "mail", "mailAction")
+            self.sms_status_badge = self.sms_button.status_badge
+            self.email_status_badge = self.email_button.status_badge
+        else:
+            badges = QHBoxLayout()
+            badges.setSpacing(8)
+            self.sms_status_badge = QLabel()
+            self.email_status_badge = QLabel()
+            for badge in (self.sms_status_badge, self.email_status_badge):
+                badge.setObjectName("channelStatusBadge")
+                badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                badge.setFixedHeight(28)
+                badges.addWidget(badge)
+            badges.addStretch()
+            delivery.addLayout(badges)
+            self.sms_button = QPushButton("문자 보내기")
+            self.sms_button.setObjectName("smsAction")
+            self.email_button = QPushButton("메일 보내기")
+            self.email_button.setObjectName("mailAction")
+            set_button_icon(self.sms_button, "message", "#ffffff")
+            set_button_icon(self.email_button, "mail")
         self.sms_button.clicked.connect(self.open_sms)
         self.sms_button.setEnabled(bool(self.draft.get("customerPhone")))
-        self.email_button = QPushButton("메일 보내기")
-        self.email_button.setObjectName("mailAction")
         self.email_button.clicked.connect(self.open_email)
         self.email_button.setEnabled(bool(self.draft.get("customerEmail")))
+        self.update_delivery_badges()
         send_buttons.addWidget(self.sms_button, 1)
         send_buttons.addWidget(self.email_button, 1)
         delivery.addLayout(send_buttons)
@@ -612,8 +651,6 @@ class QuoteDeliveryTools:
         tools.addLayout(delivery, 1)
         content.addLayout(tools)
 
-        set_button_icon(self.sms_button, "message", "#ffffff")
-        set_button_icon(self.email_button, "mail")
         set_button_icon(self.generate_quote_button, "document")
         set_button_icon(self.preview_quote_button, "document")
 
@@ -635,19 +672,38 @@ class QuoteDeliveryTools:
         else:
             sms_text, sms_style, sms_done = "문자 미전송", "idle", False
 
-        self.sms_status_badge.setText(sms_text)
+        email_done = bool(self.delivery_state.get("emailSentAt"))
+        if getattr(self, "integrated_delivery", False):
+            try:
+                fingerprint = quote_delivery_fingerprint(self.collect())
+            except UserError:
+                fingerprint = None
+            sms_current = fingerprint and self.delivery_state.get("smsQuoteFingerprint") == fingerprint
+            email_current = fingerprint and self.delivery_state.get("emailQuoteFingerprint") == fingerprint
+            if sms_done and not sms_current:
+                sms_text, sms_style, sms_done = "문자 재전송", "pending", False
+            if email_done and not email_current:
+                email_done = False
+                email_text = "메일 재전송"
+            else:
+                email_text = "메일 전송완료" if email_done else "메일 미전송" if self.draft.get("customerEmail") else "이메일 없음"
+        else:
+            email_text = "메일 전송완료" if email_done else "메일 미전송" if self.draft.get("customerEmail") else "이메일 없음"
+        self.sms_status_badge.setText(sms_text.removeprefix("문자 ") if getattr(self, "integrated_delivery", False) else sms_text)
         self.sms_status_badge.setProperty("done", sms_done)
         self.sms_status_badge.setProperty("state", sms_style)
         self.sms_status_badge.style().unpolish(self.sms_status_badge)
         self.sms_status_badge.style().polish(self.sms_status_badge)
 
-        email_done = bool(self.delivery_state.get("emailSentAt"))
-        self.email_status_badge.setText("메일 전송완료" if email_done else
-                                       "메일 미전송" if self.draft.get("customerEmail") else "이메일 없음")
+        self.email_status_badge.setText(email_text.removeprefix("메일 ") if getattr(self, "integrated_delivery", False) else email_text)
         self.email_status_badge.setProperty("done", email_done)
         self.email_status_badge.setProperty("state", "success" if email_done else "idle")
         self.email_status_badge.style().unpolish(self.email_status_badge)
         self.email_status_badge.style().polish(self.email_status_badge)
+        for action, text in ((self.sms_button, sms_text), (self.email_button, email_text)):
+            action.setAccessibleName(action.title_label.text() + ", " + text if isinstance(action, DeliveryActionButton) else action.text())
+            action.setToolTip(text)
+
 
 
     def open_sms(self):
@@ -997,7 +1053,7 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         right.setObjectName("workbenchBody")
         content = QVBoxLayout(right)
         content.setContentsMargins(24, 16, 24, 8)
-        content.setSpacing(8)
+        content.setSpacing(5 if large else 8)
         content.addWidget(section_heading("견적 품목", "leaf", 36))
         # Logical indices stay stable for collection; visual order puts price before amount.
         self.items = table(["묘목명", "수량", "판매 금액", "판매 단가", "순번"])
@@ -1042,7 +1098,7 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         self.workbench_summary.setObjectName("workbenchSummary")
         self.workbench_summary.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         summary = QHBoxLayout(self.workbench_summary)
-        summary.setContentsMargins(20, 16, 20, 16)
+        summary.setContentsMargins(20, 12 if large else 16, 20, 12 if large else 16)
         summary.setSpacing(16)
         summary.addWidget(workbench_icon("calculator", 52))
         summary.addWidget(label("합계", "workbenchSumTitle"))
@@ -1052,6 +1108,12 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         self.total.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         summary.addWidget(self.total)
         content.addWidget(self.workbench_summary)
+        content.addSpacing(12)
+        self.workbench_delivery_rule = QFrame()
+        self.workbench_delivery_rule.setObjectName("workbenchTotalRule")
+        self.workbench_delivery_rule.setFixedHeight(3)
+        content.addWidget(self.workbench_delivery_rule)
+        content.addSpacing(16)
         self.build_delivery_tools(content, compact=True, document_content=document_content)
         content.addStretch()
         self.workbench_scroll.setWidget(right)
@@ -1081,10 +1143,11 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         self.close_button.setMinimumWidth(120)
         footer.addWidget(self.close_button)
         self.confirm_button = button("견적완료", lambda: self.finish("finalize"), True)
-        self.confirm_button.setMinimumWidth(200)
+        self.confirm_button.setMinimumWidth(132)
+        self.confirm_button.setProperty("deliveryCompletion", True)
         self.confirm_button.setEnabled(self.request_status in ("", "신규"))
         set_button_icon(self.confirm_button, "check", "#ffffff")
-        footer.addWidget(self.confirm_button)
+        self.delivery_send_layout.addWidget(self.confirm_button)
         root.addWidget(self.workbench_footer)
         for item in self.draft["items"]:
             self.add_item(item)
@@ -1140,6 +1203,10 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         for value in self.customer_values.values():
             value.setMaximumWidth(value_width)
             value.setFixedHeight(value.heightForWidth(value_width))
+        narrow = self.workbench_scroll.viewport().width() < 700
+        for action in (self.sms_button, self.email_button):
+            action.title_label.setStyleSheet("font-size:16px;" if narrow else "font-size:18px;")
+            action.status_badge.setStyleSheet("font-size:12px;padding:2px 4px;" if narrow else "")
         row_height = 64 if large else 56
         for row in range(self.items.rowCount()):
             self.items.setRowHeight(row, row_height)
@@ -1291,6 +1358,8 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         except UserError:
             self.total.setText("판매 단가를 입력해주세요")
             self.amount_detail.setText("판매 금액 = 수량 × 판매 단가" if self.simple_request else "판매 금액은 수량 × 판매 단가로 계산합니다.")
+        if self.simple_request and hasattr(self, "sms_status_badge"):
+            self.update_delivery_badges()
 
     def edit_issuer(self):
         if self.simple_request:
@@ -1321,6 +1390,14 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         try:
             require(mode in ("finalize", "confirm"), "견적 확정 또는 판매 등록을 선택해주세요.")
             draft = self.collect()
+            if self.simple_request and mode == "finalize":
+                fingerprint = quote_delivery_fingerprint(draft)
+                state = self.delivery_state
+                delivered = ((state.get("smsState") == "success" and state.get("smsQuoteFingerprint") == fingerprint)
+                             or (bool(state.get("emailSentAt")) and state.get("emailQuoteFingerprint") == fingerprint))
+                if not delivered:
+                    QMessageBox.warning(self, "고객 전달 확인", "문자 또는 메일을 먼저 보내 주세요.\n현재 견적의 전송이 완료되어야 견적완료할 수 있습니다.\n문자 결과확인 중이면 최종 전송 결과를 확인해 주세요.")
+                    return
             if mode == "finalize" and QMessageBox.question(self, "견적 확정", "판매 단가와 합계를 확인했나요?\n확정하면 온라인 요청 상태가 '견적확정'으로 바뀌고 확정 견적으로 이동합니다.", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
                 return
             if mode == "confirm" and QMessageBox.question(self, "입금확인", "고객의 구매와 입금을 확인했나요?\n품목·수량·금액은 판매 등록 후 변경할 수 없습니다.", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:

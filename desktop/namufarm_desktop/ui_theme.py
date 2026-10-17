@@ -173,6 +173,11 @@ QDialog#quoteWorkbench QPushButton#smsAction{background:#25634b;color:#ffffff;}
 QDialog#quoteWorkbench QPushButton#smsAction:hover{background:#194c37;}
 QDialog#quoteWorkbench QPushButton#smsAction:disabled{background:#e1e9e4;color:#6a7b71;border-color:#bdcec3;}
 QDialog#quoteWorkbench QPushButton#pdfAction,QDialog#quoteWorkbench QPushButton#smsAction,QDialog#quoteWorkbench QPushButton#mailAction{font-size:18px;padding:0 8px;}
+QDialog#quoteWorkbench QPushButton#smsAction,QDialog#quoteWorkbench QPushButton#mailAction,QDialog#quoteWorkbench QPushButton[deliveryCompletion="true"]{min-height:64px;max-height:64px;padding:0 8px;}
+QDialog#quoteWorkbench QLabel#deliveryActionTitle{font-size:18px;}
+QDialog#quoteWorkbench QPushButton#smsAction QLabel#deliveryActionTitle{color:#ffffff;}
+QDialog#quoteWorkbench QPushButton:disabled QLabel#deliveryActionTitle{color:#6a7b71;}
+QDialog#quoteWorkbench QPushButton:focus{border:2px solid #b37a22;}
 QDialog#quoteWorkbench QLabel#channelStatusBadge{font-size:14px;background:#f1f4f2;border-radius:5px;padding:2px 6px;color:#52645c;}
 QDialog#quoteWorkbench QLabel#channelStatusBadge[state="success"]{background:#e2efe5;color:#23603b;}
 QDialog#quoteWorkbench QLabel#channelStatusBadge[state="failed"]{background:#fbe5e2;color:#a13d32;}
