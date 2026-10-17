@@ -2707,7 +2707,7 @@ class SellerWindow(MainWindow):
         self.request_table.setWordWrap(False)
         self.request_table.setTextElideMode(Qt.TextElideMode.ElideRight)
         self.request_table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Fixed)
-        self.request_table.set_column_layout(((3, 2.7), (4, 1.8), (8, 3), (1, 1.8), (7, 1.3)))
+        self.request_table.set_column_layout(((3, 2.7), (4, 1.8), (8, 3), (1, 1.8), (7, 1.3), (5, 2.5)))
         self.request_table.setItemDelegateForColumn(3, CustomerDelegate(self.request_table))
         request_layout = old_pages[0].layout()
         self.request_count = label("견적요청 0건", "sectionTitle")

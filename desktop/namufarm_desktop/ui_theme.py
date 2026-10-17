@@ -61,7 +61,7 @@ QLineEdit:disabled,QComboBox:disabled,QPlainTextEdit:disabled{background:#ecefea
 QTableWidget{background:#fff;alternate-background-color:#f1f6ef;border:1px solid #a8bca9;border-radius:8px;gridline-color:#d8e3d8;selection-background-color:#c7dfd0;selection-color:#173b2e;}
 QTableWidget:focus{border:2px solid #286547;}
 QTableWidget::item{padding:8px;border:0;border-bottom:1px solid #dce6da;}
-QTableWidget::item:selected{background:#c7dfd0;color:#173b2e;border-bottom:2px solid #286547;}
+QTableWidget::item:selected{background:#c7dfd0;color:#173b2e;border:0;border-bottom:1px solid #a4c2ac;}
 QHeaderView::section{background:#e8eee8;color:#304a3b;border:0;border-right:1px solid #cdd9ce;border-bottom:1px solid #b9cbbb;padding:9px 8px;font-weight:700;}
 QGroupBox{background:#fff;border:1px solid #cdd9ce;border-radius:12px;margin-top:22px;padding:20px;font-weight:600;}
 QGroupBox::title{subcontrol-origin:margin;left:16px;padding:0 6px;}
@@ -111,7 +111,14 @@ class StatusMessage(QLabel):
         self.setToolTip(self.details)
 
 
-class CustomerDelegate(QStyledItemDelegate):
+class RowSelectionDelegate(QStyledItemDelegate):
+    """Use the row highlight and table focus border instead of cell focus boxes."""
+    def initStyleOption(self, option, index):
+        super().initStyleOption(option, index)
+        option.state &= ~QStyle.StateFlag.State_HasFocus
+
+
+class CustomerDelegate(RowSelectionDelegate):
     """Customer first, stable receipt/order number on a second line."""
     def paint(self, painter, option, index):
         secondary = index.data(Qt.ItemDataRole.UserRole)
@@ -142,7 +149,7 @@ class CustomerDelegate(QStyledItemDelegate):
         painter.restore()
 
 
-class StatusDelegate(QStyledItemDelegate):
+class StatusDelegate(RowSelectionDelegate):
     def paint(self, painter, option, index):
         opt = QStyleOptionViewItem(option)
         self.initStyleOption(opt, index)
@@ -179,6 +186,7 @@ class DataTable(QTableWidget):
     """Keep visible business columns within the viewport; logical indices stay stable."""
     def __init__(self, rows, columns):
         super().__init__(rows, columns)
+        self.setItemDelegate(RowSelectionDelegate(self))
         self._weights = ()
         self._fitting = False
         self.viewport().installEventFilter(self)
