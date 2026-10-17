@@ -117,5 +117,27 @@ class QuoteWorkflowTest {
         assertThrows(IllegalStateException::class.java) { runBlocking { workflow.complete(confirmed, draft) } }
         assertTrue(store.records().isEmpty())
     }
+    @Test fun staleRequestsAreRefetchedBeforeAnyMessageOrLocalWrite() = runBlocking {
+        for (current in listOf(null, request.copy(status = "견적확정"), request.copy(customerPhone = "01099998888"))) {
+            val store = MemoryStore()
+            var reads = 0
+            val workflow = QuoteWorkflow(store, { _, _ -> error("must not send") }, { _, _ -> error("must not confirm") },
+                latestRequest = { reads++; current })
+            assertThrows(ServerQuoteRequestChanged::class.java) { runBlocking { workflow.sendSms(request, draft) } }
+            assertThrows(ServerQuoteRequestChanged::class.java) { runBlocking { workflow.sendEmail(request, draft) } }
+            assertEquals(2, reads)
+            assertTrue(store.records().isEmpty())
+        }
+    }
+    @Test fun aPendingCompletionCanRecoverAfterTheServerHasMovedTheRequest() = runBlocking {
+        val store = MemoryStore()
+        store.save(QuoteWorkflowRecord(request, draft, QuoteDeliveryRecord(emailSentAt = 1,
+            emailFingerprint = quoteWorkflowFingerprint(draft)), confirmationPending = true))
+        var confirms = 0
+        val workflow = QuoteWorkflow(store, { _, _ -> error("must not resend") }, { _, _ -> confirms++ }, { 123L },
+            latestRequest = { error("a pending acknowledgement must use its original journal") })
+        assertEquals(123L, workflow.complete(request, draft).confirmedAt)
+        assertEquals(1, confirms)
+    }
 
 }

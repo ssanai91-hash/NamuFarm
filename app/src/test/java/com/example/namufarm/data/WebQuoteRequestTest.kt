@@ -173,6 +173,63 @@ class WebQuoteRequestTest {
         }
         assertEquals(1, repository.syncWebSnapshot(api, "test", "test"))
     }
+    @Test fun fullServerDownloadReplacesChangedLocalCustomerAndLowerSequence() = runBlocking {
+        repository.syncWebSnapshot(apiReturning(snapshot(remote(50))), "test", "test")
+        repository.markWebRequestRead(id)
+        db.managementDao().insertPendingSync(PendingSyncEntity(syncType = "unknown", payloadJson = "{}"))
+        val fresh = snapshot(remote().copy(customerPhone = "01099998888")).copy(watermark = 1L)
+        repository.syncWebSnapshot(apiReturning(fresh), "test", "test")
+        val row = local.getWebRequests().single()
+        assertEquals("01099998888", row.customerPhone)
+        assertEquals(1L, row.sequence)
+        assertNotNull(row.readAt)
+        assertEquals(1L, local.webRequestCursor())
+        assertEquals(1, local.getAllPendingSync().size)
+    }
+    @Test fun snapshotConflictRestartsFromZeroWithoutUploadingLocalData() = runBlocking {
+        var calls = 0
+        val api = object : WebQuoteApi {
+            override suspend fun request(url: String, body: Map<String, Any>): WebQuoteEnvelope {
+                assertEquals("snapshot_requests", body["action"])
+                return when (++calls) {
+                    1 -> snapshot(remote(), total = 2, more = true)
+                    2 -> WebQuoteEnvelope(ok = false, code = "CONFLICT")
+                    else -> {
+                        assertEquals(0L, body["afterSequence"])
+                        assertFalse(body.containsKey("snapshotId"))
+                        snapshot(remote(2, secondId))
+                    }
+                }
+            }
+        }
+        assertEquals(1, repository.syncWebSnapshot(api, "test", "test"))
+        assertEquals(3, calls)
+        assertEquals(secondId, local.getWebRequests().single().requestId)
+    }
+    @Test fun repeatedSnapshotConflictKeepsExistingInboxAndStopsAfterThreeReads() = runBlocking {
+        repository.syncWebSnapshot(apiReturning(snapshot(remote())), "test", "test")
+        var calls = 0
+        val api = object : WebQuoteApi {
+            override suspend fun request(url: String, body: Map<String, Any>): WebQuoteEnvelope {
+                calls++; return WebQuoteEnvelope(ok = false, code = "CONFLICT")
+            }
+        }
+        assertTrue(runCatching { repository.syncWebSnapshot(api, "test", "test") }.isFailure)
+        assertEquals(3, calls)
+        assertEquals(id, local.getWebRequests().single().requestId)
+    }
+    @Test fun oldServerAlsoDownloadsAllRowsFromZeroAndRemovesDeletedRequests() = runBlocking {
+        repository.syncWebSnapshot(apiReturning(snapshot(remote())), "test", "test")
+        val api = object : WebQuoteApi {
+            override suspend fun request(url: String, body: Map<String, Any>): WebQuoteEnvelope {
+                assertEquals(0L, body["afterSequence"])
+                return if (body["action"] == "snapshot_requests") WebQuoteEnvelope(ok = false, code = "INVALID_ACTION")
+                else page(remote(2, secondId))
+            }
+        }
+        repository.syncWebSnapshot(api, "test", "test")
+        assertEquals(secondId, local.getWebRequests().single().requestId)
+    }
     @Test fun notificationDeepLinkOnlyAcceptsOneValidRequestId() {
         val context = RuntimeEnvironment.getApplication()
         assertEquals(id, WebRequestPush.fromIntent(WebRequestPush.intent(context, id)))

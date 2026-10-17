@@ -69,6 +69,10 @@ class WebRequestConnection(context: Context, private val repository: NamuFarmRep
         PushRegistrationWorker.enqueue(app)
         return repository.syncWebSnapshot(api, settings.url, settings.deviceToken, ::readRequest)
     }
+    suspend fun latestRequest(id: String): com.example.namufarm.data.WebQuoteRequestEntity? {
+        refresh()
+        return localRequests().firstOrNull { it.requestId == id }
+    }
     private fun readRequest(outer: com.example.namufarm.data.remote.WebQuoteRemote): com.example.namufarm.data.remote.WebQuoteRemote =
         readLegacyWebRequest(outer, keys)
     suspend fun restoreLegacy(): Int = repository.restoreDeferredWebRequests(::readRequest)
@@ -86,6 +90,11 @@ class WebRequestConnection(context: Context, private val repository: NamuFarmRep
         check(paired) { "서버를 먼저 연결해주세요." }
         require(action in setOf("send_quote_sms", "quote_sms_status", "send_quote_email"))
         val response = api.request(settings.url, fields + mapOf("action" to action, "deviceToken" to settings.deviceToken))
+        if (response.ok != true && response.code == "CONFLICT" && action in setOf("send_quote_sms", "send_quote_email")) {
+            val current = latestRequest(fields["requestId"] as String)
+            if (current == null || current.status != "신규") throw com.example.namufarm.quotation.ServerQuoteRequestChanged()
+            throw IllegalStateException("서버가 전송을 거절했습니다. 요청은 신규 상태입니다. 운영 서버의 문자·메일 처리 버전을 확인해주세요.")
+        }
         WebQuoteValidator.checkResponse(response)
         return response
     }

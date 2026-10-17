@@ -58,14 +58,20 @@ class AndroidQuoteWorkflowStore(context: Context) : QuoteWorkflowStore {
     }
 }
 
+class ServerQuoteRequestChanged : IllegalStateException("서버에서 이미 처리되었거나 내용이 변경된 요청입니다. 최신 목록에서 다시 확인해주세요.")
+
+fun sameServerQuoteRequest(a: WebQuoteRequestEntity, b: WebQuoteRequestEntity): Boolean =
+    a.copy(sequence = b.sequence, status = b.status, readAt = b.readAt) == b
+
 class QuoteWorkflow(
     private val store: QuoteWorkflowStore,
     private val call: suspend (String, Map<String, Any>) -> WebQuoteEnvelope,
     private val confirmRemote: suspend (String, SellerQuoteDraft) -> Unit,
-    private val clock: () -> Long = System::currentTimeMillis
+    private val clock: () -> Long = System::currentTimeMillis,
+    private val latestRequest: suspend (WebQuoteRequestEntity) -> WebQuoteRequestEntity? = { it }
 ) {
     fun records() = store.records()
-    private fun prepare(request: WebQuoteRequestEntity, draft: SellerQuoteDraft): QuoteWorkflowRecord {
+    private suspend fun prepare(request: WebQuoteRequestEntity, draft: SellerQuoteDraft): QuoteWorkflowRecord {
         check(request.status == "신규") { "확정견적은 결과 확인만 가능합니다." }
         quoteWorkflowText(request, draft) // Validate the same totals and limits before any state or network write.
         val previous = store.records().firstOrNull { it.request.requestId == request.requestId }
@@ -73,7 +79,13 @@ class QuoteWorkflow(
         check(previous?.confirmationPending != true || previous.draft == draft) {
             "완료 확인 중인 견적은 내용을 바꾸지 말고 같은 내용으로 견적완료를 다시 눌러주세요."
         }
-        return (previous?.copy(draft = draft) ?: QuoteWorkflowRecord(request, draft)).also(store::save)
+        // Pending completion retries the exact acknowledged input, even after the server moved it.
+        if (previous?.confirmationPending != true) {
+            val current = latestRequest(request)
+            if (current == null || current.status != "신규" || !sameServerQuoteRequest(request, current))
+                throw ServerQuoteRequestChanged()
+        }
+        return (previous?.copy(request = request, draft = draft) ?: QuoteWorkflowRecord(request, draft)).also(store::save)
     }
     suspend fun sendSms(request: WebQuoteRequestEntity, draft: SellerQuoteDraft): QuoteWorkflowRecord {
         var record = prepare(request, draft)

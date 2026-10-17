@@ -34,7 +34,8 @@ internal fun QuoteOnlyScreen(viewModel: ManagementViewModel, connection: WebRequ
     onRead: (String) -> Unit, onDelete: (String) -> Unit) {
     val context = LocalContext.current
     val store = remember(context) { AndroidQuoteWorkflowStore(context) }
-    val workflow = remember(store, connection) { QuoteWorkflow(store, connection::quoteAction, connection::confirmQuote) }
+    val workflow = remember(store, connection) { QuoteWorkflow(store, connection::quoteAction, connection::confirmQuote,
+        latestRequest = { connection.latestRequest(it.requestId) }) }
     val management by viewModel.uiState.collectAsState()
     val scope = rememberCoroutineScope()
     var recordsReady by remember { mutableStateOf(false) }
@@ -44,6 +45,7 @@ internal fun QuoteOnlyScreen(viewModel: ManagementViewModel, connection: WebRequ
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     var result by remember { mutableStateOf<QuoteWorkflowRecord?>(null) }
     var legacyResult by remember { mutableStateOf<QuoteEntity?>(null) }
+    var readyRequest by remember { mutableStateOf<WebQuoteRequestEntity?>(null) }
     val editing = management.editingRequest
     val deleting = inbox.deleteFeedback?.phase == "deleting"
     LaunchedEffect(management.message) {
@@ -72,6 +74,23 @@ internal fun QuoteOnlyScreen(viewModel: ManagementViewModel, connection: WebRequ
             viewModel.dismissManualQuote()
         }
     }
+    LaunchedEffect(editing?.requestId, recordsReady) {
+        readyRequest = null
+        if (!recordsReady || editing == null || editing.status != "신규" || editing.requestId in confirmedIds) return@LaunchedEffect
+        busy = true
+        try {
+            val saved = records.firstOrNull { it.request.requestId == editing.requestId }
+            val current = if (saved?.confirmationPending == true) editing else
+                withContext(Dispatchers.IO) { connection.latestRequest(editing.requestId) }
+            onRead(editing.requestId) // Also publish the refreshed server cache to the list.
+            if (current == null || current.status != "신규") {
+                viewModel.dismissManualQuote(); message = "서버에서 이미 처리되었거나 삭제된 요청입니다."; onSync()
+            } else { readyRequest = current; message = null }
+        } catch (e: CancellationException) { throw e }
+        catch (e: Exception) {
+            viewModel.dismissManualQuote(); message = "서버 요청을 가져오지 못했습니다: ${e.message}"
+        } finally { busy = false }
+    }
     val pending = records.filter { it.confirmationPending }.map { it.request }
     val requests = (pending + inbox.requests.filter { it.status == "신규" })
         .distinctBy { it.requestId }.filter { it.requestId !in confirmedIds }.sortedByDescending { it.sequence }
@@ -95,12 +114,13 @@ internal fun QuoteOnlyScreen(viewModel: ManagementViewModel, connection: WebRequ
                     label = { Text("확정견적 ${confirmed.size + legacy.size}") })
             }
             message?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
+            if (busy || inbox.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
             if (selectedTab == 0) {
                 if (requests.isEmpty()) Text("새 견적요청이 없습니다. 가져오기로 서버 요청을 확인하세요.")
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     items(requests, key = { it.requestId }) { request ->
                         OutlinedCard(Modifier.fillMaxWidth().clickable(enabled = !busy && !inbox.busy && !deleting) {
-                            viewModel.useWebRequestForQuote(request); onRead(request.requestId); message = null
+                            viewModel.useWebRequestForQuote(request); message = null
                         }) {
                             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                 Text(request.receiptNumber.ifBlank { request.requestId }, fontWeight = FontWeight.Bold)
@@ -135,13 +155,11 @@ internal fun QuoteOnlyScreen(viewModel: ManagementViewModel, connection: WebRequ
             }
         }
     }
-    editing?.takeIf { recordsReady && it.status == "신규" && it.requestId !in confirmedIds }?.let { request ->
-        val saved = records.firstOrNull { it.request.requestId == request.requestId }
+    readyRequest?.takeIf { editing?.requestId == it.requestId && recordsReady && it.requestId !in confirmedIds }?.let { request ->
+        val saved = records.firstOrNull { it.request.requestId == request.requestId && sameServerQuoteRequest(it.request, request) }
         ManualQuoteEditor(request, busy || inbox.busy || deleting, message,
             onDismiss = { if (!busy) { viewModel.dismissManualQuote(); message = null } },
-            initialDraft = saved?.draft ?: management.quotesByRequest[request.requestId]?.let { older ->
-                runCatching { SellerQuoteDraft.from(older, QuoteRecipient.from(request), QuoteIssuerSettings(context).load()) }.getOrNull()
-            }, draftKey = request.requestId,
+            initialDraft = saved?.draft, draftKey = request.requestId,
             onDeleteRequest = if (saved?.confirmationPending == true) null else ({ onDelete(request.requestId) }),
             verifiedDelivery = saved?.delivery, verifyDelivery = true,
             onSave = { draft, action ->
@@ -180,6 +198,10 @@ internal fun QuoteOnlyScreen(viewModel: ManagementViewModel, connection: WebRequ
                                 else "처리 결과를 확인하고 견적완료를 눌러주세요."
                             }
                         } catch (e: CancellationException) { throw e }
+                        catch (e: ServerQuoteRequestChanged) {
+                            viewModel.dismissManualQuote(); readyRequest = null
+                            message = e.message; onSync()
+                        }
                         catch (e: Exception) { message = "❌ ${e.message ?: "처리 결과를 확인하지 못했습니다. 다시 확인해주세요."}" }
                         finally {
                             try { records = withContext(Dispatchers.IO) { workflow.records() } }

@@ -65,20 +65,22 @@ object WebQuoteTransport {
     }
 }
 
+class WebQuoteResponseException(val responseCode: String?, message: String) : IllegalStateException(message)
+
 object WebQuoteValidator {
     private val uuid = Regex("[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}")
     fun validId(value: String) = uuid.matches(value)
     fun checkResponse(response: WebQuoteEnvelope) {
-        check(response.ok == true) { when (response.code) {
+        if (response.ok != true) throw WebQuoteResponseException(response.code, when (response.code) {
             "UNAUTHORIZED" -> "서버 연결이 유효하지 않습니다. 서버 연결을 다시 시도해주세요."
-            "CONFLICT" -> "다른 기기에서 변경한 기록이 있습니다. 동기화 후 다시 확인해주세요."
+            "CONFLICT" -> "서버의 현재 요청 상태와 맞지 않습니다. 최신 요청을 다시 가져와 확인해주세요."
             "UPGRADE_REQUIRED", "INVALID_ACTION" -> "앱과 구글시트 서버를 최신 버전으로 업데이트해주세요."
             "NOT_READY" -> "구글시트 서버 준비가 필요합니다. 서버 배포와 시트 설정을 확인해주세요."
             "DEVICE_LIMIT" -> "등록 가능한 기기 수가 찼습니다. 서버 관리자에게 등록 기기 정리를 요청해주세요."
             "BUSY" -> "서버가 다른 요청을 처리 중입니다. 잠시 후 다시 동기화해주세요."
             "INVALID" -> "요청 형식이 맞지 않습니다. 앱과 서버 버전을 확인해주세요."
             else -> "서버 응답을 확인하지 못했어요. 저장된 기록을 유지하며 다시 시도할 수 있습니다."
-        } }
+        })
     }
     data class Page(val rows: List<WebQuoteRequestEntity>, val cursor: Long, val expiredIds: List<String>,
         val deferred: List<com.example.namufarm.data.DeferredWebRequestEntity> = emptyList())

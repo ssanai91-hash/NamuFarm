@@ -105,7 +105,7 @@ jobs:
 
       # Offline credential tests only; no server requests or order/message trials.
       - name: Verify quote workflow and connection credential preservation
-        run: ./gradlew --no-daemon :app:testDebugUnitTest --tests com.example.namufarm.webrequests.WebRequestSettingsTest --tests com.example.namufarm.quotation.QuoteWorkflowTest --tests com.example.namufarm.ui.QuoteWorkflowUiTest
+        run: ./gradlew --no-daemon :app:testDebugUnitTest --tests com.example.namufarm.data.WebQuoteRequestTest --tests com.example.namufarm.webrequests.WebRequestSettingsTest --tests com.example.namufarm.quotation.QuoteWorkflowTest --tests com.example.namufarm.ui.QuoteWorkflowUiTest
 
       - name: Build signed release APK
         if: env.APK_TYPE == 'release'

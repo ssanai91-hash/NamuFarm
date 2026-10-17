@@ -722,47 +722,54 @@ class NamuFarmRepository(
     fun deferredWebRequestCount() = local.deferredWebRequestCount()
     suspend fun markWebRequestRead(id: String) = local.transaction { markWebRequestRead(id, System.currentTimeMillis()) }
 
-    /** Stage every page before replacing the local inbox, including a cleared Sheet. */
+    /** Always download from sequence zero; local drafts, sales and outboxes are not uploaded. */
     suspend fun syncWebSnapshot(api: WebQuoteApi, url: String, deviceToken: String,
-        decrypt: ((com.example.namufarm.data.remote.WebQuoteRemote) -> com.example.namufarm.data.remote.WebQuoteRemote)? = null): Int {
-        val imported = local.serializedSync {
-            val rows = mutableListOf<com.example.namufarm.data.WebQuoteRequestEntity>()
-            val deferred = mutableListOf<com.example.namufarm.data.DeferredWebRequestEntity>()
-            val expired = mutableListOf<String>(); val ids = mutableSetOf<String>()
-            var cursor = 0L; var snapshot: String? = null; var total = -1; var watermark = 0L
-            repeat(100) {
-                val body = mutableMapOf<String, Any>("action" to "snapshot_requests", "deviceToken" to deviceToken, "afterSequence" to cursor)
-                snapshot?.let { body["snapshotId"] = it }
-                val response = api.request(url, body)
-                // Compatibility with the previous server; do not nest the sync mutex.
-                if (it == 0 && response.ok == false && response.code == "INVALID_ACTION") return@serializedSync null
-                val page = WebQuoteValidator.checkedPage(response, cursor, decrypt)
-                val token = checkNotNull(response.snapshotId)
-                check(Regex("[a-f0-9]{64}").matches(token)) { "견적 동기화 응답 식별자가 올바르지 않습니다." }
-                check(response.total != null && response.total in 0..10000 && response.watermark != null && response.watermark in 0..9_007_199_254_740_991L) { "구글시트 견적 목록의 전체 건수 또는 순번이 올바르지 않습니다." }
-                if (snapshot == null) { snapshot = token; total = response.total; watermark = response.watermark }
-                check(token == snapshot && total == response.total && watermark == response.watermark) { "시트가 변경되었습니다. 다시 동기화해주세요." }
-                response.requests.orEmpty().forEach { check(ids.add(checkNotNull(it?.requestId))) { "요청이 중복되어 기존 자료를 유지합니다." } }
-                check(ids.size <= total) { "받은 견적 건수가 구글시트 응답과 맞지 않습니다." }
-                rows += page.rows; deferred += page.deferred; expired += page.expiredIds; cursor = page.cursor
-                if (response.hasMore == false) {
-                    check(ids.size == total && cursor <= watermark) { "시트 자료를 전부 받지 못해 기존 기록을 유지합니다." }
-                    return@serializedSync local.transaction {
-                        check(watermark >= webRequestCursor()) { "서버 순번이 이전보다 작아 기존 기록을 유지합니다." }
-                        val floor = watermark
-                        expired.forEach { purgeRequestCopies(it) }
-                        retainWebRequests((rows.map { it.requestId } + deferred.map { it.requestId }).toSet())
-                        val added = insertWebRequests(rows)
-                        insertDeferredWebRequests(deferred)
-                        advanceWebCursor(floor)
-                        added
+        decrypt: ((com.example.namufarm.data.remote.WebQuoteRemote) -> com.example.namufarm.data.remote.WebQuoteRemote)? = null): Int = local.serializedSync {
+        // A changing server snapshot is safe to read again. Never retry customer-message writes here.
+        repeat(3) { attempt ->
+            try {
+                val rows = mutableListOf<com.example.namufarm.data.WebQuoteRequestEntity>()
+                val deferred = mutableListOf<com.example.namufarm.data.DeferredWebRequestEntity>()
+                val ids = mutableSetOf<String>()
+                var cursor = 0L; var snapshot: String? = null; var total = -1; var watermark = 0L
+                var legacy = false
+                repeat(100) {
+                    val body = mutableMapOf<String, Any>("action" to if (legacy) "list_requests" else "snapshot_requests",
+                        "deviceToken" to deviceToken, "afterSequence" to cursor)
+                    snapshot?.let { body["snapshotId"] = it }
+                    var response = api.request(url, body)
+                    if (it == 0 && response.ok == false && response.code == "INVALID_ACTION") {
+                        legacy = true
+                        response = api.request(url, mapOf("action" to "list_requests", "deviceToken" to deviceToken, "afterSequence" to 0L))
+                    }
+                    if (response.ok == false && response.code == "CONFLICT") throw ServerInboxChanged()
+                    val page = WebQuoteValidator.checkedPage(response, cursor, decrypt)
+                    if (!legacy) {
+                        val token = checkNotNull(response.snapshotId)
+                        check(Regex("[a-f0-9]{64}").matches(token)) { "견적 동기화 응답 식별자가 올바르지 않습니다." }
+                        check(response.total != null && response.total in 0..10000 && response.watermark != null && response.watermark in 0..9_007_199_254_740_991L) {
+                            "구글시트 견적 목록의 전체 건수 또는 순번이 올바르지 않습니다."
+                        }
+                        if (snapshot == null) { snapshot = token; total = response.total; watermark = response.watermark }
+                        if (token != snapshot || total != response.total || watermark != response.watermark) throw ServerInboxChanged()
+                    }
+                    response.requests.orEmpty().forEach { check(ids.add(checkNotNull(it?.requestId))) { "요청이 중복되어 기존 자료를 유지합니다." } }
+                    check(ids.size <= 10000 && (legacy || ids.size <= total)) { "받은 견적 건수가 구글시트 응답과 맞지 않습니다." }
+                    rows += page.rows; deferred += page.deferred; cursor = page.cursor
+                    if (response.hasMore == false) {
+                        check(legacy || (ids.size == total && cursor <= watermark)) { "시트 자료를 전부 받지 못해 기존 기록을 유지합니다." }
+                        return@serializedSync local.transaction { replaceWebSnapshot(rows, deferred, if (legacy) cursor else watermark) }
                     }
                 }
+                error("자료가 많아 가져오기를 마치지 못했습니다. 기존 자료를 유지합니다.")
+            } catch (e: ServerInboxChanged) {
+                if (attempt == 2) error("서버 요청이 계속 변경되고 있습니다. 잠시 후 가져오기를 다시 눌러주세요.")
             }
-            error("자료가 많아 동기화를 마치지 못했습니다. 기존 자료를 유지합니다.")
         }
-        return imported ?: syncWebRequests(api, url, deviceToken, decrypt)
+        error("서버 요청을 가져오지 못했습니다.")
     }
+
+    private class ServerInboxChanged : IllegalStateException()
 
     /** Immutable enquiries are independent of the legacy inventory outbox. Commit rows and cursor together. */
     suspend fun syncWebRequests(api: WebQuoteApi, url: String, deviceToken: String, decrypt: ((com.example.namufarm.data.remote.WebQuoteRemote) -> com.example.namufarm.data.remote.WebQuoteRemote)? = null): Int = local.serializedSync {

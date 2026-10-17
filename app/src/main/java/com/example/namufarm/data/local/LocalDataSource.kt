@@ -52,6 +52,17 @@ class LocalDataSource(
         getWebRequests().filter { it.requestId !in ids }.forEach { dao.deleteWebRequest(it.requestId) }
         getDeferredWebRequests().filter { it.requestId !in ids }.forEach { dao.deleteDeferredWebRequest(it.requestId) }
     }
+    /** A complete validated server download replaces only the disposable inbox cache. */
+    fun replaceWebSnapshot(rows: List<WebQuoteRequestEntity>, deferred: List<com.example.namufarm.data.DeferredWebRequestEntity>, watermark: Long): Int {
+        val reads = getWebRequests().associate { it.requestId to it.readAt }
+        val added = rows.count { it.requestId !in reads }
+        retainWebRequests(emptySet())
+        insertWebRequests(rows.map { it.copy(readAt = reads[it.requestId]) })
+        insertDeferredWebRequests(deferred)
+        // Full downloads can legitimately have a lower sequence after a server restore.
+        dao.savePrivacyCursor(com.example.namufarm.data.PrivacySyncEntity("web", watermark))
+        return added
+    }
     fun deleteQuoteDocument(id: String) = dao.deleteQuoteDocument(id)
     fun replacePending(item: PendingSyncEntity) = dao.replacePending(item.copy(payloadJson=protect(item.payloadJson)))
 
