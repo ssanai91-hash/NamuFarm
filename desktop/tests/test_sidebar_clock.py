@@ -50,3 +50,24 @@ class SidebarClockTest(QtTestCase):
             button.click()
             self.assertEqual(i, self.window.stack.currentIndex())
             self.assertTrue(button.isChecked())
+
+    def test_tree_and_clock_fit_large_and_small_windows(self):
+        self.window.large_font_check.setChecked(False)
+        self.window.resize(1600, 1000)
+        self.window.show()
+        for _ in range(8):
+            self.app.processEvents()
+        self.assertFalse(self.window.sidebar_tree.pixmap().isNull())
+        self.assertGreaterEqual(self.window.sidebar_tree.pixmap().height(), 96)
+        self.assertTrue(self.window.sidebar_clock_heading.isVisible())
+        tree_bottom = self.window.sidebar_tree.mapTo(self.window.sidebar, QPoint()).y() + self.window.sidebar_tree.height()
+        self.assertLess(tree_bottom, self.window.sidebar_clock.y())
+        for large in (False, True):
+            self.window.large_font_check.setChecked(large)
+            self.window.resize(1000, 620)
+            for _ in range(8):
+                self.app.processEvents()
+            self.assertFalse(self.window.sidebar_clock_heading.isVisible())
+            self.assertLess(self.window.sidebar_clock.geometry().bottom(), self.window.sidebar.height())
+            last = self.window.nav[-1]
+            self.assertLess(last.mapTo(self.window.sidebar, QPoint()).y() + last.height(), self.window.sidebar_clock.y())

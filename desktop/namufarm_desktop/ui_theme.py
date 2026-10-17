@@ -17,9 +17,11 @@ QMainWindow,#workspace,QDialog{background:#f4f6f7;}
 #sidebar QLabel{color:#c6d9cf;}
 #sidebar QFrame#brandPanel{background:#285446;border:1px solid #4a7761;border-radius:10px;}
 #sidebar #brand{font-size:30px;font-weight:700;color:#fff;background:transparent;}
-#sidebar QFrame#sidebarClock{background:#15342b;border:0;border-top:1px solid #4b6d5e;border-radius:8px;}
+#sidebar QFrame#sidebarClock{background:#234b3c;border:1px solid #4b7760;border-radius:12px;}
+#sidebar QLabel#sidebarTree{background:transparent;border:0;}
+#sidebar QLabel#sidebarClockTitle{font-size:14px;font-weight:600;color:#b8d8c4;background:transparent;}
 #sidebar QLabel#sidebarDate{font-size:18px;color:#d0e0d7;background:transparent;}
-#sidebar QLabel#sidebarTime{font-size:26px;font-weight:600;color:#fff;background:transparent;}
+#sidebar QLabel#sidebarTime{font-family:Consolas,"Malgun Gothic";font-size:32px;letter-spacing:1px;font-weight:700;color:#f1fbf4;background:transparent;}
 #sidebar #navFoot{font-size:@small@px;color:#c6d9cf;}
 #sidebar QPushButton{background:transparent;color:#e0ebe3;border:2px solid transparent;border-radius:8px;text-align:left;padding:10px 14px;font-size:@nav@px;min-height:@navheight@px;max-height:@navheight@px;font-weight:600;}
 #sidebar QPushButton:checked{background:#2e604e;color:#fff;border-left-color:#b6df9a;}
@@ -133,7 +135,9 @@ QDialog#quoteWorkbench QScrollArea#workbenchCustomerScroll{border:0;border-right
 QDialog#quoteWorkbench QWidget#workbenchCustomerRail{background:#edf4ef;}
 QDialog#quoteWorkbench QLabel#workbenchSectionTitle{font-size:@section@px;font-weight:700;color:#193c32;}
 QDialog#quoteWorkbench QLabel#workbenchCustomerTitle{font-size:22px;font-weight:700;color:#193c32;}
-QDialog#quoteWorkbench QLabel#workbenchCaption{font-size:@caption@px;font-weight:600;color:#52645c;}
+QDialog#quoteWorkbench QLabel#workbenchCaption{font-size:@field@px;font-weight:600;color:#465a50;background:#e1eae5;border:1px solid #cbdacf;border-radius:4px;padding:5px 8px;}
+QDialog#quoteWorkbench QFrame#workbenchCustomerHeadingRule{background:#315c47;border:0;}
+QDialog#quoteWorkbench QFrame#workbenchDocumentTools{background:#ffffff;border:1px solid #d6e1da;border-radius:6px;}
 QDialog#quoteWorkbench QTextBrowser#workbenchCustomerName{background:transparent;border:0;padding:0;font-size:28px;font-weight:700;color:#193c32;}
 QDialog#quoteWorkbench QTextBrowser#workbenchInfo{background:transparent;border:0;padding:0;font-size:@body@px;color:#24313a;}
 QDialog#quoteWorkbench QTextBrowser#workbenchReceipt{background:transparent;border:0;padding:0;font-size:@body@px;font-weight:700;color:#24313a;}
@@ -174,7 +178,7 @@ QDialog#quoteWorkbench QLabel#channelStatusBadge[state="success"]{background:#e2
 QDialog#quoteWorkbench QLabel#channelStatusBadge[state="failed"]{background:#fbe5e2;color:#a13d32;}
 QDialog#quoteWorkbench QLabel#channelStatusBadge[state="pending"]{background:#fff3d8;color:#78520d;}
 QDialog#quoteWorkbench QFrame#deliveryVerticalRule{background:#c5d9ce;border:0;}
-""".replace('@body@', '22' if large else '20').replace('@caption@', '20' if large else '18').replace('@title@', '32' if large else '30').replace('@section@', '26' if large else '24').replace('@total@', '40' if large else '36')
+""".replace('@body@', '22' if large else '20').replace('@caption@', '20' if large else '18').replace('@field@', '18' if large else '16').replace('@title@', '32' if large else '30').replace('@section@', '26' if large else '24').replace('@total@', '40' if large else '36')
 
 
 def quote_delivery_style(large=False, compact=False):

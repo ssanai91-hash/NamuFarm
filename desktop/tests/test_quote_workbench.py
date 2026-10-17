@@ -41,7 +41,7 @@ class QuoteWorkbenchTest(QtTestCase):
     def test_selected_layout_has_no_seedling_icons_and_a_separate_total_rule(self):
         dialog = self.dialog()
         header = dialog.items.horizontalHeader()
-        self.assertEqual([0, 1, 3, 2], [header.logicalIndex(i) for i in range(4)])
+        self.assertEqual([4, 0, 1, 3, 2], [header.logicalIndex(i) for i in range(5)])
         self.assertEqual('54,000원', dialog.total.text())
         self.assertEqual(0, dialog.items.verticalScrollBar().maximum())
         self.assertEqual(0, dialog.items.horizontalScrollBar().maximum())
@@ -51,7 +51,11 @@ class QuoteWorkbenchTest(QtTestCase):
         self.assertLess(rule_y + dialog.workbench_total_rule.height(),
                         dialog.workbench_summary.mapTo(dialog, QPoint()).y())
         self.assertEqual(3, dialog.workbench_total_rule.height())
+        self.assertEqual(3, dialog.items.rowCount())  # Reserve space, not fake business items.
+        self.assertGreaterEqual(dialog.items.height(), dialog.items.horizontalHeader().height() + 5 * 56)
         for row in range(3):
+            self.assertEqual(str(row + 1), dialog.items.item(row, 4).text())
+            self.assertFalse(dialog.items.item(row, 4).flags() & Qt.ItemFlag.ItemIsEditable)
             self.assertTrue(dialog.items.item(row, 0).icon().isNull())
             editor = dialog.unit_price_editor(row)
             self.assertEqual(editor.minus.height(), editor.input.height())
@@ -80,8 +84,11 @@ class QuoteWorkbenchTest(QtTestCase):
         dialog = self.dialog()
         heading = dialog.workbench_customer_heading
         banner = dialog.workbench_formal_banner
-        self.assertEqual(heading.geometry().center().y(), banner.geometry().center().y())
-        self.assertGreater(banner.x(), heading.geometry().right())
+        caption = dialog.customer_captions['공식견적서']
+        self.assertEqual(caption.geometry().center().y(), banner.geometry().center().y())
+        self.assertGreater(banner.y(), heading.geometry().bottom())
+        self.assertGreater(banner.x(), caption.geometry().right())
+        self.assertEqual(banner.x(), dialog.customer_values['견적번호'].x())
         self.assertLessEqual(banner.geometry().right(), dialog.customer_scroll.viewport().width())
         value_columns = {value.x() for value in dialog.customer_values.values()}
         self.assertEqual(1, len(value_columns))
@@ -92,7 +99,12 @@ class QuoteWorkbenchTest(QtTestCase):
         self.assertIn('leaf', names)
         self.assertIn('calculator', names)
         self.assertIn('document', names)
+        self.assertIn('shipping', names)
         self.assertTrue(all(not icon.pixmap().isNull() for icon in dialog.workbench_icons))
+        self.assertTrue(dialog.workbench_document_area.isAncestorOf(dialog.generate_quote_button))
+        self.assertTrue(dialog.workbench_document_area.isAncestorOf(dialog.quote_file_label))
+        self.assertLess(dialog.generate_quote_button.mapTo(dialog, QPoint()).x(), dialog.customer_scroll.width())
+        self.assertEqual('견적완료', dialog.confirm_button.text())
 
     def test_long_customer_values_wrap_without_changing_their_copyable_text(self):
         self.app.setProperty('namufarmLargeFont', True)
