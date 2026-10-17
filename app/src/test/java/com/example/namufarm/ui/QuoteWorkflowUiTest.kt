@@ -31,7 +31,7 @@ class QuoteWorkflowUiTest {
         compose.onNodeWithText("고객 전달 확인").assertIsDisplayed()
         assertNull(action)
         compose.onNodeWithText("확인", useUnmergedTree = true).performClick()
-        compose.onNodeWithText("문자", useUnmergedTree = true).performClick()
+        compose.onNode(hasText("문자") and hasClickAction()).performClick()
         assertEquals(QuoteDelivery.SMS, action)
     }
     @Test fun confirmedResultHasCloseOnlyAndNoTransmissionOrPricingActions() {
