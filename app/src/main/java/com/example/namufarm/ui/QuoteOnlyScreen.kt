@@ -6,12 +6,16 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.namufarm.data.WebQuoteRequestEntity
 import com.example.namufarm.data.QuoteEntity
@@ -122,11 +126,22 @@ internal fun QuoteOnlyScreen(viewModel: ManagementViewModel, connection: WebRequ
                         OutlinedCard(Modifier.fillMaxWidth().clickable(enabled = !busy && !inbox.busy && !deleting) {
                             viewModel.useWebRequestForQuote(request); message = null
                         }) {
-                            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Text(request.receiptNumber.ifBlank { request.requestId }, fontWeight = FontWeight.Bold)
-                                Text("${request.customerName} · ${request.customerPhone}")
+                            Row(Modifier.fillMaxWidth().heightIn(min = 56.dp)
+                                .padding(horizontal = 12.dp, vertical = 12.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically) {
+                                Text(request.receiptNumber.ifBlank { request.requestId },
+                                    modifier = Modifier.weight(1f), fontWeight = FontWeight.Bold,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(request.customerName, modifier = Modifier.widthIn(max = 72.dp),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(request.customerPhone, style = MaterialTheme.typography.bodyMedium,
+                                    maxLines = 1, softWrap = false)
                                 if (records.any { it.request.requestId == request.requestId && it.confirmationPending })
-                                    Text("견적완료 확인 필요 · 같은 내용으로 다시 확인하세요.")
+                                    Icon(Icons.Outlined.Info, "견적완료 확인 필요 · 같은 내용으로 다시 확인하세요.",
+                                        modifier = Modifier.size(18.dp))
                             }
                         }
                     }
