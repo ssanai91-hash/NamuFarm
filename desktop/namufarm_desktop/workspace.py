@@ -19,7 +19,9 @@ from PySide6.QtWidgets import (QApplication, QButtonGroup, QCheckBox, QComboBox,
 
 from . import __version__
 from .ui_theme import (align_table, fit_window, scroll_dialog, scroll_page, workspace_style,
-                       CustomerDelegate, StatusDelegate, customer_reference)
+                       CustomerDelegate, StatusDelegate, customer_reference, CompactDateDelegate,
+                       NavigationButton, size_table_to_rows, collapsible)
+from .ui_icons import set_button_icon
 from .app import MainWindow, Task, table, fill_table, money, timestamp
 from .commerce import (ISSUER, new_draft, draft_amounts, validate_draft, quote_html, quote_document_html, shipping_html,
                        shipping_problem, parse_tracking_csv, tracking_number)
@@ -51,7 +53,7 @@ def card(title):
     frame = QFrame()
     frame.setObjectName("card")
     layout = QVBoxLayout(frame)
-    layout.setContentsMargins(22, 18, 22, 18)
+    layout.setContentsMargins(16, 12, 16, 12)
     layout.setSpacing(12)
     layout.addWidget(label(title, "sectionTitle"))
     return frame, layout
@@ -64,6 +66,8 @@ def polish_table(widget):
     widget.setShowGrid(False)
     widget.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
     widget.horizontalHeader().setDefaultAlignment(Qt.AlignmentFlag.AlignCenter)
+    if widget.property("visibleItemRows"):
+        size_table_to_rows(widget, int(widget.property("visibleItemRows")))
 
 
 class UnitPriceEditor(QWidget):
@@ -496,9 +500,11 @@ class QuoteDialog(QDialog):
         self.draft, self.mode, self.request_status = copy.deepcopy(draft), "", request_status
         self.simple_request = bool(draft.get("sourceRequestId"))
         self.setWindowTitle("견적 작업대")
+        self.setObjectName("quoteEditor")
         self.resize(1160 if self.simple_request else 1280, 760 if self.simple_request else 840)
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(24, 20, 24, 20)
+        layout.setContentsMargins(20, 16, 20, 16)
+        layout.setSpacing(8)
 
         head = QHBoxLayout()
         head.addWidget(label("견적 작업대", "pageTitle"))
@@ -510,6 +516,9 @@ class QuoteDialog(QDialog):
         if self.simple_request:
             info = QWidget()
             form = QFormLayout(info)
+            form.setContentsMargins(0, 0, 0, 0)
+            form.setVerticalSpacing(4)
+            form.setFormAlignment(Qt.AlignmentFlag.AlignTop)
             for title, value in (("견적번호", draft.get("requestReceiptNumber", "") or draft.get("sourceRequestId", "")),
                                  ("고객명", draft.get("customerName", "")),
                                  ("연락처", draft.get("customerPhone", "")),
@@ -518,6 +527,8 @@ class QuoteDialog(QDialog):
                 field = QLineEdit(str(value))
                 field.setReadOnly(True)
                 field.setAccessibleName(title)
+                field.setToolTip(str(value))
+                field.setCursorPosition(0)
                 form.addRow(title, field)
 
             formal = bool(draft.get("formalQuoteRequested", False))
@@ -536,22 +547,28 @@ class QuoteDialog(QDialog):
                 form.addRow("수신 방법", reply)
             self.note = QPlainTextEdit(draft.get("note", ""))
             self.note.setReadOnly(True)
-            self.note.setMinimumHeight(82)
-            self.note.setMaximumHeight(110)
+            self.note.setFixedHeight(64 if draft.get("note") else 44)
             info_scroll = QScrollArea()
             info_scroll.setWidgetResizable(True)
             info_scroll.setWidget(info)
+            info_scroll.setMinimumWidth(330)
+            info_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
             split.addWidget(info_scroll)
             self.cost = QCheckBox()
         else:
             info = QWidget()
             form = QFormLayout(info)
+            form.setContentsMargins(0, 0, 0, 0)
+            form.setVerticalSpacing(4)
+            form.setFormAlignment(Qt.AlignmentFlag.AlignTop)
             for key, title in (("customerName", "고객명"), ("customerPhone", "연락처"), ("customerEmail", "이메일"),
                                ("receiverName", "수령인"), ("zipNo", "우편번호"), ("roadAddress", "도로명 주소"), ("detailAddress", "상세 주소"),
                                ("validUntil", "견적 유효기간"), ("paymentAccount", "입금계좌 안내")):
                 field = QLineEdit(str(draft.get(key, "")))
                 field.setPlaceholderText(title)
                 field.setAccessibleName(title)
+                field.setToolTip(str(value))
+                field.setCursorPosition(0)
                 self.fields[key] = field
                 form.addRow(title, field)
             self.note = QPlainTextEdit(draft.get("note", ""))
@@ -576,6 +593,8 @@ class QuoteDialog(QDialog):
 
         right = QWidget()
         content = QVBoxLayout(right)
+        content.setContentsMargins(12, 0, 0, 0)
+        content.setSpacing(8)
         content.addWidget(label("견적 품목", "sectionTitle"))
         if self.simple_request:
             self.items = table(["묘목명", "수량", "판매 금액", "판매 단가"])
@@ -585,8 +604,6 @@ class QuoteDialog(QDialog):
         self.items.setEditTriggers(self.items.EditTrigger.DoubleClicked | self.items.EditTrigger.EditKeyPressed | self.items.EditTrigger.AnyKeyPressed)
         self.items.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         polish_table(self.items)
-        self.items.setStyleSheet("QHeaderView::section{background:#2f5d3a;color:#fff;border:0;"
-                                "border-right:1px solid #78967f;padding:10px 8px;font-weight:700;}")
         if self.simple_request:
             self.items.set_column_layout(((0, 3), (1, 1), (3, 2.8), (2, 2)))
         else:
@@ -623,6 +640,7 @@ class QuoteDialog(QDialog):
         if self.simple_request:
             self.confirm_button = button("견적 확정", lambda: self.finish("finalize"), True)
             self.confirm_button.setEnabled(request_status in ("", "신규"))
+            set_button_icon(self.confirm_button, "check", "#ffffff")
             footer.addWidget(self.confirm_button)
         else:
             footer.addWidget(button("입금확인 · 판매 등록", lambda: self.finish("confirm"), True))
@@ -1354,8 +1372,8 @@ class QuoteDeliveryDialog(QDialog):
             self.resize(1180, 940)
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(28, 24, 28, 24)
-        layout.setSpacing(16)
+        layout.setContentsMargins(20, 16, 20, 16)
+        layout.setSpacing(12)
 
         # ─────────────────────────────
         # Header
@@ -1382,7 +1400,8 @@ class QuoteDeliveryDialog(QDialog):
         self.email_status_badge = QLabel()
         for badge in (self.sms_status_badge, self.email_status_badge):
             badge.setObjectName("channelStatusBadge")
-            badge.setMinimumSize(120, 36)
+            badge.setMinimumWidth(110)
+            badge.setFixedHeight(30)
             badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
             delivery_badges.addWidget(badge)
         self.update_delivery_badges()
@@ -1391,12 +1410,11 @@ class QuoteDeliveryDialog(QDialog):
         status = QLabel(self.request_status)
         status.setObjectName("quoteStatusBadge")
         status.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        status.setFixedSize(176, 52)
+        status.setMinimumWidth(140)
+        status.setFixedHeight(32)
 
         summary_head = QVBoxLayout()
         summary_head.addWidget(status)
-        self.header_amount = label(money(draft_amounts(self.draft)["total"]), "infoValue")
-        summary_head.addWidget(self.header_amount)
         head.addLayout(summary_head)
         layout.addLayout(head)
 
@@ -1421,8 +1439,6 @@ class QuoteDeliveryDialog(QDialog):
         )
 
         summary = (
-            ("견적번호", self.quote_number()),
-            ("고객명", self.draft.get("customerName", "")),
             ("연락처", self.draft.get("customerPhone", "")),
             ("메일", self.draft.get("customerEmail") or "미입력"),
             (
@@ -1435,13 +1451,15 @@ class QuoteDeliveryDialog(QDialog):
         )
 
         for index, (caption, value) in enumerate(summary):
-            column = (index % 3) * 2
-            row = index // 3
+            column = (index % 2) * 2
+            row = index // 2
 
             caption_label = QLabel(caption)
             caption_label.setObjectName("infoCaption")
 
-            value_label = QLabel(str(value))
+            value_label = label(str(value), "infoValue", True)
+            value_label.setMinimumWidth(0)
+            value_label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
             value_label.setObjectName("infoValue")
             value_label.setTextInteractionFlags(
                 Qt.TextInteractionFlag.TextSelectableByMouse
@@ -1452,7 +1470,6 @@ class QuoteDeliveryDialog(QDialog):
 
         info.setColumnStretch(1, 1)
         info.setColumnStretch(3, 1)
-        info.setColumnStretch(5, 2)
 
         layout.addWidget(info_card)
 
@@ -1463,7 +1480,7 @@ class QuoteDeliveryDialog(QDialog):
         items_card.setObjectName("quoteItemsCard")
 
         items_layout = QVBoxLayout(items_card)
-        items_layout.setContentsMargins(18, 16, 18, 18)
+        items_layout.setContentsMargins(16, 12, 16, 12)
         items_layout.setSpacing(10)
 
         items_head = QHBoxLayout()
@@ -1474,13 +1491,7 @@ class QuoteDeliveryDialog(QDialog):
         items_title = QLabel("견적 품목")
         items_title.setObjectName("quoteItemsTitle")
 
-        items_hint = QLabel(
-            "고객에게 전달할 묘목 · 수량 · 판매단가를 최종 확인하세요."
-        )
-        items_hint.setObjectName("quoteItemsHint")
-
         items_title_box.addWidget(items_title)
-        items_title_box.addWidget(items_hint)
 
         items_head.addLayout(items_title_box)
         items_head.addStretch()
@@ -1504,9 +1515,7 @@ class QuoteDeliveryDialog(QDialog):
         self.items.setObjectName("deliveryItems")
         self.items.setAlternatingRowColors(True)
         self.items.setShowGrid(True)
-        visible_rows = min(max(len(self.draft.get("items", [])), 2), 4)
-        self.items.setMinimumHeight(54 + visible_rows * 56)
-        self.items.verticalHeader().setDefaultSectionSize(56)
+        polish_table(self.items)
 
         header = self.items.horizontalHeader()
         header.setStretchLastSection(False)
@@ -1562,6 +1571,7 @@ class QuoteDeliveryDialog(QDialog):
                     | Qt.AlignmentFlag.AlignVCenter
                 )
 
+        size_table_to_rows(self.items, 4)
         items_layout.addWidget(self.items)
 
         # Shipping decision belongs to the delivery stage, after item prices are confirmed.
@@ -1623,34 +1633,14 @@ class QuoteDeliveryDialog(QDialog):
         self.shipping_fee.textChanged.connect(self.recalculate_shipping)
         self.recalculate_shipping()
 
-        layout.addWidget(items_card, 1)
+        layout.addWidget(items_card)
 
-        # ─────────────────────────────
-        # Customer request note
-        # ─────────────────────────────
+        details = QWidget()
+        details_layout = QVBoxLayout(details)
+        details_layout.setContentsMargins(0, 0, 0, 0)
         if self.draft.get("note"):
-            note_card = QFrame()
-            note_card.setObjectName("requestNoteCard")
+            details_layout.addWidget(label(self.draft["note"], "infoValue", True))
 
-            note_layout = QVBoxLayout(note_card)
-            note_layout.setContentsMargins(16, 12, 16, 14)
-            note_layout.setSpacing(7)
-
-            note_title = QLabel("요청사항")
-            note_title.setObjectName("sectionTitle")
-
-            note_text = QLabel(self.draft.get("note", ""))
-            note_text.setWordWrap(True)
-            note_text.setTextInteractionFlags(
-                Qt.TextInteractionFlag.TextSelectableByMouse
-            )
-
-            note_layout.addWidget(note_title)
-            note_layout.addWidget(note_text)
-
-            layout.addWidget(note_card)
-
-        # ─────────────────────────────
         # Delivery notice
         # ─────────────────────────────
         if self.request_status == "견적발송완료":
@@ -1674,13 +1664,14 @@ class QuoteDeliveryDialog(QDialog):
         notice.setObjectName("deliveryNotice")
         notice.setWordWrap(True)
 
-        layout.addWidget(notice)
+        details_layout.addWidget(notice)
+        layout.addWidget(collapsible("요청사항 · 전달 안내", details))
 
         # ─────────────────────────────
         # Action buttons
         # ─────────────────────────────
         actions = QHBoxLayout()
-        actions.setSpacing(10)
+        actions.setSpacing(8)
 
         self.sms_button = QPushButton("문자 보내기")
         self.sms_button.setObjectName("smsAction")
@@ -1736,15 +1727,19 @@ class QuoteDeliveryDialog(QDialog):
         self.quote_file_label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         finish_actions.addWidget(self.quote_file_label, 1)
         finish_actions.addWidget(close_button)
-        finish_actions.addWidget(label("업무 단계", "muted"))
         finish_actions.addWidget(self.sent_button)
         finish_actions.addWidget(self.payment_button)
         footer = QVBoxLayout()
-        footer.setSpacing(12)
+        footer.setSpacing(8)
         footer.addLayout(actions)
         footer.addLayout(finish_actions)
         layout.addLayout(footer)
         self.items.set_column_layout(((0, 3.6), (1, 1.2), (2, 1.8), (3, 2)))
+        set_button_icon(self.sms_button, "message")
+        set_button_icon(self.email_button, "mail")
+        set_button_icon(self.generate_quote_button, "document")
+        set_button_icon(self.sent_button, "check", "#ffffff")
+        set_button_icon(self.payment_button, "check", "#ffffff")
         scroll_dialog(self, layout)
 
     def quote_number(self):
@@ -1802,7 +1797,6 @@ class QuoteDeliveryDialog(QDialog):
             item_total = sum(int(item["quantity"]) * int(item["unitPrice"]) for item in self.draft.get("items", []))
             amounts = draft_amounts(self.draft)
             self.total_value.setText(f"{amounts['total']:,}원")
-            self.header_amount.setText(self.total_value.text())
             if self.draft["isPrepaid"]:
                 self.shipping_status.setText(
                     f"선불 {self.draft['shippingFee']:,}원 · 묘목금액 {item_total:,}원에 포함"
@@ -1813,7 +1807,6 @@ class QuoteDeliveryDialog(QDialog):
                 )
         except UserError:
             self.total_value.setText("금액 확인 필요")
-            self.header_amount.setText(self.total_value.text())
             self.shipping_status.setText("택배비 금액을 확인해주세요.")
 
     def persist_shipping(self):
@@ -2036,8 +2029,8 @@ class CustomerOrderDialog(QDialog):
             self.resize(1120, 880)
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(26, 22, 26, 22)
-        layout.setSpacing(14)
+        layout.setContentsMargins(20, 16, 20, 16)
+        layout.setSpacing(12)
 
         header = QHBoxLayout()
         title_box = QVBoxLayout()
@@ -2047,33 +2040,29 @@ class CustomerOrderDialog(QDialog):
         header.addStretch()
         status = QLabel(customer_status_text(self.meta["status"]))
         status.setObjectName("customerStatusBadge")
-        record_status = QVBoxLayout()
-        record_status.addWidget(status)
-        record_status.addWidget(label(money(self.meta["totalPrice"] + self.meta.get("taxAmount", 0)), "infoValue"))
+        status.setFixedHeight(32)
+        status.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        record_status = QHBoxLayout()
+        record_status.addWidget(status, 0, Qt.AlignmentFlag.AlignVCenter)
+        record_status.addWidget(label(money(self.meta["totalPrice"] + self.meta.get("taxAmount", 0)), "customerAmountValue"))
         header.addLayout(record_status)
         layout.addLayout(header)
 
         summary = QFrame()
         summary.setObjectName("customerSummaryCard")
         metrics = QGridLayout(summary)
-        metrics.setContentsMargins(18, 13, 18, 13)
+        metrics.setContentsMargins(16, 10, 16, 10)
         metrics.setHorizontalSpacing(24)
         metrics.setVerticalSpacing(5)
-        item_names = ", ".join(i["species"] for i in self.meta.get("items", [])) or "—"
         tracking = tracking_number(self.order) or "미등록"
-        payment = self.meta["totalPrice"] + self.meta.get("taxAmount", 0)
         summary_values = (
-            ("주문번호", self.meta["orderNumber"]),
             ("주문일", timestamp(self.meta["orderDate"])),
             ("입금일", timestamp(self.meta["paidAt"])),
             ("송장번호", tracking),
-            ("품목", item_names),
         )
-        for index, (caption, value) in enumerate((*summary_values, ("결제금액", money(payment)))):
-            row, column = divmod(index, 3)
-            metrics.addWidget(label(caption, "customerMetricCaption"), row * 2, column)
-            metrics.addWidget(label(value, "customerAmountValue" if index == 5 else "customerMetricValue", True), row * 2 + 1, column)
-            metrics.setColumnStretch(column, 1)
+        for index, (caption, value) in enumerate(summary_values):
+            metrics.addWidget(label(caption + " · " + str(value), "customerMetricCaption", True), 0, index)
+            metrics.setColumnStretch(index, 1)
         layout.addWidget(summary)
 
         body = QHBoxLayout()
@@ -2082,11 +2071,11 @@ class CustomerOrderDialog(QDialog):
         info_card = QFrame()
         info_card.setObjectName("customerInfoCard")
         info_layout = QVBoxLayout(info_card)
-        info_layout.setContentsMargins(18, 16, 18, 16)
+        info_layout.setContentsMargins(16, 12, 16, 12)
         info_layout.addWidget(label("고객 · 배송 정보", "sectionTitle"))
         form = QGridLayout()
         form.setHorizontalSpacing(12)
-        form.setVerticalSpacing(9)
+        form.setVerticalSpacing(8)
         self.customer_fields = {}
         fields = (
             ("customerName", "고객명"),
@@ -2106,23 +2095,27 @@ class CustomerOrderDialog(QDialog):
                 edit.setReadOnly(True)
                 edit.setToolTip("확정 견적서와 연결된 고객 전화번호는 유지합니다.")
             self.customer_fields[name] = edit
-            r = index
-            form.addWidget(label(caption), r, 0)
-            form.addWidget(edit, r, 1)
+            positions = {"customerName": (0, 0, 1), "customerPhone": (0, 2, 1),
+                         "customerEmail": (1, 0, 3), "receiverName": (2, 0, 1),
+                         "zipNo": (2, 2, 1), "roadAddress": (3, 0, 3), "detailAddress": (4, 0, 3)}
+            r, c, span = positions[name]
+            form.addWidget(label(caption, "infoCaption"), r, c)
+            form.addWidget(edit, r, c + 1, 1, span)
         form.setColumnStretch(1, 1)
+        form.setColumnStretch(3, 1)
         info_layout.addLayout(form)
 
-        info_layout.addWidget(label("배송 메모", "customerMetricCaption"))
         self.note = QPlainTextEdit(str(self.order.get("note", "") or ""))
         self.note.setAccessibleName("배송 메모")
-        self.note.setMaximumHeight(100)
-        info_layout.addWidget(self.note)
+        self.note.setFixedHeight(64)
+        info_layout.addWidget(collapsible("배송 메모", self.note))
+        info_layout.addStretch()
         body.addWidget(info_card, 3)
 
         finance_card = QFrame()
         finance_card.setObjectName("customerFinanceCard")
         finance_layout = QVBoxLayout(finance_card)
-        finance_layout.setContentsMargins(18, 16, 18, 16)
+        finance_layout.setContentsMargins(16, 12, 16, 12)
         finance_layout.addWidget(label("판매 · 원가 확인", "sectionTitle"))
 
         finance_form = QFormLayout()
@@ -2130,14 +2123,17 @@ class CustomerOrderDialog(QDialog):
         self.profit_mode.addItem("매입 후 판매", "resale")
         self.profit_mode.addItem("중개 수수료", "commission")
         self.profit_mode.setCurrentIndex(1 if self.order.get("profitMode") == "commission" else 0)
-        finance_form.addRow("수익 방식", self.profit_mode)
+        profit_options = QWidget()
+        profit_form = QFormLayout(profit_options)
+        profit_form.setContentsMargins(0, 0, 0, 0)
+        profit_form.addRow("수익 방식", self.profit_mode)
 
         self.commission = QDoubleSpinBox()
         self.commission.setRange(0, 100)
         self.commission.setDecimals(2)
         self.commission.setSuffix(" %")
         self.commission.setValue(self.order.get("commissionBps", 3000) / 100)
-        finance_form.addRow("수수료율", self.commission)
+        profit_form.addRow("수수료율", self.commission)
 
         self.cost_total = QLineEdit(str(int(self.order.get("costTotal", 0) or 0)))
         self.cost_total.setAlignment(Qt.AlignmentFlag.AlignRight)
@@ -2156,21 +2152,30 @@ class CustomerOrderDialog(QDialog):
         )
         finance_form.addRow("택배비", label(shipping_text, "customerMetricValue"))
         finance_layout.addLayout(finance_form)
+        finance_layout.addWidget(collapsible("수익 방식 · 수수료", profit_options, self.order.get("profitMode") == "commission"))
 
         self.cost_confirmed = QCheckBox("원가와 비용을 확인했습니다")
         self.cost_confirmed.setChecked(bool(self.order.get("costConfirmed")))
         finance_layout.addWidget(self.cost_confirmed)
 
-        profit_value = label(money(profit(self.meta)), "customerAmountValue")
+        profit_value = label(money(profit(self.meta)), "infoValue")
         finance_layout.addWidget(label("현재 저장 기준 매출이익", "customerMetricCaption"))
         finance_layout.addWidget(profit_value)
 
         self.quote_print = button("확정 견적서 출력", self.print_quote)
         self.quote_print.setEnabled(bool(self.row["private"].get("quoteDocumentJson")))
-        finance_layout.addWidget(label("연결 견적 · " + (self.order.get("sourceQuoteNumber") or "번호 없음"), "customerMetricCaption", True))
+        quote_info = QWidget()
+        quote_layout = QVBoxLayout(quote_info)
+        quote_layout.setContentsMargins(0, 0, 0, 0)
+        quote_number = self.order.get("sourceQuoteNumber") or "번호 없음"
+        shown_number = quote_number[:12] + "…" if quote_number.startswith("PCQ_") and len(quote_number) > 20 else quote_number
+        reference = label(shown_number, "customerMetricCaption", True)
+        reference.setToolTip(quote_number)
+        quote_layout.addWidget(reference)
         if not self.row["private"].get("quoteDocumentJson"):
             self.quote_print.setToolTip("이 주문에 보관된 확정 견적서가 없습니다.")
-        finance_layout.addWidget(self.quote_print)
+        quote_layout.addWidget(self.quote_print)
+        finance_layout.addWidget(collapsible("연결 견적서", quote_info))
         finance_layout.addStretch()
         body.addWidget(finance_card, 2)
         layout.addLayout(body)
@@ -2185,8 +2190,8 @@ class CustomerOrderDialog(QDialog):
         polish_table(self.items)
         center_table_columns(self.items, (1, 2, 3, 4))
         self.items.set_column_layout(((0, 3.5), (1, 2), (2, 1), (3, 1.7), (4, 2)))
-        self.items.setMinimumHeight(min(280, 62 + max(1, len(self.meta.get("items", []))) * 45))
-        layout.addWidget(self.items, 1)
+        size_table_to_rows(self.items, 3)
+        layout.addWidget(self.items)
 
         terminal = self.meta["status"] in ("배송완료", "구매취소", "판매완료", "주문취소")
         if terminal:
@@ -2217,6 +2222,11 @@ class CustomerOrderDialog(QDialog):
         self.note.textChanged.connect(lambda: self.edit_state.setText("수정 중 · 저장 필요"))
         self.commission.valueChanged.connect(lambda _value: self.edit_state.setText("수정 중 · 저장 필요"))
         self.cost_confirmed.toggled.connect(lambda _value: self.edit_state.setText("수정 중 · 저장 필요"))
+        self.profit_mode.currentIndexChanged.connect(lambda _value: self.edit_state.setText("수정 중 · 저장 필요"))
+        set_button_icon(self.cancel_order_button, "trash", "#9c3c2e")
+        set_button_icon(self.save_button, "save")
+        set_button_icon(self.delivery_button, "check", "#ffffff")
+        set_button_icon(self.quote_print, "document")
         scroll_dialog(self, layout)
 
     def collect_fields(self):
@@ -2390,6 +2400,7 @@ class SellerWindow(MainWindow):
         self.request_unread_count = 0
         self.request_nav_badge = None
         self.tray_icon = None
+        self.page_counts = {}
         super().__init__(vault_path)
         self.setWindowTitle(f"나무팜 판매관리 | Ver {__version__}")
         self.setMinimumSize(1000, 620)
@@ -2420,19 +2431,17 @@ class SellerWindow(MainWindow):
         sidebar.setFixedWidth(220)
         side = QVBoxLayout(sidebar)
         side.setContentsMargins(12, 20, 12, 16)
-        side.setSpacing(6)
+        side.setSpacing(8)
         side.addWidget(label("  namufarm", "brand"))
         side.addSpacing(6)
         self.nav = []
         for index, (title, _) in enumerate(self.PAGES):
             if index in (self.PAGE_REQUESTS, self.PAGE_REPORTS):
                 side.addWidget(label("견적 · 주문" if index == self.PAGE_REQUESTS else "운영", "navGroup"))
-            widget = button(title, lambda checked=False, i=index: self.navigate(i))
-            icons = (QStyle.StandardPixmap.SP_FileDialogDetailedView,
-                     QStyle.StandardPixmap.SP_FileDialogContentsView, QStyle.StandardPixmap.SP_DirHomeIcon,
-                     QStyle.StandardPixmap.SP_DriveNetIcon, QStyle.StandardPixmap.SP_FileDialogInfoView,
-                     QStyle.StandardPixmap.SP_FileDialogListView)
-            widget.setIcon(self.style().standardIcon(icons[index]))
+            widget = NavigationButton(title)
+            widget.clicked.connect(lambda checked=False, i=index: self.navigate(i))
+            icons = ("requests", "confirmed", "orders", "shipping", "reports", "settings")
+            set_button_icon(widget, icons[index], "#e0ebe3", 20)
             widget.setCheckable(True)
             self.nav.append(widget)
             if index == self.PAGE_REQUESTS:
@@ -2453,15 +2462,17 @@ class SellerWindow(MainWindow):
         outer.addWidget(sidebar)
         content = QWidget()
         content_layout = QVBoxLayout(content)
-        content_layout.setContentsMargins(20, 14, 20, 12)
-        content_layout.setSpacing(10)
+        content_layout.setContentsMargins(24, 16, 24, 16)
+        content_layout.setSpacing(12)
         header = QHBoxLayout()
         heading = QVBoxLayout()
         self.page_title = label("", "pageTitle")
         heading.addWidget(self.page_title)
         header.addLayout(heading)
         header.addStretch()
-        self.sync_button.setText("↻ 가져오기")
+        self.sync_button.setText("가져오기")
+        set_button_icon(self.sync_button, "refresh")
+        self.sync_button.setToolTip("최신 자료를 가져오고 전송 대기 중인 변경사항도 서버에 반영합니다. F5")
         self.sync_button.setObjectName("syncSecondary")
         self.sync_button.setMinimumWidth(138)
 
@@ -2471,7 +2482,7 @@ class SellerWindow(MainWindow):
         self.server_log_frame.setObjectName("serverLogFrame")
         self.server_log_frame.setProperty("state", "idle")
         log_layout = QHBoxLayout(self.server_log_frame)
-        log_layout.setContentsMargins(12, 10, 12, 10)
+        log_layout.setContentsMargins(12, 8, 12, 8)
         log_layout.setSpacing(12)
         self.status_title = label("연결 안내", "serverLogTitle")
         log_layout.addWidget(self.status_title)
@@ -2498,7 +2509,7 @@ class SellerWindow(MainWindow):
         content_layout.addWidget(self.stack, 1)
         outer.addWidget(content, 1)
         old_root.deleteLater()
-        self.request_quote_button = button("+견적", self.quote_request)
+        self.request_quote_button = button("견적", self.quote_request)
         self.request_quote_button.setObjectName("requestQuote")
         self.request_quote_button.setMinimumWidth(140)
         self.request_table.itemDoubleClicked.connect(self.quote_request)
@@ -2506,11 +2517,14 @@ class SellerWindow(MainWindow):
         self.request_table.setWordWrap(False)
         self.request_table.setTextElideMode(Qt.TextElideMode.ElideRight)
         self.request_table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Fixed)
-        self.request_table.set_column_layout(((3, 2.7), (4, 1.8), (8, 3), (1, 1.8), (7, 1.3), (5, 2.5)))
+        self.configure_request_columns()
         self.request_table.setItemDelegateForColumn(3, CustomerDelegate(self.request_table))
         request_layout = old_pages[0].layout()
-        self.request_count = label("견적요청 0건", "sectionTitle")
-        request_layout.insertWidget(0, self.request_count)
+        request_layout.setContentsMargins(0, 0, 0, 0)
+        request_layout.setSpacing(8)
+        self.request_table.setItemDelegateForColumn(1, CompactDateDelegate(self.request_table))
+        self.request_table.horizontalHeaderItem(1).setToolTip("접수일 · 전체 날짜와 시간은 셀 도움말에서 확인합니다.")
+        set_button_icon(self.request_quote_button, "plus", "#23593a")
         self.ui_settings = QSettings("NamuFarm", "NamuFarmDesktop")
         self.large_font_check.setChecked(self.ui_settings.value("ui/largeFont", False, type=bool))
         self.large_font_check.toggled.connect(self.apply_design_scale)
@@ -2554,6 +2568,7 @@ class SellerWindow(MainWindow):
             polish_table(widget)
             if hasattr(widget, "fit_columns"):
                 widget.fit_columns()
+        self.configure_request_columns()
 
     def run_job(self, title, work, on_success=None, refresh_on_error=True):
         starting = self.task is None
@@ -2568,10 +2583,26 @@ class SellerWindow(MainWindow):
         self.server_log_frame.style().polish(self.server_log_frame)
         self.server_log_frame.update()
 
+    def configure_request_columns(self):
+        large = bool(QApplication.instance().property("namufarmLargeFont"))
+        minimum = (205, 140, 190, 128, 100, 205) if not large else (210, 150, 195, 144, 112, 220)
+        self.request_table.set_column_layout(tuple(
+            (column, weight, width) for (column, weight), width in zip(
+                ((3, 2), (4, .5), (8, 3), (1, .5), (7, .3), (5, 3)), minimum)))
+
+    def set_page_count(self, index, count):
+        self.page_counts[index] = count
+        if hasattr(self, "stack") and self.stack.currentIndex() == index:
+            self.update_page_title(index)
+
+    def update_page_title(self, index):
+        count = self.page_counts.get(index)
+        self.page_title.setText(self.PAGES[index][0] + (f" · {count:,}건" if count is not None else ""))
+
     def refresh_requests(self):
         super().refresh_requests()
-        if hasattr(self, "request_count"):
-            self.request_count.setText(f"견적요청 {len(self.request_rows):,}건")
+        if hasattr(self, "page_title"):
+            self.set_page_count(self.PAGE_REQUESTS, len(self.request_rows))
             customer_reference(self.request_table, 3, 0)
 
     def filter_buttons(self, choices, callback):
@@ -2603,8 +2634,6 @@ class SellerWindow(MainWindow):
         layout = QVBoxLayout(page)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(10)
-        self.draft_count = label("확정 견적 0건", "sectionTitle")
-        layout.addWidget(self.draft_count)
         self.draft_filter = "전체"
         filters, self.draft_filters = self.filter_buttons(
             (("전체", "전체"), ("전달 대기", "견적확정"), ("발송 완료", "견적발송완료")), self.set_draft_filter)
@@ -2623,7 +2652,7 @@ class SellerWindow(MainWindow):
             header.setSectionResizeMode(column, QHeaderView.ResizeMode.Interactive)
             self.draft_table.setColumnWidth(column, width)
         header.setSectionResizeMode(7, QHeaderView.ResizeMode.Stretch)
-        self.draft_table.set_column_layout(((3, 2.8), (1, 1.8), (7, 3), (8, 1.7), (9, 1.5)))
+        self.draft_table.set_column_layout(((3, 2, 215), (1, .5, 140), (7, 3, 235), (8, 1, 155), (9, .5, 100)))
         self.draft_table.setItemDelegateForColumn(3, CustomerDelegate(self.draft_table))
         self.draft_table.setItemDelegateForColumn(1, StatusDelegate(self.draft_table))
         self.draft_table.itemSelectionChanged.connect(self.update_controls)
@@ -2633,6 +2662,8 @@ class SellerWindow(MainWindow):
         self.draft_delete = button("선택 견적 삭제", self.remove_draft)
         self.draft_delete.setObjectName("danger")
         self.draft_open = button("선택 견적 열기", self.open_draft, True)
+        set_button_icon(self.draft_open, "open", "#ffffff")
+        set_button_icon(self.draft_delete, "trash", "#9c3c2e")
         self.draft_selection_status = label("견적을 선택하세요.", "muted", True)
         bar.addWidget(self.draft_selection_status, 1)
         bar.addWidget(self.draft_delete)
@@ -2655,12 +2686,12 @@ class SellerWindow(MainWindow):
         layout = QVBoxLayout(page)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(12)
-        self.sale_count = label("판매관리 0건", "sectionTitle")
-        layout.addWidget(self.sale_count)
 
         bar = QHBoxLayout()
         self.sale_search = QLineEdit()
-        self.sale_search.setPlaceholderText("주문번호 · 고객명 · 연락처 · 이메일 · 수령인 · 주소 · 품목 검색")
+        self.sale_search.setPlaceholderText("고객 · 주문번호 · 연락처 검색")
+        self.sale_search.setToolTip("주문번호·고객명·연락처·이메일·수령인·주소·품목을 검색합니다.")
+        self.sale_search.setMinimumWidth(180)
         self.sale_search.textChanged.connect(self.refresh_sales)
         self.state_filter = QComboBox()
         self.state_filter.setParent(page)
@@ -2671,7 +2702,7 @@ class SellerWindow(MainWindow):
         layout.addLayout(bar)
         filters, self.sales_filters = self.filter_buttons(
             (("전체", "전체 상태"), ("입금확인", "입금확인"), ("배송완료", "배송완료"), ("구매취소", "구매취소")), self.set_sales_filter)
-        layout.addLayout(filters)
+        bar.addLayout(filters)
 
         self.sale_table = table([
             "주문번호", "상태", "주문일", "고객명", "연락처", "이메일",
@@ -2687,7 +2718,8 @@ class SellerWindow(MainWindow):
         self.sale_table.setWordWrap(False)
         self.sale_table.setTextElideMode(Qt.TextElideMode.ElideRight)
         self.sale_table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Fixed)
-        self.sale_table.set_column_layout(((3, 2.6), (4, 1.7), (8, 2.8), (9, 1.7), (1, 1.6), (2, 1.8)))
+        self.sale_table.set_column_layout(((3, 2, 200), (4, .6, 140), (8, 3, 210), (9, 1, 145), (1, .5, 125), (2, .5, 144)))
+        self.sale_table.setItemDelegateForColumn(2, CompactDateDelegate(self.sale_table))
         self.sale_table.setItemDelegateForColumn(3, CustomerDelegate(self.sale_table))
         self.sale_table.setItemDelegateForColumn(1, StatusDelegate(self.sale_table))
         self.sale_table.itemSelectionChanged.connect(self.select_sale)
@@ -2698,6 +2730,7 @@ class SellerWindow(MainWindow):
         self.customer_list_status = label("주문을 선택하세요.", "muted", True)
         bottom.addWidget(self.customer_list_status, 1)
         self.customer_open_button = button("고객 관리 열기", self.open_customer_order, True)
+        set_button_icon(self.customer_open_button, "orders", "#ffffff")
         bottom.addWidget(self.customer_open_button)
         layout.addLayout(bottom)
         return page
@@ -2707,8 +2740,8 @@ class SellerWindow(MainWindow):
         layout = QVBoxLayout(page)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(8)
-        layout.addWidget(label("1. 주문 선택", "sectionTitle"))
         bar = QHBoxLayout()
+        bar.addWidget(label("주문 선택", "sectionTitle"))
         self.shipping_search = QLineEdit()
         self.shipping_search.setPlaceholderText("주문번호 · 수령인 · 주소 · 송장번호 검색")
         self.shipping_search.textChanged.connect(self.refresh_shipping)
@@ -2724,14 +2757,9 @@ class SellerWindow(MainWindow):
         self.shipping_table.itemSelectionChanged.connect(self.select_shipping)
         self.shipping_table.set_column_layout(((0, 1.8), (1, 1.4), (3, 2.8), (4, 1), (5, 1.8), (6, 1.8)))
         layout.addWidget(self.shipping_table, 1)
-        selection = QHBoxLayout()
-        selection.addWidget(button("목록 전체 선택", self.shipping_table.selectAll))
-        selection.addWidget(button("선택 해제", self.shipping_table.clearSelection))
-        selection.addStretch()
-        layout.addLayout(selection)
         self.shipping_status = label("주문을 선택하세요. Ctrl 또는 Shift로 여러 주문을 선택할 수 있습니다.", "muted", True)
         layout.addWidget(self.shipping_status)
-        panel, box = card("3. 송장번호 반영 · 확인")
+        panel, box = card("송장번호 반영 · 확인")
         line = QHBoxLayout()
         self.tracking_input = QLineEdit()
         self.tracking_input.setPlaceholderText("로젠에서 발급받은 송장번호 11자리")
@@ -2747,9 +2775,11 @@ class SellerWindow(MainWindow):
         self.import_button = button("송장 XLS / CSV 가져오기", self.import_shipping)
         self.print_button = button("송장번호 · 출고 확인서 출력", self.print_shipping)
         preparation = QHBoxLayout()
-        preparation.addWidget(label("2. 송장 준비", "sectionTitle"))
+        preparation.addWidget(label("송장 준비", "sectionTitle"))
         preparation.addWidget(self.export_button)
         preparation.addStretch()
+        preparation.addWidget(button("전체 선택", self.shipping_table.selectAll))
+        preparation.addWidget(button("선택 해제", self.shipping_table.clearSelection))
         layout.addLayout(preparation)
         actions.addWidget(self.import_button)
         actions.addStretch()
@@ -2757,11 +2787,14 @@ class SellerWindow(MainWindow):
         box.addLayout(actions)
         layout.addWidget(panel)
         self.export_button.setToolTip("선택 주문을 로젠 XLS로 저장하고 로젠 프로그램에 불러와 운송장을 출력하세요.")
+        set_button_icon(self.export_button, "document", "#ffffff")
+        set_button_icon(self.import_button, "folder")
+        set_button_icon(self.tracking_save, "save", "#ffffff")
         return page
 
     def navigate(self, index):
         self.stack.setCurrentIndex(index)
-        self.page_title.setText(self.PAGES[index][0])
+        self.update_page_title(index)
         for i, widget in enumerate(self.nav):
             widget.setChecked(i == index)
         if index == self.PAGE_REQUESTS and self.workspace_ready:
@@ -2877,7 +2910,7 @@ class SellerWindow(MainWindow):
         if (not error and isinstance(value, dict) and "requests" in value
                 and ("동기화" in title or "서버 연결" in title)):
             completed = timestamp(datetime.now(SEOUL).timestamp() * 1000)
-            self.last_sync_label.setText("마지막 동기화 성공 · " + completed)
+            self.last_sync_label.setText("성공 · " + completed)
             self.set_status_state("success", "동기화 완료")
         if self._request_arrival_notice:
             current = getattr(self.message, "details", self.message.text()).strip()
@@ -2987,6 +3020,7 @@ class SellerWindow(MainWindow):
             money(draft_amounts(d)["total"]),
             "서버 조회" if d["id"] in self.cloud_quote_ids else "PC 보관",
         ) for d, status in draft_pairs])
+        self.draft_table.set_empty_message("선택한 상태의 견적이 없습니다.\n전체 목록 또는 가져오기를 확인하세요.")
         center_table_columns(self.draft_table, (0, 1, 2, 3, 4, 6, 8))
         customer_reference(self.draft_table, 3, 0)
         self.draft_table.clearSelection()
@@ -2995,7 +3029,7 @@ class SellerWindow(MainWindow):
         if restored is not None:
             self.draft_table.selectRow(restored)
         self.draft_table.blockSignals(False)
-        self.draft_count.setText(f"확정 견적 {len(draft_pairs):,}건")
+        self.set_page_count(self.PAGE_QUOTES, len(draft_pairs))
         self.draft_table.horizontalHeaderItem(9).setToolTip("서버 조회: 이 PC에 저장한 견적이 없어 서버 자료로 표시 · PC 보관: 이 PC에 저장된 견적")
         self.refresh_sales()
         self.refresh_shipping()
@@ -3078,6 +3112,7 @@ class SellerWindow(MainWindow):
             ))
 
         self.sale_table.blockSignals(True)
+        self.sale_table.set_empty_message("조건에 맞는 판매 기록이 없습니다.\n검색 조건이나 상태를 바꿔 확인하세요.")
         fill_table(self.sale_table, table_rows)
         center_table_columns(self.sale_table, (0, 1, 2, 3, 4, 6, 9))
         customer_reference(self.sale_table, 3, 0)
@@ -3100,7 +3135,7 @@ class SellerWindow(MainWindow):
             f"목록 {len(self.sale_rows):,}건 · 입금확인 주문을 우선 표시합니다."
             if self.sale_rows else "조건에 맞는 판매·고객 기록이 없습니다."
         )
-        self.sale_count.setText(f"판매관리 {len(self.sale_rows):,}건")
+        self.set_page_count(self.PAGE_SALES, len(self.sale_rows))
         if self.selected_sale:
             self.select_sale()
         self.update_controls()
@@ -3177,8 +3212,10 @@ class SellerWindow(MainWindow):
             if mode == 2 and not number:
                 continue
             rows.append(row)
+        self.set_page_count(self.PAGE_SHIPPING, len(rows))
         self.shipping_rows = rows
         self.shipping_table.blockSignals(True)
+        self.shipping_table.set_empty_message("조건에 맞는 배송 주문이 없습니다.\n상태 필터 또는 가져오기를 확인하세요.")
         fill_table(self.shipping_table, [(r["metadata"]["orderNumber"], r["private"]["order"].get("receiverName", ""), r["private"]["order"]["customerPhone"],
             r["private"]["order"].get("roadAddress", ""), r["metadata"]["totalQty"], shipping_problem(r["private"]["order"]) or r["metadata"]["status"], tracking_number(r["private"]["order"]) or "미등록") for r in rows])
         self.shipping_table.clearSelection()

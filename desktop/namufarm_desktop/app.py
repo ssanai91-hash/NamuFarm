@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (
     QApplication, QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFileDialog,
     QFormLayout, QGroupBox, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMainWindow,
     QMessageBox, QPlainTextEdit, QPushButton, QScrollArea, QSplitter, QTabWidget,
-    QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget, QDateEdit, QDoubleSpinBox, QStyle,
+    QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget, QDateEdit, QDoubleSpinBox,
 )
 
 from .api import DEFAULT_URL
@@ -20,6 +20,7 @@ from .errors import ConflictError, UserError
 from .service import Manager
 from .store import Vault
 from .ui_theme import DataTable, StatusMessage, align_table, workspace_style
+from .ui_icons import set_button_icon
 
 
 def money(value):
@@ -150,7 +151,8 @@ class MainWindow(QMainWindow):
         title.setStyleSheet("font-size:24px;font-weight:700;color:#205844")
         top.addWidget(title)
         top.addStretch()
-        self.sync_button = QPushButton("↻ 가져오기")
+        self.sync_button = QPushButton("가져오기")
+        set_button_icon(self.sync_button, "refresh")
         self.sync_button.clicked.connect(self.manual_sync)
         top.addWidget(self.sync_button)
         layout.addLayout(top)
@@ -313,8 +315,11 @@ class MainWindow(QMainWindow):
     def build_requests(self):
         page = QWidget()
         layout = QVBoxLayout(page)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(8)
         self.request_search = QLineEdit()
-        self.request_search.setPlaceholderText("접수번호 · 고객명 · 전화번호 · 메일주소 · 묘목 · 지역 · 요청사항 검색")
+        self.request_search.setPlaceholderText("고객명 · 접수번호 · 연락처 · 묘목 검색")
+        self.request_search.setToolTip("접수번호·고객명·연락처·메일주소·묘목·지역·요청사항을 검색합니다.")
         self.request_search.textChanged.connect(self.refresh_requests)
         layout.addWidget(self.request_search)
         self.request_table = table(["접수번호", "접수일", "상태", "고객명", "전화번호", "메일주소", "지역", "공식견적서", "희망 묘목", "요청사항"])
@@ -334,7 +339,7 @@ class MainWindow(QMainWindow):
         self.delete_button = QPushButton("삭제")
         self.delete_button.setObjectName("requestDelete")
         self.delete_button.setMinimumWidth(140)
-        self.delete_button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_TrashIcon))
+        set_button_icon(self.delete_button, "trash", "#9c3c2e")
         self.delete_button.clicked.connect(self.delete_request)
         self.request_actions.addWidget(self.delete_button)
         self.request_actions.addStretch()
@@ -345,6 +350,9 @@ class MainWindow(QMainWindow):
         query = self.request_search.text().casefold()
         self.request_rows = [r for r in self.data["requests"] if r.get("status", "신규") == "신규"
                              and query in (r["requestId"] + r.get("receiptNumber", "") + str(r["personal"])).casefold()]
+        self.request_table.set_empty_message(
+            "검색 조건에 맞는 견적요청이 없습니다.\n검색어를 지우거나 가져오기를 확인하세요." if query else
+            "표시할 견적요청이 없습니다.\n가져오기로 최신 요청을 확인하세요.")
         self.request_table.blockSignals(True)
         fill_table(self.request_table, [(r.get("receiptNumber") or r["requestId"], timestamp(r["createdAt"]), r.get("status", "신규"), r["personal"]["customerName"], r["personal"]["customerPhone"],
                    r["personal"].get("customerEmail") or "—", r["personal"]["region"],
@@ -557,6 +565,8 @@ class MainWindow(QMainWindow):
     def build_reports(self):
         page = QWidget()
         layout = QVBoxLayout(page)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(8)
         bar = QHBoxLayout()
         self.unit = QComboBox()
         for label, key in (("일별", "day"), ("월별", "month"), ("연별", "year")):
@@ -574,7 +584,11 @@ class MainWindow(QMainWindow):
         layout.addLayout(bar)
         layout.addWidget(QLabel("배송완료일의 한국 시간 기준 · 매출은 세액 제외 · 확인한 원가를 기준으로 매출이익 계산"))
         self.report_table = table(["기간", "판매 건수", "수량", "매출", "세액", "원가", "비용", "확인 매출이익", "원가 미확인"])
-        layout.addWidget(self.report_table)
+        self.report_table.set_column_layout(((0, .5, 112), (1, .2, 80), (2, .3, 72),
+            (3, 1, 130), (4, .7, 108), (5, 1, 130), (6, .7, 100), (7, 1, 145), (8, .2, 110)))
+        self.report_table.set_empty_message("집계할 기간을 선택한 뒤 통계 조회를 눌러주세요.")
+        set_button_icon(self.report_button, "reports")
+        layout.addWidget(self.report_table, 1)
         self.report_summary = QLabel("기간을 선택하고 통계를 조회하세요.")
         layout.addWidget(self.report_summary)
         self.tabs.addTab(page, "일·월·년 통계")
@@ -590,6 +604,7 @@ class MainWindow(QMainWindow):
         report, pending = result
         self.data["pending"] = pending
         keys = ("period", "orders", "quantity", "sales", "tax", "cost", "expenses", "knownProfit", "unknownProfitOrders")
+        self.report_table.set_empty_message("선택한 기간의 배송완료 판매 기록이 없습니다.")
         fill_table(self.report_table, [[money(b[k]) if k in ("sales", "tax", "cost", "expenses", "knownProfit") else b[k] for k in keys] for b in report["buckets"]])
         buckets = report["buckets"]
         self.report_summary.setText(f"총 {sum(b['orders'] for b in buckets):,}건 · 매출 {money(sum(b['sales'] for b in buckets))} · 확인 매출이익 {money(sum(b['knownProfit'] for b in buckets))}")
@@ -602,7 +617,7 @@ class MainWindow(QMainWindow):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         content = QWidget()
-        content.setMaximumWidth(1040)
+        content.setMaximumWidth(920)
         scroll.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
         layout = QVBoxLayout(content)
         layout.setContentsMargins(0, 0, 12, 0)
@@ -612,19 +627,24 @@ class MainWindow(QMainWindow):
         status_layout = QVBoxLayout(status)
         status_layout.setSpacing(8)
         self.connection_status = QLabel("서버 연결 필요")
-        self.last_sync_label = QLabel("마지막 동기화 성공 · 이번 실행에서 확인 전")
+        self.last_sync_label = QLabel("이번 실행에서 확인 전")
         self.last_sync_label.setObjectName("muted")
         self.last_sync_label.setWordWrap(True)
         self.pending_status = QLabel("전송 대기 없음")
         self.pending_status.setWordWrap(True)
-        status_layout.addWidget(self.connection_status)
-        status_layout.addWidget(self.last_sync_label)
-        status_layout.addWidget(self.pending_status)
+        summary = QFormLayout()
+        summary.setVerticalSpacing(8)
+        summary.addRow("연결", self.connection_status)
+        summary.addRow("최근 가져오기", self.last_sync_label)
+        summary.addRow("변경사항", self.pending_status)
+        status_layout.addLayout(summary)
         status_actions = QHBoxLayout()
         status_actions.setSpacing(12)
-        self.connect_button = QPushButton("서버 연결 · 동기화")
+        self.connect_button = QPushButton("연결 확인 · 가져오기")
         self.connect_button.setObjectName("primary")
         self.connect_button.clicked.connect(self.connect_server)
+        set_button_icon(self.connect_button, "refresh", "#ffffff")
+        self.connect_button.setToolTip("연결을 확인하고 최신 자료와 전송 대기를 함께 처리합니다.")
         self.open_button = QPushButton("PC 자료 다시 열기")
         self.open_button.clicked.connect(self.open_vault)
         status_actions.addWidget(self.connect_button)
@@ -638,14 +658,15 @@ class MainWindow(QMainWindow):
         local_layout.setSpacing(12)
         self.copy_button = QPushButton("로컬 엑셀 사본 열기")
         self.copy_button.clicked.connect(self.open_request_copy)
+        set_button_icon(self.copy_button, "folder")
         local_layout.addWidget(self.copy_button, 0, Qt.AlignmentFlag.AlignLeft)
-        self.auto_check = QCheckBox("10분마다 자동 동기화 · 수정 중에는 입력내용 유지")
+        self.auto_check = QCheckBox("10분마다 자동 가져오기 · 수정 중에는 입력내용 유지")
+        self.auto_check.setToolTip("최신 자료를 가져오고 전송 대기 중인 변경사항을 서버에 반영합니다.")
         self.auto_check.setChecked(True)
         self.large_font_check = QCheckBox("큰 글씨로 보기")
         local_layout.addWidget(self.auto_check)
         local_layout.addWidget(self.large_font_check)
-        note = QLabel("로컬 엑셀은 조회용 사본입니다. 엑셀에서 수정한 내용은 서버에 올라가지 않습니다.\n"
-                      "엑셀 사본 위치: " + str(self.vault_path.with_name("나무팜-견적요청.xlsx")))
+        note = QLabel("로컬 엑셀은 조회용 사본입니다. 엑셀에서 수정한 내용은 서버에 올라가지 않습니다.")
         note.setObjectName("muted")
         note.setWordWrap(True)
         note.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
@@ -654,6 +675,7 @@ class MainWindow(QMainWindow):
 
         toggle = QPushButton("서버 주소 · 고급 설정 펼치기")
         toggle.setCheckable(True)
+        set_button_icon(toggle, "settings")
         layout.addWidget(toggle, 0, Qt.AlignmentFlag.AlignLeft)
         self.advanced_connection = QGroupBox("서버 주소와 자료 복구")
         advanced = QVBoxLayout(self.advanced_connection)
@@ -664,6 +686,11 @@ class MainWindow(QMainWindow):
         self.url.setAccessibleName("현재 연결된 서버 주소")
         form.addRow("서버 주소", self.url)
         advanced.addLayout(form)
+        copy_path = QLabel("엑셀 사본 위치: " + str(self.vault_path.with_name("나무팜-견적요청.xlsx")))
+        copy_path.setObjectName("muted")
+        copy_path.setWordWrap(True)
+        copy_path.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        advanced.addWidget(copy_path)
         self.resolve_button = QPushButton("수정 충돌 확인")
         self.resolve_button.clicked.connect(self.resolve_conflict)
         self.legacy_button = QPushButton("이전 자료 복원")

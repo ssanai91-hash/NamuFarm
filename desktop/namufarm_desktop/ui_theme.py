@@ -1,105 +1,109 @@
 """Shared desktop presentation; no storage or network operations."""
 import re
 
-from PySide6.QtCore import QEvent, Qt, QRectF
+from PySide6.QtCore import QEvent, Qt, QRectF, QTimer
 from PySide6.QtGui import QColor, QPainter
 from PySide6.QtWidgets import (QApplication, QHeaderView, QLabel, QScrollArea,
                                QSizePolicy, QTableWidget, QVBoxLayout, QWidget,
-                               QStyledItemDelegate, QStyleOptionViewItem, QStyle)
+                               QStyledItemDelegate, QStyleOptionViewItem, QStyle, QPushButton)
 
 
 def workspace_style(large=False):
     body, small = (18, 16) if large else (16, 14)
     css = """
-QWidget{font-family:'Malgun Gothic','NanumGothic',sans-serif;font-size:@body@px;color:#263e35;}
-QMainWindow,#workspace,QDialog{background:#f3f5f1;}
-#sidebar{background:#153e33;border:0;}
+QWidget{font-family:'Malgun Gothic','NanumGothic',sans-serif;font-size:@body@px;color:#24313a;}
+QMainWindow,#workspace,QDialog{background:#f4f6f7;}
+#sidebar{background:#193c32;border:0;}
 #sidebar QLabel{color:#c6d9cf;}
 #sidebar #brand{font-size:28px;font-weight:700;color:#fff;}
 #sidebar #navFoot{font-size:@small@px;color:#c6d9cf;}
 #sidebar QPushButton{background:transparent;color:#e0ebe3;border:2px solid transparent;border-radius:8px;text-align:left;padding:8px 10px;font-weight:600;}
 #sidebar QPushButton:checked{background:#2e604e;color:#fff;border-left-color:#b6df9a;}
 #sidebar QPushButton:hover{background:#285442;}
-#sidebar QPushButton:focus{border-style:dashed;border-color:#e4d29e;}
+#sidebar QPushButton[keyboardFocus="true"]{border-style:dashed;border-color:#e4d29e;}
 #sidebar QWidget#navRow{background:transparent;}
 #sidebar QLabel#navBadge{background:#c7efad;color:#173b26;border:1px solid #c7efad;border-radius:10px;min-width:24px;padding:3px 6px;font-size:@small@px;font-weight:700;}
-QLabel#pageTitle,QLabel#deliveryTitle,QLabel#heroTitle{font-size:28px;font-weight:700;color:#193d2e;}
-QLabel#sectionTitle,QLabel#quoteItemsTitle,QLabel#emailSectionTitle{font-size:20px;font-weight:700;}
-QLabel#metricValue,QLabel#quoteTotalValue,QLabel#customerAmountValue{font-size:28px;font-weight:700;color:#194d3a;}
-QLabel#muted,QLabel#eyebrow,QLabel#deliverySubtitle,QLabel#infoCaption,QLabel#customerMetricCaption,QLabel#quoteItemsHint,QLabel#emailHelp{font-size:@small@px;color:#4f6257;}
+QLabel#pageTitle,QLabel#deliveryTitle,QLabel#heroTitle{font-size:24px;font-weight:700;color:#24313a;}
+QLabel#sectionTitle,QLabel#quoteItemsTitle,QLabel#emailSectionTitle{font-size:18px;font-weight:700;}
+QLabel#metricValue,QLabel#quoteTotalValue,QLabel#customerAmountValue{font-size:28px;font-weight:700;color:#2d6a4f;}
+QLabel#muted,QLabel#eyebrow,QLabel#deliverySubtitle,QLabel#infoCaption,QLabel#customerMetricCaption,QLabel#quoteItemsHint,QLabel#emailHelp{font-size:@small@px;color:#5c6b73;}
 QLabel#infoValue,QLabel#customerMetricValue,QLabel#deliveryShippingTitle,QLabel#quoteTotalCaption{font-size:@body@px;font-weight:600;}
-QFrame#card,QFrame#hero,QFrame#deliveryInfoCard,QFrame#quoteItemsCard,QFrame#requestNoteCard,QFrame#customerSummaryCard,QFrame#customerInfoCard,QFrame#customerFinanceCard,QFrame#emailAddressCard{background:#fff;border:1px solid #cdd9ce;border-radius:12px;}
-QLabel#notice,QLabel#deliveryNotice,QLabel#emailSendStatus,QLabel#smsSendStatus{background:#e8efe6;color:#365c42;border:1px solid #cdd9ce;border-radius:8px;padding:12px;}
-QFrame#serverLogFrame{background:#fff;border:1px solid #c5d4c8;border-radius:8px;}
+QFrame#card,QFrame#hero,QFrame#deliveryInfoCard,QFrame#quoteItemsCard,QFrame#requestNoteCard,QFrame#customerSummaryCard,QFrame#customerInfoCard,QFrame#customerFinanceCard,QFrame#emailAddressCard{background:#fff;border:1px solid #ccd5d9;border-radius:12px;}
+QLabel#notice,QLabel#deliveryNotice,QLabel#emailSendStatus,QLabel#smsSendStatus{background:#eef3f1;color:#38564b;border:1px solid #ccd5d9;border-radius:8px;padding:12px;}
+QFrame#serverLogFrame{background:#fff;border:1px solid #ccd5d9;border-radius:8px;}
 QFrame#serverLogFrame[state="error"]{background:#fff1eb;border-color:#b9654e;}
 QFrame#serverLogFrame[state="working"]{background:#fff7e4;border-color:#b08b3e;}
-QLabel#serverLogTitle{font-size:@small@px;font-weight:700;color:#365c42;}
-QLabel#serverLogText{font-size:@body@px;color:#263e35;background:transparent;}
+QLabel#serverLogTitle{font-size:@small@px;font-weight:700;color:#38564b;}
+QLabel#serverLogText{font-size:@body@px;color:#24313a;background:transparent;}
 QFrame#serverLogFrame[state="error"] QLabel{color:#923c28;}
-QPushButton{background:#fff;color:#263e35;border:1px solid #9caf9f;border-radius:8px;min-height:24px;max-height:24px;padding:9px 14px;font-weight:600;}
-QPushButton:hover{background:#eaf1e7;border-color:#4b805d;}
-QPushButton:pressed{background:#d8e6d6;}
+QPushButton{background:#fff;color:#24313a;border:1px solid #7f8e95;border-radius:8px;min-height:24px;max-height:24px;padding:9px 14px;font-weight:600;}
+QPushButton:hover{background:#edf3ef;border-color:#4b805d;}
+QPushButton:pressed{background:#dcebe2;}
 QPushButton:focus{border:2px solid #986000;padding:8px 13px;}
-QPushButton:disabled{background:#ecefea;color:#68756b;border:1px solid #cbd5ca;}
-QPushButton#primary,QPushButton#syncPrimary,QPushButton#sentAction,QPushButton#emailSendPrimary,QPushButton#smsSendPrimary{background:#286547;color:#fff;border:1px solid #235b40;}
+QPushButton:disabled{background:#eef1f2;color:#718087;border:1px solid #ccd5d9;}
+QPushButton#primary,QPushButton#syncPrimary,QPushButton#sentAction,QPushButton#emailSendPrimary,QPushButton#smsSendPrimary{background:#2d6a4f;color:#fff;border:1px solid #255a43;}
 QPushButton#primary:hover,QPushButton#syncPrimary:hover,QPushButton#sentAction:hover,QPushButton#emailSendPrimary:hover,QPushButton#smsSendPrimary:hover{background:#1f573b;}
 QPushButton#primary:pressed,QPushButton#syncPrimary:pressed,QPushButton#sentAction:pressed,QPushButton#emailSendPrimary:pressed,QPushButton#smsSendPrimary:pressed{background:#16472e;}
 QPushButton#primary:focus,QPushButton#syncPrimary:focus,QPushButton#sentAction:focus,QPushButton#emailSendPrimary:focus,QPushButton#smsSendPrimary:focus{border:2px solid #ad7400;}
-QPushButton#primary:disabled,QPushButton#syncPrimary:disabled,QPushButton#sentAction:disabled,QPushButton#emailSendPrimary:disabled,QPushButton#smsSendPrimary:disabled{background:#d8e2d8;color:#546458;border-color:#bcccbc;}
+QPushButton#primary:disabled,QPushButton#syncPrimary:disabled,QPushButton#sentAction:disabled,QPushButton#emailSendPrimary:disabled,QPushButton#smsSendPrimary:disabled{background:#e1e9e4;color:#677970;border-color:#c4d2c9;}
 QPushButton#danger{background:#fff5f1;color:#a33827;border-color:#c78370;}
-QPushButton#requestDelete{background:#f9e6e2;color:#9b3529;border:1px solid #d7aaa2;}
+QPushButton#requestDelete{background:#fcedea;color:#9b3529;border:1px solid #d7aaa2;}
 QPushButton#requestDelete:hover{background:#f2d5ce;border-color:#bd7a6e;}
 QPushButton#requestDelete:pressed{background:#eac2b8;}
 QPushButton#requestDelete:focus{border:2px solid #a33827;}
 QPushButton#requestDelete:disabled{background:#f1e7e4;color:#8a706a;border-color:#d7c3bd;}
-QPushButton#requestQuote{background:#e4f0e4;color:#23593a;border:1px solid #a8c6ab;}
+QPushButton#requestQuote{background:#e8f2ec;color:#23593a;border:1px solid #a8c6ab;}
 QPushButton#requestQuote:hover{background:#d3e6d4;border-color:#6b9d74;}
 QPushButton#requestQuote:pressed{background:#bdd9c0;}
-QPushButton#requestQuote:focus{border:2px solid #286547;}
-QPushButton#requestQuote:disabled{background:#edf2eb;color:#758173;border-color:#cbd5ca;}
+QPushButton#requestQuote:focus{border:2px solid #2d6a4f;}
+QPushButton#requestQuote:disabled{background:#f1f4f5;color:#758173;border-color:#ccd5d9;}
 QPushButton#danger:hover{background:#f8e4de;}
 QPushButton#danger:focus{border:2px solid #a33827;}
-QLineEdit,QComboBox,QDateEdit,QDoubleSpinBox,QSpinBox,QPlainTextEdit{background:#fff;border:1px solid #9caf9f;border-radius:8px;padding:9px 10px;selection-background-color:#c7dfd0;selection-color:#173b2e;}
+QLineEdit,QComboBox,QDateEdit,QDoubleSpinBox,QSpinBox,QPlainTextEdit{background:#fff;border:1px solid #7f8e95;border-radius:8px;padding:9px 10px;selection-background-color:#e0eee6;selection-color:#24313a;}
 QLineEdit,QComboBox,QDateEdit,QDoubleSpinBox,QSpinBox{min-height:24px;}
-QLineEdit[readOnly="true"],QPlainTextEdit[readOnly="true"]{background:#f1f5ef;}
-QLineEdit:focus,QComboBox:focus,QDateEdit:focus,QDoubleSpinBox:focus,QSpinBox:focus,QPlainTextEdit:focus{border:2px solid #286547;padding:8px 9px;}
-QLineEdit:disabled,QComboBox:disabled,QPlainTextEdit:disabled{background:#ecefea;color:#68756b;}
-QTableWidget{background:#fff;alternate-background-color:#f1f6ef;border:1px solid #a8bca9;border-radius:8px;gridline-color:#d8e3d8;selection-background-color:#c7dfd0;selection-color:#173b2e;}
-QTableWidget:focus{border:2px solid #286547;}
-QTableWidget::item{padding:8px;border:0;border-bottom:1px solid #dce6da;}
-QTableWidget::item:selected{background:#c7dfd0;color:#173b2e;border:0;border-bottom:1px solid #a4c2ac;}
-QHeaderView::section{background:#e8eee8;color:#304a3b;border:0;border-right:1px solid #cdd9ce;border-bottom:1px solid #b9cbbb;padding:9px 8px;font-weight:700;}
-QGroupBox{background:#fff;border:1px solid #cdd9ce;border-radius:12px;margin-top:22px;padding:20px;font-weight:600;}
+QLineEdit[readOnly="true"],QPlainTextEdit[readOnly="true"]{background:#f4f6f7;}
+QLineEdit:focus,QComboBox:focus,QDateEdit:focus,QDoubleSpinBox:focus,QSpinBox:focus,QPlainTextEdit:focus{border:2px solid #2d6a4f;padding:8px 9px;}
+QLineEdit:disabled,QComboBox:disabled,QPlainTextEdit:disabled{background:#eef1f2;color:#718087;}
+QTableWidget{background:#fff;alternate-background-color:#f7f9fa;border:1px solid #ccd5d9;border-radius:8px;gridline-color:#e2e8eb;selection-background-color:#e0eee6;selection-color:#24313a;}
+QTableWidget:focus{border-color:#2d6a4f;}
+QTableWidget::item{padding:8px;border:0;border-bottom:1px solid #e2e8eb;}
+QTableWidget::item:selected{background:#e0eee6;color:#24313a;border:0;border-bottom:1px solid #c4d8cc;}
+QHeaderView::section{background:#eef2f3;color:#34434b;border:0;border-right:1px solid #ccd5d9;border-bottom:1px solid #ccd5d9;padding:9px 8px;font-weight:700;}
+QGroupBox{background:#fff;border:1px solid #ccd5d9;border-radius:12px;margin-top:20px;padding:16px;font-weight:600;}
 QGroupBox::title{subcontrol-origin:margin;left:16px;padding:0 6px;}
 QScrollArea{border:0;background:transparent;}
 QScrollArea>QWidget>QWidget{background:transparent;}
-QScrollBar:vertical{background:#edf2eb;width:16px;margin:0;}
-QScrollBar::handle:vertical{background:#879f8b;border-radius:7px;min-height:44px;}
-QScrollBar:horizontal{background:#edf2eb;height:16px;margin:0;}
-QScrollBar::handle:horizontal{background:#879f8b;border-radius:7px;min-width:44px;}
+QScrollBar:vertical{background:#f1f4f5;width:16px;margin:0;}
+QScrollBar::handle:vertical{background:#91a3ab;border-radius:7px;min-height:44px;}
+QScrollBar:horizontal{background:#f1f4f5;height:16px;margin:0;}
+QScrollBar::handle:horizontal{background:#91a3ab;border-radius:7px;min-width:44px;}
 QScrollBar::add-line,QScrollBar::sub-line{width:0;height:0;}
 QScrollBar::add-page,QScrollBar::sub-page{background:transparent;}
 QCheckBox,QRadioButton{spacing:10px;padding:6px 0;}
 QCheckBox::indicator,QRadioButton::indicator{width:22px;height:22px;}
-QTextBrowser{background:#fff;border:1px solid #cdd9ce;border-radius:8px;padding:14px;}
-QToolTip{background:#153e33;color:#fff;border:0;padding:10px;font-size:@body@px;}
-QLabel#quoteStatusBadge,QLabel#customerStatusBadge,QLabel#channelStatusBadge{background:#e2eddf;color:#23593a;border:1px solid #b5cbb5;border-radius:8px;padding:5px 10px;font-size:@small@px;font-weight:600;}
-QLabel#channelStatusBadge[done="false"]{background:#eef1ed;color:#4f6257;}
+QTextBrowser{background:#fff;border:1px solid #ccd5d9;border-radius:8px;padding:14px;}
+QToolTip{background:#193c32;color:#fff;border:0;padding:10px;font-size:@body@px;}
+QLabel#quoteStatusBadge,QLabel#customerStatusBadge,QLabel#channelStatusBadge{background:#e8f2ec;color:#23593a;border:1px solid #c6dace;border-radius:8px;padding:5px 10px;font-size:@small@px;font-weight:600;}
+QLabel#channelStatusBadge[done="false"]{background:#f1f4f5;color:#5c6b73;}
 QLabel#channelStatusBadge[state="pending"]{background:#fff3d8;color:#78520d;border-color:#ba963d;}
 QLabel#channelStatusBadge[state="failed"]{background:#fbe5e2;color:#a13d32;border-color:#c78370;}
-QLabel#channelStatusBadge[state="success"]{background:#dcebdd;color:#23603b;}
-QFrame#deliveryShippingCard,QFrame#quoteTotalBand{background:#eaf2e7;border:1px solid #bdd2bd;border-radius:12px;}
-QLabel#deliveryShippingStatus{font-size:@small@px;color:#4f6257;}
+QLabel#channelStatusBadge[state="success"]{background:#e8f2ec;color:#23603b;}
+QFrame#deliveryShippingCard,QFrame#quoteTotalBand{background:#f3f7f5;border:1px solid #c6dace;border-radius:12px;}
+QLabel#deliveryShippingStatus{font-size:@small@px;color:#5c6b73;}
 QLineEdit#deliveryShippingFee{min-width:100px;max-width:160px;}
-QLabel#quoteFileName{background:#eef2eb;color:#4f6257;border:1px solid #cdd9ce;border-radius:8px;padding:8px 10px;font-size:@small@px;}
+QLabel#quoteFileName{background:#f2f5f6;color:#5c6b73;border:1px solid #ccd5d9;border-radius:8px;padding:8px 10px;font-size:@small@px;}
 #unitPriceEditor QPushButton{padding:0;min-height:0;max-height:44px;}
 #unitPriceEditor QPushButton:focus{padding:0;}
 #unitPriceEditor QLineEdit{padding:2px 5px;min-height:0;max-height:44px;}
 #unitPriceEditor QLineEdit:focus{padding:1px 4px;}
-QPushButton#filterTab:checked{background:#dcebdd;color:#194d3a;border-color:#286547;}
+QPushButton#filterTab:checked{background:#e8f2ec;color:#2d6a4f;border-color:#2d6a4f;}
+QLabel#emptyState{color:#5c6b73;background:transparent;padding:24px;font-size:@body@px;}
+QPushButton#disclosure{text-align:left;background:#f4f6f7;border-color:#ccd5d9;}
+QDialog#quoteEditor QLineEdit[readOnly="true"]{min-height:@readonly@px;max-height:@readonly@px;}
 QLabel#navGroup{font-size:@small@px;color:#a6c2b2;padding:10px 10px 2px;}
 """
-    return css.replace('@body@', str(body)).replace('@small@', str(small))
+    return (css.replace('@body@', str(body)).replace('@small@', str(small))
+            .replace('@readonly@', '24' if large else '20'))
 
 
 class StatusMessage(QLabel):
@@ -112,7 +116,7 @@ class StatusMessage(QLabel):
         self.details = str(text)
         summary = re.sub(r'^[A-Z][A-Z _]+\s*>\s*', '', self.details)
         if 'Code.gs' in summary or 'SecureCommerce.gs' in summary:
-            summary = '서버 업데이트가 필요합니다. 자세히 보기에서 연결 안내를 확인해주세요.'
+            summary = '서버 업데이트가 필요합니다. 연결·설정에서 서버 정보를 확인해주세요.'
         super().setText(summary)
         self.setToolTip(self.details)
 
@@ -122,6 +126,34 @@ class RowSelectionDelegate(QStyledItemDelegate):
     def initStyleOption(self, option, index):
         super().initStyleOption(option, index)
         option.state &= ~QStyle.StateFlag.State_HasFocus
+
+
+class NavigationButton(QPushButton):
+    """Keyboard focus stays visible without making mouse focus look selected."""
+    def __init__(self, text, parent=None):
+        super().__init__(text, parent)
+        self.setProperty("keyboardFocus", False)
+
+    def focusInEvent(self, event):
+        self.setProperty("keyboardFocus", event.reason() in (
+            Qt.FocusReason.TabFocusReason, Qt.FocusReason.BacktabFocusReason,
+            Qt.FocusReason.ShortcutFocusReason))
+        self.style().unpolish(self)
+        self.style().polish(self)
+        super().focusInEvent(event)
+
+    def focusOutEvent(self, event):
+        self.setProperty("keyboardFocus", False)
+        self.style().unpolish(self)
+        self.style().polish(self)
+        super().focusOutEvent(event)
+
+
+class CompactDateDelegate(RowSelectionDelegate):
+    def initStyleOption(self, option, index):
+        super().initStyleOption(option, index)
+        if len(option.text) >= 16 and option.text[4:5] == '-':
+            option.text = option.text[5:16].replace('-', '.')
 
 
 class CustomerDelegate(RowSelectionDelegate):
@@ -141,14 +173,14 @@ class CustomerDelegate(RowSelectionDelegate):
         font = option.font
         font.setBold(True)
         painter.setFont(font)
-        painter.setPen(QColor('#173b2e'))
+        painter.setPen(QColor('#24313a'))
         top = QRectF(rect.x(), rect.y(), rect.width(), rect.height() / 2)
         painter.drawText(top, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
                          painter.fontMetrics().elidedText(primary, Qt.TextElideMode.ElideRight, rect.width()))
         font.setBold(False)
         font.setPixelSize(16 if QApplication.instance().property('namufarmLargeFont') else 14)
         painter.setFont(font)
-        painter.setPen(QColor('#4f6257'))
+        painter.setPen(QColor('#5c6b73'))
         bottom = top.translated(0, rect.height() / 2)
         painter.drawText(bottom, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
                          painter.fontMetrics().elidedText(str(secondary), Qt.TextElideMode.ElideRight, rect.width()))
@@ -165,18 +197,20 @@ class StatusDelegate(RowSelectionDelegate):
         style.drawControl(QStyle.ControlElement.CE_ItemViewItem, opt, painter, opt.widget)
         pending = text in ('견적확정', '입금확인', '신규')
         canceled = text == '구매취소'
-        background, foreground = (('#fff0d2', '#735016') if pending else
-                                  ('#f4e4e0', '#903c2d') if canceled else ('#e2eddf', '#23593a'))
+        background, foreground = (('#fff3da', '#805a17') if pending else
+                                  ('#fcedea', '#9c3c2e') if canceled else ('#e8f2ec', '#23593a'))
         painter.save()
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(QColor(background))
-        rect = option.rect.adjusted(6, 10, -6, -10)
+        width = min(option.rect.width() - 12, option.fontMetrics.horizontalAdvance(text) + 24)
+        rect = QRectF(0, 0, max(1, width), 30)
+        rect.moveCenter(QRectF(option.rect).center())
         painter.drawRoundedRect(rect, 6, 6)
         painter.setPen(QColor(foreground))
         painter.setFont(option.font)
         painter.drawText(rect, Qt.AlignmentFlag.AlignCenter,
-                         painter.fontMetrics().elidedText(text, Qt.TextElideMode.ElideRight, max(1, rect.width()-8)))
+                         painter.fontMetrics().elidedText(text, Qt.TextElideMode.ElideRight, max(1, int(rect.width())-8)))
         painter.restore()
 
 
@@ -193,16 +227,26 @@ class DataTable(QTableWidget):
     def __init__(self, rows, columns):
         super().__init__(rows, columns)
         self.setItemDelegate(RowSelectionDelegate(self))
+        self._empty_message = '표시할 자료가 없습니다.'
+        self._empty_label = QLabel(self.viewport())
+        self._empty_label.setObjectName("emptyState")
+        self._empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._empty_label.setWordWrap(True)
+        self._empty_label.setTextFormat(Qt.TextFormat.PlainText)
+        self._empty_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         self._weights = ()
         self._fitting = False
         self.viewport().installEventFilter(self)
         row_height = 64 if QApplication.instance().property("namufarmLargeFont") else 56
         self.verticalHeader().setMinimumSectionSize(row_height)
         self.verticalHeader().setDefaultSectionSize(row_height)
+        self.model().rowsInserted.connect(self.update_empty_state)
+        self.model().rowsRemoved.connect(self.update_empty_state)
+        self.model().modelReset.connect(self.update_empty_state)
 
     def set_column_layout(self, columns):
-        self._weights = tuple(columns)
-        order = [column for column, _weight in self._weights]
+        self._weights = tuple((c[0], c[1], c[2] if len(c) > 2 else 60) for c in columns)
+        order = [column for column, _weight, _minimum in self._weights]
         header = self.horizontalHeader()
         header.setStretchLastSection(False)
         header.setMinimumSectionSize(60)
@@ -219,11 +263,14 @@ class DataTable(QTableWidget):
         self._fitting = True
         try:
             available = max(1, self.viewport().width())
-            total = sum(weight for _column, weight in self._weights)
+            minimum_total = sum(minimum for _column, _weight, minimum in self._weights)
+            total = sum(weight for _column, weight, _minimum in self._weights)
+            extra = max(0, available - minimum_total)
             used = 0
-            for position, (column, weight) in enumerate(self._weights):
-                width = (available - used) if position == len(self._weights) - 1 else int(available * weight / total)
-                width = max(self.horizontalHeader().minimumSectionSize(), width)
+            for position, (column, weight, minimum) in enumerate(self._weights):
+                width = minimum + int(extra * weight / total) if total else minimum
+                if position == len(self._weights) - 1:
+                    width = max(minimum, available - used)
                 self.setColumnWidth(column, width)
                 used += width
         finally:
@@ -232,7 +279,23 @@ class DataTable(QTableWidget):
     def eventFilter(self, watched, event):
         if watched is self.viewport() and event.type() == QEvent.Type.Resize:
             self.fit_columns()
+            self.update_empty_state()
         return super().eventFilter(watched, event)
+
+    def set_empty_message(self, text):
+        self._empty_message = text
+        self.update_empty_state()
+
+    def setRowCount(self, count):
+        super().setRowCount(count)
+        if hasattr(self, "_empty_label"):
+            self.update_empty_state()
+
+    def update_empty_state(self, *_args):
+        self._empty_label.setText(self._empty_message)
+        self._empty_label.setGeometry(self.viewport().rect().adjusted(16, 8, -16, -8))
+        self._empty_label.setVisible(self.rowCount() == 0)
+        self._empty_label.raise_()
 
 
 def align_table(widget):
@@ -242,7 +305,7 @@ def align_table(widget):
             if item is None:
                 continue
             heading = widget.horizontalHeaderItem(column).text()
-            if any(word in heading for word in ('금액', '단가', '수량', '매출', '이익', '비용')):
+            if any(word in heading for word in ('금액', '단가', '수량', '매출', '이익', '비용', '원가', '세액', '건수')):
                 alignment = Qt.AlignmentFlag.AlignRight
             elif any(word in heading for word in ('상태', '일자', '작성일', '접수일', '주문일', '규격', '견적서')):
                 alignment = Qt.AlignmentFlag.AlignHCenter
@@ -268,7 +331,7 @@ def scroll_dialog(dialog, layout):
     body = QWidget()
     content = QVBoxLayout(body)
     content.setContentsMargins(0, 0, 0, 0)
-    content.setSpacing(16)
+    content.setSpacing(8)
     while layout.count() > 2:
         stretch = layout.stretch(1)
         item = layout.takeAt(1)
@@ -293,3 +356,37 @@ def scroll_page(page):
     scroll.setWidgetResizable(True)
     scroll.setWidget(page)
     return scroll
+
+
+def size_table_to_rows(table, max_rows=4):
+    """Short item lists use their real height; longer lists retain one scroll."""
+    table.setProperty("visibleItemRows", max_rows)
+    def resize():
+        if not table.isVisible():
+            # sizeHint is still usable before a dialog is shown.
+            header = table.horizontalHeader().sizeHint().height()
+        else:
+            header = table.horizontalHeader().height()
+        rows = min(max(1, table.rowCount()), max_rows)
+        table.setFixedHeight(header + rows * table.verticalHeader().defaultSectionSize() + 4)
+    resize()
+    QTimer.singleShot(0, resize)
+
+
+def collapsible(title, content, expanded=False):
+    from .ui_icons import set_button_icon
+    section = QWidget()
+    layout = QVBoxLayout(section)
+    layout.setContentsMargins(0, 0, 0, 0)
+    layout.setSpacing(8)
+    toggle = QPushButton(title)
+    toggle.setObjectName("disclosure")
+    toggle.setCheckable(True)
+    toggle.setChecked(expanded)
+    toggle.setAccessibleName(title + " 펼치기 또는 접기")
+    set_button_icon(toggle, "chevron", "#5c6b73")
+    content.setVisible(expanded)
+    toggle.toggled.connect(content.setVisible)
+    layout.addWidget(toggle)
+    layout.addWidget(content)
+    return section
