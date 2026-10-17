@@ -4,6 +4,7 @@
 // Draft/published releases, logs, caches, unknown artifacts and other repos are untouched.
 const groups = new Map([
   ['NamuFarm-Debug-APK', 'debug'],
+  ['namufarm-debug-apk', 'debug'],
   ['NamuFarm-Signed-APK', 'signed'],
   ['namufarm-release-apk', 'signed'],
   ['NamuFarm-PC-Windows', 'windows'],

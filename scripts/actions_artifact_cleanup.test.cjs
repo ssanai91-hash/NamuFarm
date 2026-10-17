@@ -12,7 +12,7 @@ const artifact = (id, name, days = 0, expired = false) => ({
 test('keeps two binaries per kind, coalesces signed aliases, preserves unknown and expired', () => {
   const items = [
     artifact(1, 'NamuFarm-Debug-APK', 20), artifact(2, 'NamuFarm-Debug-APK', 10),
-    artifact(3, 'NamuFarm-Debug-APK'), artifact(4, 'NamuFarm-Signed-APK', 2),
+    artifact(3, 'namufarm-debug-apk'), artifact(4, 'NamuFarm-Signed-APK', 2),
     artifact(5, 'namufarm-release-apk', 1), artifact(6, 'namufarm-release-apk'),
     artifact(7, 'NamuFarm-PC-Windows', 40), artifact(8, 'NamuFarm-PC-Windows', 30),
     artifact(9, 'NamuFarm-PC-Windows', 20), artifact(10, 'other-file', 60),
