@@ -201,17 +201,23 @@ class Vault:
                     db.execute("INSERT INTO cache VALUES (?,?,?)", (kind, index, self._seal(row, kind + ":" + index)))
             db.execute("INSERT OR REPLACE INTO config VALUES ('snapshot',?)", (self._seal(marker, "snapshot"),))
 
-    def replace_requests(self, requests, cursor, deleted):
+    def replace_requests(self, requests, cursor, deleted, quote_read_mode=None):
         """Commit an independent inbox snapshot without touching sales or their outbox."""
         with self.mutex, self._db() as db:
             marker = self._read_snapshot_marker(db)
-            require(cursor >= marker["requests"] and set(marker["deletedRequests"]) <= set(deleted),
+            switching_to_two_tabs = (
+                quote_read_mode == "annual-two-tabs" and
+                marker.get("quoteReadMode") != "annual-two-tabs"
+            )
+            require(switching_to_two_tabs or
+                    (cursor >= marker["requests"] and set(marker["deletedRequests"]) <= set(deleted)),
                     "문의 접수 순번이나 삭제 기록이 이전 상태입니다.")
             db.execute("DELETE FROM cache WHERE kind='requests'")
             for row in requests:
                 index = self._index("requests", row["requestId"])
                 db.execute("INSERT INTO cache VALUES ('requests',?,?)", (index, self._seal(row, "requests:" + index)))
-            marker.update(requests=cursor, deletedRequests=sorted(deleted))
+            marker.update(requests=cursor, deletedRequests=sorted(deleted),
+                          quoteReadMode=quote_read_mode)
             db.execute("INSERT OR REPLACE INTO config VALUES ('snapshot',?)", (self._seal(marker, "snapshot"),))
 
     def queue(self, operation, optimistic=None):

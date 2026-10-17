@@ -25,6 +25,7 @@ class Manager:
                                    if self.credentials.get("authMode") == "shared-key-v1"
                                    and self.credentials.get("connectionKeyUrl") == self.credentials.get("url", DEFAULT_URL) else "")
         self.request_snapshot = False
+        self.quote_read_mode = None
         self.copy_error = ""
 
     @property
@@ -37,6 +38,7 @@ class Manager:
         self.seller = SellerKey(self.credentials["privateKey"], self.credentials["publicKey"]) if self.credentials.get("privateKey") else None
         self.api = ScriptApi(DEFAULT_URL, self.credentials["deviceToken"])
         self.request_snapshot = False
+        self.quote_read_mode = None
         self.copy_error = ""
         return self.view()
 
@@ -76,6 +78,7 @@ class Manager:
                 "기존 자료가 있는 보관함은 다른 서버로 바꿀 수 없습니다.")
         previous = self.api
         previous_snapshot = self.request_snapshot
+        previous_read_mode = self.quote_read_mode
         self.api = api_factory(url, self.credentials["deviceToken"])
         try:
             self.verify_server()
@@ -93,6 +96,7 @@ class Manager:
         except Exception:
             self.api = previous
             self.request_snapshot = previous_snapshot
+            self.quote_read_mode = previous_read_mode
             raise
         return self.sync()
 
@@ -115,6 +119,8 @@ class Manager:
         require(info.get("requestDeletionSync") is True,
                 "PC 삭제 동기화를 지원하는 서버 코드로 Apps Script 배포를 업데이트해주세요.")
         self.request_snapshot = info.get("requestSnapshot") is True
+        mode = info.get("quoteReadMode")
+        self.quote_read_mode = mode if mode in ("annual-two-tabs", "legacy-storage") else None
         return info
 
     def pair(self, invite):
@@ -577,18 +583,26 @@ class Manager:
         requests, request_cursor, deleted = self._pages("list_requests", "requests")
         sales, sale_cursor, _ = self._pages("list_sales", "sales")
         old = self.vault.snapshot_marker()
-        if self.request_snapshot:
+        # Only a complete verified snapshot from a different annual quote store
+        # supersedes request deletion markers inherited from legacy storage.
+        switching_to_two_tabs = (self.request_snapshot and
+            self.quote_read_mode == "annual-two-tabs" and
+            old.get("quoteReadMode") != "annual-two-tabs")
+        if self.request_snapshot and not switching_to_two_tabs:
             require(not (set(old["deletedRequests"]) & {r["requestId"] for r in requests}), "삭제된 요청이 다시 나타났습니다.")
             require(request_cursor >= old["requests"], "서버 순번이 이전보다 작아 기존 기록을 유지합니다.")
             deleted |= set(old["deletedRequests"])
-        require(request_cursor >= old["requests"] and sale_cursor >= old["sales"], "서버 순번이 이전보다 작아 기존 기록을 유지합니다.")
-        require(set(old["deletedRequests"]) <= deleted, "삭제된 문의가 서버에 다시 나타나 기존 기록을 유지합니다.")
+        require((switching_to_two_tabs or request_cursor >= old["requests"]) and sale_cursor >= old["sales"],
+                "서버 순번이 이전보다 작아 기존 기록을 유지합니다.")
+        if not switching_to_two_tabs:
+            require(set(old["deletedRequests"]) <= deleted, "삭제된 문의가 서버에 다시 나타나 기존 기록을 유지합니다.")
         request_ids = {r["requestId"] for r in requests} | deleted
         require(self.request_snapshot or all(r["requestId"] in request_ids for r in self.vault.rows("requests")), "서버 문의 목록 일부가 누락되어 기존 기록을 유지합니다.")
         sale_ids = {r["metadata"]["orderNumber"] for r in sales}
         require(all(r["metadata"]["orderNumber"] in sale_ids or sale_expired(r["metadata"], now_ms())
                     for r in self.vault.rows("sales")), "서버 판매 목록 일부가 누락되어 기존 기록을 유지합니다.")
-        marker = {"requests": request_cursor, "sales": sale_cursor, "deletedRequests": sorted(deleted)}
+        marker = {"requests": request_cursor, "sales": sale_cursor,
+                  "deletedRequests": sorted(deleted), "quoteReadMode": self.quote_read_mode}
         return requests, sales, marker
 
     def flush(self):
@@ -612,12 +626,16 @@ class Manager:
         ids = {r["requestId"] for r in requests} | deleted
         require(self.request_snapshot or all(r["requestId"] in ids for r in self.vault.rows("requests")),
                 "서버 문의 목록 일부가 누락되어 기존 기록을 유지합니다.")
-        if self.request_snapshot:
-            old = self.vault.snapshot_marker()
+        old = self.vault.snapshot_marker()
+        switching_to_two_tabs = (self.request_snapshot and
+            self.quote_read_mode == "annual-two-tabs" and
+            old.get("quoteReadMode") != "annual-two-tabs")
+        if self.request_snapshot and not switching_to_two_tabs:
             require(not (set(old["deletedRequests"]) & {r["requestId"] for r in requests}), "삭제된 요청이 다시 나타났습니다.")
             require(cursor >= old["requests"], "서버 순번이 이전보다 작아 기존 기록을 유지합니다.")
             deleted |= set(old["deletedRequests"])
-        self.vault.replace_requests(requests, cursor, deleted)
+        self.vault.replace_requests(requests, cursor, deleted,
+                                    quote_read_mode=self.quote_read_mode)
         return self.local_copy_view()
 
     def sync(self):
