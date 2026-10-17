@@ -907,9 +907,12 @@ class QuoteSmsDialog(QDialog):
         customer = self.draft.get("customerName") or "고객"
         lines = [
             f"{customer}님, 안녕하세요.",
+            "",
             "나무팜농원입니다.",
             "",
             "요청하신 묘목 견적을 안내드립니다.",
+            "",
+            "-" * 53,
             f"견적번호 : {self.quote_number()}",
             "",
         ]
@@ -922,19 +925,21 @@ class QuoteSmsDialog(QDialog):
                 "",
             ])
         total = draft_amounts(self.draft)["total"]
-        shipping = (
-            f"택배비 : 선불 {int(self.draft.get('shippingFee', 0) or 0):,}원 (총금액 포함)"
-            if self.draft.get("isPrepaid")
-            else f"택배비 : 후불 / 선불 시 {int(self.draft.get('shippingFee', 0) or 0):,}원"
-        )
+        shipping_fee = int(self.draft.get("shippingFee", 0) or 0)
+        if self.draft.get("isPrepaid"):
+            shipping_line = f"택배비 : 선불 {shipping_fee:,}원"
+            total_line = f"총금액 : {total:,}원 (택배비 포함)"
+        else:
+            shipping_line = f"택배비 : 후불 / 선불 시 {shipping_fee:,}원"
+            total_line = f"총금액 : {total:,}원"
         lines.extend([
-            f"총금액 : {total:,}원",
-            shipping,
+            shipping_line,
+            total_line,
+            "-" * 53,
             "",
             payment_notice(self.draft),
             "",
-            "견적 확인 후 문의사항이 있으시면 연락 부탁드립니다.",
-            "010-4446-0304 / 043-732-0980",
+            "감사합니다.",
         ])
         return "\n".join(lines).strip()
 
@@ -1192,18 +1197,16 @@ class QuoteEmailDialog(QDialog):
             item_lines.extend([
                 f"품목{index} : {item['species']} {quantity:,}주",
                 f"판매금액 : {amount:,}원",
+                "",
             ])
-            if index < len(self.draft.get("items", [])):
-                item_lines.append("")
-
-        item_total = sum(int(item["quantity"]) * int(item["unitPrice"]) for item in self.draft.get("items", []))
+        total = draft_amounts(self.draft)["total"]
         shipping_fee = int(self.draft.get("shippingFee", 0) or 0)
         if self.draft.get("isPrepaid"):
-            total = item_total + shipping_fee
-            shipping_line = f"택배비 : 선불 {shipping_fee:,}원 (총금액 포함)"
+            shipping_line = f"택배비 : 선불 {shipping_fee:,}원"
+            total_line = f"총금액 : {total:,}원  (총금액 포함)"
         else:
-            total = item_total
-            shipping_line = f"택배비 : 후불 / 선불 시 : {shipping_fee:,}원"
+            shipping_line = f"택배비 : 후불 / 선불 시 {shipping_fee:,}원"
+            total_line = f"총금액 : {total:,}원"
 
         return "\n".join([
             f"{customer}님, 안녕하세요.",
@@ -1211,17 +1214,17 @@ class QuoteEmailDialog(QDialog):
             "나무팜농원입니다.",
             "요청하신 묘목 견적을 안내드립니다.",
             "",
-            "===========================",
+            "-" * 53,
             "",
             f"견적번호 : {self.quote_number()}",
-            *item_lines,
             "",
-            f"총금액 : {total:,}원",
+            *item_lines,
             shipping_line,
+            total_line,
             "",
             payment_notice(self.draft),
             "",
-            "===========================",
+            "-" * 53,
             "",
             "견적 내용을 확인하시고 궁금하신 사항은 편하게 연락 부탁드립니다.",
             "감사합니다.",
