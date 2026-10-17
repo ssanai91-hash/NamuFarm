@@ -1943,27 +1943,21 @@ class QuoteEmailDialog(QDialog):
             return
         super().reject()
 
-class QuoteDeliveryDialog(QuoteDeliveryTools, QDialog):
-    """확정된 견적의 고객 전달만 담당하는 전용 팝업."""
+class QuoteDeliveryDialog(QDialog):
+    """Display an immutable local confirmed quotation and saved delivery outcomes."""
 
     def __init__(self, draft, request_status, manager=None, delivery_state=None, parent=None):
         super().__init__(parent)
 
         self.draft = copy.deepcopy(draft)
-        if self.draft.get("sourceRequestId") and int(self.draft.get("shippingFee", 0) or 0) <= 0:
-            self.draft["shippingFee"] = 6000
-        self.manager = manager
         self.delivery_state = dict(delivery_state or {})
-        self.generated_quote_image = None
-        self.generated_quote_path = None
         self.request_status = (
             request_status
             or ("수기견적" if not draft.get("sourceRequestId") else "상태확인")
         )
-        self.mode = ""
 
         self.setObjectName("quoteDeliveryDialog")
-        self.setWindowTitle("견적 전달")
+        self.setWindowTitle("확정견적 확인")
         self.setSizeGripEnabled(True)
 
         large = bool(QApplication.instance().property("namufarmLargeFont"))
@@ -2006,7 +2000,7 @@ class QuoteDeliveryDialog(QuoteDeliveryTools, QDialog):
         name_row.addWidget(name)
         name_row.addStretch(1)
         identity.addLayout(name_row)
-        reference = label("견적번호  " + self.quote_number(), "deliveryReference", True)
+        reference = label("견적번호  " + draft_quote_number(self.draft), "deliveryReference", True)
         reference.setMinimumWidth(0)
         reference.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         reference.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
@@ -2018,10 +2012,10 @@ class QuoteDeliveryDialog(QuoteDeliveryTools, QDialog):
         caption = QLabel("총 견적금액")
         caption.setObjectName("deliveryCaption")
         caption.setAlignment(Qt.AlignmentFlag.AlignRight)
-        self.total_value = QLabel()
+        self.total_value = QLabel(f"{draft_amounts(self.draft)['total']:,}원")
         self.total_value.setObjectName("deliveryTotal")
         self.total_value.setAlignment(Qt.AlignmentFlag.AlignRight)
-        self.shipping_total_hint = QLabel()
+        self.shipping_total_hint = QLabel("택배비 선불 · 포함" if self.draft.get("isPrepaid") else "택배비 후불 · 별도")
         self.shipping_total_hint.setObjectName("deliveryCaption")
         self.shipping_total_hint.setAlignment(Qt.AlignmentFlag.AlignRight)
         total.addWidget(caption)
@@ -2030,7 +2024,7 @@ class QuoteDeliveryDialog(QuoteDeliveryTools, QDialog):
         head.addLayout(total)
         layout.addWidget(header)
 
-        # The business footer stays visible; long item lists and expanded notes scroll.
+        # The close action stays visible while long saved results scroll.
         self.delivery_scroll = QScrollArea()
         self.delivery_scroll.setWidgetResizable(True)
         self.delivery_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -2042,6 +2036,7 @@ class QuoteDeliveryDialog(QuoteDeliveryTools, QDialog):
         self.delivery_scroll.setWidget(body)
         layout.addWidget(self.delivery_scroll, 1)
 
+        self.result_text_values = []
         info = QHBoxLayout()
         info.setSpacing(24)
         channel = {"sms": "문자", "email": "이메일", "both": "문자 + 이메일"}.get(
@@ -2060,7 +2055,8 @@ class QuoteDeliveryDialog(QuoteDeliveryTools, QDialog):
             column.setSpacing(6)
             title = QLabel(caption)
             title.setObjectName("deliveryCaption")
-            text = label(str(value), "deliveryInfoValue", True)
+            text = CustomerInfoValue(str(value), "deliveryInfoValue")
+            self.result_text_values.append(text)
             text.setMinimumWidth(0)
             text.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
             text.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
@@ -2069,7 +2065,7 @@ class QuoteDeliveryDialog(QuoteDeliveryTools, QDialog):
             info.addLayout(column, 1)
         content.addLayout(info)
 
-        self.items = table(["묘목명", "수량", "판매 단가", "판매 금액"])
+        self.items = table(["순번", "묘목명", "수량", "판매 단가", "판매 금액"])
         self.items.setObjectName("deliveryItems")
         self.items.setAlternatingRowColors(True)
         self.items.setShowGrid(True)
@@ -2077,19 +2073,21 @@ class QuoteDeliveryDialog(QuoteDeliveryTools, QDialog):
         self.items.horizontalHeader().setFixedHeight(48 if large else 44)
         self.items.verticalHeader().setMinimumSectionSize(60 if large else 52)
         self.items.verticalHeader().setDefaultSectionSize(60 if large else 52)
-        rows = [(item["species"], f"{int(item['quantity']):,}주", f"{int(item['unitPrice']):,}원",
-                 f"{int(item['quantity']) * int(item['unitPrice']):,}원") for item in self.draft.get("items", [])]
+        rows = [(str(index + 1), item["species"], f"{int(item['quantity']):,}주", f"{int(item['unitPrice']):,}원",
+                 f"{int(item['quantity']) * int(item['unitPrice']):,}원") for index, item in enumerate(self.draft.get("items", []))]
         fill_table(self.items, rows)
-        center_table_columns(self.items, (0, 1, 2, 3))
+        center_table_columns(self.items, (0, 1, 2, 3, 4))
         for row in range(self.items.rowCount()):
             for column in range(self.items.columnCount()):
                 self.items.item(row, column).setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            font = self.items.item(row, 0).font()
+                self.items.item(row, column).setFlags(self.items.item(row, column).flags() & ~Qt.ItemFlag.ItemIsEditable)
+            font = self.items.item(row, 1).font()
             font.setBold(True)
-            self.items.item(row, 0).setFont(font)
-        self.items.set_column_layout(((0, 3.6, 220), (1, 1.2, 100), (2, 1.8, 140), (3, 2, 150)))
+            self.items.item(row, 1).setFont(font)
+        self.items.set_column_layout(((0, .5, 60), (1, 3.6, 180), (2, 1.2, 90), (3, 1.8, 120), (4, 2, 140)))
+        self.items.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         # Grow the table with the window instead of capping it at four rows.
-        # On shorter screens only the list scrolls; the delivery tools stay in view.
+        # Short screens keep the saved results readable with an internal list scrollbar.
         table_header = self.items.horizontalHeader().height()
         row_height = self.items.verticalHeader().defaultSectionSize()
         self.items.setMinimumHeight(table_header + row_height + 4)
@@ -2097,257 +2095,121 @@ class QuoteDeliveryDialog(QuoteDeliveryTools, QDialog):
         self.items.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Ignored)
         content.addWidget(self.items, 1)
 
+        self.result_values = {}
+        amount = draft_amounts(self.draft)
         shipping = QFrame()
         shipping.setObjectName("deliveryShippingStrip")
-        shipping.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         shipping_row = QHBoxLayout(shipping)
-        shipping_row.setContentsMargins(16, 10, 16, 10)
-        shipping_row.setSpacing(14)
-        shipping_title = QLabel("택배비")
-        shipping_title.setObjectName("deliverySectionTitle")
-        shipping_row.addWidget(shipping_title)
-        self.shipping_cod = QRadioButton("후불")
-        self.shipping_prepaid = QRadioButton("선불")
-        self.shipping_prepaid.setChecked(bool(self.draft.get("isPrepaid")))
-        self.shipping_cod.setChecked(not bool(self.draft.get("isPrepaid")))
-        shipping_row.addWidget(self.shipping_cod)
-        shipping_row.addWidget(self.shipping_prepaid)
-        self.shipping_fee_label = QLabel("금액")
-        self.shipping_fee_label.setObjectName("deliveryCaption")
-        shipping_row.addWidget(self.shipping_fee_label)
-        self.shipping_fee = QLineEdit(str(int(self.draft.get("shippingFee", 0) or 6000)))
-        self.shipping_fee.setObjectName("deliveryShippingFee")
-        self.shipping_fee.setValidator(QIntValidator(0, 2147483647, self.shipping_fee))
-        self.shipping_fee.setAlignment(Qt.AlignmentFlag.AlignRight)
-        self.shipping_fee.setFixedWidth(120)
-        self.shipping_fee.setAccessibleName("선불 택배비 금액")
-        shipping_row.addWidget(self.shipping_fee)
-        shipping_row.addWidget(QLabel("원"))
-        self.shipping_status = QLabel()
-        self.shipping_status.setObjectName("deliveryCaption")
-        self.shipping_status.setWordWrap(True)
-        shipping_row.addWidget(self.shipping_status, 1)
+        shipping_row.setContentsMargins(16, 12, 16, 12)
+        shipping_row.setSpacing(12)
+        truck = QLabel()
+        truck.setPixmap(ui_icon("shipping", "#2d6a4f").pixmap(24, 24))
+        shipping_row.addWidget(truck)
+        shipping_row.addWidget(label("택배비", "deliverySectionTitle"))
+        prepaid = bool(self.draft.get("isPrepaid"))
+        fee = int(self.draft.get("shippingFee", 0) or 0)
+        shipping_text = f"선불 {fee:,}원 · 합계 포함" if prepaid else "후불 · 합계 미포함"
+        self.result_values["shipping"] = label(shipping_text, "deliveryInfoValue", True)
+        shipping_row.addWidget(self.result_values["shipping"], 1)
+        item_total = sum(int(item["quantity"]) * int(item["unitPrice"]) for item in self.draft.get("items", []))
+        breakdown = f"묘목 금액 {item_total:,}원"
+        if amount["tax"]:
+            breakdown += f" · 세액 {amount['tax']:,}원"
+        shipping_row.addWidget(label(breakdown, "deliveryCaption", True))
         content.addWidget(shipping)
 
-        self.delivery_section_gap = QWidget()
-        self.delivery_section_gap.setFixedHeight(28)
-        separator_layout = QVBoxLayout(self.delivery_section_gap)
-        separator_layout.setContentsMargins(0, 0, 0, 0)
-        self.delivery_section_rule = QFrame()
-        self.delivery_section_rule.setObjectName("deliverySectionRule")
-        self.delivery_section_rule.setFixedHeight(2)
-        separator_layout.addStretch()
-        separator_layout.addWidget(self.delivery_section_rule)
-        separator_layout.addStretch()
-        content.addWidget(self.delivery_section_gap)
-
-        self.build_delivery_tools(content)
-
-        details = QWidget()
-        details_layout = QVBoxLayout(details)
-        details_layout.setContentsMargins(0, 0, 0, 0)
+        separator = QFrame()
+        separator.setObjectName("deliverySectionRule")
+        separator.setFixedHeight(2)
+        content.addWidget(separator)
+        content.addWidget(label("고객 전달 결과", "deliverySectionTitle"))
+        records = QHBoxLayout()
+        records.setSpacing(16)
+        self.delivery_records_layout = records
+        state = self.delivery_state
+        sms_state = state.get("smsState", "")
+        if not sms_state and state.get("smsMessageId"):
+            sms_state = "pending"
+        sms_text, sms_style = {
+            "success": ("전송완료", "success"),
+            "pending": ("결과확인 중", "pending"),
+            "failed": ("전송실패", "failed"),
+        }.get(sms_state, ("전송 기록 없음", "idle"))
+        email_done = bool(state.get("emailSentAt"))
+        for channel, title, icon, result, style, sent_at, recipient in (
+            ("sms", "문자", "message", sms_text, sms_style, state.get("smsSentAt"), state.get("smsTo")),
+            ("email", "메일", "mail", "전송완료" if email_done else "전송 기록 없음",
+             "success" if email_done else "idle", state.get("emailSentAt"), state.get("emailTo")),
+        ):
+            card = QFrame()
+            card.setObjectName("deliveryResultCard")
+            record = QVBoxLayout(card)
+            record.setContentsMargins(16, 12, 16, 12)
+            record.setSpacing(8)
+            title_row = QHBoxLayout()
+            symbol = QLabel()
+            symbol.setPixmap(ui_icon(icon, "#2d6a4f").pixmap(20, 20))
+            title_row.addWidget(symbol)
+            title_row.addWidget(label(title, "deliverySectionTitle"))
+            title_row.addStretch()
+            badge = label(result, "channelStatusBadge")
+            badge.setProperty("state", style)
+            title_row.addWidget(badge)
+            self.result_values[channel + "Status"] = badge
+            record.addLayout(title_row)
+            time_text = timestamp(sent_at) if sent_at else "전송완료 시각 기록 없음" if style == "success" else "전송완료 시각 없음"
+            time_value = label(time_text, "deliveryCaption", True)
+            self.result_values[channel + "Time"] = time_value
+            record.addWidget(time_value)
+            recipient_value = CustomerInfoValue(str(recipient or "수신처 기록 없음"), "deliveryInfoValue")
+            self.result_text_values.append(recipient_value)
+            recipient_value.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+            recipient_value.setMinimumWidth(0)
+            recipient_value.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+            self.result_values[channel + "To"] = recipient_value
+            record.addWidget(recipient_value)
+            if channel == "sms" and style == "failed" and state.get("smsStatusMessage"):
+                record.addWidget(label(str(state["smsStatusMessage"]), "deliveryCaption", True))
+            records.addWidget(card, 1)
+        content.addLayout(records)
         if self.draft.get("note"):
-            details_layout.addWidget(label(self.draft["note"], "infoValue", True))
-        notice_text = ("실제 고객 입금을 확인한 뒤 입금확인을 눌러 판매관리로 이동하세요."
-                       if self.request_status == "견적발송완료" else
-                       "문자 또는 메일로 실제 견적 전달을 마친 뒤 견적발송완료를 눌러주세요.")
-        details_layout.addWidget(label(notice_text, "deliveryCaption", True))
-        content.addWidget(collapsible("요청사항 · 전달 안내", details))
+            content.addWidget(label("요청사항", "deliverySectionTitle"))
+            note = label(self.draft["note"], "deliveryInfoValue", True)
+            note.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+            self.result_values["note"] = note
+            content.addWidget(note)
         content.addStretch()
 
         self.delivery_footer = QFrame()
         self.delivery_footer.setObjectName("deliveryFooter")
-        self.delivery_footer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         footer = QHBoxLayout(self.delivery_footer)
         footer.setContentsMargins(0, 12, 0, 0)
-        footer.setSpacing(12)
         footer.addStretch()
-        close_button = QPushButton("닫기")
-        close_button.setObjectName("closeAction")
-        close_button.setMinimumWidth(100)
-        close_button.clicked.connect(self.reject)
-        footer.addWidget(close_button)
-        self.sent_button = QPushButton("견적발송완료")
-        self.sent_button.setObjectName("sentAction")
-        self.sent_button.clicked.connect(self.mark_sent)
-        self.sent_button.setVisible(self.request_status == "견적확정")
-        self.sent_button.setEnabled(self.request_status == "견적확정")
-        self.payment_button = QPushButton("입금확인")
-        self.payment_button.setObjectName("sentAction")
-        self.payment_button.clicked.connect(self.confirm_payment)
-        self.payment_button.setVisible(self.request_status == "견적발송완료")
-        self.payment_button.setEnabled(self.request_status == "견적발송완료")
-        for action in (self.sent_button, self.payment_button):
-            action.setMinimumWidth(180)
-            footer.addWidget(action)
-            set_button_icon(action, "check", "#2d6a4f")
+        self.close_button = button("닫기", self.reject)
+        self.close_button.setMinimumWidth(120)
+        footer.addWidget(self.close_button)
         layout.addWidget(self.delivery_footer)
-        set_button_icon(self.sms_button, "message", "#ffffff")
-        set_button_icon(self.email_button, "mail")
-        set_button_icon(self.generate_quote_button, "document")
-        set_button_icon(self.preview_quote_button, "document")
-        self.shipping_cod.toggled.connect(self.recalculate_shipping)
-        self.shipping_prepaid.toggled.connect(self.recalculate_shipping)
-        self.shipping_fee.textChanged.connect(self.recalculate_shipping)
-        self.recalculate_shipping()
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        if not hasattr(self, "delivery_scroll"):
+        if not hasattr(self, "delivery_footer"):
             return
+        QTimer.singleShot(0, self.fit_result_values)
         compact = self.height() < 780
         if compact == getattr(self, "_delivery_compact", None):
             return
         self._delivery_compact = compact
         large = bool(QApplication.instance().property("namufarmLargeFont"))
         self.setStyleSheet(quote_delivery_style(large, compact))
-        self.layout().setContentsMargins(24, 10 if compact else 20, 24, 10 if compact else 20)
-        self.layout().setSpacing(8 if compact else 14)
-        self.delivery_scroll.widget().layout().setSpacing(4 if compact else 14)
-        self.delivery_section_gap.setFixedHeight(18 if compact else 28)
+        self.layout().setContentsMargins(24, 10 if compact else 16 if large else 20, 24, 10 if compact else 16 if large else 20)
+        self.layout().setSpacing(8 if compact else 12 if large else 14)
+        self.delivery_scroll.widget().layout().setSpacing(8 if compact else 7 if large else 14)
         self.delivery_footer.layout().setContentsMargins(0, 6 if compact else 12, 0, 0)
-        self.delivery_header.layout().setContentsMargins(0, 0, 0, 6 if compact else 16)
+        self.delivery_header.layout().setContentsMargins(0, 0, 0, 6 if compact else 12 if large else 16)
 
-
-
-    def apply_shipping(self, validate=True):
-        text = self.shipping_fee.text().strip()
-        if validate:
-            require(text.isascii() and text.isdigit(), "선불 택배비를 0 이상의 정수로 입력해주세요.")
-        fee = int(text) if text.isascii() and text.isdigit() else 0
-        self.draft["shippingFee"] = fee
-        self.draft["isPrepaid"] = self.shipping_prepaid.isChecked()
-        return self.draft
-
-    def recalculate_shipping(self, *args):
-        if not hasattr(self, "total_value"):
-            return
-        if hasattr(self, "preview_quote_button") and self.generated_quote_image is not None:
-            self.cleanup_generated_quote()
-            self.preview_quote_button.setEnabled(False)
-            self.generate_quote_button.setText("공식견적서 생성")
-            self.quote_file_label.setText("공식 견적서 미생성")
-            self.quote_file_label.setToolTip("")
-        prepaid = self.shipping_prepaid.isChecked()
-        self.shipping_total_hint.setText("택배비 선불 · 포함" if prepaid else "택배비 후불 · 별도")
-        self.shipping_fee.setEnabled(prepaid)
-        self.shipping_fee_label.setEnabled(prepaid)
-        try:
-            self.apply_shipping(False)
-            item_total = sum(int(item["quantity"]) * int(item["unitPrice"]) for item in self.draft.get("items", []))
-            amounts = draft_amounts(self.draft)
-            self.total_value.setText(f"{amounts['total']:,}원")
-            if self.draft["isPrepaid"]:
-                self.shipping_status.setText(
-                    "선불 · 총금액에 포함"
-                )
-            else:
-                self.shipping_status.setText(
-                    "후불 · 총금액에 미포함"
-                )
-        except UserError:
-            self.total_value.setText("금액 확인 필요")
-            self.shipping_status.setText("택배비 금액을 확인해주세요.")
-
-    def persist_shipping(self):
-        try:
-            self.apply_shipping(True)
-            validate_draft(self.draft)
-            if self.manager:
-                self.manager.save_draft(self.draft)
-            return True
-        except UserError as error:
-            QMessageBox.warning(self, "택배비 확인", str(error))
-            return False
-
-    def delivery_text(self):
-        if not self.persist_shipping():
-            return ""
-        amount = draft_amounts(self.draft)["total"]
-
-        items = ", ".join(
-            f"{item['species']} {item['quantity']:,}주"
-            for item in self.draft["items"]
-        )
-
-        shipping = (
-            f"택배비: 선불 {self.draft['shippingFee']:,}원 (총금액 포함)"
-            if self.draft["isPrepaid"]
-            else f"택배비: 후불 / 선불 시 {self.draft['shippingFee']:,}원"
-        )
-
-        return "\n".join(
-            [
-                "[나무팜 견적 안내]",
-                "",
-                f"{self.draft['customerName']}님, 요청하신 묘목 견적을 안내드립니다.",
-                "",
-                f"견적번호: {self.quote_number()}",
-                f"품목: {items}",
-                f"총금액: {amount:,}원",
-                shipping,
-                "",
-                payment_notice(self.draft),
-                "",
-                "확인 후 문의사항이 있으시면 연락 부탁드립니다.",
-            ]
-        )
-
-
-
-
-
-
-
-    def mark_sent(self):
-        if not self.persist_shipping():
-            return
-        answer = QMessageBox.question(
-            self,
-            "견적발송완료",
-            (
-                "문자 또는 메일 등으로 고객에게 "
-                "실제 견적 전송을 마쳤나요?\n\n"
-                "확인하면 서버 상태를 "
-                "'견적발송완료'로 변경합니다."
-            ),
-            QMessageBox.StandardButton.Yes
-            | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No,
-        )
-
-        if answer != QMessageBox.StandardButton.Yes:
-            return
-
-        self.mode = "sent"
-        self.cleanup_generated_quote()
-        self.accept()
-
-    def confirm_payment(self):
-        if self.request_status != "견적발송완료" or not self.persist_shipping():
-            return
-        answer = QMessageBox.question(
-            self,
-            "입금확인",
-            (
-                "실제 고객 입금을 확인했나요?\n\n"
-                "확인하면 이 견적을 입금확인 판매로 등록하고 "
-                "판매 · 고객 관리 목록으로 이동합니다."
-            ),
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No,
-        )
-        if answer != QMessageBox.StandardButton.Yes:
-            return
-        self.mode = "paid"
-        self.cleanup_generated_quote()
-        self.accept()
-
-    def reject(self):
-        if not self.persist_shipping():
-            return
-        self.cleanup_generated_quote()
-        super().reject()
+    def fit_result_values(self):
+        for value in self.result_text_values:
+            value.setFixedHeight(value.heightForWidth(max(60, value.viewport().width())))
 
 
 def customer_status_text(status):
@@ -3101,7 +2963,7 @@ class SellerWindow(MainWindow):
         layout.setSpacing(10)
         self.draft_filter = "견적확정"
         filters, self.draft_filters = self.filter_buttons(
-            (("전체", "전체"), ("견적 대기", "견적확정"), ("발송 완료", "견적발송완료")), self.set_draft_filter)
+            (("전체", "전체"), ("견적확정", "견적확정"), ("발송 완료", "견적발송완료")), self.set_draft_filter)
         self.draft_filters["견적확정"].setChecked(True)
         layout.addLayout(filters)
         self.draft_table = table(["견적번호", "상태", "작성일", "고객명", "연락처", "메일", "공식견적서", "품목", "판매금액", "자료 위치"])
@@ -3125,14 +2987,10 @@ class SellerWindow(MainWindow):
         self.draft_table.itemDoubleClicked.connect(self.open_draft)
         layout.addWidget(self.draft_table)
         bar = QHBoxLayout()
-        self.draft_delete = button("선택 견적 삭제", self.remove_draft)
-        self.draft_delete.setObjectName("danger")
-        self.draft_open = button("선택 견적 열기", self.open_draft, True)
+        self.draft_open = button("견적 결과 확인", self.open_draft, True)
         set_button_icon(self.draft_open, "open", "#ffffff")
-        set_button_icon(self.draft_delete, "trash", "#9c3c2e")
         self.draft_selection_status = label("견적을 선택하세요.", "muted", True)
         bar.addWidget(self.draft_selection_status, 1)
-        bar.addWidget(self.draft_delete)
         bar.addWidget(self.draft_open)
         layout.addLayout(bar)
         return page
@@ -3394,22 +3252,12 @@ class SellerWindow(MainWindow):
         self.stack.setEnabled(self.task is None)
         self.request_quote_button.setEnabled(ready and self.request_table.currentRow() >= 0)
         selected_draft = self.draft_table.currentRow()
-        self.draft_open.setEnabled(ready and not self.data.get("quoteRecovery")
-                                   and 0 <= selected_draft < len(self.draft_rows))
-        self.draft_delete.setEnabled(
-            ready and 0 <= selected_draft < len(self.draft_rows)
-            and not self.data.get("quoteRecovery")
-        )
+        self.draft_open.setEnabled(ready and 0 <= selected_draft < len(self.draft_rows))
         if 0 <= selected_draft < len(self.draft_rows):
             draft = self.draft_rows[selected_draft]
-            status = self.draft_statuses[selected_draft]
-            action = "문자·메일 전달" if status == "견적확정" else "입금 확인" if status == "견적발송완료" else "견적 확인"
-            self.draft_selection_status.setText(
-                f"{draft['customerName']} · 다음 작업: {action}")
-            self.draft_delete.setToolTip("선택한 견적을 로컬 엑셀에서 삭제")
+            self.draft_selection_status.setText(f"{draft['customerName']} · 저장된 견적 결과 확인")
         else:
-            self.draft_selection_status.setText("견적을 선택하면 다음 작업을 확인할 수 있습니다.")
-            self.draft_delete.setToolTip("삭제할 PC 견적을 선택하세요.")
+            self.draft_selection_status.setText("견적을 선택하면 저장된 결과를 확인할 수 있습니다.")
         self.export_button.setEnabled(paired)
         self.import_button.setEnabled(paired)
         self.print_button.setEnabled(ready and not self.data["pending"])
@@ -3418,7 +3266,7 @@ class SellerWindow(MainWindow):
         self.customer_open_button.setEnabled(ready and self.selected_sale is not None)
         if getattr(self, "demo_mode", False):
             for widget in (self.sync_button, self.request_quote_button,
-                           self.draft_open, self.draft_delete, self.customer_open_button,
+                           self.draft_open, self.customer_open_button,
                            self.export_button, self.import_button, self.print_button,
                            self.tracking_save, self.open_button, self.connect_button, self.report_button,
                            self.copy_button):
@@ -3438,7 +3286,7 @@ class SellerWindow(MainWindow):
             reverse=self.draft_sort_descending,
         )
         for value, widget in self.draft_filters.items():
-            title = {"전체": "전체", "견적확정": "견적 대기", "견적발송완료": "발송 완료"}[value]
+            title = {"전체": "전체", "견적확정": "견적확정", "견적발송완료": "발송 완료"}[value]
             count = len(draft_pairs) if value == "전체" else sum(status == value for _draft, status in draft_pairs)
             widget.setText(f"{title} {count:,}")
             widget.setChecked(value == self.draft_filter)
@@ -3705,11 +3553,6 @@ class SellerWindow(MainWindow):
         self.message.setText("견적을 확정하고 로컬 엑셀에 저장했습니다.")
         self.navigate(self.PAGE_QUOTES)
 
-    def draft_deleted(self, value):
-        self.apply_view(value)
-        self.message.setText("선택한 견적을 삭제했습니다.")
-        self.navigate(self.PAGE_QUOTES)
-
     def quote_request(self, *args):
         index = self.request_table.currentRow()
         if not 0 <= index < len(self.request_rows):
@@ -3732,61 +3575,26 @@ class SellerWindow(MainWindow):
         self.edit_quote(draft=draft, request_status=status)
 
     def open_draft(self, *args):
-        if self.data.get("quoteRecovery"):
-            QMessageBox.information(self, "견적 저장 확인", "먼저 가져오기로 견적 저장 확인을 완료해주세요.")
-            return
         index = self.draft_table.currentRow()
         if not 0 <= index < len(self.draft_rows):
             return
+        # Preserve the local confirmed snapshot, including its original recipient.
         draft = copy.deepcopy(self.draft_rows[index])
         status = self.draft_statuses[index] if index < len(self.draft_statuses) else ""
-        source = draft.get("sourceRequestId", "")
-        request = next((r for r in self.data.get("requests", []) if r["requestId"] == source), None) if source else None
-        if request:
-            draft["requestReceiptNumber"] = request.get("receiptNumber") or request["requestId"]
-            draft["customerEmail"] = request["personal"].get("customerEmail", "")
-        if source or status in ("견적확정", "견적발송완료"):
-            self.open_delivery_quote(draft, status)
-        else:
-            self.edit_quote(draft=draft, request_status=status)
+        self.open_delivery_quote(draft, status)
 
     def open_delivery_quote(self, draft, status):
         if getattr(self, "demo_mode", False) or not self.manager or self.task:
             return
         delivery_state = self.manager.quote_delivery_state(draft["id"])
-        dialog = QuoteDeliveryDialog(draft, status, manager=self.manager, delivery_state=delivery_state, parent=self)
+        dialog = QuoteDeliveryDialog(draft, status, delivery_state=delivery_state, parent=self)
+        was_active = self.timer.isActive()
         self.timer.stop()
-        result = dialog.exec()
-        self.timer.start()
-        if result != QDialog.DialogCode.Accepted or not dialog.mode:
-            self.apply_view(self.manager.view())
-            return
-
-        delivery_draft = copy.deepcopy(dialog.draft)
-        if dialog.mode == "sent":
-            self.run_job(
-                "견적발송완료 상태를 운영 시트에 저장 중…",
-                lambda: self.manager.mark_quote_sent(delivery_draft),
-                self.quote_sent,
-            )
-        elif dialog.mode == "paid":
-            self.run_job(
-                "입금확인 판매를 운영 시트에 저장 중…",
-                lambda: self.manager.confirm_draft(delivery_draft),
-                self.quote_confirmed,
-            )
-    def quote_sent(self, value):
-        self.apply_view(value)
-        self.message.setText("견적발송완료로 저장했습니다. 고객 회신과 입금 여부를 확인하세요.")
-        self.navigate(self.PAGE_QUOTES)
-
-    def remove_draft(self):
-        index = self.draft_table.currentRow()
-        if not self.manager or not 0 <= index < len(self.draft_rows):
-            return
-        if QMessageBox.question(self, "견적 삭제", "선택한 견적을 로컬 엑셀에서 삭제할까요? 서버의 견적 상태는 유지됩니다.", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No) == QMessageBox.StandardButton.Yes:
-            identifier = self.draft_rows[index]["id"]
-            self.run_job("견적 삭제 중…", lambda: self.manager.delete_draft(identifier), self.draft_deleted)
+        try:
+            dialog.exec()
+        finally:
+            if was_active:
+                self.timer.start()
 
     def show_order(self, number):
         if not self.allow_discard():

@@ -1,11 +1,12 @@
-"""Native Qt regression checks with synthetic customers; no server or vault."""
+"""Confirmed quotations are immutable local results, not another delivery editor."""
+import copy
 import os
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 import uuid
 from unittest.mock import Mock, patch
 
 from PySide6.QtCore import QPoint, QRect, Qt
-from PySide6.QtWidgets import QDialog, QLabel, QMessageBox, QWidget
+from PySide6.QtWidgets import QDialog, QLineEdit, QPushButton, QRadioButton, QWidget
 from namufarm_desktop.commerce import new_draft
 from namufarm_desktop.ui_theme import workspace_style
 from namufarm_desktop.workspace import QuoteDeliveryDialog
@@ -19,122 +20,116 @@ class DeliveryRedesignTest(QtTestCase):
         self.app.setStyleSheet(workspace_style())
         self.draft = new_draft()
         self.draft.update(customerName='가상 고객', customerPhone='01012345678',
-                          sourceRequestId=str(uuid.uuid4()), requestReceiptNumber='TEST-' + uuid.uuid4().hex,
-                          formalQuoteRequested=True, shippingFee=6000,
+                          customerEmail='sample@example.com', sourceRequestId=str(uuid.uuid4()),
+                          requestReceiptNumber='NAMU-20261017-0001', formalQuoteRequested=True,
+                          shippingFee=7000, isPrepaid=True, note='저장된 고객 요청사항',
                           items=[dict(species='가상 묘목', specification='', quantity=10, unitPrice=3000, unitCost=1000)])
 
-    def dialog(self, status='견적확정', manager=None):
-        dialog = QuoteDeliveryDialog(self.draft, status, manager=manager)
+    def settle(self):
+        for _ in range(8):
+            self.app.processEvents()
+
+    def dialog(self, status='견적확정', manager=None, state=None):
+        dialog = QuoteDeliveryDialog(self.draft, status, manager=manager, delivery_state=state)
         dialog.resize(1100, 660)
         dialog.show()
-        for _ in range(6):
-            self.app.processEvents()
-        self.addCleanup(dialog.cleanup_generated_quote)
+        self.settle()
         return dialog
 
-    def test_pdf_name_is_below_tools_and_shipping_edit_invalidates_actual_file(self):
+    def test_only_close_action_remains_and_table_cannot_be_edited(self):
         dialog = self.dialog()
-        dialog.generate_quote_button.click()
-        self.app.processEvents()
-        path = dialog.generated_quote_path
-        self.assertTrue(path.is_file())
-        self.assertTrue(path.read_bytes().startswith(b'%PDF'))
-        self.assertEqual(path.name, dialog.quote_file_label.text())
-        self.assertEqual(path.name, dialog.quote_file_label.toolTip())
-        self.assertGreaterEqual(dialog.quote_file_label.mapTo(dialog, QPoint()).y(),
-                                dialog.generate_quote_button.mapTo(dialog, QPoint()).y() + dialog.generate_quote_button.height())
-        self.assertTrue(dialog.preview_quote_button.isEnabled())
-        dialog.shipping_prepaid.setChecked(True)
-        dialog.shipping_fee.setText('7000')
-        self.assertEqual('37,000원', dialog.total_value.text())
-        self.assertFalse(path.exists())
-        self.assertIsNone(dialog.generated_quote_path)
-        self.assertFalse(dialog.preview_quote_button.isEnabled())
-        self.assertEqual('', dialog.quote_file_label.toolTip())
+        self.assertEqual('확정견적 확인', dialog.windowTitle())
+        self.assertEqual(['닫기'], [button.text() for button in dialog.findChildren(QPushButton)])
+        self.assertEqual([], dialog.findChildren(QLineEdit))
+        self.assertEqual([], dialog.findChildren(QRadioButton))
+        self.assertEqual(dialog.items.EditTrigger.NoEditTriggers, dialog.items.editTriggers())
+        self.assertEqual(['1', '가상 묘목', '10주', '3,000원', '30,000원'],
+                         [dialog.items.item(0, column).text() for column in range(5)])
+        self.assertTrue(all(dialog.items.item(0, column).textAlignment() == Qt.AlignmentFlag.AlignCenter
+                            for column in range(5)))
+        for old_action in ('generate_official_quote', 'open_sms', 'open_email', 'persist_shipping',
+                           'mark_sent', 'confirm_payment', 'delivery_text'):
+            self.assertFalse(hasattr(dialog, old_action))
 
-    def test_compact_window_keeps_filename_disclosure_and_footer_visible(self):
-        dialog = self.dialog()
-        self.assertEqual(0, dialog.delivery_scroll.verticalScrollBar().maximum())
-        self.assertEqual(0, dialog.items.horizontalScrollBar().maximum())
-        for column in range(4):
-            self.assertEqual(Qt.AlignmentFlag.AlignCenter, dialog.items.item(0, column).textAlignment())
-        self.assertTrue(dialog.delivery_section_rule.isVisible())
-        self.assertLess(dialog.delivery_section_rule.mapTo(dialog, QPoint()).y(),
-                        dialog.generate_quote_button.mapTo(dialog, QPoint()).y())
-        self.assertLess(dialog.sent_button.mapTo(dialog, QPoint()).y() + dialog.sent_button.height(), dialog.height())
-        self.assertFalse(dialog.email_button.isEnabled())
-        self.assertFalse(dialog.payment_button.isVisible())
+    def test_open_and_close_never_save_send_or_change_the_snapshot(self):
+        original = copy.deepcopy(self.draft)
+        manager = Mock()
+        dialog = self.dialog(manager=manager)
+        self.assertEqual('37,000원', dialog.total_value.text())
+        self.assertEqual('선불 7,000원 · 합계 포함', dialog.result_values['shipping'].text())
+        self.assertEqual(self.draft['note'], dialog.result_values['note'].text())
+        dialog.close_button.click()
+        self.assertEqual(QDialog.DialogCode.Rejected, dialog.result())
+        self.assertEqual(original, self.draft)
+        self.assertEqual(original, dialog.draft)
+        self.assertEqual([], manager.mock_calls)
+
+    def test_zero_shipping_is_never_replaced_by_an_editing_default(self):
+        for prepaid in (False, True):
+            with self.subTest(prepaid=prepaid):
+                self.draft.update(shippingFee=0, isPrepaid=prepaid)
+                dialog = self.dialog()
+                self.assertEqual(0, dialog.draft['shippingFee'])
+                self.assertEqual('30,000원', dialog.total_value.text())
+                self.assertEqual('선불 0원 · 합계 포함' if prepaid else '후불 · 합계 미포함',
+                                 dialog.result_values['shipping'].text())
+
+    def test_delivery_outcomes_and_actual_recipients_are_displayed_without_polling(self):
+        manager = Mock()
+        state = {'smsState': 'success', 'smsSentAt': 1792200000000, 'smsTo': '01099998888',
+                 'emailSentAt': 1792200001000, 'emailTo': 'sent@example.com'}
+        dialog = self.dialog(manager=manager, state=state)
+        self.assertEqual('전송완료', dialog.result_values['smsStatus'].text())
+        self.assertEqual('전송완료', dialog.result_values['emailStatus'].text())
+        self.assertEqual('01099998888', dialog.result_values['smsTo'].text())
+        self.assertEqual('sent@example.com', dialog.result_values['emailTo'].text())
+        self.assertIn('2026-', dialog.result_values['smsTime'].text())
+        self.assertEqual([], manager.mock_calls)
+        dialog.close_button.click()
+        self.assertEqual([], manager.mock_calls)
+        for state, expected in (({}, '전송 기록 없음'), ({'smsMessageId': 'legacy'}, '결과확인 중'),
+                                ({'smsState': 'pending'}, '결과확인 중'),
+                                ({'smsState': 'failed', 'smsStatusMessage': '수신번호 확인'}, '전송실패')):
+            pending = self.dialog(state=state)
+            self.assertEqual(expected, pending.result_values['smsStatus'].text())
+            self.assertEqual('전송 기록 없음', pending.result_values['emailStatus'].text())
 
     def test_initial_height_uses_parent_monitor_work_area(self):
         parent = QWidget()
         for area in (QRect(1920, 0, 1920, 1040), QRect(0, 0, 1366, 728)):
             screen = Mock()
             screen.availableGeometry.return_value = area
-            with self.subTest(area=area), patch.object(parent, 'screen', return_value=screen):
+            with patch.object(parent, 'screen', return_value=screen):
                 dialog = QuoteDeliveryDialog(self.draft, '견적확정', parent=parent)
                 self.assertEqual(min(int(area.height() * .95), area.height() - 48), dialog.height())
                 self.assertEqual(min(1140, area.width() - 40), dialog.width())
-                self.assertLess(dialog.height(), area.height())
                 dialog.deleteLater()
 
-    def test_list_grows_with_window_without_hiding_delivery_actions(self):
-        self.draft['items'] *= 5
-        dialog = self.dialog()
-        short_height = dialog.items.height()
-        self.assertEqual(0, dialog.delivery_scroll.verticalScrollBar().maximum())
-        self.assertGreater(dialog.items.verticalScrollBar().maximum(), 0)
-        dialog.resize(1140, 988)
-        for _ in range(6):
-            self.app.processEvents()
-        self.assertGreater(dialog.items.height(), short_height)
-        self.assertEqual(0, dialog.items.verticalScrollBar().maximum())
-        self.assertEqual(0, dialog.delivery_scroll.verticalScrollBar().maximum())
-        texts = [label.text() for label in dialog.findChildren(QLabel)]
-        self.assertIn('고객명', texts)
-        self.assertIn(self.draft['customerName'], texts)
-        self.assertNotIn('견적확정', texts)
-        dialog.resize(1100, 660)
-        for _ in range(6):
-            self.app.processEvents()
-        self.assertEqual(0, dialog.delivery_scroll.verticalScrollBar().maximum())
-        self.assertLessEqual(dialog.items.height(), short_height)
-        self.assertLess(dialog.sent_button.mapTo(dialog, QPoint()).y() + dialog.sent_button.height(), dialog.height())
+    def test_long_list_grows_and_small_windows_keep_close_visible(self):
+        self.draft['items'] *= 20
+        for large in (False, True):
+            self.app.setProperty('namufarmLargeFont', large)
+            self.app.setStyleSheet(workspace_style(large))
+            dialog = self.dialog()
+            short_height = dialog.items.height()
+            self.assertGreater(dialog.items.verticalScrollBar().maximum(), 0)
+            dialog.resize(1140, 988)
+            self.settle()
+            self.assertGreater(dialog.items.height(), short_height)
+            dialog.resize(900, 600)
+            self.settle()
+            self.assertEqual(0, dialog.items.horizontalScrollBar().maximum())
+            self.assertLess(dialog.close_button.mapTo(dialog, QPoint()).y() + dialog.close_button.height(), dialog.height())
+            self.assertEqual(0, dialog.delivery_scroll.horizontalScrollBar().maximum())
 
-    def test_sms_gets_current_shipping_and_does_not_implicitly_complete_quote(self):
-        manager = Mock()
-        manager.quote_delivery_state.return_value = {}
-        dialog = self.dialog(manager=manager)
-        dialog.shipping_prepaid.setChecked(True)
-        dialog.shipping_fee.setText('7000')
-        modal = Mock(delivery_state={'smsState': 'pending'})
-        modal.exec.return_value = QDialog.DialogCode.Rejected
-        with patch('namufarm_desktop.workspace.QuoteSmsDialog', return_value=modal) as factory:
-            dialog.sms_button.click()
-        sent_draft = factory.call_args.args[0]
-        self.assertEqual(7000, sent_draft['shippingFee'])
-        self.assertTrue(sent_draft['isPrepaid'])
-        self.assertEqual('', dialog.mode)
-        self.assertEqual('문자 결과확인', dialog.sms_status_badge.text())
-
-    def test_complete_quote_requires_explicit_confirmation(self):
-        dialog = self.dialog()
-        with patch('namufarm_desktop.workspace.QMessageBox.question', return_value=QMessageBox.StandardButton.No):
-            dialog.sent_button.click()
-        self.assertEqual('', dialog.mode)
-        self.assertTrue(dialog.isVisible())
-        with patch('namufarm_desktop.workspace.QMessageBox.question', return_value=QMessageBox.StandardButton.Yes):
-            dialog.sent_button.click()
-        self.assertEqual('sent', dialog.mode)
-        self.assertEqual(QDialog.DialogCode.Accepted, dialog.result())
-
-    def test_sent_quote_keeps_payment_action_and_delivery_outcome_badges(self):
-        dialog = self.dialog(status='견적발송완료')
-        self.assertTrue(dialog.payment_button.isVisible())
-        self.assertFalse(dialog.sent_button.isVisible())
-        dialog.delivery_state = {'smsState': 'failed'}
-        dialog.update_delivery_badges()
-        self.assertEqual('문자 전송실패', dialog.sms_status_badge.text())
-        dialog.delivery_state = {'smsState': 'success', 'emailSentAt': 1}
-        dialog.update_delivery_badges()
-        self.assertEqual('문자 전송완료', dialog.sms_status_badge.text())
-        self.assertEqual('메일 전송완료', dialog.email_status_badge.text())
+    def test_long_email_values_wrap_without_losing_copyable_text(self):
+        self.draft['customerEmail'] = 'long.customer.address.for.readonly.results@example.com'
+        self.app.setProperty('namufarmLargeFont', True)
+        dialog = self.dialog(state={'emailSentAt': 1792200000000, 'emailTo': self.draft['customerEmail']})
+        dialog.resize(900, 600)
+        self.settle()
+        for value in (dialog.result_text_values[1], dialog.result_values['emailTo']):
+            self.assertEqual(self.draft['customerEmail'], value.text())
+            self.assertGreater(value.height(), value.fontMetrics().height())
+            self.assertEqual(0, value.horizontalScrollBar().maximum())
+            self.assertEqual(0, value.verticalScrollBar().maximum())

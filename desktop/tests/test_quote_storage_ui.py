@@ -91,3 +91,37 @@ class QuoteStorageUiTest(QtTestCase):
             self.assertFalse(self.window.page_summary.isVisible())
             self.assertTrue(self.window.other_page_title.isVisible())
             self.assertTrue(self.window.other_page_title.text().startswith(self.window.PAGES[index][0]))
+
+    def test_confirmed_list_opens_local_snapshot_without_editing_or_refreshing_after_close(self):
+        from unittest.mock import patch
+        from PySide6.QtWidgets import QDialog
+        data = demo_data()
+        self.window.apply_view(data)
+        self.window.draft_table.selectRow(0)
+        saved = copy.deepcopy(self.window.draft_rows[0])
+        manager = Mock()
+        manager.quote_delivery_state.return_value = {'emailSentAt': 1}
+        self.window.manager = manager
+        self.window.data['quoteRecovery'] = {'draft': saved}
+        self.window.data['requests'] = [{'requestId': saved.get('sourceRequestId'),
+                                         'receiptNumber': 'SERVER-DIFFERENT',
+                                         'personal': {'customerEmail': 'changed@example.com'}}]
+        self.window.update_controls()
+        self.assertTrue(self.window.draft_open.isEnabled())
+        self.assertEqual('견적 결과 확인', self.window.draft_open.text())
+        self.assertFalse(hasattr(self.window, 'draft_delete'))
+        modal = Mock()
+        modal.exec.return_value = QDialog.DialogCode.Accepted  # No accepted result can dispatch writes.
+        with patch('namufarm_desktop.workspace.QuoteDeliveryDialog', return_value=modal) as factory, \
+             patch.object(self.window, 'edit_quote') as edit:
+            self.window.open_draft()
+        self.assertEqual(saved, factory.call_args.args[0])
+        edit.assert_not_called()
+        manager.quote_delivery_state.assert_called_once_with(saved['id'])
+        self.assertEqual(1, len(manager.mock_calls))
+        self.assertFalse(self.window.timer.isActive())
+        self.window.timer.start()
+        with patch('namufarm_desktop.workspace.QuoteDeliveryDialog', return_value=modal):
+            self.window.open_draft()
+        self.assertTrue(self.window.timer.isActive())
+        self.window.timer.stop()
