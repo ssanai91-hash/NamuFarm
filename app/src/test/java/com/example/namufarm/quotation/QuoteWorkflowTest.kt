@@ -136,6 +136,8 @@ class QuoteWorkflowTest {
         var confirms = 0
         val workflow = QuoteWorkflow(store, { _, _ -> error("must not resend") }, { _, _ -> confirms++ }, { 123L },
             latestRequest = { error("a pending acknowledgement must use its original journal") })
+        assertThrows(IllegalStateException::class.java) { runBlocking { workflow.sendEmail(request, draft) } }
+        assertThrows(IllegalStateException::class.java) { runBlocking { workflow.sendSms(request, draft) } }
         assertEquals(123L, workflow.complete(request, draft).confirmedAt)
         assertEquals(1, confirms)
     }

@@ -71,7 +71,7 @@ class QuoteWorkflow(
     private val latestRequest: suspend (WebQuoteRequestEntity) -> WebQuoteRequestEntity? = { it }
 ) {
     fun records() = store.records()
-    private suspend fun prepare(request: WebQuoteRequestEntity, draft: SellerQuoteDraft): QuoteWorkflowRecord {
+    private suspend fun prepare(request: WebQuoteRequestEntity, draft: SellerQuoteDraft, completing: Boolean = false): QuoteWorkflowRecord {
         check(request.status == "신규") { "확정견적은 결과 확인만 가능합니다." }
         quoteWorkflowText(request, draft) // Validate the same totals and limits before any state or network write.
         val previous = store.records().firstOrNull { it.request.requestId == request.requestId }
@@ -79,6 +79,7 @@ class QuoteWorkflow(
         check(previous?.confirmationPending != true || previous.draft == draft) {
             "완료 확인 중인 견적은 내용을 바꾸지 말고 같은 내용으로 견적완료를 다시 눌러주세요."
         }
+        check(previous?.confirmationPending != true || completing) { "견적완료 확인 중입니다. 전송 대신 견적완료를 다시 눌러주세요." }
         // Pending completion retries the exact acknowledged input, even after the server moved it.
         if (previous?.confirmationPending != true) {
             val current = latestRequest(request)
@@ -131,7 +132,7 @@ class QuoteWorkflow(
             emailFingerprint = quoteWorkflowFingerprint(draft))).also(store::save)
     }
     suspend fun complete(request: WebQuoteRequestEntity, draft: SellerQuoteDraft): QuoteWorkflowRecord {
-        val record = prepare(request, draft)
+        val record = prepare(request, draft, completing = true)
         check(record.delivery.canComplete(draft)) { "문자 또는 메일을 먼저 보내 주세요. 현재 견적의 전송이 완료되어야 합니다." }
         // Crash/network failure leaves this exact input retryable; server confirmation is idempotent.
         store.save(record.copy(confirmationPending = true))
