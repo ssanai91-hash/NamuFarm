@@ -20,10 +20,6 @@ QMainWindow,#workspace,QDialog{background:#f3f5f1;}
 #sidebar QPushButton{background:transparent;color:#e0ebe3;border:2px solid transparent;border-radius:8px;text-align:left;padding:9px 10px;font-weight:600;}
 #sidebar QPushButton:checked{background:#2e604e;color:#fff;border-left-color:#b6df9a;}
 #sidebar QPushButton:hover{background:#285442;}
-#sidebar QPushButton#phoneQuote{background:#2e604e;color:#fff;border:2px solid #b6df9a;border-radius:8px;text-align:center;}
-#sidebar QPushButton#phoneQuote:hover{background:#3b755e;border-color:#e1f2d2;}
-#sidebar QPushButton#phoneQuote:focus{border-style:dashed;border-color:#e4d29e;}
-#sidebar QPushButton#phoneQuote:disabled{background:#285442;color:#a6b9ac;border-color:#648774;}
 #sidebar QPushButton:focus{border-style:dashed;border-color:#e4d29e;}
 #sidebar QWidget#navRow{background:transparent;}
 #sidebar QLabel#navBadge{background:#c7efad;color:#173b26;border:1px solid #c7efad;border-radius:10px;min-width:24px;padding:3px 6px;font-size:@small@px;font-weight:700;}
@@ -51,6 +47,11 @@ QPushButton#primary:pressed,QPushButton#syncPrimary:pressed,QPushButton#sentActi
 QPushButton#primary:focus,QPushButton#syncPrimary:focus,QPushButton#sentAction:focus,QPushButton#emailSendPrimary:focus,QPushButton#smsSendPrimary:focus{border:2px solid #ad7400;}
 QPushButton#primary:disabled,QPushButton#syncPrimary:disabled,QPushButton#sentAction:disabled,QPushButton#emailSendPrimary:disabled,QPushButton#smsSendPrimary:disabled{background:#d8e2d8;color:#546458;border-color:#bcccbc;}
 QPushButton#danger{background:#fff5f1;color:#a33827;border-color:#c78370;}
+QPushButton#requestDelete{background:#b33f32;color:#fff;border:1px solid #9b3429;}
+QPushButton#requestDelete:hover{background:#9e3328;border-color:#86291f;}
+QPushButton#requestDelete:pressed{background:#86291f;}
+QPushButton#requestDelete:focus{border:2px solid #f1b391;}
+QPushButton#requestDelete:disabled{background:#e8c9c4;color:#79544e;border-color:#d8b1aa;}
 QPushButton#danger:hover{background:#f8e4de;}
 QPushButton#danger:focus{border:2px solid #a33827;}
 QLineEdit,QComboBox,QDateEdit,QDoubleSpinBox,QSpinBox,QPlainTextEdit{background:#fff;border:1px solid #9caf9f;border-radius:8px;padding:9px 10px;selection-background-color:#c7dfd0;selection-color:#173b2e;}

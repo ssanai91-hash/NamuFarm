@@ -150,7 +150,7 @@ class MainWindow(QMainWindow):
         title.setStyleSheet("font-size:24px;font-weight:700;color:#205844")
         top.addWidget(title)
         top.addStretch()
-        self.sync_button = QPushButton("지금 동기화")
+        self.sync_button = QPushButton("가져오기")
         self.sync_button.clicked.connect(self.manual_sync)
         top.addWidget(self.sync_button)
         layout.addLayout(top)
@@ -281,7 +281,7 @@ class MainWindow(QMainWindow):
         self.report_button.setEnabled(paired)
         self.resolve_button.setEnabled(paired and pending and self.conflict)
         self.connection_status.setText("연결 정보 저장됨" if self.data["paired"] else "서버 연결 필요")
-        self.pending_status.setText(f"전송 대기 {len(self.data['pending']):,}건 · 서버 동기화로 재시도하세요." if pending else "전송 대기 0건")
+        self.pending_status.setText(f"전송 대기 {len(self.data['pending']):,}건 · 가져오기로 재시도하세요." if pending else "전송 대기 0건")
 
     def allow_discard(self):
         if not self.dirty:
@@ -327,7 +327,7 @@ class MainWindow(QMainWindow):
         self.request_actions = QHBoxLayout()
         self.request_actions.addWidget(QLabel("접수번호는 홈페이지·휴대폰과 동일합니다. 수동 견적·문자·PDF 발송은 휴대폰에서 처리합니다."))
         self.request_actions.addStretch()
-        self.delete_button = QPushButton("견적요청 삭제")
+        self.delete_button = QPushButton("삭제")
         self.delete_button.clicked.connect(self.delete_request)
         self.request_actions.addWidget(self.delete_button)
         layout.addLayout(self.request_actions)

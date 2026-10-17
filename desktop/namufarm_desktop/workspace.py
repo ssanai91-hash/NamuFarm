@@ -21,7 +21,7 @@ from . import __version__
 from .ui_theme import (align_table, fit_window, scroll_dialog, scroll_page, workspace_style,
                        CustomerDelegate, StatusDelegate, customer_reference)
 from .app import MainWindow, Task, table, fill_table, money, timestamp
-from .commerce import (ISSUER, new_draft, new_manual_draft, draft_amounts, validate_draft, quote_html, quote_document_html, shipping_html,
+from .commerce import (ISSUER, new_draft, draft_amounts, validate_draft, quote_html, quote_document_html, shipping_html,
                        shipping_problem, parse_tracking_csv, tracking_number)
 from .domain import SEOUL, profit, require
 from .errors import UserError
@@ -487,194 +487,6 @@ def print_document(parent, html, filename):
     row.addWidget(button("닫기", dialog.accept))
     layout.addLayout(row)
     dialog.exec()
-
-
-class ManualQuoteDialog(QDialog):
-    """Quick phone quote intake: customer basics + manually typed seedlings."""
-
-    def __init__(self, draft=None, parent=None):
-        super().__init__(parent)
-        self.draft = copy.deepcopy(draft or new_manual_draft())
-        self.setObjectName("manualQuoteDialog")
-        self.setWindowTitle("전화 견적 추가")
-        self.resize(980, 720)
-
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(24, 20, 24, 20)
-        layout.setSpacing(12)
-        layout.addWidget(label("전화 견적 추가", "deliveryTitle"))
-        layout.addWidget(label(
-            "전화로 받은 고객 정보와 묘목·수량·판매단가를 입력하면 견적 작업대에 바로 추가됩니다.",
-            "deliverySubtitle", True
-        ))
-
-        info_card = QFrame()
-        info_card.setObjectName("emailAddressCard")
-        form = QGridLayout(info_card)
-        form.setContentsMargins(16, 14, 16, 14)
-        form.setHorizontalSpacing(12)
-        form.setVerticalSpacing(9)
-
-        self.quote_number = QLineEdit(self.draft["requestReceiptNumber"])
-        self.quote_number.setReadOnly(True)
-        self.customer_name = QLineEdit(self.draft.get("customerName", ""))
-        self.customer_name.setPlaceholderText("고객명")
-        self.customer_phone = QLineEdit(self.draft.get("customerPhone", ""))
-        self.customer_phone.setPlaceholderText("01012345678")
-        self.customer_email = QLineEdit(self.draft.get("customerEmail", ""))
-        self.customer_email.setPlaceholderText("선택 입력")
-        self.region = QLineEdit(self.draft.get("requestRegion", ""))
-        self.region.setPlaceholderText("선택 입력")
-
-        rows = (
-            ("견적번호", self.quote_number, "고객명", self.customer_name),
-            ("전화번호", self.customer_phone, "이메일", self.customer_email),
-            ("지역", self.region, "", None),
-        )
-        for r, (left_title, left, right_title, right) in enumerate(rows):
-            form.addWidget(label(left_title), r, 0)
-            form.addWidget(left, r, 1)
-            if right is not None:
-                form.addWidget(label(right_title), r, 2)
-                form.addWidget(right, r, 3)
-        form.setColumnStretch(1, 1)
-        form.setColumnStretch(3, 1)
-        layout.addWidget(info_card)
-
-        item_title = QHBoxLayout()
-        item_title.addWidget(label("묘목 목록", "sectionTitle"))
-        item_title.addStretch()
-        item_title.addWidget(button("+ 묘목 추가", self.add_item))
-        item_title.addWidget(button("선택 삭제", self.remove_item))
-        layout.addLayout(item_title)
-
-        self.items = table(["묘목명", "수량", "판매 단가", "판매 금액"])
-        self.items.setEditTriggers(
-            self.items.EditTrigger.DoubleClicked
-            | self.items.EditTrigger.EditKeyPressed
-            | self.items.EditTrigger.AnyKeyPressed
-        )
-        self.items.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        polish_table(self.items)
-        self.items.itemChanged.connect(self.recalculate)
-        layout.addWidget(self.items, 1)
-
-        self.total = label("합계 0원", "metricValue")
-        layout.addWidget(self.total)
-
-        layout.addWidget(label("요청사항 / 메모", "sectionTitle"))
-        self.note = QPlainTextEdit(self.draft.get("note", ""))
-        self.note.setMaximumHeight(90)
-        self.note.setPlaceholderText("통화 중 확인한 요청사항이 있으면 입력")
-        layout.addWidget(self.note)
-
-        self.formal_quote = QCheckBox("공식 견적서 요청")
-        self.formal_quote.setChecked(bool(self.draft.get("formalQuoteRequested")))
-        layout.addWidget(self.formal_quote)
-
-        actions = QHBoxLayout()
-        actions.addStretch()
-        actions.addWidget(button("취소", self.reject))
-        actions.addWidget(button("견적 추가", self.accept_quote, True))
-        layout.addLayout(actions)
-        scroll_dialog(self, layout)
-
-        for item in self.draft.get("items", []):
-            self.add_item(item)
-        if self.items.rowCount() == 0:
-            self.add_item()
-
-    def add_item(self, item=None):
-        item = item if isinstance(item, dict) else {
-            "species": "", "quantity": 1, "unitPrice": 0
-        }
-        row = self.items.rowCount()
-        self.items.blockSignals(True)
-        self.items.insertRow(row)
-        for column, value in enumerate((
-            item.get("species", ""),
-            item.get("quantity", 1),
-            item.get("unitPrice", 0),
-        )):
-            cell = QTableWidgetItem(str(value))
-            if column > 0:
-                cell.setTextAlignment((Qt.AlignmentFlag.AlignLeft if column == 0 else Qt.AlignmentFlag.AlignRight) | Qt.AlignmentFlag.AlignVCenter)
-            self.items.setItem(row, column, cell)
-        amount = QTableWidgetItem("")
-        amount.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        amount.setFlags(amount.flags() & ~Qt.ItemFlag.ItemIsEditable)
-        self.items.setItem(row, 3, amount)
-        self.items.blockSignals(False)
-        self.recalculate()
-
-    def remove_item(self):
-        row = self.items.currentRow()
-        if row >= 0:
-            self.items.removeRow(row)
-            self.recalculate()
-
-    def recalculate(self, *args):
-        total = 0
-        valid = self.items.rowCount() > 0
-        self.items.blockSignals(True)
-        try:
-            for row in range(self.items.rowCount()):
-                qty = self.items.item(row, 1).text().strip()
-                price = self.items.item(row, 2).text().strip()
-                if not (qty.isascii() and qty.isdigit() and price.isascii() and price.isdigit()):
-                    valid = False
-                    self.items.item(row, 3).setText("확인")
-                    continue
-                amount = int(qty) * int(price)
-                total += amount
-                self.items.item(row, 3).setText(f"{amount:,}")
-        finally:
-            self.items.blockSignals(False)
-        self.total.setText(f"합계 {total:,}원" if valid else "수량 · 판매 단가를 확인해주세요")
-
-    def collect(self):
-        draft = copy.deepcopy(self.draft)
-        name = self.customer_name.text().strip()
-        phone = "".join(c for c in self.customer_phone.text() if c.isdigit())
-        email = self.customer_email.text().strip()
-        draft.update(
-            customerName=name,
-            customerPhone=phone,
-            customerEmail=email,
-            receiverName=name,
-            requestRegion=self.region.text().strip(),
-            note=self.note.toPlainText().strip(),
-            formalQuoteRequested=self.formal_quote.isChecked(),
-            quoteRecipientName=name,
-            quoteReplyChannel="sms",
-            shippingFee=0,
-            isPrepaid=False,
-            taxAmount=0,
-            costConfirmed=False,
-            manualStatus="견적확정",
-            items=[],
-        )
-        for row in range(self.items.rowCount()):
-            species = self.items.item(row, 0).text().strip()
-            qty = self.items.item(row, 1).text().strip()
-            price = self.items.item(row, 2).text().strip()
-            require(qty.isascii() and qty.isdigit() and price.isascii() and price.isdigit(),
-                    f"{row+1}번째 묘목 수량·판매 단가를 숫자로 입력해주세요.")
-            draft["items"].append({
-                "species": species,
-                "specification": "",
-                "quantity": int(qty),
-                "unitPrice": int(price),
-                "unitCost": 0,
-            })
-        return validate_draft(draft)
-
-    def accept_quote(self):
-        try:
-            self.draft = self.collect()
-            self.accept()
-        except UserError as error:
-            QMessageBox.warning(self, "전화 견적 확인", str(error))
 
 
 class QuoteDialog(QDialog):
@@ -2638,9 +2450,6 @@ class SellerWindow(MainWindow):
             else:
                 side.addWidget(widget)
         side.addStretch()
-        self.new_quote_button = button("+ 전화 견적", self.add_manual_quote)
-        self.new_quote_button.setObjectName("phoneQuote")
-        side.addWidget(self.new_quote_button)
         outer.addWidget(sidebar)
         content = QWidget()
         content_layout = QVBoxLayout(content)
@@ -2652,7 +2461,7 @@ class SellerWindow(MainWindow):
         heading.addWidget(self.page_title)
         header.addLayout(heading)
         header.addStretch()
-        self.sync_button.setText("↻  서버 동기화")
+        self.sync_button.setText("가져오기")
         self.sync_button.setObjectName("syncSecondary")
         self.sync_button.setMinimumWidth(138)
 
@@ -2689,12 +2498,8 @@ class SellerWindow(MainWindow):
         content_layout.addWidget(self.stack, 1)
         outer.addWidget(content, 1)
         old_root.deleteLater()
-        self.manual_quote_button = button("전화 견적 추가", self.add_manual_quote)
-        # The same action is already available at the bottom of the sidebar.
-        self.manual_quote_button.setParent(self)
-        self.manual_quote_button.hide()
-        self.request_quote_button = button("견적 작성", self.quote_request, True)
-        self.request_details_button = button("요청 상세", self.show_request_details)
+        self.request_quote_button = button("수동견적작성", self.quote_request, True)
+        self.request_details_button = button("상세 보기", self.show_request_details)
         self.request_table.itemDoubleClicked.connect(self.quote_request)
         for index in range(self.request_actions.count()):
             item = self.request_actions.itemAt(index)
@@ -2724,7 +2529,7 @@ class SellerWindow(MainWindow):
         self.next_button.setObjectName("primary")
         # 판매·고객 관리는 목록 + 전용 팝업으로 동작합니다. 기존 내장 편집기는
         # MainWindow 호환을 위해 객체만 유지하고 실제 작업 화면에는 노출하지 않습니다.
-        self.delete_button.setObjectName("danger")
+        self.delete_button.setObjectName("requestDelete")
 
         if QSystemTrayIcon.isSystemTrayAvailable():
             self.tray_icon = QSystemTrayIcon(self)
@@ -2738,7 +2543,6 @@ class SellerWindow(MainWindow):
 
         self.workspace_ready = True
         self.navigate(self.PAGE_REQUESTS)
-        QShortcut(QKeySequence("Ctrl+N"), self, activated=self.add_manual_quote)
         QShortcut(QKeySequence("F5"), self, activated=self.manual_sync)
         for widget, action in ((self.request_table, self.show_request_details),
                                (self.draft_table, self.open_draft),
@@ -3132,8 +2936,6 @@ class SellerWindow(MainWindow):
         ready = self.manager is not None and self.task is None
         paired = ready and self.data["paired"] and not self.data["pending"]
         self.stack.setEnabled(self.task is None)
-        self.new_quote_button.setEnabled(ready)
-        self.manual_quote_button.setEnabled(ready)
         self.request_quote_button.setEnabled(ready and self.request_table.currentRow() >= 0)
         self.request_details_button.setEnabled(self.request_table.currentRow() >= 0)
         selected_draft = self.draft_table.currentRow()
@@ -3161,7 +2963,7 @@ class SellerWindow(MainWindow):
         self.shipping_edit.setEnabled(ready)
         self.customer_open_button.setEnabled(ready and self.selected_sale is not None)
         if getattr(self, "demo_mode", False):
-            for widget in (self.sync_button, self.new_quote_button, self.manual_quote_button, self.request_quote_button,
+            for widget in (self.sync_button, self.request_quote_button,
                            self.draft_open, self.draft_delete, self.customer_open_button,
                            self.export_button, self.import_button, self.print_button,
                            self.tracking_save, self.open_button, self.connect_button, self.report_button,
@@ -3438,27 +3240,6 @@ class SellerWindow(MainWindow):
         self.tracking_input.setText(tracking_number(selected[0]["private"]["order"]) if len(selected) == 1 else "")
         self.shipping_status.setText(f"선택 {len(selected)}건 / 목록 {len(self.shipping_rows)}건 · " +
                                      ("로젠 XLS 저장 또는 송장번호 반영을 진행하세요." if selected else "송장을 준비할 주문을 선택하세요. Ctrl·Shift로 여러 건을 선택할 수 있습니다."))
-
-    def add_manual_quote(self, *args):
-        if getattr(self, "demo_mode", False) or not self.manager or self.task or not self.allow_discard():
-            return
-        dialog = ManualQuoteDialog(new_manual_draft(), self)
-        self.timer.stop()
-        result = dialog.exec()
-        self.timer.start()
-        if result != QDialog.DialogCode.Accepted:
-            return
-        draft = copy.deepcopy(dialog.draft)
-        self.run_job(
-            "전화 견적을 작업대에 추가 중…",
-            lambda: self.manager.save_draft(draft),
-            self.manual_quote_added,
-        )
-
-    def manual_quote_added(self, value):
-        self.apply_view(value)
-        self.message.setText("전화 견적을 추가했습니다. 견적 작업대에서 문자·메일·공식견적서 전달을 진행하세요.")
-        self.navigate(self.PAGE_QUOTES)
 
     def edit_quote(self, checked=False, draft=None, request_status=""):
         if getattr(self, "demo_mode", False) or not self.manager or self.task or not self.allow_discard():
