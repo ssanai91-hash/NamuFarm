@@ -698,28 +698,29 @@ class QuoteDialog(QDialog):
         if self.simple_request:
             info = QWidget()
             form = QFormLayout(info)
-            form.setFormAlignment(Qt.AlignmentFlag.AlignTop)
-            form.setVerticalSpacing(10)
             for title, value in (("견적번호", draft.get("requestReceiptNumber", "") or draft.get("sourceRequestId", "")),
                                  ("고객명", draft.get("customerName", "")),
                                  ("연락처", draft.get("customerPhone", "")),
                                  ("이메일", draft.get("customerEmail", "") or "미입력"),
                                  ("지역", draft.get("requestRegion", ""))):
-                field = label(str(value or "미입력"), "infoValue", True)
-                field.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+                field = QLineEdit(str(value))
+                field.setReadOnly(True)
                 field.setAccessibleName(title)
                 form.addRow(title, field)
 
             formal = bool(draft.get("formalQuoteRequested", False))
-            formal_value = label("요청" if formal else "미요청", "infoValue")
+            formal_value = QLineEdit("요청" if formal else "미요청")
+            formal_value.setReadOnly(True)
             form.addRow("공식 견적서", formal_value)
             if formal:
-                recipient = label(draft.get("quoteRecipientName", "") or draft.get("customerName", ""), "infoValue", True)
+                recipient = QLineEdit(draft.get("quoteRecipientName", "") or draft.get("customerName", ""))
+                recipient.setReadOnly(True)
                 form.addRow("견적서 수신인", recipient)
                 channel = {"sms": "문자", "email": "이메일", "both": "문자 + 이메일"}.get(
                     draft.get("quoteReplyChannel", "sms"), "문자"
                 )
-                reply = label(channel, "infoValue")
+                reply = QLineEdit(channel)
+                reply.setReadOnly(True)
                 form.addRow("수신 방법", reply)
             self.note = QPlainTextEdit(draft.get("note", ""))
             self.note.setReadOnly(True)
@@ -772,6 +773,8 @@ class QuoteDialog(QDialog):
         self.items.setEditTriggers(self.items.EditTrigger.DoubleClicked | self.items.EditTrigger.EditKeyPressed | self.items.EditTrigger.AnyKeyPressed)
         self.items.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         polish_table(self.items)
+        self.items.setStyleSheet("QHeaderView::section{background:#2f5d3a;color:#fff;border:0;"
+                                "border-right:1px solid #78967f;padding:10px 8px;font-weight:700;}")
         if self.simple_request:
             self.items.set_column_layout(((0, 3), (1, 1), (3, 2.8), (2, 2)))
         else:
