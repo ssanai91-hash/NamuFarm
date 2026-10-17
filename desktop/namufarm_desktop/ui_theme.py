@@ -51,7 +51,7 @@ QPushButton#requestDelete{background:#b33f32;color:#fff;border:1px solid #9b3429
 QPushButton#requestDelete:hover{background:#9e3328;border-color:#86291f;}
 QPushButton#requestDelete:pressed{background:#86291f;}
 QPushButton#requestDelete:focus{border:2px solid #f1b391;}
-QPushButton#requestDelete:disabled{background:#e8c9c4;color:#79544e;border-color:#d8b1aa;}
+QPushButton#requestDelete:disabled{background:#c98379;color:#fff;border-color:#ba7269;}
 QPushButton#danger:hover{background:#f8e4de;}
 QPushButton#danger:focus{border:2px solid #a33827;}
 QLineEdit,QComboBox,QDateEdit,QDoubleSpinBox,QSpinBox,QPlainTextEdit{background:#fff;border:1px solid #9caf9f;border-radius:8px;padding:9px 10px;selection-background-color:#c7dfd0;selection-color:#173b2e;}

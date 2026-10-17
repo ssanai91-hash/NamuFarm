@@ -2461,7 +2461,7 @@ class SellerWindow(MainWindow):
         heading.addWidget(self.page_title)
         header.addLayout(heading)
         header.addStretch()
-        self.sync_button.setText("가져오기")
+        self.sync_button.setText("↻ 가져오기")
         self.sync_button.setObjectName("syncSecondary")
         self.sync_button.setMinimumWidth(138)
 
@@ -2498,17 +2498,9 @@ class SellerWindow(MainWindow):
         content_layout.addWidget(self.stack, 1)
         outer.addWidget(content, 1)
         old_root.deleteLater()
-        self.request_quote_button = button("수동견적작성", self.quote_request, True)
-        self.request_details_button = button("상세 보기", self.show_request_details)
+        self.request_quote_button = button("+견적", self.quote_request, True)
         self.request_table.itemDoubleClicked.connect(self.quote_request)
-        for index in range(self.request_actions.count()):
-            item = self.request_actions.itemAt(index)
-            if isinstance(item.widget(), QLabel):
-                item.widget().hide()
-        self.request_actions.removeWidget(self.delete_button)
-        self.request_actions.insertWidget(0, self.request_details_button)
-        self.request_actions.insertWidget(1, self.delete_button)
-        self.request_actions.addWidget(self.request_quote_button)
+        self.request_actions.insertWidget(1, self.request_quote_button)
         self.request_table.setWordWrap(False)
         self.request_table.setTextElideMode(Qt.TextElideMode.ElideRight)
         self.request_table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Fixed)
@@ -2517,8 +2509,6 @@ class SellerWindow(MainWindow):
         request_layout = old_pages[0].layout()
         self.request_count = label("견적요청 0건", "sectionTitle")
         request_layout.insertWidget(0, self.request_count)
-        self.request_actions.removeWidget(self.request_quote_button)
-        self.request_actions.insertWidget(2, self.request_quote_button)
         self.ui_settings = QSettings("NamuFarm", "NamuFarmDesktop")
         self.large_font_check.setChecked(self.ui_settings.value("ui/largeFont", False, type=bool))
         self.large_font_check.toggled.connect(self.apply_design_scale)
@@ -2529,7 +2519,6 @@ class SellerWindow(MainWindow):
         self.next_button.setObjectName("primary")
         # 판매·고객 관리는 목록 + 전용 팝업으로 동작합니다. 기존 내장 편집기는
         # MainWindow 호환을 위해 객체만 유지하고 실제 작업 화면에는 노출하지 않습니다.
-        self.delete_button.setObjectName("requestDelete")
 
         if QSystemTrayIcon.isSystemTrayAvailable():
             self.tray_icon = QSystemTrayIcon(self)
@@ -2544,7 +2533,7 @@ class SellerWindow(MainWindow):
         self.workspace_ready = True
         self.navigate(self.PAGE_REQUESTS)
         QShortcut(QKeySequence("F5"), self, activated=self.manual_sync)
-        for widget, action in ((self.request_table, self.show_request_details),
+        for widget, action in ((self.request_table, self.quote_request),
                                (self.draft_table, self.open_draft),
                                (self.sale_table, self.open_customer_order)):
             shortcut = QShortcut(QKeySequence("Return"), widget, activated=action)
@@ -2563,40 +2552,6 @@ class SellerWindow(MainWindow):
             polish_table(widget)
             if hasattr(widget, "fit_columns"):
                 widget.fit_columns()
-
-    def show_request_details(self):
-        index = self.request_table.currentRow()
-        if not 0 <= index < len(self.request_rows):
-            return
-        request = self.request_rows[index]
-        personal = request["personal"]
-        def escaped(value):
-            return html_escape(str(value or "미입력")).replace("\n", "<br>")
-        fields = (
-            ("접수번호", request.get("receiptNumber") or request["requestId"]),
-            ("접수일", timestamp(request["createdAt"])),
-            ("고객명", personal.get("customerName")),
-            ("연락처", personal.get("customerPhone")),
-            ("이메일", personal.get("customerEmail")),
-            ("지역", personal.get("region")),
-            ("공식 견적서", "요청" if personal.get("formalQuoteRequested") else "미요청"),
-        )
-        rows = "".join(f"<p><b>{escaped(title)}</b><br>{escaped(value)}</p>" for title, value in fields)
-        items = "".join(
-            f"<li>{escaped(item['species'])} · {escaped(item.get('specification'))} · {item['quantity']:,}주</li>"
-            for item in personal.get("items", [])
-        )
-        dialog = QDialog(self)
-        dialog.setWindowTitle("견적요청 상세")
-        layout = QVBoxLayout(dialog)
-        browser = QTextBrowser()
-        browser.setOpenExternalLinks(False)
-        browser.setAccessibleName("고객 정보와 묘목 요청 상세")
-        browser.setHtml(rows + "<h3>희망 묘목</h3><ul>" + items + "</ul><h3>요청사항</h3><p>" + escaped(personal.get("message")) + "</p>")
-        layout.addWidget(browser, 1)
-        layout.addWidget(button("닫기", dialog.accept), 0, Qt.AlignmentFlag.AlignRight)
-        fit_window(dialog, 760, 760)
-        dialog.exec()
 
     def run_job(self, title, work, on_success=None, refresh_on_error=True):
         starting = self.task is None
@@ -2937,7 +2892,6 @@ class SellerWindow(MainWindow):
         paired = ready and self.data["paired"] and not self.data["pending"]
         self.stack.setEnabled(self.task is None)
         self.request_quote_button.setEnabled(ready and self.request_table.currentRow() >= 0)
-        self.request_details_button.setEnabled(self.request_table.currentRow() >= 0)
         selected_draft = self.draft_table.currentRow()
         self.draft_open.setEnabled(ready and 0 <= selected_draft < len(self.draft_rows))
         self.draft_delete.setEnabled(

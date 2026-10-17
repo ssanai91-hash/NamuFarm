@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (
     QApplication, QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFileDialog,
     QFormLayout, QGroupBox, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMainWindow,
     QMessageBox, QPlainTextEdit, QPushButton, QScrollArea, QSplitter, QTabWidget,
-    QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget, QDateEdit, QDoubleSpinBox,
+    QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget, QDateEdit, QDoubleSpinBox, QStyle,
 )
 
 from .api import DEFAULT_URL
@@ -150,7 +150,7 @@ class MainWindow(QMainWindow):
         title.setStyleSheet("font-size:24px;font-weight:700;color:#205844")
         top.addWidget(title)
         top.addStretch()
-        self.sync_button = QPushButton("가져오기")
+        self.sync_button = QPushButton("↻ 가져오기")
         self.sync_button.clicked.connect(self.manual_sync)
         top.addWidget(self.sync_button)
         layout.addLayout(top)
@@ -272,7 +272,13 @@ class MainWindow(QMainWindow):
         self.connect_button.setEnabled(ready)
         self.copy_button.setEnabled(ready)
         pending = bool(self.data["pending"])
-        self.delete_button.setEnabled(paired and not pending and self.request_table.currentRow() >= 0)
+        self.delete_button.setEnabled(paired and self.request_table.currentRow() >= 0
+                                      and not getattr(self, "demo_mode", False))
+        self.delete_button.setToolTip(
+            "처리가 끝난 뒤 삭제할 수 있습니다." if self.task else
+            "가져오기로 서버 연결을 확인해주세요." if not paired else
+            "삭제할 견적요청을 선택하세요." if self.request_table.currentRow() < 0 else
+            "선택한 견적요청 삭제 · 서버 확인 후 목록에 반영")
         editable = paired and not pending and self.selected_sale is not None and self.selected_sale["metadata"]["status"] not in ("배송완료", "구매취소", "판매완료", "주문취소")
         self.sale_editor.setEnabled(editable)
         self.save_button.setEnabled(editable and self.dirty)
@@ -325,11 +331,12 @@ class MainWindow(QMainWindow):
         self.request_table.itemSelectionChanged.connect(self.update_controls)
         layout.addWidget(self.request_table, 1)
         self.request_actions = QHBoxLayout()
-        self.request_actions.addWidget(QLabel("접수번호는 홈페이지·휴대폰과 동일합니다. 수동 견적·문자·PDF 발송은 휴대폰에서 처리합니다."))
-        self.request_actions.addStretch()
         self.delete_button = QPushButton("삭제")
+        self.delete_button.setObjectName("requestDelete")
+        self.delete_button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_TrashIcon))
         self.delete_button.clicked.connect(self.delete_request)
         self.request_actions.addWidget(self.delete_button)
+        self.request_actions.addStretch()
         layout.addLayout(self.request_actions)
         self.tabs.addTab(page, "온라인 견적 요청함")
 
