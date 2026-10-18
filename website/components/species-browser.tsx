@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { Check, Leaf, Search, X, ShoppingBasket } from "lucide-react";
+import { Leaf, Search, X, ShoppingBasket } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { catalogInitials, filterSpecies, type CatalogInitial } from "@/lib/species-catalog";
@@ -22,15 +22,14 @@ export default function SpeciesBrowser({ lines, onSelect, onRemove, notice, lock
         <div className="catalog-search"><Search aria-hidden="true" /><Input id="catalog-search" type="search" autoComplete="off" maxLength={80} placeholder="예: 수국 또는 ㅅㄱ" aria-describedby="search-help" value={query} onChange={event => { setQuery(event.target.value); setInitial(event.target.value.trim() ? "all" : "ㄱ"); setVisibleCount(pageSize); }} />{query && <Button type="button" variant="ghost" size="icon" aria-label="묘목 검색 지우기" onClick={() => chooseInitial("ㄱ")}><X /></Button>}</div>
         <p id="search-help" className="field-help">이름이나 초성으로 검색해요.</p>
         <div className="initial-filter" role="group" aria-label="첫 글자로 묘목 찾기">{(["all", ...catalogInitials] as const).map(value => <Button type="button" variant="ghost" key={value} className="initial-button" aria-pressed={initial === value} onClick={() => chooseInitial(value)}>{value === "all" ? "전체" : value}</Button>)}</div>
-        <p className="catalog-filter-summary" role="status" aria-live="polite" aria-atomic="true">{query.trim() ? `“${query.trim()}” 검색 결과입니다.` : initial === "all" ? "전체 묘목을 보고 있어요." : `${initial}으로 시작하는 묘목을 보고 있어요.`}</p>
       </div>
       <p className="catalog-results-heading">여러 품목을 함께 담으세요</p>
-      <p className="catalog-live" role="status" aria-live="polite" aria-atomic="true">{notice || "카드를 누르면 담기고, 다시 누르면 빠져요."}</p>
+      <p className={notice.startsWith("한 번에 20종") || notice.startsWith("20종까지") ? "catalog-live" : "sr-only"} role="status" aria-live="polite" aria-atomic="true">{notice}</p>
       <div className="catalog-grid">{matches.slice(0, visibleCount).map(species => {
         const isSelected = selected.has(species.name);
         const variant = species.name.match(/^(.+?)\(([^)]+)\)$/);
-        return <button type="button" key={species.id} data-species-id={species.id} className={`catalog-card${isSelected ? " selected" : ""}`} disabled={locked} onClick={() => onSelect(species.name)} aria-label={`${species.name}, ${isSelected ? "견적에 담았어요. 다시 누르면 빼기" : "견적에 담기"}`} aria-pressed={isSelected}>
-          <span className="catalog-card-name">{variant ? <>{variant[1]}<strong className="catalog-variant">{variant[2]}</strong></> : species.name}</span><span className="catalog-card-caption">{isSelected && <Check aria-hidden="true" />}<span>{isSelected ? "담김 · 빼기" : "견적에 담기"}</span></span>
+        return <button type="button" key={species.id} data-species-id={species.id} className={`catalog-card${isSelected ? " selected" : ""}`} disabled={locked} onClick={() => onSelect(species.name)} aria-label={`${species.name}, ${isSelected ? "빼기" : "담기"}`} aria-pressed={isSelected}>
+          <span className="catalog-card-name">{variant ? <>{variant[1]}<strong className="catalog-variant">{variant[2]}</strong></> : species.name}</span><span className="catalog-card-caption">{isSelected ? "빼기" : "담기"}</span>
         </button>;
       })}</div>
       {matches.length === 0 && <div className="catalog-empty"><Leaf aria-hidden="true" /><h3>검색 결과가 없어요.</h3><p>다른 이름으로 찾거나 묘목 이름을 직접 적어주세요.</p><Button asChild variant="outline"><a href="#quote">묘목 이름 직접 적기</a></Button></div>}
