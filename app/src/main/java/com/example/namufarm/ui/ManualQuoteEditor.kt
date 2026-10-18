@@ -55,8 +55,8 @@ private fun displayEditorPhone(raw: String): String {
 @Composable
 private fun EditorInfoRow(label: String, content: @Composable RowScope.() -> Unit) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(label, modifier = Modifier.width(84.dp), color = editorMuted, fontSize = 15.sp)
+        horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(label, modifier = Modifier.width(68.dp), color = editorMuted, fontSize = 13.sp)
         Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp), content = content)
     }
@@ -65,8 +65,8 @@ private fun EditorInfoRow(label: String, content: @Composable RowScope.() -> Uni
 @Composable
 private fun EditorChannelChip(label: String, selectedColor: Color, textColor: Color) {
     Surface(shape = RoundedCornerShape(50), color = selectedColor) {
-        Text(label, Modifier.padding(horizontal = 15.dp, vertical = 8.dp),
-            color = textColor, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+        Text(label, Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+            color = textColor, fontSize = 13.sp, fontWeight = FontWeight.Medium)
     }
 }
 
@@ -125,14 +125,14 @@ private fun EditorDialog(
             color = Color(0xFFF5F6F3)) {
             Column {
                 Surface(color = Color.White) {
-                    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 12.dp),
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically) {
                         IconButton(onClick = onDismiss) {
                             Icon(Icons.Outlined.ArrowBack, "견적 작성 닫기")
                         }
                         Column(Modifier.weight(1f),
                             verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Text(title, fontSize = 21.sp, fontWeight = FontWeight.SemiBold)
+                            Text(title, fontSize = 19.sp, fontWeight = FontWeight.SemiBold)
                             Text(subtitle, fontSize = 12.sp, color = editorMuted)
                         }
                     }
@@ -141,8 +141,8 @@ private fun EditorDialog(
                 Surface(color = Color.White,
                     shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)) {
                     Column(Modifier.fillMaxWidth().navigationBarsPadding()
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
                         content = actions)
                 }
             }
@@ -253,24 +253,24 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
         }
     }) {
         Column(Modifier.verticalScroll(rememberScrollState()).testTag("quote_editor_body")
-            .padding(horizontal = 18.dp, vertical = 14.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            .padding(horizontal = 14.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)) {
 
             Surface(shape = RoundedCornerShape(16.dp),
                 border = BorderStroke(0.5.dp, editorBorder), color = Color.White) {
-                Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 18.dp),
-                    verticalArrangement = Arrangement.spacedBy(18.dp)) {
+                Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     EditorInfoRow("주문번호") {
-                        Text(subtitle, fontSize = 16.sp, color = Color(0xFF1B2A22),
+                        Text(subtitle, fontSize = 14.sp, color = Color(0xFF1B2A22),
                             maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                     EditorInfoRow("고객명") {
                         Text(draft.recipient.customerName.ifBlank { "고객" },
-                            fontSize = 17.sp, color = Color(0xFF1B2A22),
+                            fontSize = 15.sp, color = Color(0xFF1B2A22),
                             fontWeight = FontWeight.Medium, maxLines = 1)
                     }
                     EditorInfoRow("연락처") {
-                        Text(displayEditorPhone(draft.phone), fontSize = 17.sp,
+                        Text(displayEditorPhone(draft.phone), fontSize = 15.sp,
                             color = Color(0xFF1B2A22), maxLines = 1)
                     }
                     EditorInfoRow("수신방법") {
@@ -312,12 +312,12 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
 
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text("품목별 판매 단가", modifier = Modifier.weight(1f),
-                    fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                    fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
                 Text("${draft.rows.size}품목", color = Color(0xFF53695B),
                     style = MaterialTheme.typography.bodySmall)
             }
             Row(Modifier.fillMaxWidth().background(Color.White, RoundedCornerShape(16.dp))
-                .padding(horizontal = 12.dp, vertical = 10.dp),
+                .padding(horizontal = 10.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically) {
                 Text("단가 증감", style = MaterialTheme.typography.labelMedium,
                     color = Color(0xFF456552))
@@ -331,7 +331,7 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
                             border = BorderStroke(0.5.dp,
                                 if (step == value) editorGreen else editorBorder)) {
                             Text(if (value == 10000) "1만원" else money(value.toLong()),
-                                Modifier.padding(horizontal = 9.dp, vertical = 9.dp),
+                                Modifier.padding(horizontal = 9.dp, vertical = 7.dp),
                                 color = if (step == value) Color.White else editorMuted,
                                 fontSize = 12.sp)
                         }
@@ -348,19 +348,19 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
                         border = BorderStroke(0.5.dp, editorBorder),
                         color = Color.White) {
                         Column(Modifier.fillMaxWidth()
-                            .padding(horizontal = 14.dp, vertical = 12.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                     Text("${index+1}. ${row.name.ifBlank { "새 품목" }}",
                                         modifier = Modifier.weight(1f), maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis, fontSize = 17.sp,
+                                        overflow = TextOverflow.Ellipsis, fontSize = 15.sp,
                                         fontWeight = FontWeight.SemiBold)
                                     Surface(shape = RoundedCornerShape(50),
                                         color = Color(0xFFE3EEE6)) {
                                         Text("${row.quantity.ifBlank { "0" }}주",
-                                            Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                            Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
                                             color = editorGreen, fontSize = 13.sp)
                                     }
                                     if (manualEntry) {
@@ -398,7 +398,7 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
                                         focusedContainerColor = Color.White,
                                         unfocusedContainerColor = Color.White),
                                     textStyle = MaterialTheme.typography.titleMedium.copy(
-                                        textAlign = TextAlign.Center),
+                                        fontSize = 16.sp, textAlign = TextAlign.Center),
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                     modifier = Modifier.weight(1f).testTag("unit_price_$index"))
                                 FilledTonalIconButton(onClick = {
@@ -446,10 +446,10 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
             // Preserve 500-won delivery adjustments independently of the item-price step.
             Surface(shape = RoundedCornerShape(16.dp),
                 border = BorderStroke(0.5.dp, editorBorder), color = Color.White) {
-                Row(Modifier.fillMaxWidth().padding(horizontal = 11.dp, vertical = 14.dp),
+                Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                    Text("배송비", color = Color(0xFF1B2A22), fontSize = 16.sp,
+                    Text("배송비", color = Color(0xFF1B2A22), fontSize = 15.sp,
                         fontWeight = FontWeight.SemiBold, maxLines = 1)
                     Spacer(Modifier.weight(1f))
                     Row(Modifier.background(Color(0xFFEEF1EF), RoundedCornerShape(10.dp))
@@ -458,7 +458,7 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
                             Surface(onClick = { draft = draft.copy(prepaid = value) },
                                 enabled = !saving, shape = RoundedCornerShape(8.dp),
                                 color = if (draft.prepaid == value) editorGreen else Color.Transparent) {
-                                Text(label, Modifier.padding(horizontal = 9.dp, vertical = 10.dp),
+                                Text(label, Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
                                     color = if (draft.prepaid == value) Color.White else editorMuted,
                                     fontSize = 13.sp, fontWeight = FontWeight.Medium)
                             }
@@ -494,16 +494,16 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
             Surface(shape = RoundedCornerShape(16.dp),
                 border = BorderStroke(0.5.dp, editorBorder),
                 color = Color.White) {
-                Row(Modifier.fillMaxWidth().padding(16.dp),
+                Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Icon(Icons.Outlined.SpeakerNotes, null,
-                        tint = editorMuted, modifier = Modifier.size(24.dp))
+                        tint = editorMuted, modifier = Modifier.size(20.dp))
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        Text("요청사항", color = editorMuted, fontSize = 13.sp)
+                        Text("요청사항", color = editorMuted, fontSize = 12.sp)
                         Text(request?.message?.ifBlank { "없음" } ?: "없음",
                             modifier = Modifier.clickable { if (!request?.message.isNullOrBlank()) messageExpanded = true },
-                            fontSize = 15.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            fontSize = 14.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     }
                 }
             }
@@ -514,18 +514,21 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
             Surface(shape = RoundedCornerShape(16.dp),
                 border = BorderStroke(0.5.dp, Color(0xFFECE6C8)),
                 color = Color(0xFFFAF8EC)) {
-                Column(Modifier.fillMaxWidth().padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                    Text("최종 견적 금액", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                Column(Modifier.fillMaxWidth().padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text("최종 견적 금액", Modifier.weight(1f),
+                            fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                        Text(amount?.let(::money) ?: "단가 입력 필요",
+                            color = editorGreen, fontSize = 24.sp,
+                            fontWeight = FontWeight.SemiBold)
+                    }
                     Text(if (draft.prepaid)
                         "품목 " + money(itemsTotal) + " + 배송비 " + money(draft.shipping().toLong())
                         else "품목 " + money(itemsTotal) + " · 배송비 후불(착불)",
                         color = editorMuted, fontSize = 12.sp)
-                    Text(amount?.let(::money) ?: "단가 입력 필요",
-                        color = editorGreen, fontSize = 28.sp,
-                        fontWeight = FontWeight.SemiBold)
                     Row(Modifier.fillMaxWidth().background(Color(0xFFFFF3D6),
-                        RoundedCornerShape(10.dp)).padding(12.dp),
+                        RoundedCornerShape(10.dp)).padding(8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Icon(Icons.Outlined.Info, null, tint = Color(0xFF8A5A00),

@@ -68,8 +68,6 @@ internal fun WebQuoteInboxDialog(
                     modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
                     Text(if (state.busy) "연결 중…" else if (state.paired) "지금 동기화" else "서버 연결")
                 }
-                Text("서버: " + state.serverUrl, style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
                 if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
             }
         }
