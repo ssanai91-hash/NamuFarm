@@ -7,10 +7,13 @@ import com.example.namufarm.data.remote.*
 import com.example.namufarm.quotation.*
 import com.google.gson.Gson
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-/** Uses the same device connection and operating endpoint as the original master sync. */
+data class InitialQuoteCache(val requests: List<WebQuoteRequestEntity>, val deferredCount: Int)
+
+/** Reads are local; explicit synchronization replaces the cache only after a complete snapshot. */
 class InitialQuoteConnection(
     private val database: InitialQuoteDatabase,
     private val gateway: OperationsMasterGateway
@@ -20,6 +23,9 @@ class InitialQuoteConnection(
     private val gson = Gson()
     fun localRequests() = dao.requests()
     fun deferredCount() = dao.deferredCount()
+    fun observeCache() = combine(dao.observeRequests(), dao.observeDeferredCount()) { requests, deferred ->
+        InitialQuoteCache(requests, deferred)
+    }
     fun read(id: String) = dao.read(id, System.currentTimeMillis())
 
     suspend fun refresh(): Int = mutex.withLock {

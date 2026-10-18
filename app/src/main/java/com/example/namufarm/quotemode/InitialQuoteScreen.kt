@@ -50,7 +50,6 @@ internal fun InitialQuoteScreen(viewModel: InitialQuoteViewModel, connection: In
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     var result by remember { mutableStateOf<QuoteWorkflowRecord?>(null) }
     var serverResult by remember { mutableStateOf<WebQuoteRequestEntity?>(null) }
-    var readyRequest by remember { mutableStateOf<WebQuoteRequestEntity?>(null) }
     val editing = management.editingRequest
     val deleting = inbox.deleteFeedback?.phase == "deleting"
     LaunchedEffect(management.message) {
@@ -70,6 +69,8 @@ internal fun InitialQuoteScreen(viewModel: InitialQuoteViewModel, connection: In
     }
     val confirmed = records.filter { it.confirmedAt > 0 }.sortedByDescending { it.confirmedAt }
     val confirmedIds = confirmed.map { it.request.requestId }.toSet()
+    // The list already came from Room. Opening a row must never wait for a server snapshot.
+    val readyRequest = editing?.takeIf { recordsReady && it.status == "신규" && it.requestId !in confirmedIds }
     LaunchedEffect(editing, recordsReady) {
         if (recordsReady && editing != null && (editing.status != "신규" || editing.requestId in confirmedIds)) {
             result = confirmed.firstOrNull { it.request.requestId == editing.requestId }
@@ -78,22 +79,8 @@ internal fun InitialQuoteScreen(viewModel: InitialQuoteViewModel, connection: In
             viewModel.dismissManualQuote()
         }
     }
-    LaunchedEffect(editing?.requestId, recordsReady) {
-        readyRequest = null
-        if (!recordsReady || editing == null || editing.status != "신규" || editing.requestId in confirmedIds) return@LaunchedEffect
-        busy = true
-        try {
-            val saved = records.firstOrNull { it.request.requestId == editing.requestId }
-            val current = if (saved?.confirmationPending == true) editing else
-                withContext(Dispatchers.IO) { connection.latestRequest(editing.requestId) }
-            onRead(editing.requestId) // Also publish the refreshed server cache to the list.
-            if (current == null || current.status != "신규") {
-                viewModel.dismissManualQuote(); message = "서버에서 이미 처리되었거나 삭제된 요청입니다."; onSync()
-            } else { readyRequest = current; message = null }
-        } catch (e: CancellationException) { throw e }
-        catch (e: Exception) {
-            viewModel.dismissManualQuote(); message = "서버 요청을 가져오지 못했습니다: ${e.message}"
-        } finally { busy = false }
+    LaunchedEffect(readyRequest?.requestId) {
+        readyRequest?.let { onRead(it.requestId); message = null }
     }
     val pending = records.filter { it.confirmationPending }.map { it.request }
     val requests = (pending + inbox.requests.filter { it.status == "신규" })
@@ -105,7 +92,7 @@ internal fun InitialQuoteScreen(viewModel: InitialQuoteViewModel, connection: In
             colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF1976D2),
                 titleContentColor = Color.White, actionIconContentColor = Color.White), actions = {
             TextButton(onClick = onSync, enabled = !busy && !inbox.busy && !deleting,
-                colors = ButtonDefaults.textButtonColors(contentColor = Color.White)) { Text("↻ 가져오기") }
+                colors = ButtonDefaults.textButtonColors(contentColor = Color.White)) { Text("↻ 동기화") }
         })
     }) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp),
@@ -133,7 +120,7 @@ internal fun InitialQuoteScreen(viewModel: InitialQuoteViewModel, connection: In
                     LazyColumn(Modifier.fillMaxWidth().weight(1f)) {
                         if (selectedTab == 0) {
                             if (requests.isEmpty()) item {
-                                Text("새 견적요청이 없습니다. 가져오기로 서버 요청을 확인하세요.",
+                                Text("새 견적요청이 없습니다. 동기화로 서버 요청을 확인하세요.",
                                     Modifier.padding(12.dp))
                             }
                             itemsIndexed(requests, key = { _, request -> request.requestId }) { index, request ->
@@ -191,14 +178,14 @@ internal fun InitialQuoteScreen(viewModel: InitialQuoteViewModel, connection: In
                                     sentVia ?: error("실제로 보낸 방법을 선택해주세요."))
                             }
                             viewModel.dismissManualQuote(); selectedTab = 1
-                            message = "견적을 확정했습니다."; onSync()
+                            message = "견적을 확정했습니다."
                         }
                         else -> error("견적완료로 저장해주세요.")
                     }
                 } catch (e: CancellationException) { throw e }
                 catch (e: ServerQuoteRequestChanged) {
-                    viewModel.dismissManualQuote(); readyRequest = null
-                    message = e.message; onSync()
+                    viewModel.dismissManualQuote()
+                    message = e.message
                 }
                 catch (e: Exception) { message = "❌ ${e.message ?: "처리 결과를 확인하지 못했습니다. 다시 확인해주세요."}" }
                 finally {
@@ -300,5 +287,3 @@ internal fun QuoteWorkflowResultDialog(saved: QuoteWorkflowRecord, onDismiss: ()
             }
         }
 }
-
-

@@ -9,6 +9,8 @@ import com.example.namufarm.quotation.*
 import com.google.gson.Gson
 import com.google.gson.JsonObject
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
@@ -35,6 +37,36 @@ class InitialQuoteConnectionTest {
         "00000000-0000-4000-8000-%012d".format(id), id.toLong(),
         "2026-10-18T00:00:00.000Z", "기존 고객", "01000000000", "옥천",
         Gson().toJson(listOf(WebQuoteItem("가죽나무", "", 2))), "", readAt = 123)
+    @Test fun cachedRequestsAndReadMarksAreAvailableOfflineWithoutAnyServerCall() = runBlocking {
+        val saved = local()
+        db.inbox().insertRequests(listOf(saved))
+        server.offline = true
+        val initial = withTimeout(5000) { connection.observeCache().first() }
+        assertEquals(listOf(saved), initial.requests)
+        connection.read(saved.requestId)
+        val read = withTimeout(5000) { connection.observeCache().first { it.requests.single().readAt != 123L } }
+        assertNotNull(read.requests.single().readAt)
+        assertTrue(server.actions.isEmpty())
+    }
+    @Test fun failedServerDeleteKeepsTheCachedRequest() = runBlocking {
+        val saved = local()
+        db.inbox().insertRequests(listOf(saved))
+        server.offline = true
+        assertThrows(IllegalStateException::class.java) { runBlocking { connection.close(saved.requestId) } }
+        assertEquals(listOf(saved), connection.localRequests())
+    }
+    @Test fun deleteNeedsMatchingAcknowledgementAndRoomPublishesTheResultWithoutAnotherDownload() = runBlocking {
+        val saved = local()
+        db.inbox().insertRequests(listOf(saved))
+        server.invalidDelete = true
+        assertThrows(IllegalStateException::class.java) { runBlocking { connection.close(saved.requestId) } }
+        assertEquals(listOf(saved), connection.localRequests())
+        server.invalidDelete = false
+        connection.close(saved.requestId)
+        val cache = withTimeout(5000) { connection.observeCache().first { it.requests.isEmpty() } }
+        assertTrue(cache.requests.isEmpty())
+        assertEquals(listOf("close_request", "close_request"), server.actions)
+    }
     @Test fun interruptedDownloadPreservesEntirePreviousCache() = runBlocking {
         db.inbox().insertRequests(listOf(local()))
         server.rows = listOf(server.row(1), server.row(2))
@@ -98,6 +130,9 @@ class InitialQuoteConnectionTest {
         val saved = connection.localRequests().single()
         assertEquals("견적확정", saved.status)
         assertEquals("6000", serverConfirmedDraft(saved)!!.rows.single().price)
+        val observed = withTimeout(5000) { connection.observeCache().first { it.requests.single().status == "견적확정" } }
+        assertEquals(saved, observed.requests.single())
+        assertEquals(listOf("save_quote_pricing"), server.actions)
     }
     private class Server : OperationsMasterGateway {
         override var downloaded = false
@@ -107,6 +142,9 @@ class InitialQuoteConnectionTest {
         var extraTotal = 0
         var firstPageReads = 0
         var invalidConfirmation = false
+        var invalidDelete = false
+        var offline = false
+        val actions = mutableListOf<String>()
         fun row(id: Int) = Gson().toJsonTree(mapOf("requestId" to
             "00000000-0000-4000-8000-%012d".format(id), "sequence" to id,
             "createdAt" to "2026-10-18T00:00:00.000Z", "customerName" to "견적 고객",
@@ -114,6 +152,10 @@ class InitialQuoteConnectionTest {
             "status" to "신규", "receiptNumber" to "NAMU-20261018-%04d".format(id),
             "items" to listOf(mapOf("species" to "가죽나무", "specification" to "", "quantity" to 2)))).asJsonObject
         override suspend fun request(action: String, fields: Map<String, Any>): JsonObject {
+            actions += action
+            if (offline) error("offline")
+            if (action == "close_request") return Gson().toJsonTree(mapOf("ok" to true,
+                "closed" to true, "requestId" to if (invalidDelete) "wrong-id" else fields["requestId"])).asJsonObject
             if (action == "save_quote_pricing") return Gson().toJsonTree(mapOf("ok" to true,
                 "updated" to true, "requestId" to if (invalidConfirmation) "wrong-id" else fields["requestId"],
                 "status" to "견적확정")).asJsonObject

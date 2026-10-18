@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.*
 import com.example.namufarm.data.WebQuoteRequestEntity
 import com.example.namufarm.data.DeferredWebRequestEntity
+import kotlinx.coroutines.flow.Flow
 
 /** Quote intake is isolated from the original farm, stock and order database. */
 @Database(entities = [WebQuoteRequestEntity::class, DeferredWebRequestEntity::class],
@@ -21,6 +22,10 @@ abstract class InitialQuoteDatabase : RoomDatabase() {
 
 @Dao
 interface InitialQuoteDao {
+    @Query("SELECT * FROM web_quote_request ORDER BY sequence DESC")
+    fun observeRequests(): Flow<List<WebQuoteRequestEntity>>
+    @Query("SELECT COUNT(*) FROM deferred_web_request")
+    fun observeDeferredCount(): Flow<Int>
     @Query("SELECT * FROM web_quote_request ORDER BY sequence DESC")
     fun requests(): List<WebQuoteRequestEntity>
     @Query("SELECT COUNT(*) FROM deferred_web_request")
