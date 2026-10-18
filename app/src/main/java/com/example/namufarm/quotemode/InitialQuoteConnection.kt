@@ -117,9 +117,14 @@ fun serverConfirmedDraft(request: WebQuoteRequestEntity): SellerQuoteDraft? {
         SellerQuoteRow(item.get("species").asString, item.get("specification").asString,
             item.get("quantity").asInt.toString(), item.get("unitPrice").asInt.toString())
     }
-    return SellerQuoteDraft(rows, request.customerPhone, QuoteRecipient.from(request),
+    val tax = raw.get("taxAmount").asLong
+    require(tax in 0..Int.MAX_VALUE.toLong())
+    // Pricing is authoritative even if an older client omitted the formal-request flag.
+    val recipient = QuoteRecipient.from(request).copy(
+        formalQuoteRequested = request.formalQuoteRequested || tax > 0)
+    return SellerQuoteDraft(rows, request.customerPhone, recipient,
         raw.get("isPrepaid").asBoolean, raw.get("shippingFee").asInt.toString(),
-        QuoteIssueOptions(tax = raw.get("taxAmount").asLong.toString())).also {
+        QuoteIssueOptions(tax = tax.toString())).also {
         it.validate(QuoteDelivery.COMPLETE)
     }
 }

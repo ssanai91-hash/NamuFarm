@@ -74,6 +74,15 @@ class InitialQuoteConnectionTest {
         assertEquals("6000", draft.rows.single().price)
         assertEquals(18000, draft.rows.single().line().let { it.orderQty * it.retailPrice } + draft.shipping())
     }
+    @Test fun serverPricingTaxIsIncludedEvenWithoutFormalRequestFlag() {
+        val request = local(1).copy(quotePricingJson = Gson().toJson(mapOf(
+            "items" to listOf(mapOf("species" to "가죽나무", "specification" to "",
+                "quantity" to 2, "unitPrice" to 6000)), "isPrepaid" to true,
+            "shippingFee" to 6000, "taxAmount" to 1800)))
+        val draft = serverConfirmedDraft(request)!!
+        assertTrue(quoteWorkflowText(request, draft).contains("19,800원"))
+        assertFalse(request.formalQuoteRequested)
+    }
     @Test fun wrongConfirmationAcknowledgementNeverAdvancesLocalStatus() = runBlocking {
         db.inbox().insertRequests(listOf(local(1)))
         val draft = SellerQuoteDraft.from(local(1), QuoteIssuer())
