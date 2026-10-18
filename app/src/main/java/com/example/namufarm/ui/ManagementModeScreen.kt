@@ -34,13 +34,41 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.example.namufarm.data.InventoryDisplayRow
 import com.example.namufarm.viewmodel.ManagementViewModel
+import com.example.namufarm.webrequests.WebRequestConnection
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ManagementModeScreen(viewModel: ManagementViewModel, onBack: () -> Unit) {
+fun ManagementModeScreen(viewModel: ManagementViewModel, connection: WebRequestConnection,
+    onBack: () -> Unit, onManageSpecies: () -> Unit) {
     val uiState by viewModel.uiState.collectAsState()
     val scrollState = rememberScrollState()
     val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    var syncingMaster by remember { mutableStateOf(false) }
+    var masterNotice by remember { mutableStateOf("") }
+    var showSpeciesPicker by remember { mutableStateOf(false) }
+    fun refreshDirectory() {
+        if (syncingMaster) return
+        syncingMaster = true
+        scope.launch {
+            try {
+                val count = withContext(Dispatchers.IO) {
+                    connection.farmDirectory()
+                    connection.speciesDirectory()
+                    connection.refreshDirectoryInventory()
+                }
+                viewModel.refreshMasterFromLocal()
+                masterNotice = "농원 · 묘목 · 재고 가져오기 완료 (" + count + "건)"
+            } catch (e: CancellationException) { throw e }
+            catch (e: Exception) {
+                masterNotice = "가져오기 실패: " + (e.message ?: "연결을 확인해주세요.")
+            } finally { syncingMaster = false }
+        }
+    }
 
     LaunchedEffect(uiState.message) {
         uiState.message?.let { message ->
@@ -56,7 +84,6 @@ fun ManagementModeScreen(viewModel: ManagementViewModel, onBack: () -> Unit) {
     var showConfirmDialog by remember { mutableStateOf(false) }
     var pendingAction by remember { mutableStateOf<(() -> Unit)?>(null) }
     var showFarmManageDialog by remember { mutableStateOf(false) }
-    var showSpeciesManageDialog by remember { mutableStateOf(false) }
 
     val hasUnsavedChanges =
         uiState.inputQuantity > 0 || uiState.inputWholesale > 0 || uiState.inputRetail > 0
@@ -74,7 +101,7 @@ fun ManagementModeScreen(viewModel: ManagementViewModel, onBack: () -> Unit) {
         handleSelection { onBack() }
     }
 
-    val canManageInventory = uiState.selectedSpecies != null
+    val canManageInventory = uiState.selectedFarm != null && uiState.selectedSpecies != null
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -86,13 +113,13 @@ fun ManagementModeScreen(viewModel: ManagementViewModel, onBack: () -> Unit) {
                 title = {
                     Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
                         Text(
-                            text = "재고 관리",
+                            text = "농장 관리",
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.ExtraBold,
                             color = MaterialTheme.colorScheme.onPrimary
                         )
                         Text(
-                            text = "농원 · 묘목 · 가격",
+                            text = "농원 · 묘목 · 재고 · 가격",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.76f)
                         )
@@ -104,10 +131,8 @@ fun ManagementModeScreen(viewModel: ManagementViewModel, onBack: () -> Unit) {
                 ),
                 actions = {
                     FilledTonalIconButton(
-                        onClick = {
-                            viewModel.syncFarmMasterFromGoogleSheet()
-                            viewModel.syncSpeciesMasterFromGoogleSheet()
-                        },
+                        onClick = { refreshDirectory() },
+                        enabled = !syncingMaster,
                         colors = IconButtonDefaults.filledTonalIconButtonColors(
                             containerColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.14f),
                             contentColor = MaterialTheme.colorScheme.onPrimary
@@ -135,7 +160,7 @@ fun ManagementModeScreen(viewModel: ManagementViewModel, onBack: () -> Unit) {
                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                     ) {
                         Text(
-                            "판매",
+                            "견적",
                             style = MaterialTheme.typography.labelLarge,
                             fontWeight = FontWeight.Bold
                         )
@@ -152,6 +177,11 @@ fun ManagementModeScreen(viewModel: ManagementViewModel, onBack: () -> Unit) {
                 .padding(horizontal = 20.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            if (syncingMaster) LinearProgressIndicator(Modifier.fillMaxWidth())
+            if (masterNotice.isNotBlank()) Text(masterNotice,
+                style = MaterialTheme.typography.bodySmall,
+                color = if (masterNotice.startsWith("가져오기 실패"))
+                    MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
             Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.primaryContainer) {
                 Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("등록할 재고를 선택하세요", style = MaterialTheme.typography.titleMedium)
@@ -199,7 +229,7 @@ fun ManagementModeScreen(viewModel: ManagementViewModel, onBack: () -> Unit) {
                 title = "묘목",
                 color = MaterialTheme.colorScheme.primary,
                 headerAction = {
-                    TextButton(onClick = { showSpeciesManageDialog = true }) {
+                    TextButton(onClick = onManageSpecies) {
                         Text(
                             text = "묘목 관리",
                             fontWeight = FontWeight.Bold
@@ -207,25 +237,13 @@ fun ManagementModeScreen(viewModel: ManagementViewModel, onBack: () -> Unit) {
                     }
                 }
             ) {
-                ChosungPicker(uiState.selectedChosung, { initial ->
-                    handleSelection { viewModel.selectChosung(initial) }
-                })
-
-                if (uiState.speciesList.isEmpty()) {
-                    ManagementEmptyHint("선택한 초성의 묘목이 없습니다.")
-                } else {
-                    GridSelectionMenu(
-                        items = uiState.speciesList,
-                        columns = 3,
-                        itemContent = { it.speciesName },
-                        isSelected = {
-                            it.speciesId == uiState.selectedSpecies?.speciesId
-                        },
-                        onSelect = { species ->
-                            handleSelection { viewModel.selectSpecies(species) }
-                        }
-                    )
+                OutlinedButton(onClick = { showSpeciesPicker = true },
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) {
+                    Text("초성검색 · 묘목 선택", fontWeight = FontWeight.Bold)
                 }
+                Text(uiState.selectedSpecies?.speciesName ?: "농원에 등록할 묘목을 선택하세요.",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface)
             }
 
             if (canManageInventory) {
@@ -311,39 +329,19 @@ fun ManagementModeScreen(viewModel: ManagementViewModel, onBack: () -> Unit) {
     }
 
     if (showFarmManageDialog) {
-        FarmManageDialog(
-            selectedFarm = uiState.selectedFarm,
-            onDismiss = { showFarmManageDialog = false },
-            onSave = { farmId, name, address, phone, memo ->
-                viewModel.saveFarm(
-                    farmId = farmId,
-                    farmName = name,
-                    address = address,
-                    phone = phone,
-                    memo = memo
-                )
-                showFarmManageDialog = false
-            },
-            onDelete = { farmId ->
-                viewModel.deleteFarm(farmId)
-                showFarmManageDialog = false
-            }
-        )
+        FarmDirectoryDialog(connection) {
+            showFarmManageDialog = false
+            viewModel.refreshMasterFromLocal()
+        }
     }
-
-    if (showSpeciesManageDialog) {
-        SpeciesManageDialog(
-            selectedSpecies = uiState.selectedSpecies,
-            onDismiss = { showSpeciesManageDialog = false },
-            onSave = { id, name ->
-                val chosung = getChosungFromText(name)
-                viewModel.saveSpecies(id, name, "", chosung, "", "", 1)
-                showSpeciesManageDialog = false
+    if (showSpeciesPicker) {
+        SpeciesChosungDialog(
+            species = uiState.allSpeciesList,
+            onChoose = { plant ->
+                handleSelection { viewModel.selectSpecies(plant) }
+                showSpeciesPicker = false
             },
-            onDelete = { id ->
-                viewModel.deleteSpecies(id)
-                showSpeciesManageDialog = false
-            }
+            onDismiss = { showSpeciesPicker = false }
         )
     }
 }
@@ -1253,7 +1251,9 @@ fun SpeciesManageDialog(
     selectedSpecies: com.example.namufarm.data.SpeciesEntity?,
     onDismiss: () -> Unit,
     onSave: (Int?, String) -> Unit,
-    onDelete: (Int) -> Unit
+    onDelete: (Int) -> Unit,
+    busy: Boolean = false,
+    message: String? = null
 ) {
     var editingSpeciesId by remember(selectedSpecies) {
         mutableStateOf(selectedSpecies?.speciesId)
@@ -1289,7 +1289,7 @@ fun SpeciesManageDialog(
         )
     }
 
-    Dialog(onDismissRequest = onDismiss) {
+    Dialog(onDismissRequest = { if (!busy) onDismiss() }) {
         Surface(
             shape = RoundedCornerShape(20.dp),
             color = MaterialTheme.colorScheme.surface,
@@ -1301,6 +1301,8 @@ fun SpeciesManageDialog(
                 modifier = Modifier.verticalScroll(rememberScrollState()).padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
+                if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
+                message?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically

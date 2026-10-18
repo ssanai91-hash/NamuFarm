@@ -10,6 +10,8 @@ import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -133,10 +135,41 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                     composable("selling") {
-                        QuoteOnlyScreen(viewModel, quoteConnection, webState,
-                            onSync = webInbox::refresh,
-                            onSettings = { connectionOnly = true; showWebInbox = true },
-                            onRead = webInbox::read, onDelete = webInbox::close)
+                        val modeNames = listOf("견적모드", "농장관리", "묘목관리")
+                        val pagerState = rememberPagerState(initialPage = 0) { modeNames.size }
+                        val modeScope = rememberCoroutineScope()
+                        val navigateTo: (Int) -> Unit = { page ->
+                            modeScope.launch { pagerState.animateScrollToPage(page) }
+                        }
+                        Column(Modifier.fillMaxSize()) {
+                            Surface(color = MaterialTheme.colorScheme.surface) {
+                                Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    modeNames.forEachIndexed { index, title ->
+                                        androidx.compose.material3.FilterChip(
+                                            selected = pagerState.currentPage == index,
+                                            onClick = { navigateTo(index) },
+                                            modifier = Modifier.weight(1f),
+                                            label = { Text(title, fontSize = 14.sp, fontWeight = FontWeight.Bold) }
+                                        )
+                                    }
+                                }
+                            }
+                            HorizontalPager(state = pagerState, modifier = Modifier.weight(1f),
+                                beyondViewportPageCount = 2) { page ->
+                                when (page) {
+                                    0 -> QuoteOnlyScreen(viewModel, quoteConnection, webState,
+                                        onSync = webInbox::refresh,
+                                        onSettings = { connectionOnly = true; showWebInbox = true },
+                                        onRead = webInbox::read, onDelete = webInbox::close)
+                                    1 -> com.example.namufarm.ui.ManagementModeScreen(viewModel,
+                                        quoteConnection, onBack = { navigateTo(0) },
+                                        onManageSpecies = { navigateTo(2) })
+                                    else -> com.example.namufarm.ui.SpeciesManagementScreen(viewModel,
+                                        quoteConnection, onBack = { navigateTo(1) })
+                                }
+                            }
+                        }
                     }
 
                 }
