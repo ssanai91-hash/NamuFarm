@@ -2430,6 +2430,7 @@ body { background:#fafbf7; }
 }
 
 /* Compact selection cards: one tap target, no separate action row. */
+.catalog-main > .catalog-grid { row-gap: .5rem; }
 .catalog-grid .catalog-card {
   position: relative;
   flex-direction: row;
@@ -2485,8 +2486,8 @@ body { background:#fafbf7; }
 .catalog-card-choice>svg { width: .9rem; height: .9rem; stroke-width: 3; }
 @media(max-width:48rem) {
   .catalog-grid { grid-template-columns: repeat(2,minmax(0,1fr)); gap: .55rem; }
-  .catalog-grid .catalog-card { padding: .4rem 2.1rem .4rem .65rem; }
+  .catalog-grid .catalog-card { min-height: 3.125rem; padding: .3rem 2.1rem .3rem .65rem; }
+  .catalog-main > .catalog-grid { row-gap: .275rem; }
   .catalog-grid .catalog-variant { font-size: 1rem; padding: .1rem .25rem; }
   .catalog-grid.species-picker-choices { row-gap: .35rem; }
-  .catalog-grid.species-picker-choices .catalog-card { min-height: 3.125rem; padding-block: .3rem; }
 }
