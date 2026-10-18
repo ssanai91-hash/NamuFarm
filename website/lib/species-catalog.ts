@@ -1,4 +1,4 @@
-import speciesData from "./species-data.json";
+import speciesData from "./species-data.json" with { type: "json" };
 
 export const catalogInitials = ["ㄱ", "ㄴ", "ㄷ", "ㄹ", "ㅁ", "ㅂ", "ㅅ", "ㅇ", "ㅈ", "ㅊ", "ㅋ", "ㅌ", "ㅍ", "ㅎ"] as const;
 export type CatalogInitial = typeof catalogInitials[number];
@@ -11,7 +11,18 @@ export type Artwork = keyof typeof artworkSlots;
 export type CatalogSpecies = {
   id: string; name: string; initial: CatalogInitial; farmName: string; artwork: Artwork;
 };
-export const speciesCatalog = speciesData as CatalogSpecies[];
+// Show one choice per seedling name; retain the source names for searches.
+const catalogGroups = new Map<string, { species: CatalogSpecies; searchNames: string[] }>();
+for (const source of speciesData as CatalogSpecies[]) {
+  const name = source.name === "접목무궁화" ? "무궁화" : source.name.replace(/\([^)]*\).*$/, "").trim();
+  let group = catalogGroups.get(name);
+  if (!group) {
+    group = { species: { ...source, name }, searchNames: [] };
+    catalogGroups.set(name, group);
+  }
+  group.searchNames.push(source.name, source.farmName);
+}
+export const speciesCatalog = Array.from(catalogGroups.values(), group => group.species);
 const hangulInitials = "ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ";
 const simpleInitials: Record<string, string> = { "ㄲ": "ㄱ", "ㄸ": "ㄷ", "ㅃ": "ㅂ", "ㅆ": "ㅅ", "ㅉ": "ㅈ" };
 const normalize = (value: string) => value.normalize("NFC").toLocaleLowerCase("ko").replace(/[\s()·]/g, "");
@@ -29,6 +40,6 @@ export function filterSpecies(initial: CatalogInitial | "all", query: string): C
   return speciesCatalog.filter(species => {
     if (initial !== "all" && species.initial !== initial) return false;
     if (!needle) return true;
-    return [species.name, species.farmName].some(name => normalize(name).includes(needle) || normalize(nameInitials(name)).includes(needle));
+    return [species.name, ...(catalogGroups.get(species.name)?.searchNames ?? [])].some(name => normalize(name).includes(needle) || normalize(nameInitials(name)).includes(needle));
   });
 }
