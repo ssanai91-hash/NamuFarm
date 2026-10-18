@@ -1,9 +1,11 @@
 package com.example.namufarm.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -16,7 +18,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.namufarm.data.WebQuoteRequestEntity
 import com.example.namufarm.data.QuoteEntity
 import com.example.namufarm.quotation.*
@@ -119,50 +123,43 @@ internal fun QuoteOnlyScreen(viewModel: ManagementViewModel, connection: WebRequ
             }
             message?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
             if (busy || inbox.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
-            if (selectedTab == 0) {
-                if (requests.isEmpty()) Text("새 견적요청이 없습니다. 가져오기로 서버 요청을 확인하세요.")
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    items(requests, key = { it.requestId }) { request ->
-                        OutlinedCard(Modifier.fillMaxWidth().clickable(enabled = !busy && !inbox.busy && !deleting) {
-                            viewModel.useWebRequestForQuote(request); message = null
-                        }) {
-                            Row(Modifier.fillMaxWidth().heightIn(min = 56.dp)
-                                .padding(horizontal = 12.dp, vertical = 12.dp),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalAlignment = Alignment.CenterVertically) {
-                                Text(request.receiptNumber.ifBlank { request.requestId },
-                                    modifier = Modifier.weight(1f), fontWeight = FontWeight.Bold,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                Text(request.customerName, modifier = Modifier.widthIn(max = 72.dp),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                Text(request.customerPhone, style = MaterialTheme.typography.bodyMedium,
-                                    maxLines = 1, softWrap = false)
-                                if (records.any { it.request.requestId == request.requestId && it.confirmationPending })
-                                    Icon(Icons.Outlined.Info, "견적완료 확인 필요 · 같은 내용으로 다시 확인하세요.",
-                                        modifier = Modifier.size(18.dp))
-                            }
-                        }
+            Surface(Modifier.fillMaxWidth().weight(1f),
+                shape = RoundedCornerShape(4.dp),
+                border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant)) {
+                Column {
+                    Surface(color = MaterialTheme.colorScheme.secondaryContainer) {
+                        QuoteTableColumns("순번", "견적번호", "이름", "전화번호", header = true)
                     }
-                }
-            } else {
-                if (confirmed.isEmpty() && legacy.isEmpty()) Text("이 휴대폰에서 확정한 견적이 없습니다.")
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    items(confirmed, key = { it.request.requestId }) { saved ->
-                        OutlinedCard(Modifier.fillMaxWidth().clickable { result = saved }) {
-                            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Text(saved.request.receiptNumber.ifBlank { saved.request.requestId }, fontWeight = FontWeight.Bold)
-                                Text("${saved.draft.recipient.customerName} · ${saved.draft.phone}")
-                                Text("견적확정 · ${workflowDate(saved.confirmedAt)}")
+                    HorizontalDivider(thickness = 0.5.dp)
+                    LazyColumn(Modifier.fillMaxWidth().weight(1f)) {
+                        if (selectedTab == 0) {
+                            if (requests.isEmpty()) item {
+                                Text("새 견적요청이 없습니다. 가져오기로 서버 요청을 확인하세요.",
+                                    Modifier.padding(12.dp))
                             }
-                        }
-                    }
-                    items(legacy, key = { "legacy-${it.quoteNumber}" }) { saved ->
-                        OutlinedCard(Modifier.fillMaxWidth().clickable { legacyResult = saved }) {
-                            Column(Modifier.padding(16.dp)) {
-                                Text(saved.quoteNumber, fontWeight = FontWeight.Bold)
-                                Text("${saved.customerPhone} · 이전 저장 견적")
+                            itemsIndexed(requests, key = { _, request -> request.requestId }) { index, request ->
+                                QuoteTableRow(index + 1, request.receiptNumber.ifBlank { request.requestId },
+                                    request.customerName, request.customerPhone,
+                                    pending = records.any { it.request.requestId == request.requestId && it.confirmationPending },
+                                    enabled = !busy && !inbox.busy && !deleting) {
+                                    viewModel.useWebRequestForQuote(request); message = null
+                                }
+                            }
+                        } else {
+                            if (confirmed.isEmpty() && legacy.isEmpty()) item {
+                                Text("이 휴대폰에서 확정한 견적이 없습니다.", Modifier.padding(12.dp))
+                            }
+                            itemsIndexed(confirmed, key = { _, saved -> saved.request.requestId }) { index, saved ->
+                                QuoteTableRow(index + 1, saved.request.receiptNumber.ifBlank { saved.request.requestId },
+                                    saved.draft.recipient.customerName, saved.draft.phone,
+                                    detail = "견적확정 · ${workflowDate(saved.confirmedAt)}") { result = saved }
+                            }
+                            itemsIndexed(legacy, key = { _, saved -> "legacy-${saved.quoteNumber}" }) { index, saved ->
+                                val sourceId = management.quotesByRequest.entries
+                                    .firstOrNull { it.value.quoteNumber == saved.quoteNumber }?.key
+                                val customer = inbox.requests.firstOrNull { it.requestId == sourceId }?.customerName.orEmpty()
+                                QuoteTableRow(confirmed.size + index + 1, saved.quoteNumber, customer, saved.customerPhone,
+                                    detail = "이전 저장 견적 · ${saved.saveDate}") { legacyResult = saved }
                             }
                         }
                     }
@@ -234,6 +231,49 @@ internal fun QuoteOnlyScreen(viewModel: ManagementViewModel, connection: WebRequ
                 Text("저장 시각 ${saved.saveDate}")
                 Text("기존 앱에 저장된 기록입니다. 서버 견적확정 확인 정보는 포함되어 있지 않습니다.")
             }
+        }
+    }
+}
+
+@Composable
+private fun QuoteTableColumns(serial: String, number: String, name: String, phone: String,
+    header: Boolean = false, pending: Boolean = false) {
+    val values = listOf(serial, number, name, phone)
+    val widths = listOf(0.10f, 0.43f, 0.16f, 0.31f)
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val textSize = if (maxWidth < 340.dp) 12.sp else 13.sp
+        Row(Modifier.fillMaxWidth().height(if (header) 36.dp else 48.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            values.forEachIndexed { index, value ->
+                if (index > 0) VerticalDivider(Modifier.fillMaxHeight(), thickness = 0.5.dp)
+                Row(Modifier.weight(widths[index]).padding(horizontal = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Text(value.ifBlank { "—" }, Modifier.weight(1f),
+                        fontSize = textSize, letterSpacing = 0.sp,
+                        fontWeight = if (header || index == 1) FontWeight.SemiBold else FontWeight.Normal,
+                        textAlign = if (index == 0 || header) TextAlign.Center else TextAlign.Start,
+                        maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+                    if (index == 1 && pending) Icon(Icons.Outlined.Info,
+                        "견적완료 확인 필요 · 같은 내용으로 다시 확인하세요.", Modifier.size(14.dp))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun QuoteTableRow(serial: Int, number: String, name: String, phone: String,
+    detail: String? = null, pending: Boolean = false, enabled: Boolean = true, onClick: () -> Unit) {
+    Surface(color = if (serial % 2 == 0) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f)
+        else MaterialTheme.colorScheme.surface) {
+        Column(Modifier.fillMaxWidth().clickable(enabled = enabled, onClick = onClick)) {
+            QuoteTableColumns(serial.toString(), number, name, phone, pending = pending)
+            detail?.let {
+                Text(it, Modifier.fillMaxWidth().padding(start = 10.dp, end = 6.dp, bottom = 8.dp),
+                    fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            HorizontalDivider(thickness = 0.5.dp)
         }
     }
 }

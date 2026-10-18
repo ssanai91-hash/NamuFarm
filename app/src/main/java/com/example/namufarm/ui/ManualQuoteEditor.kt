@@ -219,22 +219,20 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
                 }
             }
             Button(onClick = { submit(QuoteDelivery.SMS) }, enabled = !saving,
-                modifier = Modifier.width(64.dp).height(if (verifyDelivery) 64.dp else 52.dp),
+                modifier = Modifier.width(64.dp).height(52.dp),
                 contentPadding = PaddingValues(0.dp),
                 shape = RoundedCornerShape(13.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = editorGreen)) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    if (verifyDelivery) Text((verifiedDelivery ?: QuoteDeliveryRecord()).smsLabel(draft).replace("결과확인 중", "확인중").replace("재전송 필요", "재전송"), fontSize = 12.sp)
                     Text("문자", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
             Button(onClick = { submit(QuoteDelivery.EMAIL) }, enabled = !saving,
-                modifier = Modifier.width(64.dp).height(if (verifyDelivery) 64.dp else 52.dp),
+                modifier = Modifier.width(64.dp).height(52.dp),
                 contentPadding = PaddingValues(0.dp),
                 shape = RoundedCornerShape(13.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3563A8))) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    if (verifyDelivery) Text((verifiedDelivery ?: QuoteDeliveryRecord()).emailLabel(draft).replace("재전송 필요", "재전송"), fontSize = 12.sp)
                     Text("메일", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
@@ -245,7 +243,7 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
                     else deliveryRequired = true
                 }
             }, enabled = !saving,
-                modifier = Modifier.weight(1f).height(if (verifyDelivery) 64.dp else 52.dp),
+                modifier = Modifier.weight(1f).height(52.dp),
                 contentPadding = PaddingValues(horizontal = 2.dp),
                 shape = RoundedCornerShape(13.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC8641F))) {
