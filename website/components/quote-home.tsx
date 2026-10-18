@@ -38,6 +38,10 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
   const [reviewOpen, setReviewOpen] = useState(false);
   const [confirmedNotReceived, setConfirmedNotReceived] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
+  const [resetTarget, setResetTarget] = useState<"form" | "home">("form");
+  const [catalogRevision, setCatalogRevision] = useState(0);
+  const returnHomeAfterReset = useRef(false);
+  const homeLinkRef = useRef<HTMLAnchorElement>(null);
   const inFlight = useRef(false);
   const [busy, setBusy] = useState(false); const [success, setSuccess] = useState<QuoteReceipt | null>(null);
   const [menuOpen, setMenuOpen] = useState(false); const [atForm, setAtForm] = useState(false);
@@ -188,6 +192,9 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
     setLines([emptyLine(nextLine.current++)]); setPickerLineId(null);
     setNotice(""); setRemoved(null); setProblems([]);
   }
+  function requestQuoteReset(target: "form" | "home") {
+    setResetTarget(target); setConfirmedNotReceived(false); setResetOpen(true);
+  }
   function resetQuoteForm() {
     if (busy || inFlight.current || (uncertain && !confirmedNotReceived)) return;
     try {
@@ -200,10 +207,13 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
       }
     }
     attempt.current = null;
+    returnHomeAfterReset.current = resetTarget === "home";
     setReview(null); setReviewOpen(false); setUncertain(false); setConflict(false);
     setConfirmedNotReceived(false); setResetOpen(false);
     setError(""); setSuccess(null); setSuccessContact(null); setCopyNotice("");
     clearQuoteInputs();
+    setCatalogRevision(value => value + 1);
+    setMenuOpen(false); setSampleOpen(false);
   }
   function prepare(event: FormEvent) {
     event.preventDefault(); if (locked) return; setError(""); setProblems([]); setConflict(false);
@@ -268,7 +278,7 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
   return <>
     <a className="skip-link" href="#quote">견적 요청으로 바로 가기</a>
     <header className="site-header"><div className="header-inner">
-      <a href="#home" className="brand" aria-label="나무팜 홈"><Sprout strokeWidth={2} /><span>나무팜<small>NAMUFARM</small></span></a>
+      <a href="#home" ref={homeLinkRef} className="brand" aria-label="나무팜 홈 · 견적 입력 초기화" aria-haspopup="dialog" onClick={event => { event.preventDefault(); requestQuoteReset("home"); }}><Sprout strokeWidth={2} /><span>나무팜<small>NAMUFARM</small></span></a>
       <nav className="desktop-nav" aria-label="주 메뉴"><a href="#trees">묘목 찾기</a><a href="#guide">이용 안내</a><a href="#questions">자주 묻는 질문</a></nav>
       <Button asChild variant="outline" className="header-call"><a href={`tel:${businessInfo.mobile.replaceAll("-", "")}`} aria-label={`전화 상담 ${businessInfo.mobile}`}><Phone aria-hidden="true" />전화 상담</a></Button>
       <Button asChild className="header-quote"><a href="#quote">견적 상담 요청</a></Button>
@@ -286,7 +296,7 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
         </div>
       </section>
       <div className="journey-strip wrap" aria-label="견적 상담 순서"><span><b>1</b>묘목 고르기</span><span><b>2</b>수량·연락처 입력</span><span><b>3</b>상담 후 결정</span></div>
-      <SpeciesBrowser lines={lines} onSelect={selectSpecies} onRemove={removeLine} notice={notice} locked={locked} />
+      <SpeciesBrowser key={catalogRevision} lines={lines} onSelect={selectSpecies} onRemove={removeLine} notice={notice} locked={locked} />
       <section id="quote" className="quote-section" aria-labelledby="quote-title quote-mobile-title"><div className="quote-layout wrap">
         <div className="quote-mobile-intro">
           <h2 id="quote-mobile-title">묘목 견적 상담</h2>
@@ -358,7 +368,7 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
             <div className="quote-submit-actions">
               <Button className="submit-button" type="submit" disabled={busy} onClick={uncertain ? event => { event.preventDefault(); setReviewOpen(true); } : undefined}>{uncertain ? "접수 확인 이어가기" : "내용 확인하기"}</Button>
               <Button className="quote-reset-button" type="button" variant="outline" disabled={busy}
-                onClick={() => { setConfirmedNotReceived(false); setResetOpen(true); }}>
+                onClick={() => requestQuoteReset("form")}>
                 <RotateCcw aria-hidden="true" />초기화
               </Button>
             </div>
@@ -369,17 +379,24 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
       <section id="guide" className="guide-section wrap" aria-labelledby="guide-title"><div className="section-heading"><div><span className="overline">이용 안내</span><h2 id="guide-title">나무를 만나는 세 단계</h2></div><p>회원가입 없이 편하게 문의하세요.</p></div><div className="steps">{[{ icon: Sprout, title: "묘목과 수량 선택", text: "여러 묘목을 함께 담고, 필요한 수량을 주 단위로 적어주세요." }, { icon: FileText, title: "견적 상담 요청", text: "연락처와 배송 지역을 남기면 접수 완료 화면에서 번호를 안내해요." }, { icon: MessageCircle, title: "상담 후 주문 결정", text: "여러 농원의 재고와 규격, 배송비를 안내받고 상담한 뒤 결정하세요." }].map((step, i) => <article className="step" key={step.title}><div className="step-top"><step.icon /><span>0{i + 1}</span></div><h3>{step.title}</h3><p>{step.text}</p></article>)}</div></section>
       <section id="questions" className="faq-section wrap"><div><span className="overline">자주 묻는 질문</span><h2>문의 전에<br />궁금하셨나요?</h2></div><Accordion type="single" collapsible className="faq-list"><AccordionItem value="size"><AccordionTrigger>묘목 규격을 몰라도 요청할 수 있나요?</AccordionTrigger><AccordionContent>네. 묘목 이름과 필요한 수량만 적어주세요. 희망 규격은 비워두셔도 됩니다. 심을 장소와 용도를 요청사항에 남겨주시면 상담에 도움이 됩니다.</AccordionContent></AccordionItem><AccordionItem value="order"><AccordionTrigger>견적을 요청하면 바로 주문되나요?</AccordionTrigger><AccordionContent>견적 요청은 상담을 위한 문의입니다. 재고, 규격, 금액과 배송 방법을 확인하고 주문을 결정하시면 됩니다.</AccordionContent></AccordionItem><AccordionItem value="delivery"><AccordionTrigger>배송비와 배송 날짜는 어떻게 정하나요?</AccordionTrigger><AccordionContent>묘목 크기, 수량과 배송 지역에 따라 달라집니다. 접수한 요청을 확인한 후 가능한 배송 방법과 비용, 일정을 안내드립니다.</AccordionContent></AccordionItem><AccordionItem value="more"><AccordionTrigger>목록에 없는 묘목도 문의할 수 있나요?</AccordionTrigger><AccordionContent>네. 견적 요청란에 원하는 묘목 이름을 직접 적어주세요. 공급 가능 여부는 상담을 통해 확인합니다.</AccordionContent></AccordionItem></Accordion></section>
     </main>
-    <footer className="site-footer"><div className="wrap footer-inner"><div><div className="footer-brand-row"><a href="#home" className="brand"><Sprout /><span>나무팜<small>NAMUFARM</small></span></a><div className="footer-business"><span>{businessInfo.name} · 대표 {businessInfo.representative}</span><span>사업자등록번호 {businessInfo.number}</span></div></div><p>당신의 내일에, 푸르름을 더합니다.</p></div><div><a href="#quote">묘목 견적 상담</a><div className="footer-phone-row"><a href={`tel:${businessInfo.mobile.replaceAll("-", "")}`}>전화 상담 {businessInfo.mobile}</a><span aria-hidden="true">/</span><a href={`tel:${businessInfo.phone.replaceAll("-", "")}`}>대표전화 {businessInfo.phone}</a></div><a href="/privacy">개인정보 처리방침</a><small>© {new Date().getFullYear()} NAMUFARM</small></div></div></footer>
+    <footer className="site-footer"><div className="wrap footer-inner"><div><div className="footer-brand-row"><a href="#home" className="brand" aria-label="나무팜 홈 · 견적 입력 초기화" aria-haspopup="dialog" onClick={event => { event.preventDefault(); requestQuoteReset("home"); }}><Sprout /><span>나무팜<small>NAMUFARM</small></span></a><div className="footer-business"><span>{businessInfo.name} · 대표 {businessInfo.representative}</span><span>사업자등록번호 {businessInfo.number}</span></div></div><p>당신의 내일에, 푸르름을 더합니다.</p></div><div><a href="#quote">묘목 견적 상담</a><div className="footer-phone-row"><a href={`tel:${businessInfo.mobile.replaceAll("-", "")}`}>전화 상담 {businessInfo.mobile}</a><span aria-hidden="true">/</span><a href={`tel:${businessInfo.phone.replaceAll("-", "")}`}>대표전화 {businessInfo.phone}</a></div><a href="/privacy">개인정보 처리방침</a><small>© {new Date().getFullYear()} NAMUFARM</small></div></div></footer>
     <div className={`mobile-cta ${atForm || reviewOpen || success || menuOpen || pickerLineId !== null || sampleOpen || testNoticeOpen ? "is-hidden" : ""}`} role="region" aria-label="빠른 상담"><span><strong>{count ? `담은 묘목 ${count}종` : "필요한 묘목을 알려주세요"}</strong><small>{count ? "계속 고르셔도 됩니다" : "결제 없이 견적 상담"}</small></span><div className="mobile-cta-actions"><Button asChild variant="outline" className="mobile-call"><a href={`tel:${businessInfo.mobile.replaceAll("-", "")}`} aria-label={`전화 상담 ${businessInfo.mobile}`}><Phone aria-hidden="true" />전화 상담</a></Button><Button asChild><a href="#quote">{count ? `수량 입력 (${count}종)` : "견적 바로 작성"}</a></Button></div></div>
     <SpeciesPickerDialog open={pickerLineId !== null && !locked} onOpenChange={open => { if (!open) setPickerLineId(null); }} onChoose={choosePickedSpecies} selectedName={lines.find(line => line.id === pickerLineId)?.species ?? ""} />
     <Dialog open={resetOpen} onOpenChange={open => { setResetOpen(open); if (!open) setConfirmedNotReceived(false); }}>
-      <DialogContent className="quote-reset-dialog" showCloseButton={false}>
+      <DialogContent className="quote-reset-dialog" showCloseButton={false} onCloseAutoFocus={event => {
+        if (!returnHomeAfterReset.current) return;
+        event.preventDefault(); returnHomeAfterReset.current = false;
+        window.history.replaceState(window.history.state, "", "#home");
+        homeLinkRef.current?.focus({ preventScroll: true });
+        window.scrollTo(0, 0);
+      }}>
         <DialogHeader>
-          <DialogTitle>견적 입력을 초기화할까요?</DialogTitle>
+          <DialogTitle>{resetTarget === "home" ? "초기화하고 처음 화면으로 돌아갈까요?" : "견적 입력을 초기화할까요?"}</DialogTitle>
           <DialogDescription>{uncertain
             ? "접수 결과가 확인되지 않았습니다. 이미 접수된 요청이 있을 수 있으므로 초기화 후 다시 전송하면 중복될 수 있어요."
-            : "작성 중인 묘목·수량·연락처가 모두 지워집니다."}</DialogDescription>
+            : resetTarget === "home" ? "담은 묘목과 작성 중인 견적 정보를 모두 지우고 처음 화면으로 돌아갑니다." : "작성 중인 묘목·수량·연락처가 모두 지워집니다."}</DialogDescription>
         </DialogHeader>
+        {busy && <p className="service-notice" role="status">접수 결과를 확인하고 있어요. 확인이 끝나면 초기화할 수 있습니다.</p>}
         {uncertain && <>
           <p className="service-notice">판매자에게 기존 요청이 접수되지 않았는지 먼저 확인해주세요. 초기화해도 서버에 저장된 내용은 삭제되지 않습니다.</p>
           <a className="support-call" href={`tel:${businessInfo.mobile.replaceAll("-", "")}`}><Phone aria-hidden="true" />전화로 접수 확인 · {businessInfo.mobile}</a>
