@@ -1926,52 +1926,17 @@ section {
   font-size: 1.05rem;
 }
 .species-picker-results-heading span { color: #607265; font-size: .95rem; }
-.species-picker-choices {
+.catalog-grid.species-picker-choices {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   align-content: start;
-  gap: .5rem;
+  gap: .55rem;
   min-height: 5rem;
   max-height: min(45dvh, 24rem);
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: .2rem;
+  padding: .4rem;
 }
-.species-picker-choices .species-picker-choice {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: .4rem;
-  min-width: 0;
-  min-height: 3.5rem;
-  height: auto;
-  white-space: normal;
-  text-align: center;
-  padding: .6rem .25rem;
-  font-size: 1rem;
-  font-weight: 650;
-  line-height: 1.35;
-  border: 1px solid #dae5d9;
-  border-radius: .7rem;
-  color: #263f2e;
-  background: #f6f9f4;
-}
-.species-picker-art {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  width: 100%;
-  height: 6rem;
-  padding: .35rem;
-  background: #fff;
-  border-radius: .5rem;
-  overflow: hidden;
-}
-.species-picker-art img { display: block; width: 100%; height: 100%; object-fit: contain; }
-.species-picker-art-empty { display: flex; flex-direction: column; align-items: center; gap: .15rem; font-size: .75rem; color: #586d55; }
-.species-picker-art-empty svg { width: 1.6rem; height: 1.6rem; }
-.species-picker-choice-name { flex: 1; display: flex; align-items: center; justify-content: center; }
-.species-picker-choices .species-picker-choice:hover { background: #e7f0e6; border-color: #7d9c81; }
 .species-picker-empty { grid-column: 1 / -1; text-align: center; color: #536957; padding: 1.5rem .5rem; }
 .species-picker-search { position: relative; flex-shrink: 0; }
 .species-picker-search > svg {
@@ -1999,9 +1964,7 @@ section {
     gap: .7rem;
   }
   .species-picker-initials { grid-template-columns: repeat(5, minmax(0, 1fr)); }
-  .species-picker-choices { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .4rem; max-height: 35dvh; }
-  .species-picker-choices .species-picker-choice { padding: .5rem .2rem; font-size: .95rem; }
-  .species-picker-art { height: 4.75rem; }
+  .catalog-grid.species-picker-choices { max-height: 35dvh; }
 }
 @media(max-width:22rem) {
   .species-select-row .species-select-button { min-width: 6.3rem; padding: .45rem; font-size: .9rem; }

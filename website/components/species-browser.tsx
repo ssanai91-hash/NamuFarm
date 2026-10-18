@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
-import { Check, Leaf, Search, X, ShoppingBasket } from "lucide-react";
+import { Leaf, Search, X, ShoppingBasket } from "lucide-react";
+import SpeciesChoiceCard from "@/components/species-choice-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { catalogInitials, filterSpecies, type CatalogInitial } from "@/lib/species-catalog";
@@ -25,14 +26,7 @@ export default function SpeciesBrowser({ lines, onSelect, onRemove, notice, lock
       </div>
       <p className="catalog-results-heading">눌러서 선택 · 다시 눌러 해제</p>
       <p className={notice.startsWith("한 번에 20종") || notice.startsWith("20종까지") ? "catalog-live" : "sr-only"} role="status" aria-live="polite" aria-atomic="true">{notice}</p>
-      <div className="catalog-grid">{matches.slice(0, visibleCount).map(species => {
-        const isSelected = selected.has(species.name);
-        const variant = species.name.match(/^(.+?)\(([^)]+)\)$/);
-        return <button type="button" key={species.id} data-species-id={species.id} className={`catalog-card${isSelected ? " selected" : ""}`} disabled={locked} onClick={() => onSelect(species.name)} aria-label={`${species.name} 선택`} aria-pressed={isSelected}>
-          <span className="catalog-card-name">{variant ? <>{variant[1]}<strong className="catalog-variant">{variant[2]}</strong></> : species.name}</span>
-          <span className="catalog-card-choice" aria-hidden="true">{isSelected && <Check />}</span>
-        </button>;
-      })}</div>
+      <div className="catalog-grid">{matches.slice(0, visibleCount).map(species => <SpeciesChoiceCard key={species.id} id={species.id} name={species.name} selected={selected.has(species.name)} disabled={locked} onSelect={() => onSelect(species.name)} />)}</div>
       {matches.length === 0 && <div className="catalog-empty"><Leaf aria-hidden="true" /><h3>검색 결과가 없어요.</h3><p>다른 이름으로 찾거나 묘목 이름을 직접 적어주세요.</p><Button asChild variant="outline"><a href="#quote">묘목 이름 직접 적기</a></Button></div>}
       {matches.length > visibleCount && <div className="catalog-more"><Button type="button" variant="outline" onClick={() => setVisibleCount(count => count + pageSize)}>묘목 더 보기 <span>{Math.min(visibleCount, matches.length)} / {matches.length}</span></Button></div>}
     </div><aside className="catalog-basket" aria-labelledby="basket-title"><div className="basket-title"><ShoppingBasket aria-hidden="true" /><h3 id="basket-title">담은 묘목 <span>{selectedItems.length}종</span></h3></div>
