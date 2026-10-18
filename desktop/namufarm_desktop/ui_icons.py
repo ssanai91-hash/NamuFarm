@@ -7,6 +7,9 @@ from PySide6.QtSvg import QSvgRenderer
 
 
 PATHS = {
+    "farm": '<path d="M3 11 12 3l9 8M5 10v11h14V10M9 21v-7h6v7"/>',
+    # The same sprout paths used by website/public/favicon.svg.
+    "namufarm_tree": '<path d="M7 20h10M10 20c5.5-2.5.8-6.4 3-10M9.5 9.4C8.4 8.6 7.9 7.5 7.5 6c-2.8 0-5 2-5 4.5 0 3 3.5 5 7.5 3M13 10c0-5 3-8 8-8 0 5-3 8-8 8Z"/>',
     "requests": '<path d="M6 3h9l4 4v14H5V3h1zm8 0v5h5M8 12h8M8 16h5"/>',
     "confirmed": '<path d="M6 3h9l4 4v14H5V3h1zm8 0v5h5m-11 7 3 3 5-6"/>',
     "orders": '<path d="M4 7h16v14H4zM8 7V5a4 4 0 0 1 8 0v2M8 12h8M8 16h5"/>',
@@ -49,7 +52,7 @@ def ui_icon(name, color="#24313A"):
                f'stroke-linecap="round" stroke-linejoin="round">{PATHS[name]}</svg>')
     renderer = QSvgRenderer(QByteArray(svg.encode()))
     icon = QIcon()
-    sizes = (18, 20, 24, 36, 40, 48, 96, 144, 192) if name == "park" else (18, 20, 24, 36, 40, 48)
+    sizes = (18, 20, 24, 36, 40, 48, 96, 144, 192) if name in ("park", "namufarm_tree") else (18, 20, 24, 36, 40, 48)
     for size in sizes:
         pixmap = QPixmap(size, size)
         pixmap.fill(Qt.GlobalColor.transparent)

@@ -27,6 +27,7 @@ from .commerce import (ISSUER, new_draft, draft_amounts, validate_draft, quote_h
 from .domain import SEOUL, profit, require
 from .errors import UserError
 from .shipping_excel import shipping_xls, parse_tracking_xls, export_orders, UPLOAD_SHEET
+from .nursery_ui import NurseryPage, DigitalClock
 
 STYLE = workspace_style()
 
@@ -509,7 +510,7 @@ class SidebarTree(QLabel):
         if extent < 24:
             self.clear()
         else:
-            self.setPixmap(ui_icon("park", "#9dc7ac").pixmap(extent, extent))
+            self.setPixmap(ui_icon("namufarm_tree", "#9dc7ac").pixmap(extent, extent))
 
 
 class CustomerInfoValue(QTextBrowser):
@@ -2621,9 +2622,10 @@ class ShippingExportDialog(QDialog):
 
 
 class SellerWindow(MainWindow):
-    PAGE_REQUESTS, PAGE_QUOTES, PAGE_SALES, PAGE_SHIPPING, PAGE_REPORTS, PAGE_SETTINGS = range(6)
+    PAGE_REQUESTS, PAGE_QUOTES, PAGE_SALES, PAGE_SHIPPING, PAGE_REPORTS, PAGE_FARMS, PAGE_SPECIES, PAGE_SETTINGS = range(8)
     PAGES = (("견적요청", "INBOX"), ("확정 견적", "QUOTATIONS"),
-             ("판매관리", "ORDERS"), ("배송 · 송장", "FULFILLMENT"), ("매출 · 이익", "REPORTS"), ("연결 · 설정", "SETTINGS"))
+             ("판매관리", "ORDERS"), ("배송 · 송장", "FULFILLMENT"), ("매출 · 이익", "REPORTS"),
+             ("농원관리", "FARMS"), ("묘목관리", "SPECIES"), ("연결 · 설정", "SETTINGS"))
 
     def __init__(self, vault_path=None):
         self.workspace_ready = False
@@ -2676,7 +2678,7 @@ class SellerWindow(MainWindow):
         for index, (title, _) in enumerate(self.PAGES):
             widget = NavigationButton(title)
             widget.clicked.connect(lambda checked=False, i=index: self.navigate(i))
-            icons = ("requests", "confirmed", "orders", "shipping", "reports", "settings")
+            icons = ("requests", "confirmed", "orders", "shipping", "reports", "farm", "leaf", "settings")
             set_button_icon(widget, icons[index], "#e0ebe3", 22)
             widget.setCheckable(True)
             self.nav.append(widget)
@@ -2714,9 +2716,10 @@ class SellerWindow(MainWindow):
         clock_heading.addStretch()
         clock_layout.addWidget(self.sidebar_clock_heading)
         self.sidebar_date = label("", "sidebarDate")
-        self.sidebar_time = label("", "sidebarTime")
+        self.sidebar_time = DigitalClock()
         for clock_label in (self.sidebar_date, self.sidebar_time):
-            clock_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            if isinstance(clock_label, QLabel):
+                clock_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
             clock_layout.addWidget(clock_label)
         side.addWidget(self.sidebar_clock)
         self.update_sidebar_clock()
@@ -2788,6 +2791,10 @@ class SellerWindow(MainWindow):
         self.stack.addWidget(self.build_customer_management())
         self.stack.addWidget(self.build_shipping())
         self.stack.addWidget(scroll_page(old_pages[2]))
+        self.farms_page = NurseryPage(self, 'farms')
+        self.species_page = NurseryPage(self, 'species')
+        self.stack.addWidget(self.farms_page)
+        self.stack.addWidget(self.species_page)
         self.stack.addWidget(old_pages[3])
         for index in range(self.stack.count()):
             self.stack.widget(index).setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Ignored)
@@ -2857,6 +2864,8 @@ class SellerWindow(MainWindow):
         self.sidebar.layout().setSpacing(6 if compact else 8)
         self.sidebar.layout().setContentsMargins(12, 12 if compact else 16, 12, 12 if compact else 14)
         self.brand_panel.layout().setContentsMargins(12, 10 if compact else 18, 12, 10 if compact else 18)
+        for widget in self.nav:
+            widget.setStyleSheet('padding:6px 12px;min-height:20px;' if compact else '')
 
     def apply_design_scale(self, large):
         app = QApplication.instance()
@@ -3117,6 +3126,8 @@ class SellerWindow(MainWindow):
         return page
 
     def navigate(self, index):
+        if index in (self.PAGE_FARMS, self.PAGE_SPECIES):
+            self.refresh_nursery()
         self.stack.setCurrentIndex(index)
         self.update_page_title(index)
         for i, widget in enumerate(self.nav):
@@ -3229,6 +3240,8 @@ class SellerWindow(MainWindow):
 
     def job_finished(self, task, value, error, conflict, on_success):
         super().job_finished(task, value, error, conflict, on_success)
+        if self.workspace_ready:
+            self.refresh_nursery()
         self.set_status_state("error" if error else "success", "처리 실패" if error else "처리 완료")
         title = getattr(task, "operation_title", "")
         if (not error and isinstance(value, dict) and "requests" in value
@@ -3250,6 +3263,8 @@ class SellerWindow(MainWindow):
         ready = self.manager is not None and self.task is None
         paired = ready and self.data["paired"] and not self.data["pending"]
         self.stack.setEnabled(self.task is None)
+        for page in (self.farms_page, self.species_page):
+            page.update_controls()
         self.request_quote_button.setEnabled(ready and self.request_table.currentRow() >= 0)
         selected_draft = self.draft_table.currentRow()
         self.draft_open.setEnabled(ready and 0 <= selected_draft < len(self.draft_rows))
@@ -3275,8 +3290,15 @@ class SellerWindow(MainWindow):
     def apply_view(self, value):
         super().apply_view(value)
         if self.workspace_ready:
+            self.refresh_nursery()
             self.refresh_workspace()
             self.refresh_request_notifications()
+
+    def refresh_nursery(self):
+        for page in (self.farms_page, self.species_page):
+            page.refresh_local()
+        self.set_page_count(self.PAGE_FARMS, len(self.farms_page.rows))
+        self.set_page_count(self.PAGE_SPECIES, len(self.species_page.rows))
 
     def refresh_workspace(self):
         # This category is backed only by the local confirmed-quotes workbook.
@@ -3727,11 +3749,16 @@ class SellerWindow(MainWindow):
     def manual_sync(self):
         if getattr(self, "demo_mode", False) or not self.manager or not self.allow_discard():
             return
+        if self.stack.currentIndex() in (self.PAGE_FARMS, self.PAGE_SPECIES):
+            self.stack.currentWidget().sync()
+            return
         include_sales = self.stack.currentIndex() in (self.PAGE_SALES, self.PAGE_SHIPPING, self.PAGE_REPORTS)
         self.run_job("SYNC  >  서버 동기화 중…",
                      lambda: self.manager.connect(include_sales=include_sales))
 
     def auto_sync(self):
+        if self.stack.currentIndex() in (self.PAGE_FARMS, self.PAGE_SPECIES):
+            return
         if self.manager and self.data["paired"] and self.auto_check.isChecked() and not self.task and not self.dirty and not self.conflict:
             pull = self.manager.sync if self.stack.currentIndex() in (self.PAGE_SALES, self.PAGE_SHIPPING, self.PAGE_REPORTS) else self.manager.sync_requests
             self.run_job("AUTO SYNC  >  서버 동기화 중…", pull)

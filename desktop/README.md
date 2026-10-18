@@ -1,10 +1,10 @@
-# 나무팜 PC 판매관리 0.4.8
+# 나무팜 PC 판매관리 0.5.0
 
 Windows에서 견적 접수·작성, 입금확인, 배송완료, 로젠 송장번호, 매출·이익을 관리합니다. Google Sheets API v5와 기기 인증을 사용합니다. 연결파일을 처음 한 번 선택하면 됩니다. 별도 키 입력·복호화 백업·새 비밀번호 설정이 필요 없습니다.
 
 ## 실행
 
-- 실행 파일: GitHub Actions **Desktop manager CI → NamuFarm-PC-Windows**의 `NamuFarm-PC.exe`. Python 설치 없이 실행합니다.
+- 실행 파일: GitHub Actions **Desktop EXE Build**를 수동 실행해 만든 `NamuFarm-PC.exe`. Python 설치 없이 실행합니다.
 - 소스로 실행: Python 3.11 이상을 설치하고 `start_windows.bat`. 최초 실행 시 PySide6·cryptography·XLS 입출력 패키지를 설치합니다.
 - 읽기 전용 화면 보기: `NamuFarm-PC.exe --demo` 또는 `preview_windows.bat`. 예시 데이터만 표시하고 운영 서버·보관함에 접근하지 않습니다.
 - 실행 파일 빌드: `build_windows.bat` → `dist/NamuFarm-PC.exe`.
@@ -44,9 +44,21 @@ https://script.google.com/macros/s/AKfycbw4GnfIlXyjMo9TPZmCmRnmIIzd016piTDma-xrh
 | 판매 · 고객 관리 | 입금확인 이후 주문을 고객·연락처·이메일·수령인·배송주소·품목·결제금액 목록으로 확인하고, 더블클릭 팝업에서 고객·배송·원가 수정 → 배송완료/구매취소 처리 |
 | 배송 · 로젠 송장 | 출고/송장 필터, 주소 누락 확인, 원본 24열 XLS 저장, 송장 XLS/CSV 검증·등록, 번호 개별 등록, 출고 확인서 출력 |
 | 매출 · 이익 분석 | 한국 시간 완료일 기준 일·월·년 매출·원가·비용·확인 이익 |
+| 농원관리 | 농원명·주소·전화번호·메모를 PC에 저장하고 수동 동기화 |
+| 묘목관리 | 초성·이름 검색, 묘목 사용 여부, 농원별 규격·수량·도매단가·판매단가 관리 |
 | 연결 · 설정 | 최초 1회 연결파일, 연결 상태, 수동/선택 자동 동기화, 조회용 XLSX |
 
 단축키: `Ctrl+K` 고객·주문 검색, `Ctrl+N` 새 견적, `F5` 동기화. 배송 목록에서 `Ctrl`/`Shift`로 여러 주문을 선택합니다.
+
+## 농원·묘목 관리
+
+`연결 · 설정` 위의 **농원관리 / 묘목관리**는 이 PC의 암호화 자료를 바로 표시합니다. 추가·수정·삭제는 자료와 전송 대기를 함께 저장하므로 인터넷 연결이 끊겨도 프로그램을 다시 열어 이어서 작업할 수 있습니다. 이 화면에서 **동기화** 또는 `F5`를 누르면 PC 변경을 먼저 전송하고 운영 시트의 최신 목록을 가져옵니다. 관리 화면에서는 자동 동기화를 실행하지 않습니다.
+
+묘목관리의 **농원별 재고** 탭에서 농원과 묘목을 직접 선택한 뒤 등급·연생·규격·재배형태별 재고를 추가합니다. 기존 재고는 수량·단가를 수정하며, 재고 삭제는 수량 0으로 저장합니다. 재고가 있는 농원을 삭제하거나 묘목 사용을 중지하려면 재고를 먼저 삭제하고 동기화해야 합니다. 다른 기기의 수정과 충돌하면 PC 변경을 유지하고 **충돌 확인**에서 서버 내용과 비교합니다. 서버 내용을 선택하기 전까지 해당 변경을 자동으로 덮어쓰지 않습니다.
+
+운영 Apps Script에는 `FarmManagement.gs`, `SpeciesManagement.gs`, **최신 `InventoryManagement.gs`**가 필요합니다. 기존 웹 앱 배포를 새 버전으로 갱신하면 같은 운영 파일의 `농원관리`, `묘목관리`, `농원별묘목` 시트를 사용합니다. PC 재고 전송에는 `inventoryVersioning: 1` 응답이 필요하며, 이전 서버에서는 PC 자료와 전송 대기를 보존한 채 업데이트 안내를 표시합니다. 기존 Android의 버전 없는 재고 요청도 계속 지원합니다. 이 소스 변경만으로 운영 Apps Script가 자동 배포되지는 않습니다.
+
+사이드바는 홈페이지의 새싹 그림과 한국 시간 전자시계를 표시합니다. 작은 창에서는 여덟 메뉴와 시계가 겹치지 않도록 간격을 줄입니다.
 
 ## 견적에서 판매로
 
@@ -118,7 +130,7 @@ node --test server/quote-requests/tests/*.test.cjs
 QT_QPA_PLATFORM=offscreen python -m namufarm_desktop --self-check
 ```
 
-실제 Apps Script 소스를 메모리 시트 fixture에서 실행하며 테스트 고객·키만 사용합니다. 운영 시트에 테스트 주문을 넣지 않습니다. GitHub CI는 Linux 테스트 후 Windows에서도 검사하고 실행 파일을 만들며 패키지 시작을 확인합니다.
+실제 Apps Script 소스를 메모리 시트 fixture에서 실행하며 테스트 고객·키만 사용합니다. 운영 시트에 테스트 주문을 넣지 않습니다. Windows 실행 파일은 별도 수동 워크플로 **Desktop EXE Build**에서 만들고 패키지 시작을 확인합니다.
 
 설계 참고: [카페24 주문·배송 관리](https://www.cafe24.com/commerce/manage/order.html)의 상태별 업무·일괄 송장 입력, [로젠 공식 조회](https://www.ilogen.com/web/personal/tkSearch?t=1)의 11자리 송장 안내. 화면과 코드는 나무팜 업무에 맞게 별도로 작성했습니다.
 

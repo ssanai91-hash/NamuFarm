@@ -122,6 +122,12 @@ class NurseryStore:
                 name = "farmName" if kind == "farms" else "speciesName"
                 require(not any(r["_key"] != key and r[name] == row[name] for r in state[kind]),
                         "같은 이름이 있습니다. 해당 항목을 수정해주세요.")
+                if kind == "species" and row["isActive"] == 0:
+                    require(not any(r.get("speciesKey") == key and r["quantity"] > 0
+                                    for r in state["inventory"]) and
+                            not any(op["kind"] == "inventory" and op["after"].get("speciesKey") == key
+                                    for op in state["pending"]),
+                            "이 묘목의 재고를 먼저 삭제하고 동기화해주세요.")
             else:
                 for attr, parent in (("farmKey", "farms"), ("speciesKey", "species")):
                     ref = values.get(attr)
@@ -136,9 +142,19 @@ class NurseryStore:
                         ("farmKey", "speciesKey", "quality", "age", "size", "plantType")) for r in state[kind]),
                         "같은 규격의 재고가 있습니다. 기존 재고를 수정해주세요.")
             if delete:
-                require(kind == "farms" and row.get("farmId", 0) > 0, "농원을 먼저 동기화해주세요.")
+                require(kind == "farms", "농원 삭제 항목을 확인해주세요.")
                 require(not any(r.get("farmKey") == key and r["quantity"] > 0 for r in state["inventory"]),
                         "이 농원에 등록된 묘목 재고를 먼저 삭제해주세요.")
+                require(not any(op["kind"] == "inventory" and op["after"].get("farmKey") == key
+                                for op in state["pending"]),
+                        "이 농원의 재고 전송 대기를 먼저 동기화해주세요.")
+                if row.get("farmId", 0) == 0:
+                    require(not any(op["key"] == key and op.get("payload") for op in state["pending"]),
+                            "서버 확인 대기 중인 농원입니다. 동기화 후 삭제해주세요.")
+                    state[kind] = [r for r in state[kind] if r["_key"] != key]
+                    state["pending"] = [op for op in state["pending"] if op["key"] != key]
+                    self._write(state)
+                    return key
                 row["_deleted"] = True
             operation = next((op for op in state["pending"] if op["key"] == key), None)
             require(operation is None or not operation.get("payload"),

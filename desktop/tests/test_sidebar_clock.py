@@ -34,14 +34,14 @@ class SidebarClockTest(QtTestCase):
         self.assertEqual(1000, self.window.sidebar_clock_timer.interval())
         self.assertFalse(self.window.vault_path.exists())
 
-    def test_wider_sidebar_keeps_six_menus_and_footer_separate_at_minimum_height(self):
+    def test_wider_sidebar_keeps_eight_menus_and_footer_separate_at_minimum_height(self):
         self.window.large_font_check.setChecked(False)
         self.window.resize(1000, 620)
         self.window.show()
         self.app.processEvents()
         self.assertEqual(286, self.window.sidebar.width())
         self.assertEqual('나무팜(주)', self.window.brand_label.text())
-        self.assertEqual(6, len(self.window.nav))
+        self.assertEqual(8, len(self.window.nav))
         self.assertFalse(self.window.sidebar.findChildren(QLabel, 'navGroup'))
         last = self.window.nav[-1]
         self.assertLess(last.mapTo(self.window.sidebar, QPoint()).y() + last.height(),

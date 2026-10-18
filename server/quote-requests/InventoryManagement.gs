@@ -35,7 +35,10 @@ function inventoryDirectoryRecord_(row){
     farmId:Number(row[0]),speciesId:Number(row[1]),quality:String(row[2]||''),
     age:String(row[3]||''),size:String(row[4]||''),plantType:String(row[5]||''),
     quantity:Number(row[6]),wholesalePrice:Number(row[7]),retailPrice:Number(row[8])});
-  return Object.assign(f,{updatedAt:String(row[9]||'')});
+  const updatedAt=String(row[9]||'');
+  return Object.assign(f,{updatedAt:updatedAt,version:hash_(JSON.stringify([
+    f.farmId,f.speciesId,f.quality,f.age,f.size,f.plantType,
+    f.quantity,f.wholesalePrice,f.retailPrice,updatedAt]))});
 }
 function inventoryDirectoryRows_(sheet){
   const count=sheet.getLastRow()-1;
@@ -47,7 +50,7 @@ function inventoryDirectoryRows_(sheet){
   return entries;
 }
 function listInventoryDirectory_(){
-  return lock_(()=>({inventory:inventoryDirectoryRows_(inventoryDirectorySheet_()).map(e=>e.stock)}));
+  return lock_(()=>({inventoryVersioning:1,inventory:inventoryDirectoryRows_(inventoryDirectorySheet_()).map(e=>e.stock)}));
 }
 function saveInventoryDirectory_(body){
   const stock=inventoryDirectoryFields_(body.inventory);
@@ -65,6 +68,11 @@ function saveInventoryDirectory_(body){
       e.species.speciesId===stock.speciesId&&e.species.isActive===1),'INVALID');
     const key=inventoryDirectoryKey_(stock);
     const previous=entries.find(e=>inventoryDirectoryKey_(e.stock)===key);
+    // New clients use optimistic concurrency; older Android clients remain compatible.
+    if(Object.prototype.hasOwnProperty.call(body,'expectedVersion')) {
+      assert_(typeof body.expectedVersion==='string' &&
+        (previous ? equal_(body.expectedVersion,previous.stock.version) : body.expectedVersion===''),'CONFLICT');
+    }
     assert_(previous||sheet.getLastRow()<15001,'NOT_READY');
     const row=[stock.farmId,stock.speciesId,stock.quality,stock.age,stock.size,stock.plantType,
       stock.quantity,stock.wholesalePrice,stock.retailPrice,receiptTime_(new Date().toISOString()),body.operationId];

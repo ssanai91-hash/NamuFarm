@@ -34,8 +34,8 @@ function fixture({configure=true,now=Date.now(),monthly=false}={}) {
      if(failWrite||failReceipt&&n==='판매변경이력'||injected&&!injected.after){failWrite=false;failReceipt=false;throw Error('sheet failure')}
      values.forEach((row,i)=>{cells[r-1+i]??=[];row.forEach((v,j)=>cells[r-1+i][c-1+j]=v)});
      if(injected)throw Error('write response lost');return this;
-    },clearContent(){return this.setValues(Array.from({length:count},()=>Array(width).fill('')))},setNumberFormat(){return this},setBackground(){return this},setFontColor(){return this},setFontWeight(){return this}
-   }},setFrozenRows(){return this},setColumnWidth(){return this}};
+    },setValue(value){return this.setValues([[value]])},clearContent(){return this.setValues(Array.from({length:count},()=>Array(width).fill('')))},setNumberFormat(){return this},setBackground(){return this},setFontColor(){return this},setFontWeight(){return this}
+   }},setFrozenRows(){return this},setColumnWidth(){return this},hideColumns(){return this},deleteRow(row){cells.splice(row-1,1);return this}};
    sheets.set(n,value);return value;
   }};books.set(id,result);return result;
  }
