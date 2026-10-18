@@ -17,6 +17,19 @@ class WebRequestConnection(context: Context, private val repository: NamuFarmRep
     val pushConfigured get() = WebRequestPush.configured
     val serverUrl get() = settings.url
     fun localRequests() = repository.getWebRequests()
+    fun cachedFarms() = repository.getAllFarms().map {
+        com.example.namufarm.data.remote.FarmDirectoryRecord(
+            farmId = it.farmId ?: 0, farmName = it.farmName,
+            address = it.address.orEmpty(), phone = it.phone.orEmpty(), memo = it.memo.orEmpty()
+        )
+    }.filter { it.farmId > 0 }
+    fun cachedSpecies() = repository.getAllSpecies().map {
+        com.example.namufarm.data.remote.SpeciesDirectoryRecord(
+            speciesId = it.speciesId ?: 0, speciesName = it.speciesName,
+            farmName = it.nameFarm.orEmpty(), chosung = it.chosung.orEmpty(),
+            category = it.category.orEmpty(), memo = it.memo.orEmpty(), isActive = it.isActive ?: 1
+        )
+    }.filter { it.speciesId > 0 }
     val deferredCount get() = repository.deferredWebRequestCount()
     suspend fun read(id: String) = repository.markWebRequestRead(id)
     /** No file or password: new devices enroll on first manual sync or server connect. */
@@ -101,25 +114,82 @@ class WebRequestConnection(context: Context, private val repository: NamuFarmRep
         farms.forEach { it.checked() }
         check(farms.map { it.farmId }.distinct().size == farms.size &&
             farms.map { it.farmName }.distinct().size == farms.size) { "농원 번호 또는 이름이 중복되어 있습니다." }
+        repository.cacheDirectoryFarms(farms)
         return farms
     }
     suspend fun saveDirectoryFarm(farm: com.example.namufarm.data.FarmEntity, expectedVersion: String,
         operationId: String): com.example.namufarm.data.remote.FarmDirectoryRecord {
         val fields = mapOf("farmName" to farm.farmName.trim(), "address" to farm.address.orEmpty().trim(),
             "phone" to farm.phone.orEmpty().trim(), "memo" to farm.memo.orEmpty().trim())
+        val version = if (farm.farmId != null && expectedVersion.isBlank())
+            farmDirectory().singleOrNull { it.farmId == farm.farmId }?.version
+                ?: error("농원이 서버에서 삭제되었습니다. 새로고침해주세요.")
+            else expectedVersion
         val response = farmDirectoryAction("save_farm", mapOf("farmId" to (farm.farmId ?: 0),
-            "farm" to fields, "expectedVersion" to expectedVersion, "operationId" to operationId))
+            "farm" to fields, "expectedVersion" to version, "operationId" to operationId))
         val saved = checkNotNull(response.farm).checked()
         check(response.saved == true && response.operationId == operationId &&
             (farm.farmId == null || saved.farmId == farm.farmId) &&
             saved.farmName == fields["farmName"] && saved.address == fields["address"] &&
             saved.phone == fields["phone"] && saved.memo == fields["memo"]) { "농원 저장 결과를 확인하지 못했습니다." }
+        repository.cacheDirectoryFarms(listOf(saved))
         return saved
     }
     suspend fun deleteDirectoryFarm(farm: com.example.namufarm.data.remote.FarmDirectoryRecord) {
+        val current = if (farm.version.isBlank()) farmDirectory().singleOrNull { it.farmId == farm.farmId }
+            ?: error("농원이 서버에서 삭제되었습니다. 새로고침해주세요.") else farm
         val response = farmDirectoryAction("delete_farm",
-            mapOf("farmId" to farm.farmId, "expectedVersion" to farm.version))
+            mapOf("farmId" to current.farmId, "expectedVersion" to current.version))
         check(response.deleted == true && response.farmId == farm.farmId) { "농원 삭제 결과를 확인하지 못했습니다." }
+    }
+
+    private suspend fun speciesAction(action: String, fields: Map<String, Any> = emptyMap()):
+        com.example.namufarm.data.remote.WebQuoteEnvelope {
+        if (!paired) connect()
+        val response = api.request(settings.url,
+            fields + mapOf("action" to action, "deviceToken" to settings.deviceToken))
+        if (response.ok != true && response.code == "CONFLICT")
+            error("묘목 정보가 변경되었거나 중복된 이름입니다. 새로고침해주세요.")
+        if (response.ok != true && response.code in setOf("INVALID_ACTION", "UPGRADE_REQUIRED"))
+            error("묘목관리 서버 업데이트가 필요합니다. SpeciesManagement.gs를 반영해주세요.")
+        WebQuoteValidator.checkResponse(response)
+        return response
+    }
+    suspend fun speciesDirectory(): List<com.example.namufarm.data.remote.SpeciesDirectoryRecord> {
+        val species = checkNotNull(speciesAction("list_species").species) { "묘목 목록을 확인하지 못했습니다." }
+        species.forEach { it.checked() }
+        check(species.map { it.speciesId }.distinct().size == species.size &&
+            species.map { it.speciesName }.distinct().size == species.size) {
+            "묘목 번호 또는 이름이 중복되어 있습니다."
+        }
+        repository.cacheDirectorySpecies(species)
+        return species
+    }
+    suspend fun saveDirectorySpecies(species: com.example.namufarm.data.remote.SpeciesDirectoryRecord,
+        operationId: String): com.example.namufarm.data.remote.SpeciesDirectoryRecord {
+        val current = if (species.speciesId > 0)
+            speciesDirectory().singleOrNull { it.speciesId == species.speciesId }
+                ?: error("묘목이 서버에서 삭제되었습니다. 새로고침해주세요.")
+            else null
+        val payload = mapOf("speciesName" to species.speciesName.trim(),
+            "farmName" to species.farmName.trim(), "chosung" to species.chosung.trim(),
+            "category" to species.category.trim(), "memo" to species.memo.trim(),
+            "isActive" to species.isActive)
+        val response = speciesAction("save_species",
+            mapOf("speciesId" to species.speciesId, "species" to payload,
+                "expectedVersion" to (current?.version ?: ""), "operationId" to operationId))
+        val saved = checkNotNull(response.speciesRecord).checked()
+        check(response.saved == true && response.operationId == operationId) { "묘목 저장 확인에 실패했습니다." }
+        repository.cacheDirectorySpecies(listOf(saved))
+        return saved
+    }
+    suspend fun deleteDirectorySpecies(species: com.example.namufarm.data.remote.SpeciesDirectoryRecord) {
+        val current = speciesDirectory().singleOrNull { it.speciesId == species.speciesId }
+            ?: error("묘목이 서버에서 삭제되었습니다. 새로고침해주세요.")
+        val response = speciesAction("delete_species",
+            mapOf("speciesId" to current.speciesId, "expectedVersion" to current.version))
+        check(response.deleted == true && response.speciesId == current.speciesId) { "묘목 비활성 처리를 확인하지 못했습니다." }
+        repository.cacheDirectorySpecies(listOf(current.copy(isActive = 0)))
     }
 
     suspend fun quoteAction(action: String, fields: Map<String, Any>): com.example.namufarm.data.remote.WebQuoteEnvelope {

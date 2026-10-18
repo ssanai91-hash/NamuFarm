@@ -131,6 +131,32 @@ class NamuFarmRepository(
 
     fun getAllFarms(): List<FarmEntity> = local.getAllFarms()
     fun getAllSpecies(): List<SpeciesEntity> = local.getAllSpecies()
+    suspend fun cacheDirectoryFarms(rows: List<com.example.namufarm.data.remote.FarmDirectoryRecord>) =
+        local.transaction {
+            rows.forEach { row ->
+                val farm = row.asFarm()
+                val existing = getAllFarms().singleOrNull { it.farmId == farm.farmId }
+                check(getAllFarms().none { it.farmName == farm.farmName && it.farmId != farm.farmId }) {
+                    "로컬 농원 이름과 운영 시트 ID가 다릅니다. 기존 자료를 확인해주세요."
+                }
+                if (existing != null && existing.farmName != farm.farmName)
+                    MasterReferenceGuard.farm(this, checkNotNull(farm.farmId))
+                upsertFarm(farm)
+            }
+        }
+    suspend fun cacheDirectorySpecies(rows: List<com.example.namufarm.data.remote.SpeciesDirectoryRecord>) =
+        local.transaction {
+            rows.forEach { row ->
+                val species = row.asSpecies()
+                val existing = getAllSpeciesIncludingInactive().singleOrNull { it.speciesId == species.speciesId }
+                check(getAllSpeciesIncludingInactive().none {
+                    it.speciesName == species.speciesName && it.speciesId != species.speciesId
+                }) { "로컬 묘목 이름과 운영 시트 ID가 다릅니다. 기존 자료를 확인해주세요." }
+                if (existing != null && existing.speciesName != species.speciesName)
+                    MasterReferenceGuard.species(this, checkNotNull(species.speciesId))
+                upsertSpecies(species)
+            }
+        }
     fun getAllSellingInventory(): List<SellingDisplayRow> = local.getAllSellingInventory()
 
     fun getInventoryRows(farmId: Int, speciesId: Int): List<InventoryDisplayRow> =

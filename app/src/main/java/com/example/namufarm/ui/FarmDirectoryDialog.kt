@@ -47,7 +47,12 @@ internal fun FarmDirectoryDialog(connection: WebRequestConnection, onDismiss: ()
             finally { busy = false }
         }
     }
-    LaunchedEffect(connection) { refresh() }
+    LaunchedEffect(connection) {
+        farms = withContext(Dispatchers.IO) { connection.cachedFarms() }
+        loaded = true
+        message = if (farms.isEmpty()) "처음 사용할 때 새로고침을 눌러 농원을 가져오세요."
+            else "로컬에 저장된 농원 ${farms.size}곳입니다."
+    }
 
     NamuDialog("농원 관리", "농원명 · 주소 · 전화번호 · 메모",
         onDismiss = { if (!busy) onDismiss() },
@@ -65,7 +70,7 @@ internal fun FarmDirectoryDialog(connection: WebRequestConnection, onDismiss: ()
             if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
             message?.let { Text(it, style = MaterialTheme.typography.bodySmall,
                 color = if (it.startsWith("❌")) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary) }
-            if (loaded && farms.isEmpty() && !busy) Text("등록된 농원이 없습니다. 농원 추가를 눌러주세요.")
+            if (loaded && farms.isEmpty() && !busy) Text("등록된 농원이 없습니다. 새로고침하거나 농원을 추가하세요.")
             LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(farms, key = { it.farmId }) { farm ->
                     OutlinedCard(Modifier.fillMaxWidth().clickable(enabled = !busy) {

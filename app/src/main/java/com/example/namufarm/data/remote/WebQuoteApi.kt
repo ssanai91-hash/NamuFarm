@@ -34,6 +34,8 @@ data class WebQuoteEnvelope(
     val messageId: String? = null, val checked: Boolean? = null, val state: String? = null,
     val statusCode: String? = null, val statusMessage: String? = null,
     val farms: List<FarmDirectoryRecord>? = null, val farm: FarmDirectoryRecord? = null,
+    val species: List<SpeciesDirectoryRecord>? = null, val speciesRecord: SpeciesDirectoryRecord? = null,
+    val speciesId: Int? = null,
     val deleted: Boolean? = null, val farmId: Int? = null, val operationId: String? = null
 )
 data class WebQuoteRemote(
