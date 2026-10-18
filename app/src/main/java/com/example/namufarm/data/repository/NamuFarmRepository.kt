@@ -163,6 +163,20 @@ class NamuFarmRepository(
                 if (existing != farm) upsertFarm(farm)
             }
         }
+    /** A deleted operations-directory farm may disappear from Room only if no inventory or sales reference it. */
+    suspend fun ensureDirectoryFarmCanDelete(id: Int) = local.transaction {
+        check(getAllInventoryEntities().none { it.farmId == id }) {
+            "등록된 묘목 재고를 먼저 삭제해주세요."
+        }
+        MasterReferenceGuard.farm(this,id,deleting=true)
+    }
+    suspend fun removeDirectoryFarm(id: Int) = local.transaction {
+        check(getAllInventoryEntities().none { it.farmId == id }) {
+            "농원에 연결된 재고가 있어 로컬 자료를 유지합니다."
+        }
+        MasterReferenceGuard.farm(this,id,deleting=true)
+        deleteFarmById(id)
+    }
     suspend fun cacheDirectorySpecies(rows: List<com.example.namufarm.data.remote.SpeciesDirectoryRecord>) =
         local.transaction {
             rows.forEach { row ->

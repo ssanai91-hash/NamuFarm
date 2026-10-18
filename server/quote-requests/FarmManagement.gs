@@ -103,6 +103,9 @@ function deleteFarmDirectory_(body) {
     const current=entries.find(entry=>entry.farm.farmId===body.farmId);
     if(!current)return {deleted:true,farmId:body.farmId};
     assert_(equal_(body.expectedVersion,current.farm.version),'CONFLICT');
+    // A nursery with live inventory must not leave orphaned stock references.
+    assert_(!inventoryDirectoryRows_(inventoryDirectorySheet_())
+      .some(e=>e.stock.farmId===body.farmId&&e.stock.quantity>0),'CONFLICT');
     const props=PropertiesService.getScriptProperties();
     const floor=Math.max(Number(props.getProperty('FARM_DIRECTORY_LAST_ID')||0),...entries.map(entry=>entry.farm.farmId));
     assert_(Number.isInteger(floor) && floor>0 && floor<=2147483647,'NOT_READY');

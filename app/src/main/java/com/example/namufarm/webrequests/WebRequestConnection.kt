@@ -136,11 +136,13 @@ class WebRequestConnection(context: Context, private val repository: NamuFarmRep
         return saved
     }
     suspend fun deleteDirectoryFarm(farm: com.example.namufarm.data.remote.FarmDirectoryRecord) {
+        repository.ensureDirectoryFarmCanDelete(farm.farmId)
         val current = if (farm.version.isBlank()) farmDirectory().singleOrNull { it.farmId == farm.farmId }
             ?: error("농원이 서버에서 삭제되었습니다. 새로고침해주세요.") else farm
         val response = farmDirectoryAction("delete_farm",
             mapOf("farmId" to current.farmId, "expectedVersion" to current.version))
         check(response.deleted == true && response.farmId == farm.farmId) { "농원 삭제 결과를 확인하지 못했습니다." }
+        repository.removeDirectoryFarm(farm.farmId)
     }
 
     private suspend fun speciesAction(action: String, fields: Map<String, Any> = emptyMap()):

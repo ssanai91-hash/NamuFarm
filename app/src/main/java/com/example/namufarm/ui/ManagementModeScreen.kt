@@ -386,7 +386,7 @@ fun FarmManageDialog(
             onDismissRequest = { showDeleteConfirm = false },
             title = { Text("농원을 삭제할까요?", fontWeight = FontWeight.Bold) },
             text = {
-                Text(if (directoryOnly) "선택한 농원의 연락처와 메모를 운영 시트에서 삭제합니다."
+                Text(if (directoryOnly) "농원에 등록된 재고가 없을 때만 삭제할 수 있습니다. 기존 견적과 주문은 유지됩니다."
                     else "이 농원과 연결된 재고도 함께 삭제됩니다. 주문 기록은 유지됩니다.")
             },
             confirmButton = {
