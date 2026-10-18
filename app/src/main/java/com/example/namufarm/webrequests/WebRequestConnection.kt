@@ -86,6 +86,42 @@ class WebRequestConnection(context: Context, private val repository: NamuFarmRep
             bytes.fill(0)
         } finally { password.fill('\u0000') }
     }
+    private suspend fun farmDirectoryAction(action: String, fields: Map<String, Any> = emptyMap()): com.example.namufarm.data.remote.WebQuoteEnvelope {
+        if (!paired) connect()
+        val response = api.request(settings.url, fields + mapOf("action" to action, "deviceToken" to settings.deviceToken))
+        if (response.ok != true && response.code == "CONFLICT")
+            error("농원 정보가 변경되었거나 같은 이름이 있습니다. 새로고침 후 다시 확인해주세요.")
+        if (response.ok != true && response.code in setOf("INVALID_ACTION", "UPGRADE_REQUIRED"))
+            error("농원관리 서버 업데이트가 필요합니다. 운영 Apps Script에 FarmManagement.gs를 반영해주세요.")
+        WebQuoteValidator.checkResponse(response)
+        return response
+    }
+    suspend fun farmDirectory(): List<com.example.namufarm.data.remote.FarmDirectoryRecord> {
+        val farms = checkNotNull(farmDirectoryAction("list_farms").farms) { "농원 목록을 확인하지 못했습니다." }
+        farms.forEach { it.checked() }
+        check(farms.map { it.farmId }.distinct().size == farms.size &&
+            farms.map { it.farmName }.distinct().size == farms.size) { "농원 번호 또는 이름이 중복되어 있습니다." }
+        return farms
+    }
+    suspend fun saveDirectoryFarm(farm: com.example.namufarm.data.FarmEntity, expectedVersion: String,
+        operationId: String): com.example.namufarm.data.remote.FarmDirectoryRecord {
+        val fields = mapOf("farmName" to farm.farmName.trim(), "address" to farm.address.orEmpty().trim(),
+            "phone" to farm.phone.orEmpty().trim(), "memo" to farm.memo.orEmpty().trim())
+        val response = farmDirectoryAction("save_farm", mapOf("farmId" to (farm.farmId ?: 0),
+            "farm" to fields, "expectedVersion" to expectedVersion, "operationId" to operationId))
+        val saved = checkNotNull(response.farm).checked()
+        check(response.saved == true && response.operationId == operationId &&
+            (farm.farmId == null || saved.farmId == farm.farmId) &&
+            saved.farmName == fields["farmName"] && saved.address == fields["address"] &&
+            saved.phone == fields["phone"] && saved.memo == fields["memo"]) { "농원 저장 결과를 확인하지 못했습니다." }
+        return saved
+    }
+    suspend fun deleteDirectoryFarm(farm: com.example.namufarm.data.remote.FarmDirectoryRecord) {
+        val response = farmDirectoryAction("delete_farm",
+            mapOf("farmId" to farm.farmId, "expectedVersion" to farm.version))
+        check(response.deleted == true && response.farmId == farm.farmId) { "농원 삭제 결과를 확인하지 못했습니다." }
+    }
+
     suspend fun quoteAction(action: String, fields: Map<String, Any>): com.example.namufarm.data.remote.WebQuoteEnvelope {
         check(paired) { "서버를 먼저 연결해주세요." }
         require(action in setOf("send_quote_sms", "quote_sms_status", "send_quote_email"))

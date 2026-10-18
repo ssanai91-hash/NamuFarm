@@ -371,7 +371,8 @@ fun FarmManageDialog(
     selectedFarm: com.example.namufarm.data.FarmEntity?,
     onDismiss: () -> Unit,
     onSave: (Int?, String, String, String, String) -> Unit,
-    onDelete: (Int) -> Unit
+    onDelete: (Int) -> Unit,
+    busy: Boolean = false, message: String? = null, directoryOnly: Boolean = false
 ) {
     var editingFarmId by remember(selectedFarm) { mutableStateOf(selectedFarm?.farmId) }
     var farmName by remember(selectedFarm) { mutableStateOf(selectedFarm?.farmName.orEmpty()) }
@@ -387,7 +388,8 @@ fun FarmManageDialog(
             onDismissRequest = { showDeleteConfirm = false },
             title = { Text("농원을 삭제할까요?", fontWeight = FontWeight.Bold) },
             text = {
-                Text("이 농원과 연결된 재고도 함께 삭제됩니다. 주문 기록은 유지됩니다.")
+                Text(if (directoryOnly) "선택한 농원의 연락처와 메모를 운영 시트에서 삭제합니다."
+                    else "이 농원과 연결된 재고도 함께 삭제됩니다. 주문 기록은 유지됩니다.")
             },
             confirmButton = {
                 Button(
@@ -451,7 +453,7 @@ fun FarmManageDialog(
         )
     }
 
-    Dialog(onDismissRequest = onDismiss) {
+    Dialog(onDismissRequest = { if (!busy) onDismiss() }) {
         Surface(
             shape = RoundedCornerShape(20.dp),
             color = MaterialTheme.colorScheme.surface,
@@ -474,7 +476,8 @@ fun FarmManageDialog(
                             fontWeight = FontWeight.ExtraBold
                         )
                         Text(
-                            text = "판매와 재고에 사용할 기본 정보를 관리합니다.",
+                            text = if (directoryOnly) "운영 시트의 농원 연락처와 메모를 관리합니다."
+                                else "판매와 재고에 사용할 기본 정보를 관리합니다.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -482,6 +485,7 @@ fun FarmManageDialog(
 
                     if (editingFarmId != null) {
                         TextButton(
+                            enabled = !busy,
                             onClick = {
                                 editingFarmId = null
                                 farmName = ""
@@ -495,7 +499,12 @@ fun FarmManageDialog(
                     }
                 }
 
+                if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
+                message?.let { Text(it, color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall) }
+
                 OutlinedTextField(
+                    enabled = !busy,
                     value = farmName,
                     onValueChange = { farmName = it },
                     label = { Text("농원명") },
@@ -505,6 +514,7 @@ fun FarmManageDialog(
                 )
 
                 OutlinedTextField(
+                    enabled = !busy,
                     value = farmAddress,
                     onValueChange = { farmAddress = it },
                     label = { Text("주소") },
@@ -514,6 +524,7 @@ fun FarmManageDialog(
                 )
 
                 OutlinedTextField(
+                    enabled = !busy,
                     value = farmPhone,
                     onValueChange = { farmPhone = it },
                     label = { Text("전화번호") },
@@ -523,6 +534,7 @@ fun FarmManageDialog(
                 )
 
                 OutlinedTextField(
+                    enabled = !busy,
                     value = farmMemo,
                     onValueChange = { farmMemo = it },
                     label = { Text("메모") },
@@ -539,6 +551,7 @@ fun FarmManageDialog(
                     if (editingFarmId != null) {
                         OutlinedButton(
                             onClick = { showDeleteConfirm = true },
+                            enabled = !busy,
                             modifier = Modifier.weight(1f).height(48.dp),
                             shape = RoundedCornerShape(12.dp),
                             colors = ButtonDefaults.outlinedButtonColors(
@@ -555,6 +568,7 @@ fun FarmManageDialog(
 
                     OutlinedButton(
                         onClick = onDismiss,
+                        enabled = !busy,
                         modifier = Modifier.weight(1f).height(48.dp),
                         shape = RoundedCornerShape(12.dp)
                     ) {
@@ -565,7 +579,7 @@ fun FarmManageDialog(
                         onClick = {
                             if (farmName.isNotBlank()) showSaveConfirm = true
                         },
-                        enabled = farmName.isNotBlank(),
+                        enabled = farmName.isNotBlank() && !busy,
                         modifier = Modifier.weight(1.2f).height(48.dp),
                         shape = RoundedCornerShape(12.dp)
                     ) {

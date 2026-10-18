@@ -51,6 +51,7 @@ internal fun QuoteOnlyScreen(viewModel: ManagementViewModel, connection: WebRequ
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+    var showFarmDirectory by rememberSaveable { mutableStateOf(false) }
     var result by remember { mutableStateOf<QuoteWorkflowRecord?>(null) }
     var legacyResult by remember { mutableStateOf<QuoteEntity?>(null) }
     var readyRequest by remember { mutableStateOf<WebQuoteRequestEntity?>(null) }
@@ -115,11 +116,18 @@ internal fun QuoteOnlyScreen(viewModel: ManagementViewModel, connection: WebRequ
     }) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(selected = selectedTab == 0, onClick = { selectedTab = 0 },
                     label = { Text("견적요청 ${requests.size}") })
                 FilterChip(selected = selectedTab == 1, onClick = { selectedTab = 1 },
                     label = { Text("확정견적 ${confirmed.size + legacy.size}") })
+                Spacer(Modifier.weight(1f))
+                OutlinedButton(onClick = { showFarmDirectory = true },
+                    enabled = !busy && !inbox.busy && !deleting,
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)) {
+                    Text("농원 관리", fontSize = 13.sp)
+                }
             }
             message?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
             if (busy || inbox.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
@@ -219,6 +227,7 @@ internal fun QuoteOnlyScreen(viewModel: ManagementViewModel, connection: WebRequ
             onSave = { draft, action -> handleAction(draft, action) },
             onConfirmSent = { draft, method -> handleAction(draft, QuoteDelivery.COMPLETE, method) })
     }
+    if (showFarmDirectory) FarmDirectoryDialog(connection) { showFarmDirectory = false }
     result?.let { QuoteWorkflowResultDialog(it) { result = null } }
     legacyResult?.let { saved ->
         NamuDialog("이전 저장 견적 확인", saved.quoteNumber, { legacyResult = null },
