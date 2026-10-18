@@ -1896,8 +1896,8 @@ section {
 .species-picker-dialog {
   display: flex;
   flex-direction: column;
-  width: min(52rem, calc(100vw - 1.5rem));
-  max-width: 52rem;
+  width: min(36rem, calc(100vw - 1.5rem));
+  max-width: 36rem;
   max-height: calc(100dvh - 1.5rem);
   padding: 1.5rem;
   gap: .9rem;
@@ -1929,7 +1929,7 @@ section {
 .species-picker-results-heading span { color: #607265; font-size: .95rem; }
 .species-picker-choices {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   align-content: start;
   gap: .5rem;
   min-height: 5rem;
@@ -1981,7 +1981,7 @@ section {
     gap: .7rem;
   }
   .species-picker-initials { grid-template-columns: repeat(5, minmax(0, 1fr)); }
-  .species-picker-choices { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .4rem; max-height: 35dvh; }
+  .species-picker-choices { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .4rem; max-height: 35dvh; }
   .species-picker-choices .species-picker-choice { padding: .5rem .2rem; font-size: .95rem; }
 }
 @media(max-width:22rem) {
