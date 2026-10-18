@@ -2,6 +2,9 @@ name: Desktop EXE Build
 
 on:
   workflow_dispatch:
+  push:
+    branches: ['build/napi-0.5.0-20261019']
+    paths: ['.github/workflows/desktop-exe-build.yml']
 
 permissions:
   contents: read
