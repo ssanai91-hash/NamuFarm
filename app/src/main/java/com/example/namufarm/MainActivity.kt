@@ -62,9 +62,9 @@ class MainActivity : ComponentActivity() {
         val dao = database.managementDao()
 
         // 2. 동기화 엔진(API 통신망) 생성 및 조립
-        val masterSync = com.example.namufarm.data.OperationsMasterSync(database,
-            com.example.namufarm.data.remote.OperationsMasterClient(
-                com.example.namufarm.data.remote.MasterDeviceCredentials(this)))
+        val masterClient = com.example.namufarm.data.remote.OperationsMasterClient(
+            com.example.namufarm.data.remote.MasterDeviceCredentials(this))
+        val masterSync = com.example.namufarm.data.OperationsMasterSync(database, masterClient)
         val syncManager = SyncManager(dao, masterSync)
 
         // 3. 공장에 dao와 syncManager 둘 다 넘겨주기!
@@ -72,6 +72,12 @@ class MainActivity : ComponentActivity() {
 
         // 🚨 위에서 선언한 전역 변수에 뷰모델 할당!
         viewModel = ViewModelProvider(this, factory)[ManagementViewModel::class.java]
+
+        val quoteConnection = com.example.namufarm.quotemode.InitialQuoteConnection(
+            com.example.namufarm.quotemode.InitialQuoteDatabase.get(this), masterClient)
+        val quoteViewModel = ViewModelProvider(this,
+            com.example.namufarm.quotemode.InitialQuoteViewModelFactory(quoteConnection, this))[
+                com.example.namufarm.quotemode.InitialQuoteViewModel::class.java]
 
         // 🚨 4. 권한 체크 및 통화 감시자 작동 시작!
         checkAndRequestPermissions()
@@ -82,14 +88,11 @@ class MainActivity : ComponentActivity() {
             NavHost(navController = navController, startDestination = "splash") {
                 composable("splash") {
                     SplashScreen {
-                        navController.navigate("selling") { popUpTo("splash") { inclusive = true } }
+                        navController.navigate("modes") { popUpTo("splash") { inclusive = true } }
                     }
                 }
-                composable("selling") {
-                    SellingModeScreen(viewModel = viewModel, onNavigateToManagement = { navController.navigate("management") })
-                }
-                composable("management") {
-                    ManagementModeScreen(viewModel = viewModel, onBack = { navController.popBackStack() })
+                composable("modes") {
+                    com.example.namufarm.quotemode.InitialAppModes(viewModel, quoteViewModel)
                 }
             }
         }

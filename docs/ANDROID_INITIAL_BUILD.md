@@ -10,3 +10,5 @@
 빌드 중 applicationId를 com.example.namufarm.original, 표시 이름을 나무팜 초기버전으로 지정한다.
 현재 앱과 나란히 설치되며, 이전에 설치한 초기버전의 기기 DB는 버전 13으로 보존 이관한다.
 기존 저장소의 release 인증서로 서명하고 NamuFarm-original-release.apk를 draft release에 제공한다.
+
+견적 모드 통합은 INITIAL_QUOTE_MODE.md 참고. 버전 1.1-quote-mode(3).

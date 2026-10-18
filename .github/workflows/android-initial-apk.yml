@@ -93,5 +93,5 @@ jobs:
         run: |
           set -euo pipefail
           tag="android-initial-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
-          gh release create "$tag" "$RUNNER_TEMP/NamuFarm-original-release.apk" --draft --target "$GITHUB_SHA" --title "NamuFarm initial Android UI 2026-09-27" --notes "Original application sources: f8f2de29e6ac1755f505fc00d444480267399269. Built from restore/android-initial-20260927. Separate application ID com.example.namufarm.original allows installation alongside the current app; Original UI and resource sources are preserved. Farm/species masters now connect to the operations workbook; legacy stock/orders remain local."
+          gh release create "$tag" "$RUNNER_TEMP/NamuFarm-original-release.apk" --draft --target "$GITHUB_SHA" --title "NamuFarm original UI with quote mode" --notes "Original application sources: f8f2de29e6ac1755f505fc00d444480267399269. Built from restore/android-initial-20260927. Separate application ID com.example.namufarm.original allows installation alongside the current app; Original UI and resource sources are preserved. Adds quote, selling and farm/species mode navigation. Quotes use the operating workbook and Android SMS/email composers. Farm/species masters remain connected; legacy stock/orders remain local."
           echo "Initial APK saved in draft release: $tag" >> "$GITHUB_STEP_SUMMARY"

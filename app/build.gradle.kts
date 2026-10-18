@@ -16,10 +16,14 @@ android {
         applicationId = "com.example.namufarm"
         minSdk = 24
         targetSdk = 36
-        versionCode = 2
-        versionName = "1.0-master-sync"
+        versionCode = 3
+        versionName = "1.1-quote-mode"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        buildConfigField("String", "PAYMENT_ACCOUNT_TEXT", "\"농협 328-12-035671 / 오진웅\"")
+        buildConfigField("String", "WEB_REQUEST_SCRIPT_URL", "\"https://script.google.com/macros/s/AKfycbzY7JKzXYmS9APLNFDt15k8dv09zb4EXKFHOOv_T1vpFmkr6TLwbqGznGLgpd2cIVgD/exec\"")
+
     }
 
     testOptions { unitTests.isIncludeAndroidResources = true }
@@ -39,6 +43,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
