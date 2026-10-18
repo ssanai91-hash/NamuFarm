@@ -1555,7 +1555,16 @@ section {
     padding: 16px;
   }
   .initial-filter {
-    gap: .4rem;
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: .35rem;
+  }
+  .initial-filter .initial-button {
+    min-width: 0;
+    width: 100%;
+    min-height: 3rem;
+    padding: .4rem 0!important;
+    font-size: 1.05rem;
   }
   .catalog-note {
     font-size: 1rem;
