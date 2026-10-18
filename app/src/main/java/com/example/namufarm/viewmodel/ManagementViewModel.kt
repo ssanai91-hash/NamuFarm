@@ -905,7 +905,7 @@ class ManagementViewModel(
         sb.append("================\n")
 
         // 택배비 선불/후불 분기 처리
-        if (isPrepaid && shippingFee > 0) {
+        if (isPrepaid) {
             sb.append("상품 합계: ${String.format("%,d", totalRetail)}원\n")
             sb.append("배송비(선불): ${String.format("%,d", shippingFee)}원\n")
             sb.append("총 견적 금액: ${String.format("%,d", totalRetail + shippingFee)}원\n\n")
@@ -962,7 +962,7 @@ class ManagementViewModel(
         sb.append("================\n")
 
         // 🚨 택배비 선불/후불 분기 처리
-        if (quote.isPrepaid && quote.shippingFee > 0) {
+        if (quote.isPrepaid) {
             val itemTotal = quote.totalPrice - quote.shippingFee
             sb.append("상품 합계: ${String.format("%,d", itemTotal)}원\n")
             sb.append("배송비(선불): ${String.format("%,d", quote.shippingFee)}원\n")

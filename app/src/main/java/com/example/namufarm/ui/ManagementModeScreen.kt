@@ -186,6 +186,10 @@ fun ManagementModeScreen(viewModel: ManagementViewModel, onBack: () -> Unit) {
                                         colors = ButtonDefaults.buttonColors(
                                             containerColor = if (isSelected) Color(0xFF388E3C) else Color(0xFFF1F8E9)
                                         ),
+                                        border = BorderStroke(
+                                            if (isSelected) 2.dp else 1.dp,
+                                            if (isSelected) Color(0xFF2E7D32) else Color(0xFF8DB580)
+                                        ),
                                         shape = RoundedCornerShape(20.dp),
                                         contentPadding = PaddingValues(0.dp)
                                     ) {

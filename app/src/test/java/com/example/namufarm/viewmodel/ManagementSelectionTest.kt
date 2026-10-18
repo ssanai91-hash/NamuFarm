@@ -4,6 +4,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.room.Room
 import com.example.namufarm.data.*
 import com.example.namufarm.data.remote.OperationsMasterGateway
+import com.example.namufarm.domain.order.ShippingCharge
 import com.google.gson.JsonObject
 import java.lang.reflect.Proxy
 import java.util.concurrent.CountDownLatch
@@ -118,5 +119,31 @@ class ManagementSelectionTest {
         val state = viewModel.uiState.value
         assertEquals(d, state.selectedSpecies)
         assertEquals(listOf(2), state.inventoryList.map { it.speciesId })
+    }
+
+    @Test fun shippingChoiceMatchesSmsAndTheQuoteSavedInRoomIncludingZeroPrepaid() = runBlocking {
+        val item = SellingDisplayRow(1, 1, "테스트 농원", "편백나무", "특묘", "2년생", "1.0m", "실생",
+            10, 2_000, 5_000, "ㅍ")
+        for (charge in listOf(ShippingCharge(), ShippingCharge(fee = 0), ShippingCharge(isPrepaid = false))) {
+            viewModel.addToCart(item, 10)
+            val text = viewModel.generateQuoteText(charge.isPrepaid, charge.fee)
+            val expected = 50_000 + charge.fee
+            assertTrue(text.contains("총 견적 금액: ${String.format("%,d", expected)}원"))
+            if (charge.isPrepaid) {
+                assertTrue(text.contains("배송비(선불): ${String.format("%,d", charge.fee)}원"))
+                assertFalse(text.contains("후불(착불)"))
+            } else {
+                assertTrue(text.contains("배송비: 후불(착불)"))
+            }
+            viewModel.saveCurrentQuote(charge.isPrepaid, charge.fee)
+            awaitLoads()
+            val saved = dao.getTodayQuotes().first()
+            assertEquals(charge.isPrepaid, saved.isPrepaid)
+            assertEquals(charge.fee, saved.shippingFee)
+            assertEquals(expected, saved.totalPrice)
+            val savedText = viewModel.generateQuoteTextFromEntity(saved)
+            assertTrue(savedText.contains("총 견적 금액: ${String.format("%,d", expected)}원"))
+            assertEquals(!charge.isPrepaid, savedText.contains("후불(착불)"))
+        }
     }
 }

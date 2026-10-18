@@ -5,6 +5,7 @@ import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -31,6 +32,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.namufarm.data.SellingDisplayRow
+import com.example.namufarm.domain.order.ShippingCharge
 import com.example.namufarm.viewmodel.ManagementViewModel
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
@@ -194,8 +196,9 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
     var showCartDialog by remember { mutableStateOf(false) }
     var showCallLogDialog by remember { mutableStateOf(false) } // 🔥 런처보다 무조건 위에 있어야 함!
 
-    var shippingFee by remember { mutableIntStateOf(0) }
-    var isPrepaid by remember { mutableStateOf(true) } // true: 선불, false: 후불(착불)
+    var shippingCharge by remember { mutableStateOf(ShippingCharge()) }
+    val shippingFee = shippingCharge.fee
+    val isPrepaid = shippingCharge.isPrepaid
 
     var showTodayQuotesDialog by remember { mutableStateOf(false) }
     var showTodayOrdersDialog by remember { mutableStateOf(false) }
@@ -380,8 +383,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                                 Button(
                                     onClick = {
                                         viewModel.updateCustomerPhone("") // 🚨 1. 전화번호 초기화
-                                        shippingFee = 0 // 🚨 2. 택배비 초기화
-                                        isPrepaid = true // 🚨 3. 기본값 후불로 설정
+                                        shippingCharge = ShippingCharge()
                                         showCartDialog = true
                                     },
                                     modifier = Modifier
@@ -863,82 +865,11 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                             .background(Color(0xFFFAFAFA))
                             .padding(16.dp)
                     ) {
-                        // 🚨 [추가] 택배비 설정 구역
-                        Surface(
-                            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
-                            color = Color.White,
-                            shape = RoundedCornerShape(12.dp),
-                            border = BorderStroke(1.dp, Color(0xFFEEEEEE))
-                        ) {
-                            Column(modifier = Modifier.padding(12.dp)) {
-                                Text("📦 배송비 설정", fontWeight = FontWeight.ExtraBold, color = Color.DarkGray, fontSize = 14.sp)
-                                Spacer(modifier = Modifier.height(8.dp))
-
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    // 선불 버튼
-                                    OutlinedButton(
-                                        onClick = { isPrepaid = true },
-                                        colors = ButtonDefaults.outlinedButtonColors(
-                                            containerColor = if (isPrepaid) Color(0xFFE8F5E9) else Color.White,
-                                            contentColor = if (isPrepaid) Color(0xFF2E7D32) else Color.Gray
-                                        ),
-                                        border = BorderStroke(1.dp, if (isPrepaid) Color(0xFF2E7D32) else Color(0xFFE0E0E0)),
-                                        modifier = Modifier.weight(1f).height(40.dp),
-                                        contentPadding = PaddingValues(0.dp)
-                                    ) { Text("선불", fontWeight = FontWeight.Bold, fontSize = 13.sp) }
-
-                                    // 후불 버튼
-                                    OutlinedButton(
-                                        onClick = {
-                                            isPrepaid = false
-                                            shippingFee = 0 // 후불 선택 시 금액 자동 초기화
-                                        },
-                                        colors = ButtonDefaults.outlinedButtonColors(
-                                            containerColor = if (!isPrepaid) Color(0xFFFFEBEE) else Color.White,
-                                            contentColor = if (!isPrepaid) Color(0xFFD32F2F) else Color.Gray
-                                        ),
-                                        border = BorderStroke(1.dp, if (!isPrepaid) Color(0xFFD32F2F) else Color(0xFFE0E0E0)),
-                                        modifier = Modifier.weight(1.2f).height(40.dp),
-                                        contentPadding = PaddingValues(0.dp)
-                                    ) { Text("후불(착불)", fontWeight = FontWeight.Bold, fontSize = 13.sp) }
-
-                                    // +1,000원 버튼
-                                    Button(
-                                        onClick = {
-                                            isPrepaid = true // 요금 추가 시 자동으로 선불 모드로 변경!
-                                            shippingFee += 1000
-                                        },
-                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1976D2)),
-                                        modifier = Modifier.weight(1.2f).height(40.dp),
-                                        shape = RoundedCornerShape(8.dp),
-                                        contentPadding = PaddingValues(0.dp)
-                                    ) { Text("+1,000원", fontWeight = FontWeight.Bold, fontSize = 13.sp) }
-
-                                    // 초기화 버튼 (새로고침 아이콘)
-                                    Button(
-                                        onClick = { shippingFee = 0 },
-                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF757575)),
-                                        modifier = Modifier.width(48.dp).height(40.dp),
-                                        shape = RoundedCornerShape(8.dp),
-                                        contentPadding = PaddingValues(0.dp)
-                                    ) { Icon(Icons.Default.Refresh, contentDescription = "초기화", tint = Color.White, modifier = Modifier.size(20.dp)) }
-                                }
-
-                                // 선불 금액이 0원보다 클 때만 텍스트 표시
-                                if (isPrepaid && shippingFee > 0) {
-                                    Text(
-                                        text = "선불 배송비: ${String.format("%,d", shippingFee)}원",
-                                        color = Color(0xFF1976D2),
-                                        fontWeight = FontWeight.ExtraBold,
-                                        modifier = Modifier.align(Alignment.End).padding(top = 8.dp)
-                                    )
-                                }
-                            }
-                        }
+                        ShippingFeeRow(
+                            charge = shippingCharge,
+                            onChange = { shippingCharge = it },
+                            modifier = Modifier.padding(bottom = 12.dp)
+                        )
 
                         // 🚨 [수정] 선불일 때만 총 견적 금액에 택배비 합산!
                         val finalRetail = uiState.estimateCart.sumOf { it.item.retailPrice * it.orderQuantity } + (if(isPrepaid) shippingFee else 0)
@@ -1308,7 +1239,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                                         verticalAlignment = Alignment.Bottom // 글자 바닥선 맞춤
                                     ) {
                                         // 배송비 텍스트 로직
-                                        val shippingText = if (quote.isPrepaid && quote.shippingFee > 0) {
+                                        val shippingText = if (quote.isPrepaid) {
                                             "선불 ${String.format("%,d", quote.shippingFee)}원"
                                         } else {
                                             "후불 (착불)"
@@ -1613,7 +1544,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                         ) {
                             Text("📦 배송비", fontSize = 15.sp, color = Color.DarkGray, fontWeight = FontWeight.Bold)
                             // (주의: 데이터베이스 엔티티에 isPrepaid, shippingFee 변수가 있어야 에러가 안 나!)
-                            if (quote.isPrepaid && quote.shippingFee > 0) {
+                            if (quote.isPrepaid) {
                                 Text(
                                     text = "선불 ${String.format("%,d", quote.shippingFee)}원",
                                     fontSize = 16.sp,
@@ -1891,7 +1822,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                         ) {
                             Text("📦 배송비", fontSize = 15.sp, color = Color.DarkGray, fontWeight = FontWeight.Bold)
                             // (주의: 데이터베이스 엔티티에 isPrepaid, shippingFee 변수가 있어야 에러가 안 나!)
-                            if (order.isPrepaid && order.shippingFee > 0) {
+                            if (order.isPrepaid) {
                                 Text(
                                     text = "선불 ${String.format("%,d", order.shippingFee)}원",
                                     fontSize = 16.sp,
@@ -2286,7 +2217,12 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                                 Spacer(modifier = Modifier.height(10.dp))
 
                                 // 초성 버튼들
-                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Column(
+                                    modifier = Modifier.fillMaxWidth()
+                                        .border(1.dp, Color(0xFFBCD3B7), RoundedCornerShape(12.dp))
+                                        .padding(4.dp),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
                                     chosungRows.forEach { rowItems ->
                                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                             rowItems.forEach { chosung ->
@@ -2296,6 +2232,10 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                                                     modifier = Modifier.weight(1f).height(40.dp),
                                                     colors = ButtonDefaults.buttonColors(
                                                         containerColor = if (isSelected) Color(0xFF388E3C) else Color(0xFFF1F8E9)
+                                                    ),
+                                                    border = BorderStroke(
+                                                        if (isSelected) 2.dp else 1.dp,
+                                                        if (isSelected) Color(0xFF2E7D32) else Color(0xFF8DB580)
                                                     ),
                                                     contentPadding = PaddingValues(0.dp)
                                                 ) { Text(chosung, color = if (isSelected) Color.White else Color(0xFF2E7D32), fontWeight = FontWeight.Bold) }
