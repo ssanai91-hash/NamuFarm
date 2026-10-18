@@ -38,13 +38,13 @@ class InitialQuoteConnectionTest {
         "2026-10-18T00:00:00.000Z", "기존 고객", "01000000000", "옥천",
         Gson().toJson(listOf(WebQuoteItem("가죽나무", "", 2))), "", readAt = 123)
     @Test fun cachedRequestsAndReadMarksAreAvailableOfflineWithoutAnyServerCall() = runBlocking {
-        val saved = local()
+        val saved = local().copy(readAt = null)
         db.inbox().insertRequests(listOf(saved))
         server.offline = true
         val initial = withTimeout(5000) { connection.observeCache().first() }
         assertEquals(listOf(saved), initial.requests)
         connection.read(saved.requestId)
-        val read = withTimeout(5000) { connection.observeCache().first { it.requests.single().readAt != 123L } }
+        val read = withTimeout(5000) { connection.observeCache().first { it.requests.single().readAt != null } }
         assertNotNull(read.requests.single().readAt)
         assertTrue(server.actions.isEmpty())
     }
