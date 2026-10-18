@@ -19,8 +19,8 @@ function inventoryDirectorySheet_() {
 function inventoryDirectoryFields_(raw){
   assert_(raw&&typeof raw==='object','INVALID');
   const f={farmId:raw.farmId,speciesId:raw.speciesId,
-    quality:text_(raw.quality,100,1),age:text_(raw.age,100,1),
-    size:text_(raw.size,100,1),plantType:text_(raw.plantType,100,1),
+    quality:text_(raw.quality,100),age:text_(raw.age,100),
+    size:text_(raw.size,100),plantType:text_(raw.plantType,100),
     quantity:raw.quantity,wholesalePrice:raw.wholesalePrice,retailPrice:raw.retailPrice};
   [f.farmId,f.speciesId].forEach(v=>assert_(Number.isInteger(v)&&v>0&&v<=2147483647,'INVALID'));
   [f.quantity,f.wholesalePrice,f.retailPrice].forEach(v=>assert_(Number.isInteger(v)&&v>=0&&v<=2147483647,'INVALID'));

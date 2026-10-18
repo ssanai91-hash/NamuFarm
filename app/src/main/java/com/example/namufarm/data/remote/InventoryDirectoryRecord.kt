@@ -11,7 +11,7 @@ data class InventoryDirectoryRecord(
 ) {
     fun checked(): InventoryDirectoryRecord {
         check(farmId > 0 && speciesId > 0 &&
-            listOf(quality, age, size, plantType).all { it.isNotBlank() && it.length <= 100 } &&
+            listOf(quality, age, size, plantType).all { it.length <= 100 && it == it.trim() } &&
             quantity >= 0 && wholesalePrice >= 0 && retailPrice >= 0) {
             "농원별 묘목 재고 형식을 확인해주세요."
         }
