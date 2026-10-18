@@ -2,6 +2,8 @@
  * Quote month = KST receipt month; order month = first confirmed payment month.
  * Existing records remain at their original location; never move them on update.
  */
+/** New yearly quote/order workbooks belong beside the three existing NamuFarm files. */
+const NAMUFARM_SERVER_FOLDER_ID = '10wb4cZjsG5KpIuIhIuNjNistJHo0bFey';
 const ANNUAL_FILES = '연도별장부파일';
 const ANNUAL_FILE_HEADERS = ['구분','연도','파일ID','생성토큰','생성상태','생성시각(UTC)'];
 const ANNUAL_QUOTE_INDEX = '연도견적색인';
@@ -46,7 +48,7 @@ function annualLedgerBook_(kind,year) {
     if(v[4]==='RESERVED'){
       v[4]='CREATING';quoteWriteVerified_(table,entry.index+2,v);
       const file=Drive.Files.create({name:'나무팜_'+(kind==='quote'?'견적':'주문')+'_'+year,
-        mimeType:'application/vnd.google-apps.spreadsheet',appProperties:quoteMonthFileProperties_(v[3])},null,{fields:'id'});
+        mimeType:'application/vnd.google-apps.spreadsheet',parents:[NAMUFARM_SERVER_FOLDER_ID],appProperties:quoteMonthFileProperties_(v[3])},null,{fields:'id'});
       assert_(file && file.id,'NOT_READY');v[2]=file.id;quoteWriteVerified_(table,entry.index+2,v);
     }else{
       // A lost create response must not result in another annual workbook.
@@ -98,6 +100,7 @@ function annualActiveBook_(kind,year){
   const entry=saved || Drive.Files.create({
     name:'나무팜_'+(kind==='quote'?'견적':'주문')+'_'+year,
     mimeType:'application/vnd.google-apps.spreadsheet',
+    parents:[NAMUFARM_SERVER_FOLDER_ID],
     appProperties:quoteMonthFileProperties_(token)
   },null,{fields:'id'});
   assert_(entry && entry.id,'NOT_READY');
