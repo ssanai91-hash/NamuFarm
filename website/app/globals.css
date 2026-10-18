@@ -460,16 +460,13 @@ section {
 }
 .catalog-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit,minmax(min(100%,17rem),1fr));
+  grid-template-columns: repeat(auto-fit,minmax(min(100%,9rem),1fr));
   gap: .8rem;
 }
 .catalog-card {
   display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: space-between;
-  gap: .75rem;
-  min-height: 3.5rem;
+  flex-direction: column;
+  align-items: stretch;
   min-width: 0;
   padding: .6rem .8rem .8rem;
   background: #f0f4e9;
@@ -531,14 +528,16 @@ section {
   font-size: 1.125rem;
   font-weight: 750;
   line-height: 1.5;
-  text-wrap: pretty;
+  text-wrap: balance;
   flex: 1;
 }
 .catalog-card-caption {
   font-size: 1rem;
   font-weight: 600;
   line-height: 1.5;
-  border: 1px solid #d6e0cf;
+  border-top: 1px solid #d6e0cf;
+  margin-top: .55rem;
+  padding-top: .55rem;
 }
 .selected .catalog-card-caption {
   color: #174d32;
@@ -2346,15 +2345,18 @@ body { background:#fafbf7; }
   font-size: 1rem;
   font-weight: 700;
 }
+.catalog-filter-summary {
+  margin-top: .85rem;
+  color: #254f36;
+  font-size: 1rem;
+  font-weight: 700;
+}
 .catalog-card-name {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: center;
   gap: .35rem;
-  min-width: 0;
-  font-size: 1rem;
-  text-align: left;
   overflow-wrap: anywhere;
 }
 .catalog-variant {
@@ -2363,26 +2365,18 @@ body { background:#fafbf7; }
   padding: .15rem .35rem;
   background: #e8efe1;
   color: #1b4b34;
-  font-size: inherit;
+  font-size: 1.05rem;
   font-weight: 800;
   line-height: 1.4;
-  white-space: nowrap;
 }
 .catalog-card-caption {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: .3rem;
-  flex-shrink: 0;
-  min-width: 3.5rem;
-  min-height: 2.25rem;
-  margin: 0;
-  padding: .3rem .6rem;
-  border-radius: .55rem;
-  background: #f5f8f1;
-  white-space: nowrap;
+  min-height: 2rem;
 }
-.selected .catalog-card-caption { background: #245a40; border-color: #245a40; color: #fff; }
+.catalog-card-caption>svg { width: 1.1rem; height: 1.1rem; flex-shrink: 0; }
 .art-pending>span { font-size: 1rem; color: #40593b; }
 .step-top>span { color: #3f5e38; font-weight: 700; }
 .form-call-help {

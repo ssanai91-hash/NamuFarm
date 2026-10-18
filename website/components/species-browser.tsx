@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { Leaf, Search, X, ShoppingBasket } from "lucide-react";
+import { Check, Leaf, Search, X, ShoppingBasket } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { catalogInitials, filterSpecies, type CatalogInitial } from "@/lib/species-catalog";
@@ -28,8 +28,8 @@ export default function SpeciesBrowser({ lines, onSelect, onRemove, notice, lock
       <div className="catalog-grid">{matches.slice(0, visibleCount).map(species => {
         const isSelected = selected.has(species.name);
         const variant = species.name.match(/^(.+?)\(([^)]+)\)$/);
-        return <button type="button" key={species.id} data-species-id={species.id} className={`catalog-card${isSelected ? " selected" : ""}`} disabled={locked} onClick={() => onSelect(species.name)} aria-label={`${species.name}, ${isSelected ? "빼기" : "담기"}`} aria-pressed={isSelected}>
-          <span className="catalog-card-name">{variant ? <>{variant[1]}<strong className="catalog-variant">{variant[2]}</strong></> : species.name}</span><span className="catalog-card-caption">{isSelected ? "빼기" : "담기"}</span>
+        return <button type="button" key={species.id} data-species-id={species.id} className={`catalog-card${isSelected ? " selected" : ""}`} disabled={locked} onClick={() => onSelect(species.name)} aria-label={`${species.name}, ${isSelected ? "견적에 담았어요. 다시 누르면 빼기" : "견적에 담기"}`} aria-pressed={isSelected}>
+          <span className="catalog-card-name">{variant ? <>{variant[1]}<strong className="catalog-variant">{variant[2]}</strong></> : species.name}</span><span className="catalog-card-caption">{isSelected && <Check aria-hidden="true" />}<span>{isSelected ? "담김 · 빼기" : "견적에 담기"}</span></span>
         </button>;
       })}</div>
       {matches.length === 0 && <div className="catalog-empty"><Leaf aria-hidden="true" /><h3>검색 결과가 없어요.</h3><p>다른 이름으로 찾거나 묘목 이름을 직접 적어주세요.</p><Button asChild variant="outline"><a href="#quote">묘목 이름 직접 적기</a></Button></div>}
