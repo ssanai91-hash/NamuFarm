@@ -7,7 +7,7 @@ export function validatedQuoteReceipt(value: unknown, expectedId: string): Quote
     || typeof receipt.createdAt !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(receipt.createdAt)) return null;
   const time = Date.parse(receipt.createdAt);
   if (!Number.isFinite(time) || new Date(time).toISOString() !== receipt.createdAt) return null;
-  const match = /^NFQ-(\d{8})-(\d{4,16})$/.exec(receipt.receiptNumber);
+  const match = /^(?:NAMU|NFQ)-(\d{8})-(\d{4,16})$/.exec(receipt.receiptNumber);
   if (!match || !Number.isSafeInteger(Number(match[2])) || Number(match[2]) < 1
     || match[1] !== new Date(time + 9 * 3600000).toISOString().slice(0, 10).replace(/-/g, "")) return null;
   return { requestId: receipt.requestId, receiptNumber: receipt.receiptNumber, createdAt: receipt.createdAt };

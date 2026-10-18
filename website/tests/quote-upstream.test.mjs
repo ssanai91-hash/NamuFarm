@@ -21,6 +21,8 @@ test('a login page or malformed JSON never becomes a saved receipt', async () =>
 });
 test('only a complete matching receipt confirms storage', async () => {
   assert.deepEqual(await readQuoteResponse(Response.json(receipt), id), {status:201,body:{requestId:id,receiptNumber:receipt.receiptNumber,createdAt:receipt.createdAt}});
+  const current = { ...receipt, receiptNumber: 'NAMU-20261008-0001' };
+  assert.deepEqual(await readQuoteResponse(Response.json(current), id), {status:201,body:{requestId:id,receiptNumber:current.receiptNumber,createdAt:receipt.createdAt}});
   for (const value of [{...receipt,requestId:'another'}, {...receipt,receiptNumber:''}, {...receipt,ok:false}]) {
     assert.notEqual((await readQuoteResponse(Response.json(value), id)).status, 201);
   }

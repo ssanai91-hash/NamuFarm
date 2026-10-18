@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Sprout, Plus, Minus, FileText, CheckCheck, MessageCircle, ShieldCheck, LoaderCircle, CircleCheck, X, Copy, Phone, ChevronDown } from "lucide-react";
+import { Sprout, Plus, Minus, FileText, CheckCheck, MessageCircle, ShieldCheck, LoaderCircle, CircleCheck, X, Copy, Phone, ChevronDown, RotateCcw } from "lucide-react";
 import SpeciesBrowser from "@/components/species-browser";
 import SpeciesPickerDialog from "@/components/species-picker-dialog";
 import { Button } from "@/components/ui/button";
@@ -37,6 +37,7 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
   const [uncertain, setUncertain] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [confirmedNotReceived, setConfirmedNotReceived] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
   const inFlight = useRef(false);
   const [busy, setBusy] = useState(false); const [success, setSuccess] = useState<QuoteReceipt | null>(null);
   const [menuOpen, setMenuOpen] = useState(false); const [atForm, setAtForm] = useState(false);
@@ -180,6 +181,30 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
     try { await navigator.clipboard.writeText(success.receiptNumber); setCopyNotice("접수번호를 복사했어요."); }
     catch { setCopyNotice("접수번호를 길게 누르거나 선택해서 복사해주세요."); }
   }
+  /** Reset local form inputs, leaving confirmed receipt display separate. */
+  function clearQuoteInputs() {
+    setName(""); setPhone(""); setRegion(""); setMessage(""); setEmail("");
+    setFormalQuote(false); setRecipient(""); setReplyChannel("sms"); setWebsite("");
+    setLines([emptyLine(nextLine.current++)]); setPickerLineId(null);
+    setNotice(""); setRemoved(null); setProblems([]);
+  }
+  function resetQuoteForm() {
+    if (busy || inFlight.current || (uncertain && !confirmedNotReceived)) return;
+    try {
+      sessionStorage.removeItem("namufarm.pending-request");
+    } catch {
+      if (uncertain) {
+        setError("접수 확인 정보를 지우지 못했어요. 전화로 문의하거나 브라우저를 다시 열어주세요.");
+        setResetOpen(false);
+        return;
+      }
+    }
+    attempt.current = null;
+    setReview(null); setReviewOpen(false); setUncertain(false); setConflict(false);
+    setConfirmedNotReceived(false); setResetOpen(false);
+    setError(""); setSuccess(null); setSuccessContact(null); setCopyNotice("");
+    clearQuoteInputs();
+  }
   function prepare(event: FormEvent) {
     event.preventDefault(); if (locked) return; setError(""); setProblems([]); setConflict(false);
     if (testMode && !testAcknowledged) { setTestNoticeOpen(true); return; }
@@ -219,9 +244,9 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
       if (!response.ok || !receipt) throw new Error(result.error || "접수 결과를 확인하지 못했어요. 같은 내용으로 다시 보내주세요.");
       sessionStorage.removeItem("namufarm.pending-request");
       setSuccessContact({ phoneTail: review.customerPhone.slice(-4), channel: review.replyChannel || "sms", formal: review.formalQuoteRequested === true });
-      setCopyNotice(""); setNotice(""); setRemoved(null); setProblems([]);
+      setCopyNotice("");
       setUncertain(false); setSuccess(receipt); setReview(null); setReviewOpen(false); setConfirmedNotReceived(false); attempt.current = null;
-      setName(""); setPhone(""); setRegion(""); setMessage(""); setEmail(""); setFormalQuote(false); setRecipient(""); setReplyChannel("sms"); setLines([emptyLine(nextLine.current++)]);
+      clearQuoteInputs();
     } catch (e) { setError(e instanceof Error && e.name !== "TimeoutError" && e.name !== "TypeError" && e.name !== "SyntaxError" ? e.message : "접수 결과를 확인하지 못했어요. 창을 닫아도 입력 내용은 유지됩니다. 잠시 후 같은 요청으로 확인해주세요."); }
     finally { setBusy(false); inFlight.current = false; }
   }
@@ -329,7 +354,15 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
             <div className="honeypot" aria-hidden="true"><label htmlFor="website">Website</label><input id="website" tabIndex={-1} autoComplete="off" value={website} onChange={e => setWebsite(e.target.value)} /></div>
             <div className="processing-notice"><p>{quoteProcessingNotice}</p><a href="/privacy">개인정보 처리방침</a></div>
             <div id="quote-errors" ref={errorRef} tabIndex={-1} className={error ? "form-error" : ""} role={error ? "alert" : undefined}>{error}{problems.length > 0 && <ul>{problems.map(problem => <li key={problem.id}><button type="button" onClick={() => focusField(problem.id)}>{problem.message}</button></li>)}</ul>}</div>
-            <div className="form-summary"><span>요청 품목 <strong>{count}종</strong></span><span>총 수량 <strong>{total.toLocaleString()}주</strong></span></div><Button className="submit-button" type="submit" disabled={busy} onClick={uncertain ? event => { event.preventDefault(); setReviewOpen(true); } : undefined}>{uncertain ? "접수 확인 이어가기" : "내용 확인하기"}</Button><p className="submit-note">주문과 결제는 상담 후 결정합니다.</p>
+            <div className="form-summary"><span>요청 품목 <strong>{count}종</strong></span><span>총 수량 <strong>{total.toLocaleString()}주</strong></span></div>
+            <div className="quote-submit-actions">
+              <Button className="submit-button" type="submit" disabled={busy} onClick={uncertain ? event => { event.preventDefault(); setReviewOpen(true); } : undefined}>{uncertain ? "접수 확인 이어가기" : "내용 확인하기"}</Button>
+              <Button className="quote-reset-button" type="button" variant="outline" disabled={busy}
+                onClick={() => { setConfirmedNotReceived(false); setResetOpen(true); }}>
+                <RotateCcw aria-hidden="true" />초기화
+              </Button>
+            </div>
+            <p className="submit-note">주문과 결제는 상담 후 결정합니다.</p>
           </>}
         </form>
       </div></section>
@@ -339,6 +372,29 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
     <footer className="site-footer"><div className="wrap footer-inner"><div><div className="footer-brand-row"><a href="#home" className="brand"><Sprout /><span>나무팜<small>NAMUFARM</small></span></a><div className="footer-business"><span>{businessInfo.name} · 대표 {businessInfo.representative}</span><span>사업자등록번호 {businessInfo.number}</span></div></div><p>당신의 내일에, 푸르름을 더합니다.</p></div><div><a href="#quote">묘목 견적 상담</a><div className="footer-phone-row"><a href={`tel:${businessInfo.mobile.replaceAll("-", "")}`}>전화 상담 {businessInfo.mobile}</a><span aria-hidden="true">/</span><a href={`tel:${businessInfo.phone.replaceAll("-", "")}`}>대표전화 {businessInfo.phone}</a></div><a href="/privacy">개인정보 처리방침</a><small>© {new Date().getFullYear()} NAMUFARM</small></div></div></footer>
     <div className={`mobile-cta ${atForm || reviewOpen || success || menuOpen || pickerLineId !== null || sampleOpen || testNoticeOpen ? "is-hidden" : ""}`} role="region" aria-label="빠른 상담"><span><strong>{count ? `담은 묘목 ${count}종` : "필요한 묘목을 알려주세요"}</strong><small>{count ? "계속 고르셔도 됩니다" : "결제 없이 견적 상담"}</small></span><div className="mobile-cta-actions"><Button asChild variant="outline" className="mobile-call"><a href={`tel:${businessInfo.mobile.replaceAll("-", "")}`} aria-label={`전화 상담 ${businessInfo.mobile}`}><Phone aria-hidden="true" />전화 상담</a></Button><Button asChild><a href="#quote">{count ? `수량 입력 (${count}종)` : "견적 바로 작성"}</a></Button></div></div>
     <SpeciesPickerDialog open={pickerLineId !== null && !locked} onOpenChange={open => { if (!open) setPickerLineId(null); }} onChoose={choosePickedSpecies} selectedName={lines.find(line => line.id === pickerLineId)?.species ?? ""} />
+    <Dialog open={resetOpen} onOpenChange={open => { setResetOpen(open); if (!open) setConfirmedNotReceived(false); }}>
+      <DialogContent className="quote-reset-dialog" showCloseButton={false}>
+        <DialogHeader>
+          <DialogTitle>견적 입력을 초기화할까요?</DialogTitle>
+          <DialogDescription>{uncertain
+            ? "접수 결과가 확인되지 않았습니다. 이미 접수된 요청이 있을 수 있으므로 초기화 후 다시 전송하면 중복될 수 있어요."
+            : "작성 중인 묘목·수량·연락처가 모두 지워집니다."}</DialogDescription>
+        </DialogHeader>
+        {uncertain && <>
+          <p className="service-notice">판매자에게 기존 요청이 접수되지 않았는지 먼저 확인해주세요. 초기화해도 서버에 저장된 내용은 삭제되지 않습니다.</p>
+          <a className="support-call" href={`tel:${businessInfo.mobile.replaceAll("-", "")}`}><Phone aria-hidden="true" />전화로 접수 확인 · {businessInfo.mobile}</a>
+          <label className="pending-confirm">
+            <input type="checkbox" checked={confirmedNotReceived} onChange={e => setConfirmedNotReceived(e.target.checked)} />
+            판매자에게 기존 요청이 접수되지 않았음을 확인했어요.
+          </label>
+        </>}
+        <div className="quote-reset-dialog-actions">
+          <Button type="button" variant="outline" onClick={() => { setResetOpen(false); setConfirmedNotReceived(false); }}>취소</Button>
+          <Button type="button" disabled={busy || (uncertain && !confirmedNotReceived)} onClick={resetQuoteForm}>입력 초기화</Button>
+        </div>
+        <p className="submit-note">초기화는 홈페이지 입력만 지우며 서버에 저장된 견적은 삭제하지 않습니다.</p>
+      </DialogContent>
+    </Dialog>
     <Dialog open={reviewOpen && !!review} onOpenChange={open => { if (!open) closeReview(); }}><DialogContent className="review-dialog" onOpenAutoFocus={event => { event.preventDefault(); reviewTitleRef.current?.focus(); }} showCloseButton={false}>
       <DialogClose asChild><Button className="dialog-dismiss" type="button" variant="ghost" aria-label="접수 확인창 닫기"><X /></Button></DialogClose>
       <DialogHeader><DialogTitle ref={reviewTitleRef} tabIndex={-1}>{testMode ? "테스트 요청을 확인해주세요" : "견적 상담을 요청할까요?"}</DialogTitle><DialogDescription>{testMode ? testNotice : "품목·수량·연락처를 확인해주세요. 주문과 결제는 상담 후 결정합니다."}</DialogDescription></DialogHeader>
