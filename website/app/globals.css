@@ -531,17 +531,6 @@ section {
   text-wrap: balance;
   flex: 1;
 }
-.catalog-card-caption {
-  font-size: 1rem;
-  font-weight: 600;
-  line-height: 1.5;
-  border-top: 1px solid #d6e0cf;
-  margin-top: .55rem;
-  padding-top: .55rem;
-}
-.selected .catalog-card-caption {
-  color: #174d32;
-}
 .catalog-more {
   text-align: center;
   margin-top: 1.4rem;
@@ -1585,10 +1574,6 @@ section {
   .catalog-card.selected {
     padding: calc(.5rem - 1px) calc(.7rem - 1px) calc(.7rem - 1px);
   }
-  .catalog-card-caption {
-    margin-top: .45rem;
-    padding-top: .45rem;
-  }
   .quote-section {
     padding-block: 2rem;
   }
@@ -2220,7 +2205,6 @@ body { background:#fafbf7; }
   border-radius:.85rem;
   margin-bottom:.65rem;
 }
-.catalog-card-caption { border-top-color:#e5ede3; }
 .catalog-basket {
   border-color:#d4e3d1;
   border-radius:1.2rem;
@@ -2374,14 +2358,6 @@ body { background:#fafbf7; }
   font-weight: 800;
   line-height: 1.4;
 }
-.catalog-card-caption {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: .3rem;
-  min-height: 2rem;
-}
-.catalog-card-caption>svg { width: 1.1rem; height: 1.1rem; flex-shrink: 0; }
 .art-pending>span { font-size: 1rem; color: #40593b; }
 .step-top>span { color: #3f5e38; font-weight: 700; }
 .form-call-help {
@@ -2485,4 +2461,64 @@ body { background:#fafbf7; }
   .quote-form .add-line { width: 100%; min-height: 3.25rem; margin-top: 1rem; border-style: solid; background: #fff; color: #205844; font-size: 1.125rem; }
   .quote-form .contact-grid { grid-template-columns: minmax(0, 1fr); gap: 1rem; }
   .quote-form .contact-grid > .field { grid-column: 1 / -1; }
+}
+
+/* Compact selection cards: one tap target, no separate action row. */
+.catalog-grid .catalog-card {
+  position: relative;
+  flex-direction: row;
+  align-items: center;
+  min-height: 3.75rem;
+  padding: .65rem 2.35rem .65rem .75rem;
+  border: 2px solid #cbdacf;
+  border-radius: .9rem;
+  background: #fff;
+  text-align: left;
+  box-shadow: 0 2px 6px #224a2909;
+  transform: none;
+}
+.catalog-grid .catalog-card:hover {
+  border-color: #769c80;
+  background: #f6faf5;
+  transform: none;
+}
+.catalog-grid .catalog-card.selected {
+  border-color: #205844;
+  background: #e4f0e7;
+  color: #174d32;
+  box-shadow: 0 0 0 1px #20584424;
+}
+.catalog-grid .catalog-card:focus-visible {
+  outline: 3px solid #ae771d;
+  outline-offset: 3px;
+}
+.catalog-grid .catalog-card-name {
+  justify-content: flex-start;
+  gap: .25rem;
+  line-height: 1.35;
+  text-wrap: wrap;
+}
+.catalog-card-choice {
+  position: absolute;
+  right: .6rem;
+  top: 50%;
+  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  border: 1.5px solid #9ab4a2;
+  border-radius: 50%;
+  background: #fff;
+  color: #fff;
+}
+.selected .catalog-card-choice {
+  border-color: #205844;
+  background: #205844;
+}
+.catalog-card-choice>svg { width: .9rem; height: .9rem; stroke-width: 3; }
+@media(max-width:48rem) {
+  .catalog-grid { grid-template-columns: repeat(2,minmax(0,1fr)); gap: .55rem; }
+  .catalog-grid .catalog-card { padding: .55rem 2.1rem .55rem .65rem; }
+  .catalog-grid .catalog-variant { font-size: 1rem; padding: .1rem .25rem; }
 }
