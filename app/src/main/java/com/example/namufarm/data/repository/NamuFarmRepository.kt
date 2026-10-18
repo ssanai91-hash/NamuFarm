@@ -141,7 +141,7 @@ class NamuFarmRepository(
                 }
                 if (existing != null && existing.farmName != farm.farmName)
                     MasterReferenceGuard.farm(this, checkNotNull(farm.farmId))
-                upsertFarm(farm)
+                if (existing != farm) upsertFarm(farm)
             }
         }
     suspend fun cacheDirectorySpecies(rows: List<com.example.namufarm.data.remote.SpeciesDirectoryRecord>) =
@@ -154,7 +154,7 @@ class NamuFarmRepository(
                 }) { "로컬 묘목 이름과 운영 시트 ID가 다릅니다. 기존 자료를 확인해주세요." }
                 if (existing != null && existing.speciesName != species.speciesName)
                     MasterReferenceGuard.species(this, checkNotNull(species.speciesId))
-                upsertSpecies(species)
+                if (existing != species) upsertSpecies(species)
             }
         }
     fun getAllSellingInventory(): List<SellingDisplayRow> = local.getAllSellingInventory()

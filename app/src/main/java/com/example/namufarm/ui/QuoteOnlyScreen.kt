@@ -123,6 +123,8 @@ internal fun QuoteOnlyScreen(viewModel: ManagementViewModel, connection: WebRequ
                     label = { Text("견적요청 ${requests.size}") })
                 FilterChip(selected = selectedTab == 1, onClick = { selectedTab = 1 },
                     label = { Text("확정견적 ${confirmed.size + legacy.size}") })
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Spacer(Modifier.weight(1f))
                 OutlinedButton(onClick = { showFarmDirectory = true },
                     enabled = !busy && !inbox.busy && !deleting,
