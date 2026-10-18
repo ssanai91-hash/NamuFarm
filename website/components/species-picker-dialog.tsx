@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Search, X } from "lucide-react";
+import { Leaf, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { catalogInitials, filterSpecies, type CatalogInitial } from "@/lib/species-catalog";
+import { speciesIllustration } from "@/lib/species-illustrations";
 
 type Props = {
   open: boolean;
@@ -14,6 +15,18 @@ type Props = {
 };
 
 const initials: Array<CatalogInitial | "all"> = [...catalogInitials, "all"];
+
+function SpeciesPickerImage({ id }: { id: string }) {
+  const [failed, setFailed] = useState(false);
+  const illustration = speciesIllustration(id);
+  return (
+    <span className="species-picker-art" aria-hidden="true">
+      {illustration && !failed
+        ? <img src={illustration.src} width={256} height={256} loading="lazy" decoding="async" alt="" onError={() => setFailed(true)} />
+        : <span className="species-picker-art-empty"><Leaf strokeWidth={1.3} /><span>그림 미등록</span></span>}
+    </span>
+  );
+}
 
 export default function SpeciesPickerDialog({ open, onOpenChange, onChoose }: Props) {
   const [initial, setInitial] = useState<CatalogInitial | "all">("ㄱ");
@@ -69,7 +82,8 @@ export default function SpeciesPickerDialog({ open, onOpenChange, onChoose }: Pr
               className="species-picker-choice"
               onClick={() => onChoose(species.name)}
             >
-              {species.name}
+              <SpeciesPickerImage id={species.id} />
+              <span className="species-picker-choice-name">{species.name}</span>
             </Button>
           ))}
           {matches.length === 0 && <p className="species-picker-empty">찾는 묘목이 없어요. 이름을 직접 입력할 수 있어요.</p>}
