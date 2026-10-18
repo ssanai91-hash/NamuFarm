@@ -76,19 +76,18 @@ class ManagementViewModel(
 
             // 🚨 [핵심 추가] 폰 DB가 완전 텅 비어있다면? (최초 설치 or DB 파괴 직후)
             // 구글 시트에서 전체 농원/묘목 마스터 데이터를 최초 1회 자동으로 싹 긁어온다!
-            if (farms.isEmpty() || allSpecies.isEmpty()) {
+            if ((farms.isEmpty() || allSpecies.isEmpty()) && !syncManager.masters.initialized) {
                 _uiState.update { it.copy(message = "🔄 최초 실행: 전체 농원/묘목 마스터 데이터 가져오는 중...") }
 
                 // 마스터 데이터 강제 1회 다운로드
-                syncManager.syncFarmsWithGoogleSheet()
-                syncManager.syncSpeciesWithGoogleSheet()
+                val initialSync = syncManager.masters.sync()
 
                 // 다운로드 끝났으니 DB에서 다시 읽어오기
                 allSpecies = dao.getAllSpecies()
                 farms = dao.getAllFarms()
                 allInventory = dao.getAllSellingInventory()
 
-                _uiState.update { it.copy(message = "✅ 마스터 데이터 초기 세팅 완료!") }
+                _uiState.update { it.copy(message = initialSync.message) }
             }
 
             android.util.Log.d("NamuFarm", "farms.size = ${farms.size}")
@@ -836,106 +835,16 @@ class ManagementViewModel(
         }
     }
 
-    // 🚨 2. 추가됨: 동기화 버튼을 눌렀을 때 실행될 함수!
-    fun syncDataWithGoogleSheet() {
+    fun syncDataWithGoogleSheet() = syncMasterDirectory(null)
+    fun syncFarmMasterFromGoogleSheet() = syncMasterDirectory(OperationsMasterSync.FARM)
+    fun syncSpeciesMasterFromGoogleSheet() = syncMasterDirectory(OperationsMasterSync.SPECIES)
+
+    private fun syncMasterDirectory(kind: String?) {
         viewModelScope.launch(Dispatchers.IO) {
-            _uiState.update { it.copy(message = "🔄 미동기화 항목 재전송 중...") }
-
-            val pendingList = dao.getAllPendingSync()
-
-            var resentSuccess = 0
-            var resentFail = 0
-
-            pendingList.forEach { pending ->
-                val result = syncManager.processPendingSync(pending)
-
-                if (result.success) {
-                    pending.syncId?.let { dao.deletePendingSync(it) }
-                    resentSuccess++
-                } else {
-                    pending.syncId?.let {
-                        dao.markPendingSyncFailed(
-                            syncId = it,
-                            error = result.errorMessage ?: "알 수 없는 오류"
-                        )
-                    }
-                    resentFail++
-                }
-            }
-
+            _uiState.update { it.copy(message = "🔄 농원·묘목 운영 시트 동기화 중...") }
+            val result = syncManager.masters.sync(kind)
             refreshLocalState()
-
-            if (resentFail > 0) {
-                _uiState.update {
-                    it.copy(
-                        message = "⚠️ 미동기화 ${resentFail}건 남아 있어 Pull 생략. 네트워크 확인 후 다시 동기화하세요."
-                    )
-                }
-                return@launch
-            }
-
-            _uiState.update {
-                it.copy(
-                    message = if (resentSuccess > 0) {
-                        "☁️ 재전송 ${resentSuccess}건 완료. 재고/주문 최신 데이터 가져오는 중..."
-                    } else {
-                        "☁️ 미동기화 없음. 재고/주문 최신 데이터 가져오는 중..."
-                    }
-                )
-            }
-
-            val inventorySyncResult = syncManager.syncWithGoogleSheet()
-            val orderSyncCount = syncManager.syncOrdersWithGoogleSheet()
-
-            refreshLocalState()
-
-            _uiState.update {
-                it.copy(
-                    message = if (inventorySyncResult.errorMessage != null || orderSyncCount < 0) {
-                        "⚠️ 재고/주문 동기화 일부 실패"
-                    } else {
-                        "✅ 동기화 완료 (재고: ${inventorySyncResult.upserted}건, 주문: ${orderSyncCount}건)"
-                    }
-                )
-            }
-        }
-    }
-
-    fun syncFarmMasterFromGoogleSheet() {
-        viewModelScope.launch(Dispatchers.IO) {
-            _uiState.update { it.copy(message = "🏡 농원목록 동기화 중...") }
-
-            val result = syncManager.syncFarmsWithGoogleSheet()
-            refreshLocalState()
-
-            _uiState.update {
-                it.copy(
-                    message = if (result < 0) {
-                        "❌ 농원목록 동기화 실패"
-                    } else {
-                        "✅ 농원목록 동기화 완료 (${result}건)"
-                    }
-                )
-            }
-        }
-    }
-
-    fun syncSpeciesMasterFromGoogleSheet() {
-        viewModelScope.launch(Dispatchers.IO) {
-            _uiState.update { it.copy(message = "🌱 묘목목록 동기화 중...") }
-
-            val result = syncManager.syncSpeciesWithGoogleSheet()
-            refreshLocalState()
-
-            _uiState.update {
-                it.copy(
-                    message = if (result < 0) {
-                        "❌ 묘목목록 동기화 실패"
-                    } else {
-                        "✅ 묘목목록 동기화 완료 (${result}건)"
-                    }
-                )
-            }
+            _uiState.update { it.copy(message = result.message) }
         }
     }
 
@@ -1162,168 +1071,43 @@ class ManagementViewModel(
         }
     }
 
-    fun saveFarm(
-        farmId: Int?,
-        farmName: String,
-        address: String,
-        phone: String,
-        memo: String
-    ) {
+    fun saveFarm(farmId: Int?, farmName: String, address: String, phone: String, memo: String) {
         viewModelScope.launch(Dispatchers.IO) {
-            val savedId = dao.upsertFarm(
-                FarmEntity(
-                    farmId = farmId,
-                    farmName = farmName,
-                    address = address.ifBlank { null },
-                    phone = phone.ifBlank { null },
-                    memo = memo.ifBlank { null }
-                )
-            ).toInt()
-
-            val targetFarm = FarmEntity(
-                farmId = farmId ?: savedId,
-                farmName = farmName,
-                address = address.ifBlank { null },
-                phone = phone.ifBlank { null },
-                memo = memo.ifBlank { null }
-            )
-
-            val farms = dao.getAllFarms()
-
-            _uiState.update {
-                it.copy(
-                    farmList = farms,
-                    selectedFarm = farms.find { farm -> farm.farmId == (farmId ?: savedId) },
-                    message = "🏡 로컬 농원 저장 완료"
-                )
-            }
-
-            val pendingId = enqueuePendingSync(
-                PendingSyncType.FARM_SAVE,
-                PendingFarmSyncPayload(targetFarm)
-            )
-
-            val isCloudSuccess = syncManager.uploadFarmToSheet(targetFarm)
-            if (isCloudSuccess) {
-                dao.deletePendingSync(pendingId)
-                _uiState.update { it.copy(message = "✅ 농원 저장 + 시트 연동 완료") }
-            } else {
-                _uiState.update { it.copy(message = "⚠️ 농원 로컬 저장 완료, 시트 연동 실패") }
-            }
+            val result = syncManager.masters.saveFarm(FarmEntity(farmId, farmName.trim(),
+                address.trim(), phone.trim(), memo.trim()))
+            refreshLocalState()
+            _uiState.update { state -> state.copy(
+                selectedFarm = state.farmList.find { it.farmId == result.localId },
+                message = result.message) }
         }
     }
 
     fun deleteFarm(farmId: Int) {
         viewModelScope.launch(Dispatchers.IO) {
-            dao.deleteInventoryByFarmId(farmId)
-            dao.deleteFarmById(farmId)
-
-            val pendingId = enqueuePendingSync(
-                PendingSyncType.FARM_DELETE,
-                PendingDeleteFarmSyncPayload(farmId)
-            )
-
-            val isCloudSuccess = syncManager.deleteFarmOnSheet(farmId)
-            if (isCloudSuccess) {
-                dao.deletePendingSync(pendingId)
-            }
-
+            val result = syncManager.masters.deleteFarm(farmId)
             refreshLocalState()
-
-            _uiState.update {
-                it.copy(
-                    selectedFarm = null,
-                    selectedSpecies = null,
-                    inventoryList = emptyList(),
-                    speciesList = emptyList(),
-                    isSpeciesEnabled = false,
-                    isInputEnabled = false,
-                    isInputActive = false,
-                    message = if (isCloudSuccess) {
-                        "🗑️ 농원 및 재고 삭제 + 시트 반영 완료"
-                    } else {
-                        "⚠️ 농원 및 재고 로컬 삭제 완료, 시트 연동 실패"
-                    }
-                )
-            }
+            _uiState.update { it.copy(selectedFarm = null, selectedSpecies = null,
+                inventoryList = emptyList(), speciesList = emptyList(),
+                isSpeciesEnabled = false, isInputEnabled = false, isInputActive = false,
+                message = result.message) }
         }
     }
 
-    fun saveSpecies(
-        speciesId: Int?,
-        speciesName: String,
-        nameFarm: String,
-        chosung: String,
-        category: String,
-        memo: String,
-        isActive: Int = 1
-    ) {
+    fun saveSpecies(speciesId: Int?, speciesName: String, nameFarm: String,
+                    chosung: String, category: String, memo: String, isActive: Int = 1) {
         viewModelScope.launch(Dispatchers.IO) {
-            val savedId = dao.upsertSpecies(
-                SpeciesEntity(
-                    speciesId = speciesId,
-                    speciesName = speciesName,
-                    nameFarm = nameFarm.ifBlank { null },
-                    chosung = chosung.ifBlank { null },
-                    category = category.ifBlank { null },
-                    memo = memo.ifBlank { null },
-                    isActive = isActive
-                )
-            ).toInt()
-
-            val targetSpecies = SpeciesEntity(
-                speciesId = speciesId ?: savedId,
-                speciesName = speciesName,
-                nameFarm = nameFarm.ifBlank { null },
-                chosung = chosung.ifBlank { null },
-                category = category.ifBlank { null },
-                memo = memo.ifBlank { null },
-                isActive = isActive
-            )
-
+            val result = syncManager.masters.saveSpecies(SpeciesEntity(speciesId, speciesName.trim(),
+                nameFarm.trim(), chosung.trim(), category.trim(), memo.trim(), isActive))
             refreshLocalState()
-            _uiState.update { it.copy(message = "🌱 로컬 묘목 저장 완료") }
-
-            val pendingId = enqueuePendingSync(
-                PendingSyncType.SPECIES_SAVE,
-                PendingSpeciesSyncPayload(targetSpecies)
-            )
-
-            val isCloudSuccess = syncManager.uploadSpeciesToSheet(targetSpecies)
-            if (isCloudSuccess) {
-                dao.deletePendingSync(pendingId)
-                _uiState.update { it.copy(message = "✅ 묘목 저장 + 시트 연동 완료") }
-            } else {
-                _uiState.update { it.copy(message = "⚠️ 묘목 로컬 저장 완료, 시트 연동 실패") }
-            }
+            _uiState.update { it.copy(message = result.message) }
         }
     }
 
     fun deleteSpecies(speciesId: Int) {
         viewModelScope.launch(Dispatchers.IO) {
-            dao.deactivateSpecies(speciesId)
-
-            val pendingId = enqueuePendingSync(
-                PendingSyncType.SPECIES_DELETE,
-                PendingDeleteSpeciesSyncPayload(speciesId)
-            )
-
-            val isCloudSuccess = syncManager.deleteSpeciesOnSheet(speciesId)
-            if (isCloudSuccess) {
-                dao.deletePendingSync(pendingId)
-            }
-
+            val result = syncManager.masters.deleteSpecies(speciesId)
             refreshLocalState()
-
-            _uiState.update {
-                it.copy(
-                    message = if (isCloudSuccess) {
-                        "🗑️ 묘목 비활성화 + 시트 반영 완료"
-                    } else {
-                        "⚠️ 묘목 로컬 비활성화 완료, 시트 연동 실패"
-                    }
-                )
-            }
+            _uiState.update { it.copy(message = result.message) }
         }
     }
     // 🚨 [추가] 꽉 막힌 동기화 큐를 강제로 날려버리는 관리자 비상용 함수

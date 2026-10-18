@@ -31,8 +31,8 @@ jobs:
       - name: Restore Gradle dependency cache
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Verify original application sources
-        run: git diff --exit-code f8f2de29e6ac1755f505fc00d444480267399269 -- app
+      - name: Verify original UI sources
+        run: git diff --exit-code f8f2de29e6ac1755f505fc00d444480267399269 -- app/src/main/java/com/example/namufarm/ui app/src/main/res
 
       - name: Prepare side-by-side installation identity
         run: |
@@ -66,7 +66,7 @@ jobs:
           fi
 
       - name: Compile original release APK
-        run: ./gradlew --no-daemon :app:assembleRelease
+        run: ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleRelease
 
       - name: Sign and verify initial-version APK
         env:
@@ -93,5 +93,5 @@ jobs:
         run: |
           set -euo pipefail
           tag="android-initial-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
-          gh release create "$tag" "$RUNNER_TEMP/NamuFarm-original-release.apk" --draft --target "$GITHUB_SHA" --title "NamuFarm initial Android UI 2026-09-27" --notes "Original application sources: f8f2de29e6ac1755f505fc00d444480267399269. Built from restore/android-initial-20260927. Separate application ID com.example.namufarm.original allows installation alongside the current app; UI and application Kotlin sources remain the initial version. This is the legacy application, with its original server integration."
+          gh release create "$tag" "$RUNNER_TEMP/NamuFarm-original-release.apk" --draft --target "$GITHUB_SHA" --title "NamuFarm initial Android UI 2026-09-27" --notes "Original application sources: f8f2de29e6ac1755f505fc00d444480267399269. Built from restore/android-initial-20260927. Separate application ID com.example.namufarm.original allows installation alongside the current app; Original UI and resource sources are preserved. Farm/species masters now connect to the operations workbook; legacy stock/orders remain local."
           echo "Initial APK saved in draft release: $tag" >> "$GITHUB_STEP_SUMMARY"

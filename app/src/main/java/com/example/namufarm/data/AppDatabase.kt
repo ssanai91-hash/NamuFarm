@@ -14,9 +14,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         FarmInventoryEntity::class,
         QuoteEntity::class,
         OrderEntity::class,
-        PendingSyncEntity::class
+        PendingSyncEntity::class,
+        MasterLinkEntity::class
     ],
-    version = 12, // 🚨 [수정 완료] 버전 10으로 확실하게 올림!
+    version = 13, // Preserve local IDs and add operations-sheet links.
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -426,6 +427,31 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+
+        private val MIGRATION_10_12 = object : Migration(10, 12) {
+            override fun migrate(db: SupportSQLiteDatabase) { addShippingColumns(db) }
+        }
+        private val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(db: SupportSQLiteDatabase) { addShippingColumns(db) }
+        }
+        private fun addShippingColumns(db: SupportSQLiteDatabase) {
+            for (table in listOf("quote_list", "order_list")) {
+                if (!columnExists(db, table, "is_prepaid"))
+                    db.execSQL("ALTER TABLE $table ADD COLUMN is_prepaid INTEGER NOT NULL DEFAULT 0")
+                if (!columnExists(db, table, "shipping_fee"))
+                    db.execSQL("ALTER TABLE $table ADD COLUMN shipping_fee INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+        private val MIGRATION_12_13 = object : Migration(12, 13) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""CREATE TABLE IF NOT EXISTS master_links (
+                    kind TEXT NOT NULL, local_id INTEGER NOT NULL,
+                    remote_id INTEGER NOT NULL, version TEXT NOT NULL,
+                    PRIMARY KEY(kind, local_id))""".trimIndent())
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_master_links_kind_remote_id ON master_links(kind, remote_id)")
+            }
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return instance ?: synchronized(this) {
                 val newInstance = Room.databaseBuilder(
@@ -442,10 +468,11 @@ abstract class AppDatabase : RoomDatabase() {
                         MIGRATION_6_7,
                         MIGRATION_7_8,
                         MIGRATION_8_9,
-                        MIGRATION_9_10
+                        MIGRATION_9_10,
+                        MIGRATION_10_12,
+                        MIGRATION_11_12,
+                        MIGRATION_12_13
                     )
-                    // 🚨 [수정 완료] 버전이 안 맞으면 에러 뱉지 말고 쿨하게 DB 초기화해라!
-                    .fallbackToDestructiveMigration()
                     .build()
 
                 instance = newInstance

@@ -212,4 +212,26 @@ interface ManagementDao {
         orderNumber: String,
         status: String
     )
+
+    @Query("SELECT * FROM species ORDER BY species_name")
+    fun getAllSpeciesIncludingInactive(): List<SpeciesEntity>
+
+    @Query("SELECT * FROM species WHERE species_id = :id LIMIT 1")
+    fun getSpeciesById(id: Int): SpeciesEntity?
+
+    @Query("SELECT COUNT(*) FROM farm_inventory WHERE farm_id = :id")
+    fun getFarmInventoryCount(id: Int): Int
+
+    @Query("SELECT * FROM master_links WHERE kind = :kind")
+    fun getMasterLinks(kind: String): List<MasterLinkEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun upsertMasterLink(link: MasterLinkEntity)
+
+    @Query("DELETE FROM master_links WHERE kind = :kind AND local_id = :id")
+    fun deleteMasterLink(kind: String, id: Int)
+
+    @Query("UPDATE pending_sync SET payload_json = :json WHERE sync_id = :id")
+    fun updatePendingPayload(id: Int, json: String)
+
 } // <- 인터페이스 닫는 괄호
