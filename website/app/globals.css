@@ -2468,8 +2468,8 @@ body { background:#fafbf7; }
   position: relative;
   flex-direction: row;
   align-items: center;
-  min-height: 3.75rem;
-  padding: .65rem 2.35rem .65rem .75rem;
+  min-height: 3.375rem;
+  padding: .5rem 2.35rem .5rem .75rem;
   border: 2px solid #cbdacf;
   border-radius: .9rem;
   background: #fff;
@@ -2519,6 +2519,6 @@ body { background:#fafbf7; }
 .catalog-card-choice>svg { width: .9rem; height: .9rem; stroke-width: 3; }
 @media(max-width:48rem) {
   .catalog-grid { grid-template-columns: repeat(2,minmax(0,1fr)); gap: .55rem; }
-  .catalog-grid .catalog-card { padding: .55rem 2.1rem .55rem .65rem; }
+  .catalog-grid .catalog-card { padding: .4rem 2.1rem .4rem .65rem; }
   .catalog-grid .catalog-variant { font-size: 1rem; padding: .1rem .25rem; }
 }
