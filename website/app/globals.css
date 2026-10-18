@@ -1169,10 +1169,15 @@ section {
   display: none;
 }
 [data-slot=dialog-content] {
-  /* Keep one centering rule across viewport sizes, without translation offsets. */
+  /* Keep the dialog's 50%/50% anchor and -50% translation together.
+     inset: 0 overwrote the anchor and shifted mobile dialogs offscreen. */
   position: fixed;
-  inset: 0;
-  margin: auto;
+  top: 50%;
+  left: 50%;
+  right: auto;
+  bottom: auto;
+  margin: 0;
+  translate: -50% -50%;
   width: calc(100% - 2rem);
   max-width: 32rem;
   height: fit-content;
