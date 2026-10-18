@@ -155,7 +155,7 @@ internal fun InitialQuoteScreen(viewModel: InitialQuoteViewModel, connection: In
                             }
                             itemsIndexed(remoteConfirmed, key = { _, saved -> "server-${saved.requestId}" }) { index, saved ->
                                 QuoteTableRow(confirmed.size + index + 1, saved.receiptNumber.ifBlank { saved.requestId },
-                                    saved.customerName, saved.customerPhone, detail = "견적확정 · 운영 시트 저장") {
+                                    saved.customerName, saved.customerPhone) {
                                     serverResult = saved
                                 }
                             }
