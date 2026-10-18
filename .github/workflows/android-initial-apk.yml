@@ -1,0 +1,96 @@
+name: Android Initial APK Build
+
+on:
+  push:
+    branches: [ "restore/android-initial-20260927" ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  original_apk:
+    name: Build original Android UI APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: write
+    steps:
+      - name: Check out original branch
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Configure Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Restore Gradle dependency cache
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Verify original application sources
+        run: git diff --exit-code f8f2de29e6ac1755f505fc00d444480267399269 -- app
+
+      - name: Prepare side-by-side installation identity
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          build = Path("app/build.gradle.kts")
+          source = build.read_text()
+          needle = 'applicationId = "com.example.namufarm"'
+          if source.count(needle) != 1:
+              raise SystemExit("Unexpected original application ID")
+          build.write_text(source.replace(needle, 'applicationId = "com.example.namufarm.original"'))
+          labels = Path("app/src/main/res/values/strings.xml")
+          text = labels.read_text()
+          labels.write_text(text.replace('name="app_name">NamuFarm<', 'name="app_name">나무팜 초기버전<'))
+          PY
+          chmod +x gradlew
+
+      - name: Prepare existing release signing
+        id: signing
+        env:
+          SIGNING_BASE64: ${{ secrets.NAMUFARM_KEYSTORE_BASE64 }}
+          NAMUFARM_STORE_PASSWORD: ${{ secrets.NAMUFARM_STORE_PASSWORD }}
+          NAMUFARM_KEY_ALIAS: ${{ secrets.NAMUFARM_KEY_ALIAS }}
+          NAMUFARM_KEY_PASSWORD: ${{ secrets.NAMUFARM_KEY_PASSWORD }}
+          NAMUFARM_SIGNING_SHA256: ${{ vars.NAMUFARM_SIGNING_SHA256 }}
+        run: |
+          python3 scripts/prepare_android_signing.py
+          if ! grep -q '^ready=true$' "$GITHUB_OUTPUT"; then
+            echo "::error::Existing release signing is required."
+            exit 1
+          fi
+
+      - name: Compile original release APK
+        run: ./gradlew --no-daemon :app:assembleRelease
+
+      - name: Sign and verify initial-version APK
+        env:
+          NAMUFARM_STORE_PASSWORD: ${{ secrets.NAMUFARM_STORE_PASSWORD }}
+          NAMUFARM_KEY_ALIAS: ${{ secrets.NAMUFARM_KEY_ALIAS }}
+          NAMUFARM_KEY_PASSWORD: ${{ secrets.NAMUFARM_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          apks=(app/build/outputs/apk/release/*-unsigned.apk)
+          if [ "${#apks[@]}" -ne 1 ]; then
+            echo "::error::Expected exactly one unsigned release APK."
+            exit 1
+          fi
+          build_tools="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
+          "$build_tools/zipalign" -p -f 4 "${apks[0]}" "$RUNNER_TEMP/namufarm-original-aligned.apk"
+          "$build_tools/apksigner" sign --ks "$RUNNER_TEMP/namufarm-release.jks" --ks-key-alias "$NAMUFARM_KEY_ALIAS" --ks-pass env:NAMUFARM_STORE_PASSWORD --key-pass env:NAMUFARM_KEY_PASSWORD --out "$RUNNER_TEMP/NamuFarm-original-release.apk" "$RUNNER_TEMP/namufarm-original-aligned.apk"
+          "$build_tools/apksigner" verify --verbose "$RUNNER_TEMP/NamuFarm-original-release.apk"
+
+      - name: Save original APK as a draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          tag="android-initial-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          gh release create "$tag" "$RUNNER_TEMP/NamuFarm-original-release.apk" --draft --target "$GITHUB_SHA" --title "NamuFarm initial Android UI 2026-09-27" --notes "Original application sources: f8f2de29e6ac1755f505fc00d444480267399269. Built from restore/android-initial-20260927. Separate application ID com.example.namufarm.original allows installation alongside the current app; UI and application Kotlin sources remain the initial version. This is the legacy application, with its original server integration."
+          echo "Initial APK saved in draft release: $tag" >> "$GITHUB_STEP_SUMMARY"
