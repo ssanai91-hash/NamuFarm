@@ -192,6 +192,51 @@ class WebRequestConnection(context: Context, private val repository: NamuFarmRep
         repository.cacheDirectorySpecies(listOf(current.copy(isActive = 0)))
     }
 
+    private suspend fun inventoryAction(action: String, extra: Map<String, Any> = emptyMap()):
+        com.example.namufarm.data.remote.WebQuoteEnvelope {
+        if (!paired) connect()
+        val response = api.request(settings.url,
+            extra + mapOf("action" to action, "deviceToken" to settings.deviceToken))
+        if (response.ok != true && response.code == "INVALID_ACTION")
+            error("운영 서버에 InventoryManagement.gs를 반영하고 기존 웹앱을 업데이트해주세요.")
+        if (response.ok != true && response.code == "CONFLICT")
+            error("다른 기기에서 농원별 묘목 자료를 수정했습니다. 새로고침으로 확인해주세요.")
+        WebQuoteValidator.checkResponse(response)
+        return response
+    }
+
+    /** Saves an existing Room outbox item, using a stable idempotency key on retries. */
+    suspend fun uploadPendingInventory(syncId: Int,
+        payload: com.example.namufarm.data.PendingInventorySyncPayload): Boolean {
+        val entity = payload.entity
+        val operationId = java.util.UUID.nameUUIDFromBytes(
+            ("namufarm:inventory:" + settings.prepareToken() + ":" + syncId)
+                .toByteArray(Charsets.UTF_8)).toString()
+        val fields = mapOf<String, Any>(
+            "farmId" to entity.farmId, "speciesId" to entity.speciesId,
+            "quality" to entity.quality, "age" to entity.age, "size" to entity.size,
+            "plantType" to entity.plantType, "quantity" to entity.quantity,
+            "wholesalePrice" to entity.wholesalePrice, "retailPrice" to entity.retailPrice
+        )
+        val result = inventoryAction("save_inventory",
+            mapOf("inventory" to fields, "operationId" to operationId))
+        return result.saved == true && result.operationId == operationId &&
+            result.inventoryRecord?.checked()?.asEntity() == entity
+    }
+
+    /** Called by the farm-mode Refresh button, not on every screen open. */
+    suspend fun refreshDirectoryInventory(): Int {
+        repository.flushInventoryPending()
+        val inventory = checkNotNull(inventoryAction("list_inventory").inventory) {
+            "농원별 묘목 목록을 확인하지 못했습니다."
+        }
+        inventory.forEach { it.checked() }
+        val keys = inventory.map { listOf(it.farmId, it.speciesId, it.quality, it.age, it.size, it.plantType) }
+        check(keys.distinct().size == keys.size) { "농원별 묘목 재고 키가 중복되어 있습니다." }
+        repository.cacheDirectoryInventory(inventory)
+        return inventory.count { it.quantity > 0 }
+    }
+
     suspend fun quoteAction(action: String, fields: Map<String, Any>): com.example.namufarm.data.remote.WebQuoteEnvelope {
         check(paired) { "서버를 먼저 연결해주세요." }
         require(action in setOf("send_quote_sms", "quote_sms_status", "send_quote_email"))

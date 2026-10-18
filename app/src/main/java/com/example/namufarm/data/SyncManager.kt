@@ -45,6 +45,10 @@ class SyncManager(
 ) {
     private val gson = Gson()
 
+    // Wired by MainActivity to the authenticated operations endpoint.
+    // Retain legacy fallback for older repositories and disconnected app flows.
+    var inventoryUploader: (suspend (Int, PendingInventorySyncPayload) -> Boolean)? = null
+
     suspend fun processPendingSync(item: PendingSyncEntity): PendingSyncProcessResult {
         return try {
             if (salesGateway != null && item.syncType in listOf(PendingSyncType.ORDER, PendingSyncType.CANCEL_ORDER, PendingSyncType.DELIVERY)) {
@@ -57,11 +61,12 @@ class SyncManager(
                         item.payloadJson,
                         PendingInventorySyncPayload::class.java
                     )
-                    uploadToSheet(
-                        action = payload.action,
-                        entity = payload.entity,
-                        farmName = payload.farmName,
-                        speciesName = payload.speciesName
+                    val uploader = inventoryUploader
+                    if (uploader != null)
+                        uploader(checkNotNull(item.syncId), payload)
+                    else uploadToSheet(
+                        action = payload.action, entity = payload.entity,
+                        farmName = payload.farmName, speciesName = payload.speciesName
                     )
                 }
 

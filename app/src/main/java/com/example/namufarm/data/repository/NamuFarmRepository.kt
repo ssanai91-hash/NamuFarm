@@ -131,6 +131,25 @@ class NamuFarmRepository(
 
     fun getAllFarms(): List<FarmEntity> = local.getAllFarms()
     fun getAllSpecies(): List<SpeciesEntity> = local.getAllSpecies()
+
+    /** Merge a verified remote snapshot without clearing local stock or unrelated tables. */
+    suspend fun cacheDirectoryInventory(rows: List<com.example.namufarm.data.remote.InventoryDirectoryRecord>) =
+        local.transaction {
+            val farms = getAllFarms().mapNotNull { it.farmId }.toSet()
+            val species = getAllSpeciesIncludingInactive().mapNotNull { it.speciesId }.toSet()
+            rows.forEach { record ->
+                val row = record.checked().asEntity()
+                check(row.farmId in farms && row.speciesId in species) {
+                    "농원·묘목 목록을 먼저 새로고침해주세요."
+                }
+                val existing = getInventoryEntity(row.farmId,row.speciesId,row.quality,
+                    row.age,row.size,row.plantType)
+                if (row.quantity == 0) {
+                    if (existing != null) deleteInventory(row.farmId,row.speciesId,
+                        row.quality,row.age,row.size,row.plantType)
+                } else if (existing != row) upsertInventory(row)
+            }
+        }
     suspend fun cacheDirectoryFarms(rows: List<com.example.namufarm.data.remote.FarmDirectoryRecord>) =
         local.transaction {
             rows.forEach { row ->
@@ -443,7 +462,7 @@ class NamuFarmRepository(
             )
         }
 
-        return flushThrough(pendingId)
+        return flushInventoryThrough(pendingId)
     }
 
     suspend fun confirmOrder(quote: QuoteEntity, newOrder: OrderEntity, paid: Boolean = false): CloudWriteResult {
@@ -716,9 +735,15 @@ class NamuFarmRepository(
 
     // Called only while holding the database's shared network mutex. New local writes
     // can commit immediately; each invocation processes a bounded snapshot of the queue.
-    private suspend fun drainPending(throughId: Int = Int.MAX_VALUE, salesOnly: Boolean = false): DrainResult {
+    private suspend fun drainPending(
+        throughId: Int = Int.MAX_VALUE, salesOnly: Boolean = false, inventoryOnly: Boolean = false
+    ): DrainResult {
         var sent = 0
-        for (pending in local.getAllPendingSync().filter { checkNotNull(it.syncId) <= throughId && (!salesOnly || it.syncType == PendingSyncType.SALE) }) {
+        for (pending in local.getAllPendingSync().filter {
+            checkNotNull(it.syncId) <= throughId &&
+                (!salesOnly || it.syncType == PendingSyncType.SALE) &&
+                (!inventoryOnly || it.syncType == PendingSyncType.INVENTORY)
+        }) {
             val id = checkNotNull(pending.syncId)
             val result = syncManager.processPendingSync(pending)
             if (!result.success) {
@@ -741,6 +766,24 @@ class NamuFarmRepository(
         } catch (e: Exception) {
             // The local transaction has already committed. Keep its outbox for retry.
             CloudWriteResult(false, e.message ?: "동기화 대기")
+        }
+    }
+
+    /** Send only inventory outbox entries; unrelated legacy edits must not block farm management. */
+    suspend fun flushInventoryPending(): Int = local.serializedSync {
+        val result = drainPending(inventoryOnly = true)
+        check(result.error == null) { result.error ?: "재고 전송 대기 중입니다." }
+        result.sent
+    }
+
+    private suspend fun flushInventoryThrough(id: Int): CloudWriteResult = local.serializedSync {
+        try {
+            val result = drainPending(id, inventoryOnly = true)
+            CloudWriteResult(local.getPendingSyncById(id) == null, result.error)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            CloudWriteResult(false, e.message ?: "재고 서버 반영 대기")
         }
     }
 

@@ -596,6 +596,19 @@ class ManagementViewModel(
         }
     }
 
+    /** UI master lists are Room-backed; external directory refresh calls this after caching. */
+    fun refreshMasterFromLocal() {
+        launchOperation {
+            refreshLocalState()
+            val state = _uiState.value
+            val farm = state.selectedFarm?.farmId
+            val species = state.selectedSpecies?.speciesId
+            _uiState.update { it.copy(inventoryList =
+                if (farm != null && species != null) repository.getInventoryRows(farm, species)
+                else emptyList()) }
+        }
+    }
+
     fun loadTodayData() {
         launchOperation {
             val quotes = repository.sentQuotesForDate(todayDatePrefix())

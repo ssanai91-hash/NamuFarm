@@ -85,6 +85,9 @@ class MainActivity : ComponentActivity() {
         viewModel = ViewModelProvider(this, factory)[ManagementViewModel::class.java]
 
         val quoteConnection = WebRequestConnection(this, repository)
+        syncManager.inventoryUploader = { syncId, payload ->
+            quoteConnection.uploadPendingInventory(syncId, payload)
+        }
         val webInbox = ViewModelProvider(this, WebInboxViewModelFactory(quoteConnection))[WebInboxViewModel::class.java]
 
         setContent {
