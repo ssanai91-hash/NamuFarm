@@ -15,8 +15,6 @@ type Props = {
   selectedName: string;
 };
 
-const initials: Array<CatalogInitial | "all"> = [...catalogInitials, "all"];
-
 export default function SpeciesPickerDialog({ open, onOpenChange, onChoose, selectedName }: Props) {
   const [initial, setInitial] = useState<CatalogInitial | "all">("ㄱ");
   const [query, setQuery] = useState("");
@@ -44,7 +42,7 @@ export default function SpeciesPickerDialog({ open, onOpenChange, onChoose, sele
         </DialogHeader>
 
         <div className="species-picker-initials" role="group" aria-label="첫 글자 선택">
-          {initials.map(value => (
+          {catalogInitials.map(value => (
             <Button
               key={value}
               type="button"
@@ -53,14 +51,17 @@ export default function SpeciesPickerDialog({ open, onOpenChange, onChoose, sele
               aria-pressed={initial === value}
               onClick={() => { setInitial(value); setQuery(""); }}
             >
-              {value === "all" ? "전체" : value}
+              {value}
             </Button>
           ))}
         </div>
 
         <div className="species-picker-results-heading">
           <strong>{query ? "검색 결과" : initial === "all" ? "전체 묘목" : initial + " 묘목"}</strong>
-          <span>{matches.length}종</span>
+          <div className="species-picker-results-actions">
+            <span>{matches.length}종</span>
+            <Button type="button" variant={initial === "all" ? "default" : "outline"} className="species-picker-all" aria-pressed={initial === "all"} onClick={() => { setInitial("all"); setQuery(""); }}>전체</Button>
+          </div>
         </div>
         <div className="catalog-grid species-picker-choices" role="group" aria-label="묘목 목록">
           {matches.map(species => (

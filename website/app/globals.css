@@ -1904,7 +1904,7 @@ section {
 }
 .species-picker-initials {
   display: grid;
-  grid-template-columns: repeat(8, minmax(0, 1fr));
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: .4rem;
   flex-shrink: 0;
 }
@@ -1926,6 +1926,8 @@ section {
   font-size: 1.05rem;
 }
 .species-picker-results-heading span { color: #607265; font-size: .95rem; }
+.species-picker-results-actions { display: flex; align-items: center; gap: .5rem; }
+.species-picker-results-actions .species-picker-all { min-height: 2.25rem; padding: .3rem .65rem; font-size: 1rem; }
 .catalog-grid.species-picker-choices {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1963,7 +1965,8 @@ section {
     padding: 1rem;
     gap: .7rem;
   }
-  .species-picker-initials { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .species-picker-initials { grid-template-columns: repeat(7, minmax(0, 1fr)); gap: .35rem; }
+  .species-picker-initials .species-picker-initial { padding-inline: 0; font-size: 1.05rem; }
   .catalog-grid.species-picker-choices { max-height: 35dvh; }
 }
 @media(max-width:22rem) {
@@ -2484,4 +2487,6 @@ body { background:#fafbf7; }
   .catalog-grid { grid-template-columns: repeat(2,minmax(0,1fr)); gap: .55rem; }
   .catalog-grid .catalog-card { padding: .4rem 2.1rem .4rem .65rem; }
   .catalog-grid .catalog-variant { font-size: 1rem; padding: .1rem .25rem; }
+  .catalog-grid.species-picker-choices { row-gap: .35rem; }
+  .catalog-grid.species-picker-choices .catalog-card { min-height: 3.125rem; padding-block: .3rem; }
 }
