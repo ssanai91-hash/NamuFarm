@@ -4,12 +4,12 @@ import fs from 'node:fs/promises';
 const root = new URL('../', import.meta.url);
 const json = async relative => JSON.parse(await fs.readFile(new URL(relative, root), 'utf8'));
 
-test('every original catalog ID has an explicit illustration decision', async () => {
+test('every catalog ID has an explicit illustration decision', async () => {
   const species = await json('lib/species-data.json');
   const mapping = await json('lib/species-illustrations.json');
   const index = await json('lib/species-illustration-index.json');
-  assert.equal(species.length, 186);
-  assert.equal(new Set(species.map(item => item.id)).size, 186);
+  assert.equal(species.length, 185);
+  assert.equal(new Set(species.map(item => item.id)).size, 185);
   assert.deepEqual(Object.keys(mapping).sort(), species.map(item => item.id).sort());
   assert.deepEqual(index, Object.fromEntries(Object.entries(mapping).map(([id, art]) => [id, art.status === 'illustrated' ? art.src : ''])), 'Run node scripts/sync-species-illustrations.mjs after editing the source manifest');
   for (const [id, art] of Object.entries(mapping)) {

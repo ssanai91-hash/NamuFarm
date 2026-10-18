@@ -6,17 +6,6 @@
     "references": [],
     "note": "명칭 확인 보류: 가시오가피 등과 유통명·실제 종이 일치하는지 확인 필요"
   },
-  "214": {
-    "src": "/plants/v1/kaizuka-juniper.webp",
-    "group": "kaizuka-juniper",
-    "status": "illustrated",
-    "depictedTaxon": "Juniperus chinensis Kaizuka / 가이즈까향나무",
-    "artworkScope": "Young small Chinese juniper with slightly twisted rising branches and green scale-leaf sprays; asymmetrical curling compact juvenile silhouette, no berries.",
-    "references": [
-      "https://plants.ces.ncsu.edu/plants/juniperus-chinensis-kaizuka/"
-    ],
-    "note": "Primary botanical reference(s) support the depicted general leaf/growth morphology. Supplier identity, cultivar, production method and exact stock are not established by these references. No claim of exact cultivar, supplier stock, grafting, plant age, size, pot or fruit characteristics. Flowers where shown are species-level reference accents, not a cultivar bloom promise."
-  },
   "215": {
     "src": "/plants/v1/persimmon.webp",
     "group": "persimmon",
