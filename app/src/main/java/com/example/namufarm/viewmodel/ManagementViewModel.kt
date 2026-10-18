@@ -233,7 +233,14 @@ class ManagementViewModel(
             currentState.copy(
                 selectedChosung = chosung,
                 speciesList = filteredSpecies,
-                filteredSellingInventory = filteredSelling
+                filteredSellingInventory = filteredSelling,
+                selectedSpecies = null,
+                inventoryList = emptyList(),
+                isInputEnabled = false,
+                isInputActive = false,
+                inputQuantity = 0,
+                inputWholesale = 0,
+                inputRetail = 0
             )
         }
     }
@@ -664,21 +671,17 @@ class ManagementViewModel(
         }
     }
 
-    // 🚨 1. 농원 선택 시, 이미 선택된 묘목이 있다면 재고 목록을 바로 불러오도록 수정!
+    // A new farm starts with an unselected seedling in the first initial group.
     fun selectFarm(farm: FarmEntity) {
-        _uiState.update { it.copy(selectedFarm = farm, isInputEnabled = false, isInputActive = false, inventoryList = emptyList()) }
-
-        val currentSpecies = _uiState.value.selectedSpecies
-        if (currentSpecies != null) {
-            _uiState.update { it.copy(isInputEnabled = true) }
-            loadInventory(farm.farmId!!, currentSpecies.speciesId!!)
-        }
+        _uiState.update { it.copy(selectedFarm = farm, selectedSpecies = null,
+            isInputEnabled = false, isInputActive = false, inventoryList = emptyList()) }
         selectChosung("ㄱ")
     }
 
     // 🚨 2. 묘목 선택 시, 농원이 없어도 무조건 선택되도록 제한(return) 해제!
     fun selectSpecies(species: SpeciesEntity) {
-        _uiState.update { it.copy(selectedSpecies = species, isInputEnabled = true, isInputActive = false) }
+        _uiState.update { it.copy(selectedSpecies = species, isInputEnabled = true,
+            isInputActive = false, inventoryList = emptyList()) }
 
         val farmId = _uiState.value.selectedFarm?.farmId
         val specId = species.speciesId
@@ -694,11 +697,20 @@ class ManagementViewModel(
     private fun loadInventory(farmId: Int, speciesId: Int) {
         viewModelScope.launch(Dispatchers.IO) {
             val rows = dao.getInventoryRows(farmId, speciesId)
-            _uiState.update { it.copy(inventoryList = rows) }
+            _uiState.update { current ->
+                if (current.selectedFarm?.farmId == farmId && current.selectedSpecies?.speciesId == speciesId)
+                    current.copy(inventoryList = rows)
+                else current
+            }
         }
     }
 
-    fun activateNewInput() { _uiState.update { it.copy(inputQuantity = 0, inputWholesale = 0, inputRetail = 0, isInputActive = true) } }
+    fun activateNewInput() {
+        _uiState.update {
+            if (it.selectedSpecies == null || !it.isInputEnabled) it
+            else it.copy(inputQuantity = 0, inputWholesale = 0, inputRetail = 0, isInputActive = true)
+        }
+    }
 
     // 🚨 새로 추가된 크기 및 타입 업데이트 함수
     fun updateSize(meters: Float) { _uiState.update { it.copy(inputSizeMeters = meters) } }

@@ -50,7 +50,7 @@ fun ManagementModeScreen(viewModel: ManagementViewModel, onBack: () -> Unit) {
     var showSpeciesManageDialog by remember { mutableStateOf(false) }
 
     // (기존 isSpeciesEnabled 변수는 지우거나 그냥 둬도 돼. 이제 무조건 true로 쓸 거니까!)
-    val isInputEnabled = uiState.selectedSpecies != null // 농원 조건 제거!
+    val isInputEnabled = uiState.selectedSpecies != null && uiState.isInputEnabled
 
     Scaffold(
         topBar = {
@@ -215,13 +215,15 @@ fun ManagementModeScreen(viewModel: ManagementViewModel, onBack: () -> Unit) {
             }
             // 🚨 여기까지 덮어쓰기!
 
-            if (isInputEnabled) {
-                if (uiState.inventoryList.isNotEmpty()) InventoryListSection(viewModel = viewModel)
-                Button(
-                    onClick = { viewModel.activateNewInput() },
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp).height(50.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)), shape = RoundedCornerShape(8.dp)
-                ) { Text("'${uiState.selectedSpecies?.speciesName}' 추가", fontSize = 16.sp, fontWeight = FontWeight.Bold) }
+            if (isInputEnabled && uiState.inventoryList.isNotEmpty()) InventoryListSection(viewModel = viewModel)
+            Button(
+                onClick = { viewModel.activateNewInput() },
+                enabled = isInputEnabled,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp).height(50.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)), shape = RoundedCornerShape(8.dp)
+            ) {
+                Text(uiState.selectedSpecies?.let { "'${it.speciesName}' 추가" } ?: "묘목을 선택해주세요",
+                    fontSize = 16.sp, fontWeight = FontWeight.Bold)
             }
 
             Box(modifier = Modifier.alpha(if (uiState.isInputActive) 1f else 0.4f)) {

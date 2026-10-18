@@ -31,8 +31,10 @@ jobs:
       - name: Restore Gradle dependency cache
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Verify original UI sources
-        run: git diff --exit-code f8f2de29e6ac1755f505fc00d444480267399269 -- app/src/main/java/com/example/namufarm/ui app/src/main/res
+      - name: Verify preserved UI sources
+        run: |
+          git diff --exit-code f8f2de29e6ac1755f505fc00d444480267399269 -- app/src/main/java/com/example/namufarm/ui app/src/main/res ':(exclude)app/src/main/java/com/example/namufarm/ui/ManagementModeScreen.kt'
+          test "$(git hash-object app/src/main/java/com/example/namufarm/ui/ManagementModeScreen.kt)" = "8be82db73784c652413acf508307e8a30a0d2c27"
 
       - name: Prepare side-by-side installation identity
         run: |
