@@ -47,6 +47,8 @@ function doPost(e) {
       else if (body.action === 'list_species') value = listSpeciesDirectory_();
       else if (body.action === 'save_species') value = saveSpeciesDirectory_(body);
       else if (body.action === 'delete_species') value = deleteSpeciesDirectory_(body);
+      else if (body.action === 'list_inventory') value = listInventoryDirectory_();
+      else if (body.action === 'save_inventory') value = saveInventoryDirectory_(body);
       else if (body.action === 'close_request') value = closeRequest_(body);
       else fail_('INVALID_ACTION');
     }
