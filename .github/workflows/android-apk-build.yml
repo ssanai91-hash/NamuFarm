@@ -21,6 +21,10 @@ jobs:
   apk:
     if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[build apk]')
     name: Build ${{ inputs.apk_type || 'release' }} APK
+    # Job scope is intentional: an unmarked push must not cancel a requested APK.
+    concurrency:
+      group: android-apk-${{ github.event_name == 'workflow_dispatch' && format('manual-{0}', github.run_id) || github.ref }}
+      cancel-in-progress: true
     env:
       APK_TYPE: ${{ github.event_name == 'push' && 'release' || inputs.apk_type }}
     runs-on: ubuntu-latest
@@ -28,6 +32,10 @@ jobs:
     permissions:
       contents: write # Needed only to save the APK as a draft release.
     steps:
+      - name: Coalesce marked pushes before APK setup
+        if: github.event_name == 'push'
+        run: sleep 30
+
       - name: Check out selected commit
         uses: actions/checkout@v4
         with:
@@ -180,5 +188,6 @@ jobs:
       - name: Remove temporary signing file
         if: always()
         run: rm -f "$RUNNER_TEMP/namufarm-release.jks"
+
 
 

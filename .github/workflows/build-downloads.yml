@@ -1,9 +1,6 @@
 name: Build APK and EXE downloads
 
 on:
-  push:
-    branches: [main]
-    paths: [.github/workflows/build-downloads.yml]
   workflow_dispatch:
 
 permissions:
@@ -34,3 +31,4 @@ jobs:
               .addRaw('Three builds were requested on main: test-only debug APK, permanently signed APK, and Windows EXE. Dispatch success does not imply build/test success.\n\n')
               .addLink('Check each build result and download',
                 `https://github.com/${owner}/${repo}/actions`).write();
+

@@ -2,9 +2,38 @@ name: Android CI
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [main]
+    paths:
+      - "app/**"
+      - "gradle/**"
+      - "*.gradle.kts"
+      - "gradle.properties"
+      - "gradlew"
+      - "gradlew.bat"
+      - "local.properties.example"
+      - "scripts/prepare_android_signing.py"
+      - "desktop/namufarm_desktop/api.py"
+      - "desktop/namufarm_desktop/crypto.py"
+      - "desktop/namufarm_desktop/errors.py"
+      - "desktop/tests/check_android_backup.py"
+      - ".github/workflows/android-ci.yml"
+
   pull_request:
-    branches: [ "main" ]
+    branches: [main]
+    paths:
+      - "app/**"
+      - "gradle/**"
+      - "*.gradle.kts"
+      - "gradle.properties"
+      - "gradlew"
+      - "gradlew.bat"
+      - "local.properties.example"
+      - "scripts/prepare_android_signing.py"
+      - "desktop/namufarm_desktop/api.py"
+      - "desktop/namufarm_desktop/crypto.py"
+      - "desktop/namufarm_desktop/errors.py"
+      - "desktop/tests/check_android_backup.py"
+      - ".github/workflows/android-ci.yml"
   workflow_dispatch:
     inputs:
       upload_ui_previews:
@@ -17,16 +46,22 @@ on:
         default: false
 
 concurrency:
-  group: android-ci-${{ github.event.pull_request.number || github.ref }}
+  group: android-ci-${{ github.event_name == 'workflow_dispatch' && format('manual-{0}', github.run_id) || github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 40
     permissions:
       contents: write
 
     steps:
+      # Relevant pushes share a cancellation group. Manual builds start immediately.
+      - name: Coalesce rapid pushes before Android setup
+        if: github.event_name == 'push'
+        run: sleep 30
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -41,17 +76,6 @@ jobs:
 
       - name: Make Gradle executable
         run: chmod +x gradlew
-
-      - name: Set up Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: "24"
-
-      - name: Website protocol and legacy compatibility tests
-        run: node --test website/tests/privacy-crypto.test.mjs website/tests/quote-service.test.mjs
-
-      - name: Quote request server tests
-        run: node --test server/quote-requests/tests/*.test.cjs
 
       - name: Configure current server and optional Firebase
         env:
@@ -206,6 +230,7 @@ jobs:
       - name: Remove temporary release keystore
         if: always()
         run: rm -f "$RUNNER_TEMP/namufarm-release.jks"
+
 
 
 

@@ -1,0 +1,42 @@
+name: Server and website regression CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'server/**'
+      - 'website/**'
+      - '!website/**.md'
+      - '.github/workflows/protocol-ci.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'server/**'
+      - 'website/**'
+      - '!website/**.md'
+      - '.github/workflows/protocol-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: protocol-ci-${{ github.event_name == 'workflow_dispatch' && format('manual-{0}', github.run_id) || github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  protocol:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      # Always run BOTH suites: a website push can supersede an earlier server push.
+      # These are offline fixtures and need no npm install, JDK, Gradle or Qt.
+      - name: Server regression tests
+        run: node --test server/quote-requests/tests/*.test.cjs
+      - name: Website protocol and legacy compatibility tests
+        if: ${{ !cancelled() }}
+        run: node --test website/tests/privacy-crypto.test.mjs website/tests/quote-service.test.mjs website/tests/quote-receipt.test.mjs website/tests/quote-upstream.test.mjs website/tests/species-catalog.test.mjs
