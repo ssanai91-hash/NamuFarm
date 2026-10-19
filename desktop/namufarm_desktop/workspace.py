@@ -3083,7 +3083,7 @@ class SellerWindow(MainWindow):
         self.shipping_filter.currentIndexChanged.connect(self.refresh_shipping)
         bar.addWidget(self.shipping_search, 1)
         bar.addWidget(self.shipping_filter)
-        bar.addWidget(button("로젠 기업택배 열기 ↗", lambda: QDesktopServices.openUrl(QUrl("https://www.ilogen.com/web/enterprise"))))
+        bar.addWidget(button("로젠 기업택배 열기 ↗", lambda: QDesktopServices.openUrl(QUrl("https://logis.ilogen.com"))))
         layout.addLayout(bar)
         self.shipping_table = table(["주문번호", "수령인", "연락처", "배송주소", "수량", "배송 준비", "송장번호"])
         self.shipping_table.setSelectionMode(self.shipping_table.SelectionMode.ExtendedSelection)

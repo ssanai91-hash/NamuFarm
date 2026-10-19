@@ -1,4 +1,4 @@
-# 나무팜 PC 판매관리 0.5.0
+# 나무팜 PC 판매관리 0.5.1
 
 Windows에서 견적 접수·작성, 입금확인, 배송완료, 로젠 송장번호, 매출·이익을 관리합니다. Google Sheets API v5와 기기 인증을 사용합니다. 연결파일을 처음 한 번 선택하면 됩니다. 별도 키 입력·복호화 백업·새 비밀번호 설정이 필요 없습니다.
 
@@ -109,7 +109,7 @@ PC 작성 품목은 기존 Android의 `수기견적` 형식입니다. **휴대�
 
 `송장번호 · 출고 확인서 출력`은 A4 확인서이며 택배 부착용 라벨은 로젠에서 출력합니다. 나무팜에는 현재 **주문당 대표 송장 1개**만 저장합니다. 복수 박스의 개별 송장은 로젠에서 관리·확인합니다. Open API 연동은 사용하지 않습니다.
 
-- [로젠 기업택배 시스템](https://www.ilogen.com/web/enterprise)
+- [로젠 기업택배 시스템](https://logis.ilogen.com)
 - [운송장 출력 매뉴얼](https://usermanual.ilogen.com/lsy05f-user-manual/index.html?page=invoice-print_MultiOrdPrtMeth&tab=invoice-print)
 
 ## 보관과 동기화
