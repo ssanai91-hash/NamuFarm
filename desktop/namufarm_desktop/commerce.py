@@ -31,6 +31,26 @@ def payment_notice(draft):
     return f"입금계좌 안내 : {account}"
 
 
+def payment_confirmation_message(draft):
+    """Payment notice for the current order, including its adjusted delivery fee."""
+    amount = draft_amounts(draft)["total"]
+    number = draft.get("requestReceiptNumber") or "PCQ_" + draft["id"][:8]
+    lines = [f"{draft.get('customerName') or '고객'}님, 안녕하세요.", "", "나무팜농원입니다.", "",
+             f"견적번호 : {number}", "", "주문 내역", "-" * 53]
+    for i, item in enumerate(draft["items"], 1):
+        lines.extend([f"품목{i} : {item['species']} {item['quantity']:,}주",
+                      f"판매금액 : {item['quantity'] * item['unitPrice']:,}원"])
+        if item.get("remarks", "").strip():
+            lines.append("비고 : " + item["remarks"].strip())
+        lines.append("")
+    fee = int(draft.get("shippingFee", 0) or 0)
+    lines.extend([f"택배비 : 선불 {fee:,}원" if draft.get("isPrepaid") else "택배비 : 후불",
+                  f"총 주문금액 : {amount:,}원", "-" * 53, "",
+                  f"{amount:,}원 입금 확인했습니다.", "주문하신 묘목을 준비하겠습니다.", "",
+                  "문의 : 043-732-0980", "감사합니다."])
+    return "\n".join(lines)
+
+
 def quote_delivery_fingerprint(draft):
     """Bind a successful delivery to the customer and quotation that was sent."""
     keys = ("id", "sourceRequestId", "requestReceiptNumber", "customerName", "customerPhone",

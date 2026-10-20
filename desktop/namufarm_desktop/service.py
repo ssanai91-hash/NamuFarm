@@ -251,8 +251,13 @@ class Manager:
                 quotes = self._local_quotes()
             except (UserError, OSError):
                 pass
-        active = [d for d in quotes if d["quoteStatus"] in ("견적확정", "견적발송완료")
-                  and not any(r["metadata"]["orderNumber"] == "PC_" + d["id"] for r in sales)]
+        registered = {r["metadata"]["orderNumber"] for r in sales} | set(self.vault.snapshot_marker().get("deletedSales", []))
+        registered_sources = {r["private"]["order"].get("sourceRequestId") for r in sales
+                              if r["private"]["order"].get("sourceRequestId")}
+        # Paid orders retain the original local quotation as a readable history.
+        active = [{**copy.deepcopy(d), "paymentRegistered": d["quoteStatus"] == "입금확인" or
+                   "PC_" + d["id"] in registered or d.get("sourceRequestId") in registered_sources}
+                  for d in quotes]
         drafts = self.vault.preference("drafts", [])
         active_drafts = [d for d in drafts if d["createdAt"] > now_ms() - 30 * 86400000
                          and not any(r["metadata"]["orderNumber"] == "PC_" + d["id"] for r in sales)]
@@ -394,18 +399,40 @@ class Manager:
         # Confirmed Excel and server status are changed only by confirm_quote().
         self.save_draft(draft)
 
-    def send_quote_sms(self, draft, text):
+    def payment_delivery_state(self, identifier):
+        require(valid_id(identifier), "견적 식별자를 확인해주세요.")
+        states = self.vault.preference("payment_delivery", {})
+        return copy.deepcopy(states.get(identifier, {})) if isinstance(states, dict) else {}
+
+    def _save_payment_delivery_state(self, identifier, state):
+        require(valid_id(identifier), "견적 식별자를 확인해주세요.")
+        states = self.vault.preference("payment_delivery", {})
+        states = copy.deepcopy(states) if isinstance(states, dict) else {}
+        states[identifier] = copy.deepcopy(state)
+        self.vault.save_preference("payment_delivery", dict(list(states.items())[-1000:]))
+        return self.payment_delivery_state(identifier)
+
+    def send_payment_sms(self, draft, text):
+        return self.send_quote_sms(draft, text, payment=True)
+
+    def refresh_payment_sms_status(self, identifier):
+        return self.refresh_quote_sms_status(identifier, payment=True)
+
+    def send_quote_sms(self, draft, text, *, payment=False):
         validate_draft(draft)
         require(isinstance(text, str) and 1 <= len(text.strip()) <= 1000, "문자 내용을 1~1,000자로 입력해주세요.")
         recipient = draft.get("customerPhone", "").strip()
         require(recipient, "고객 연락처가 입력되지 않았습니다.")
         recipient_digits = "".join(ch for ch in recipient if ch.isdigit())
         source = draft.get("sourceRequestId", "")
-        self._prepare_quote_delivery(draft)
+        if payment:
+            self._confirmed_source(draft)
+        else:
+            self._prepare_quote_delivery(draft)
         result = self.api.call("send_quote_sms", requestId=source, recipientPhone=recipient, text=text.strip())
         require(result.get("sent") is True and result.get("recipientPhone") == recipient_digits,
                 "문자 전송 접수를 확인하지 못했습니다.")
-        state = self.quote_delivery_state(draft["id"])
+        state = self.payment_delivery_state(draft["id"]) if payment else self.quote_delivery_state(draft["id"])
         state.update({"smsSentAt": 0, "smsTo": recipient_digits,
                       "senderPhone": result.get("senderPhone", ""),
                       "smsMessageId": result.get("messageId", ""),
@@ -414,13 +441,13 @@ class Manager:
                       "smsStatusCode": str(result.get("statusCode", "") or "2000"),
                       "smsStatusMessage": str(result.get("statusMessage", "") or "문자 발송을 접수했습니다."),
                       "smsUpdatedAt": now_ms()})
-        delivery = self._save_quote_delivery_state(draft["id"], state)
+        delivery = (self._save_payment_delivery_state if payment else self._save_quote_delivery_state)(draft["id"], state)
         return {"delivery": delivery, "senderPhone": result.get("senderPhone", ""),
                 "messageId": result.get("messageId", ""), "statusCode": result.get("statusCode", ""),
                 "statusMessage": result.get("statusMessage", ""), "sentAt": result.get("sentAt", "")}
 
-    def refresh_quote_sms_status(self, identifier):
-        state = self.quote_delivery_state(identifier)
+    def refresh_quote_sms_status(self, identifier, *, payment=False):
+        state = self.payment_delivery_state(identifier) if payment else self.quote_delivery_state(identifier)
         message_id = state.get("smsMessageId", "")
         require(message_id, "확인할 문자 발송 기록이 없습니다.")
         result = self.api.call("quote_sms_status", messageId=message_id)
@@ -436,7 +463,7 @@ class Manager:
                 state["smsSentAt"] = now_ms()
         elif sms_state == "failed":
             state["smsSentAt"] = 0
-        return self._save_quote_delivery_state(identifier, state)
+        return (self._save_payment_delivery_state if payment else self._save_quote_delivery_state)(identifier, state)
 
     def email_profile(self):
         require(self.credentials.get("paired") is True, "PC를 먼저 연결해주세요.")
@@ -554,6 +581,43 @@ class Manager:
         require(len(canonical(payload).encode("utf-8")) <= 63000, "견적 품목이나 메모를 줄여주세요.")
         self.vault.queue({"id": event_id, "action": "save_sale", "payload": payload},
                          {**payload, "sequence": 0, "expired": False})
+        return self.sync()
+
+    def prepare_received_payment(self, draft):
+        validate_draft(draft)
+        view = self.sync()
+        number = "PC_" + draft["id"]
+        require(number not in self.vault.snapshot_marker().get("deletedSales", []),
+                "이미 판매자료에서 삭제한 주문입니다. 같은 견적으로 다시 등록할 수 없습니다.")
+        existing = next((r for r in view["sales"] if r["metadata"]["orderNumber"] == number or
+                         (draft.get("sourceRequestId") and r["private"]["order"].get("sourceRequestId") == draft["sourceRequestId"])), None)
+        if existing:
+            return {"alreadyRegistered": True, "view": view}
+        local = self._confirmed_source(draft)
+        require(canonical(local["items"]) == canonical(draft["items"]),
+                "확정 품목이 변경되었습니다. 묘목정보 수정에서 먼저 저장해주세요.")
+        for field in ("customerName", "customerPhone", "customerEmail", "requestReceiptNumber", "note", "taxAmount"):
+            require(local.get(field) == draft.get(field), "확정 견적이 변경되었습니다. 창을 다시 열어주세요.")
+        return {"alreadyRegistered": False, "view": view}
+
+    def confirm_received_payment(self, draft, *, sms_required):
+        prepared = self.prepare_received_payment(draft)
+        if prepared["alreadyRegistered"]:
+            return prepared["view"]
+        if sms_required:
+            state = self.payment_delivery_state(draft["id"])
+            require(state.get("smsState") == "success" and
+                    state.get("smsQuoteFingerprint") == quote_delivery_fingerprint(draft),
+                    "현재 주문·입금 금액의 문자 전송 성공을 확인한 뒤 판매 등록할 수 있습니다.")
+        order = order_from_draft(draft)
+        private = {"order": order, "quoteDocumentJson": canonical(quote_document(draft))}
+        meta, event_id = metadata(order), str(uuid.uuid4())
+        payload = {"eventId": event_id, "metadata": meta, "personalData": private,
+                   "fingerprint": customer_digest(meta, private), "protocolVersion": 5,
+                   "sourceRequestId": draft.get("sourceRequestId", "")}
+        require(len(canonical(payload).encode("utf-8")) <= 63000, "주문 품목이나 메모를 줄여주세요.")
+        self.vault.queue({"id": event_id, "action": "save_sale", "payload": payload,
+                          "preserveQuote": True}, {**payload, "sequence": 0, "expired": False})
         return self.sync()
 
     def register_tracking(self, number, expected_revision, tracking):
@@ -744,7 +808,7 @@ class Manager:
             if operation["action"] == "save_sale":
                 number = payload["metadata"]["orderNumber"]
                 quote = next((d for d in self._local_quotes() if number == "PC_" + d["id"]), None) if number.startswith("PC_") else None
-                if quote and quote["quoteStatus"] != "입금확인":
+                if quote and quote["quoteStatus"] != "입금확인" and not operation.get("preserveQuote"):
                     self.vault.save_preference("quote_write_pending", {
                         "draft": quote, "status": "입금확인", "acknowledged": True})
             elif operation["action"] == "close_request":
