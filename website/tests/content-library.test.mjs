@@ -8,6 +8,20 @@ const id = 'HgNJrIhC3rk';
 const validUrls = [`https://youtu.be/${id}?si=abc`, `https://www.youtube.com/watch?v=${id}&t=1`, `https://m.youtube.com/shorts/${id}`, `https://youtube.com/live/${id}`, `https://www.youtube-nocookie.com/embed/${id}`];
 const invalidUrls = ['javascript:alert(1)', `https://youtube.com.evil.test/watch?v=${id}`, `https://evil.test/?v=${id}`, `https://user@youtube.com/watch?v=${id}`, `https://youtu.be/${id}/other`, `https://youtube.com/watch?v=${id}extra`, 'https://youtube.com/playlist?list=abc'];
 
+test('bundled catalog includes the complete verified Videos tab and excludes every captured Short', () => {
+  const raw = JSON.parse(readFileSync(new URL('../lib/video-catalog.json', import.meta.url), 'utf8'));
+  const audit = JSON.parse(readFileSync(new URL('../docs/namujunggaesa-catalog-20261020.json', import.meta.url), 'utf8'));
+  assert.equal(initialVideos.length, raw.length, 'invalid records must not silently disappear');
+  assert.equal(new Set(initialVideos.map(video => video.id)).size, raw.length);
+  assert.deepEqual(initialVideos.map(video => video.videoId), audit.includedVideoIds);
+  assert.equal(new Set(audit.includedVideoIds).size, audit.includedVideoIds.length);
+  assert.equal(audit.videoPages.at(-1).hasContinuation, false);
+  const shorts = new Set(audit.excludedShortsIds);
+  assert.ok(initialVideos.every(video => !shorts.has(video.videoId)));
+  assert.equal(initialVideos[0].videoId, id);
+  assert.ok(initialVideos.some(video => video.videoId === 'FTdLhnyfyYs'), 'short horizontal videos in Videos are retained');
+});
+
 test('YouTube links normalize without accepting arbitrary URLs or markup', () => {
   for (const url of validUrls) assert.equal(youtubeVideoId(url), id, url);
   for (const url of invalidUrls) assert.equal(youtubeVideoId(url), null, url);

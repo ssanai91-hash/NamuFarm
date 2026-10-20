@@ -1,3 +1,5 @@
+import bundledVideos from "./video-catalog.json" with { type: "json" };
+
 export type VideoResource = {
   id: string;
   kind: "youtube";
@@ -10,13 +12,12 @@ export type VideoResource = {
   order: number;
 };
 
-// The first video supplied by the owner. Title/channel verified with YouTube oEmbed.
-// This initial selection remains usable until the Apps Script catalog is deployed.
-export const initialVideos: VideoResource[] = [{
-  id: "video-001", kind: "youtube", title: "나무 심는방법 - 1년생 묘목 이렇게 꼭 심는다!",
-  videoId: "HgNJrIhC3rk", url: "https://www.youtube.com/watch?v=HgNJrIhC3rk",
-  species: ["공통"], topics: ["식재"], source: "나무중개사", order: 1,
-}];
+// Verified channel Videos-tab snapshot, excluding Shorts. Keep the owner's first
+// reference pinned. A successful Sheets response still controls the live catalog,
+// including removals and an intentionally empty list; failures retain this snapshot.
+export const initialVideos: VideoResource[] = readVideoCatalog({
+  ok: true, catalogVersion: 1, items: bundledVideos,
+}) ?? [];
 
 export function youtubeVideoId(value: unknown): string | null {
   if (typeof value !== "string" || value.length > 2048) return null;
