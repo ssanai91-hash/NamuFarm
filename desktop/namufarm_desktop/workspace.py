@@ -2621,6 +2621,10 @@ QDialog#quoteWorkbench QLineEdit#workbenchCustomerInput{min-height:@input@px;max
 QDialog#quoteWorkbench QLineEdit#workbenchCustomerInput:focus{padding:3px 7px;}
 QDialog#quoteWorkbench QPushButton{min-height:36px;max-height:36px;padding:0 12px;}
 QDialog#quoteWorkbench QPushButton[deliveryCompletion="true"]{min-height:40px;max-height:40px;font-size:18px;}
+QDialog#quoteWorkbench QWidget#workbenchCustomerRail QLineEdit#workbenchCustomerInput{min-height:30px;max-height:30px;padding:6px 8px;}
+QDialog#quoteWorkbench QWidget#workbenchCustomerRail QLineEdit#workbenchCustomerInput:focus{padding:5px 7px;}
+QDialog#quoteWorkbench QWidget#workbenchCustomerRail QLineEdit#workbenchCustomerInput[customerName="true"]{font-size:24px;font-weight:600;min-height:34px;max-height:34px;}
+QDialog#quoteWorkbench QFrame#workbenchShipping{background:#f5f8f6;border:1px solid #d6e1da;border-radius:10px;}
 """.replace("@input@", "28" if large else "26"))
         screen = parent.screen() if parent is not None and hasattr(parent, "screen") else QApplication.primaryScreen()
         if screen:
@@ -2677,6 +2681,7 @@ QDialog#quoteWorkbench QPushButton[deliveryCompletion="true"]{min-height:40px;ma
         body.setContentsMargins(0, 0, 0, 0)
         body.setSpacing(0)
         customer_scroll = QScrollArea()
+        self.customer_scroll = customer_scroll
         customer_scroll.setObjectName("workbenchCustomerScroll")
         customer_scroll.setWidgetResizable(True)
         customer_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -2685,9 +2690,16 @@ QDialog#quoteWorkbench QPushButton[deliveryCompletion="true"]{min-height:40px;ma
         rail = QWidget()
         rail.setObjectName("workbenchCustomerRail")
         customer = QVBoxLayout(rail)
-        customer.setContentsMargins(14, 10, 14, 10)
+        customer.setContentsMargins(16, 12, 16, 10)
         customer.setSpacing(10)
-        customer.addWidget(section("고객 정보", "person"))
+        customer_heading = QWidget()
+        customer_title = QHBoxLayout(customer_heading)
+        customer_title.setContentsMargins(0, 0, 0, 0)
+        customer_title.setSpacing(8)
+        customer_title.addWidget(icon("person", 36))
+        customer_title.addWidget(label("고객 정보", "workbenchCustomerTitle"))
+        customer_title.addStretch(1)
+        customer.addWidget(customer_heading)
         rule = QFrame()
         rule.setObjectName("workbenchCustomerHeadingRule")
         rule.setFixedHeight(2)
@@ -2697,6 +2709,8 @@ QDialog#quoteWorkbench QPushButton[deliveryCompletion="true"]{min-height:40px;ma
         def field(name, caption):
             edit = QLineEdit(str(self.order.get(name, "") or ""))
             edit.setObjectName("workbenchCustomerInput")
+            edit.setProperty("customerName", name == "customerName")
+            edit.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
             edit.setAccessibleName(caption)
             edit.setMinimumWidth(0)
             edit.setMaxLength({"customerEmail": 254, "roadAddress": 300, "detailAddress": 300,
@@ -2706,7 +2720,7 @@ QDialog#quoteWorkbench QPushButton[deliveryCompletion="true"]{min-height:40px;ma
 
         identity = QGridLayout()
         identity.setHorizontalSpacing(8)
-        identity.setVerticalSpacing(7)
+        identity.setVerticalSpacing(4)
         identity.setColumnStretch(1, 1)
         for index, (name, caption) in enumerate((("customerName", "고객명"), ("customerPhone", "연락처"),
                                                   ("customerEmail", "이메일"))):
@@ -2768,7 +2782,7 @@ QDialog#quoteWorkbench QPushButton[deliveryCompletion="true"]{min-height:40px;ma
         totals.setContentsMargins(10, 6, 10, 6)
         shipping_text = (f"선불 {int(self.order.get('shippingFee', 0) or 0):,}원" if self.order.get("isPrepaid") else
                          f"후불 · 선불 기준 {int(self.order.get('shippingFee', 0) or 0):,}원")
-        totals.addWidget(label("택배비  " + shipping_text, "deliveryCaption", True))
+        totals.addWidget(label("택배비  " + shipping_text, "deliveryCaption"))
         totals.addStretch(1)
         totals.addWidget(label("총금액  " + money(self.meta["totalPrice"] + self.meta.get("taxAmount", 0)), "deliverySectionTitle"))
         content.addWidget(item_summary)
@@ -2779,26 +2793,42 @@ QDialog#quoteWorkbench QPushButton[deliveryCompletion="true"]{min-height:40px;ma
         shipping_layout.setContentsMargins(12, 8, 12, 8)
         shipping_layout.setSpacing(6)
         shipping_layout.addWidget(section("배송 정보 · 송장", "shipping"))
-        form = QGridLayout()
-        form.setHorizontalSpacing(10)
+        # Keep addresses readable without stretching the fields across the whole table.
+        form_area = QWidget()
+        form_area.setMaximumWidth(860 if large else 820)
+        form_area.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        form = QGridLayout(form_area)
+        form.setContentsMargins(0, 0, 0, 0)
+        form.setHorizontalSpacing(12)
         form.setVerticalSpacing(7)
         for r, (name, caption) in enumerate((("receiverName", "수령인"), ("zipNo", "우편번호"),
                 ("roadAddress", "도로명 주소"), ("detailAddress", "상세주소"))):
             form.addWidget(label(caption, "workbenchCaption"), r, 0)
             edit = field(name, caption)
             if name == "zipNo":
+                edit.setFixedWidth(124 if large else 112)
+                edit.setPlaceholderText("우편번호")
                 postal_row = QHBoxLayout()
                 postal_row.setSpacing(8)
-                postal_row.addWidget(edit, 1)
+                postal_row.addWidget(edit)
                 self.address_button = button("주소찾기", self.find_address)
                 postal_row.addWidget(self.address_button)
+                postal_row.addStretch(1)
                 form.addLayout(postal_row, r, 1)
+            elif name == "receiverName":
+                edit.setMaximumWidth(360 if large else 320)
+                recipient_row = QHBoxLayout()
+                recipient_row.setContentsMargins(0, 0, 0, 0)
+                recipient_row.addWidget(edit, 1)
+                recipient_row.addStretch(1)
+                form.addLayout(recipient_row, r, 1)
             else:
                 form.addWidget(edit, r, 1)
         self.tracking_number_edit = QLineEdit(tracking_number(self.order))
         self.tracking_number_edit.setObjectName("workbenchCustomerInput")
         self.tracking_number_edit.setAccessibleName("로젠 송장번호")
-        self.tracking_number_edit.setPlaceholderText("로젠에서 발급받은 송장번호 11자리")
+        self.tracking_number_edit.setPlaceholderText("로젠 송장번호 11자리")
+        self.tracking_number_edit.setMaximumWidth(280 if large else 260)
         self.tracking_number_edit.setMaxLength(20)
         form.addWidget(label("송장번호", "workbenchCaption"), 4, 0)
         tracking_row = QHBoxLayout()
@@ -2806,9 +2836,14 @@ QDialog#quoteWorkbench QPushButton[deliveryCompletion="true"]{min-height:40px;ma
         tracking_row.addWidget(self.tracking_number_edit, 1)
         self.tracking_entry_button = button("송장번호 입력", self.enter_tracking)
         tracking_row.addWidget(self.tracking_entry_button)
+        tracking_row.addStretch(1)
         form.addLayout(tracking_row, 4, 1)
         form.setColumnStretch(1, 1)
-        shipping_layout.addLayout(form)
+        form_row = QHBoxLayout()
+        form_row.setContentsMargins(0, 0, 0, 0)
+        form_row.addWidget(form_area, 1)
+        form_row.addStretch(0)
+        shipping_layout.addLayout(form_row)
         content.addWidget(shipping)
 
         content.addStretch(1)
@@ -2857,6 +2892,18 @@ QDialog#quoteWorkbench QPushButton[deliveryCompletion="true"]{min-height:40px;ma
                 (self.preparation_button, "shipping", "#ffffff"),
                 (self.restore_button, "refresh", "#193c32")):
             set_button_icon(widget, name, color)
+        self.fit_customer_rail()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if hasattr(self, "customer_scroll"):
+            self.fit_customer_rail()
+
+    def fit_customer_rail(self):
+        # Match QuoteDialog's customer background width at the same window size.
+        large = bool(QApplication.instance().property("namufarmLargeFont"))
+        width = min(480 if large else 440, max(320 if large else 300, self.width() - 900))
+        self.customer_scroll.setFixedWidth(width)
 
     def find_address(self):
         from .address_search import AddressSearchDialog
