@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent, type MouseEvent } from "react";
-import { Sprout, Plus, Minus, FileText, CheckCheck, MessageCircle, ShieldCheck, LoaderCircle, CircleCheck, X, Copy, Phone, ChevronDown, RotateCcw } from "lucide-react";
+import { Sprout, Plus, Minus, FileText, CheckCheck, MessageCircle, ShieldCheck, LoaderCircle, CircleCheck, X, Copy, Phone, ChevronDown, RotateCcw, Play } from "lucide-react";
 import SpeciesBrowser from "@/components/species-browser";
 import SpeciesPickerDialog from "@/components/species-picker-dialog";
 import VideoLibraryDialog from "@/components/video-library-dialog";
@@ -285,10 +285,10 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
     <a className="skip-link" href="#quote">견적 요청으로 바로 가기</a>
     <header className="site-header"><div className="header-inner">
       <a href="#home" ref={homeLinkRef} className="brand" aria-label="나무팜 홈 · 견적 입력 초기화" aria-haspopup="dialog" onClick={event => { event.preventDefault(); requestQuoteReset("home"); }}><Sprout strokeWidth={2} /><span>나무팜<small>NAMUFARM</small></span></a>
-      <nav className="desktop-nav" aria-label="주 메뉴"><a href="#trees">묘목 찾기</a><button type="button" className="video-nav-button" onClick={openVideos} aria-haspopup="dialog">묘목 관리 영상</button><a href="#guide">이용 안내</a><a href="#questions">자주 묻는 질문</a></nav>
+      <nav className="desktop-nav" aria-label="주 메뉴"><a href="#trees">묘목 찾기</a><button type="button" className="video-nav-button" onClick={openVideos} aria-haspopup="dialog">묘목 재배 영상</button><a href="#guide">이용 안내</a><a href="#questions">자주 묻는 질문</a></nav>
       <Button asChild variant="outline" className="header-call"><a href={`tel:${businessInfo.mobile.replaceAll("-", "")}`} aria-label={`전화 상담 ${businessInfo.mobile}`}><Phone aria-hidden="true" />전화 상담</a></Button>
       <Button asChild className="header-quote"><a href="#quote">견적 상담 요청</a></Button>
-      <Button type="button" variant="outline" className="header-videos" aria-label="묘목 관리 영상 열기" aria-haspopup="dialog" onClick={openVideos}>관리 영상</Button>
+      <Button type="button" variant="outline" className="header-videos" aria-label="묘목 재배 영상 보기" aria-haspopup="dialog" onClick={openVideos}>재배 영상</Button>
       <Dialog open={menuOpen} onOpenChange={setMenuOpen}><DialogTrigger asChild><Button variant="ghost" className="menu-button" aria-label="메뉴 열기">메뉴</Button></DialogTrigger><DialogContent className="menu-dialog" showCloseButton={false}><DialogClose asChild><Button className="dialog-dismiss" variant="ghost" aria-label="메뉴 닫기"><X /></Button></DialogClose><DialogHeader><DialogTitle>나무팜</DialogTitle><DialogDescription>묘목 찾기와 견적 상담</DialogDescription></DialogHeader><nav aria-label="모바일 메뉴">{[["trees", "묘목 찾기"], ["quote", "견적 상담 요청"], ["guide", "이용 안내"], ["questions", "자주 묻는 질문"]].map(([id, title]) => <a key={id} href={`#${id}`} onClick={() => setMenuOpen(false)}>{title}</a>)}<a href={`tel:${businessInfo.mobile.replaceAll("-", "")}`}><Phone aria-hidden="true" />전화 상담 · {businessInfo.mobile}</a></nav></DialogContent></Dialog>
     </div></header>
     <main id="home">
@@ -299,6 +299,7 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
           <h1 id="hero-title">심고 싶은 나무,<br />견적부터 <em>편하게.</em></h1>
           <p>원하는 묘목을 고르고 수량을 알려주세요.<br />규격과 배송은 상담을 통해 안내해 드립니다.</p>
           <div className="hero-actions"><Button asChild className="hero-cta"><a href="#trees"><Sprout />묘목 찾아보기</a></Button><a className="hero-direct" href="#quote">견적 바로 작성 →</a></div>
+          <Button type="button" variant="outline" className="hero-videos" aria-haspopup="dialog" onClick={openVideos}><Play aria-hidden="true" />묘목 재배 영상 보기</Button>
           <div className="hero-highlights" aria-label="견적 상담 특징"><span>회원가입 없이 요청</span><span>규격 상담 가능</span><span>결제는 상담 후 결정</span></div>
         </div>
       </section>

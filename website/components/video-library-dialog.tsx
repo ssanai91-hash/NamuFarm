@@ -68,10 +68,10 @@ export default function VideoLibraryDialog({ open, onOpenChange, opener }: {
       onCloseAutoFocus={event => { event.preventDefault(); opener.current?.focus(); }}>
       <div className="video-library-heading">
         <DialogHeader>
-          <DialogTitle ref={titleRef} tabIndex={-1}>묘목 관리 영상</DialogTitle>
+          <DialogTitle ref={titleRef} tabIndex={-1}>묘목 재배 영상</DialogTitle>
           <DialogDescription>심기부터 관리까지, 필요한 영상을 찾아보세요.</DialogDescription>
         </DialogHeader>
-        <DialogClose asChild><Button type="button" variant="ghost" className="video-dismiss" aria-label="영상 자료실 닫기"><X /></Button></DialogClose>
+        <DialogClose asChild><Button type="button" variant="outline" className="video-dismiss" aria-label="영상 자료실 닫기"><X aria-hidden="true" />닫기</Button></DialogClose>
       </div>
       <div className="video-library-body" ref={bodyRef}>
         {open && selected ? <div className="video-detail">
