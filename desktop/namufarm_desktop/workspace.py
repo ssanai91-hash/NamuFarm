@@ -2609,23 +2609,39 @@ class CustomerOrderDialog(QDialog):
         self.row = copy.deepcopy(row)
         self.meta = self.row["metadata"]
         self.order = self.row["private"]["order"]
+        # The issued quote preserves the customer's words independently of shipping edits.
+        try:
+            document = json.loads(self.row["private"].get("quoteDocumentJson") or "{}")
+        except (ValueError, TypeError):
+            document = {}
+        request_note = document.get("customerRequestNote", "") if isinstance(document, dict) else ""
+        if not isinstance(request_note, str):
+            request_note = ""
+        source = self.order.get("sourceRequestId")
+        if not request_note and source and parent is not None:
+            request = next((r for r in getattr(parent, "data", {}).get("requests", [])
+                            if r["requestId"] == source), None)
+            if request:
+                request_note = request.get("personal", {}).get("message", "")
         self.mode = ""
         self.collected_fields = None
         self.setObjectName("quoteWorkbench")
         self.setWindowTitle("판매관리 · 고객·배송 정보")
         self.setSizeGripEnabled(True)
         large = bool(QApplication.instance().property("namufarmLargeFont"))
+        identity_height = 48 if large else 44
         self.setStyleSheet(quote_workbench_style(large) + """
 QDialog#quoteWorkbench QLabel#workbenchCaption{padding:4px 8px;}
 QDialog#quoteWorkbench QLineEdit#workbenchCustomerInput{min-height:@input@px;max-height:@input@px;padding:4px 8px;}
 QDialog#quoteWorkbench QLineEdit#workbenchCustomerInput:focus{padding:3px 7px;}
 QDialog#quoteWorkbench QPushButton{min-height:36px;max-height:36px;padding:0 12px;}
 QDialog#quoteWorkbench QPushButton[deliveryCompletion="true"]{min-height:40px;max-height:40px;font-size:18px;}
-QDialog#quoteWorkbench QWidget#workbenchCustomerRail QLineEdit#workbenchCustomerInput{min-height:30px;max-height:30px;padding:6px 8px;}
+QDialog#quoteWorkbench QWidget#workbenchCustomerRail QLineEdit#workbenchCustomerInput{min-height:@identity@px;max-height:@identity@px;padding:6px 8px;}
 QDialog#quoteWorkbench QWidget#workbenchCustomerRail QLineEdit#workbenchCustomerInput:focus{padding:5px 7px;}
-QDialog#quoteWorkbench QWidget#workbenchCustomerRail QLineEdit#workbenchCustomerInput[customerName="true"]{font-size:24px;font-weight:600;min-height:34px;max-height:34px;}
+QDialog#quoteWorkbench QWidget#workbenchCustomerRail QLineEdit#workbenchCustomerInput[customerName="true"]{font-size:24px;font-weight:600;}
 QDialog#quoteWorkbench QFrame#workbenchShipping{background:#f5f8f6;border:1px solid #d6e1da;border-radius:10px;}
-""".replace("@input@", "28" if large else "26"))
+QDialog#quoteWorkbench QLabel#salesShippingFee{font-size:@freight@px;font-weight:600;color:#193c32;}
+""".replace("@input@", "28" if large else "26").replace("@identity@", "34" if large else "30").replace("@freight@", "22" if large else "20"))
         screen = parent.screen() if parent is not None and hasattr(parent, "screen") else QApplication.primaryScreen()
         if screen:
             available = screen.availableGeometry()
@@ -2685,8 +2701,8 @@ QDialog#quoteWorkbench QFrame#workbenchShipping{background:#f5f8f6;border:1px so
         customer_scroll.setObjectName("workbenchCustomerScroll")
         customer_scroll.setWidgetResizable(True)
         customer_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        customer_scroll.setMinimumWidth(320 if large else 300)
-        customer_scroll.setMaximumWidth(480 if large else 440)
+        customer_scroll.setMinimumWidth(360 if large else 340)
+        customer_scroll.setMaximumWidth(520 if large else 480)
         rail = QWidget()
         rail.setObjectName("workbenchCustomerRail")
         customer = QVBoxLayout(rail)
@@ -2722,17 +2738,34 @@ QDialog#quoteWorkbench QFrame#workbenchShipping{background:#f5f8f6;border:1px so
         identity.setHorizontalSpacing(8)
         identity.setVerticalSpacing(4)
         identity.setColumnStretch(1, 1)
+        identity.setColumnMinimumWidth(0, 84 if large else 76)
+
+        def identity_caption(text):
+            caption = label(text, "workbenchCaption")
+            caption.setFixedHeight(identity_height)
+            return caption
+
         for index, (name, caption) in enumerate((("customerName", "고객명"), ("customerPhone", "연락처"),
                                                   ("customerEmail", "이메일"))):
-            identity.addWidget(label(caption, "workbenchCaption"), index, 0)
-            identity.addWidget(field(name, caption), index, 1)
+            identity.addWidget(identity_caption(caption), index, 0)
+            edit = field(name, caption)
+            edit.setFixedHeight(identity_height)
+            identity.addWidget(edit, index, 1)
         if self.row["private"].get("quoteDocumentJson"):
             self.customer_fields["customerPhone"].setReadOnly(True)
             self.customer_fields["customerPhone"].setToolTip("확정 견적서와 연결된 고객 전화번호는 유지합니다.")
         for index, (caption, value) in enumerate((("상태", customer_status_text(self.meta["status"])),
                 ("주문일", timestamp(self.meta["orderDate"])), ("입금일", timestamp(self.meta["paidAt"]))), 3):
-            identity.addWidget(label(caption, "workbenchCaption"), index, 0)
-            identity.addWidget(label(value, "deliveryCaption", True), index, 1)
+            identity.addWidget(identity_caption(caption), index, 0)
+            display = QLineEdit(value)
+            display.setObjectName("workbenchCustomerInput")
+            display.setAccessibleName(caption)
+            display.setReadOnly(True)
+            display.setMinimumWidth(0)
+            display.setFixedHeight(identity_height)
+            display.setCursorPosition(0)
+            display.setToolTip(value)
+            identity.addWidget(display, index, 1)
         customer.addLayout(identity)
 
         customer.addWidget(label("배송 메모", "deliverySectionTitle"))
@@ -2780,12 +2813,28 @@ QDialog#quoteWorkbench QFrame#workbenchShipping{background:#f5f8f6;border:1px so
         item_summary.setObjectName("workbenchSummary")
         totals = QHBoxLayout(item_summary)
         totals.setContentsMargins(10, 6, 10, 6)
-        shipping_text = (f"선불 {int(self.order.get('shippingFee', 0) or 0):,}원" if self.order.get("isPrepaid") else
-                         f"후불 · 선불 기준 {int(self.order.get('shippingFee', 0) or 0):,}원")
-        totals.addWidget(label("택배비  " + shipping_text, "deliveryCaption"))
+        shipping_text = f"선불 {money(self.meta['shippingFee'])}" if self.meta["isPrepaid"] else "후불"
+        totals.addWidget(label("택배비  " + shipping_text, "salesShippingFee"))
         totals.addStretch(1)
         totals.addWidget(label("총금액  " + money(self.meta["totalPrice"] + self.meta.get("taxAmount", 0)), "deliverySectionTitle"))
         content.addWidget(item_summary)
+        content.addSpacing(6)
+        request_area = QFrame()
+        request_area.setObjectName("workbenchOriginalRequest")
+        request_layout = QVBoxLayout(request_area)
+        request_layout.setContentsMargins(0, 0, 0, 0)
+        request_layout.setSpacing(8)
+        request_layout.addWidget(label("고객 요청정보", "deliverySectionTitle"))
+        self.request_note_view = QPlainTextEdit(request_note)
+        self.request_note_view.setObjectName("workbenchOriginalText")
+        self.request_note_view.setAccessibleName("고객의 견적요청 원문")
+        self.request_note_view.setReadOnly(True)
+        self.request_note_view.setPlaceholderText("저장된 고객 요청사항이 없습니다.")
+        self.request_note_view.document().setDocumentMargin(0)
+        self.request_note_view.setFixedHeight(88 if large else 76)
+        request_layout.addWidget(self.request_note_view)
+        content.addWidget(request_area)
+        content.addSpacing(6)
 
         shipping = QFrame()
         shipping.setObjectName("workbenchShipping")
@@ -2806,7 +2855,7 @@ QDialog#quoteWorkbench QFrame#workbenchShipping{background:#f5f8f6;border:1px so
             form.addWidget(label(caption, "workbenchCaption"), r, 0)
             edit = field(name, caption)
             if name == "zipNo":
-                edit.setFixedWidth(124 if large else 112)
+                edit.setFixedWidth(186 if large else 168)
                 edit.setPlaceholderText("우편번호")
                 postal_row = QHBoxLayout()
                 postal_row.setSpacing(8)
@@ -2900,9 +2949,9 @@ QDialog#quoteWorkbench QFrame#workbenchShipping{background:#f5f8f6;border:1px so
             self.fit_customer_rail()
 
     def fit_customer_rail(self):
-        # Match QuoteDialog's customer background width at the same window size.
+        # Give the uniform customer fields a little more width than the quote rail.
         large = bool(QApplication.instance().property("namufarmLargeFont"))
-        width = min(480 if large else 440, max(320 if large else 300, self.width() - 900))
+        width = min(520 if large else 480, max(360 if large else 340, self.width() - 860))
         self.customer_scroll.setFixedWidth(width)
 
     def find_address(self):
