@@ -1,0 +1,2983 @@
+{
+  "capturedOn": "2026-10-20",
+  "channelId": "UCCsCLfa7_HKk1wyJzHMN1VQ",
+  "sourceUrl": "https://www.youtube.com/@%EB%82%98%EB%AC%B4%EC%A4%91%EA%B0%9C%EC%82%AC/shorts",
+  "pages": [
+    {
+      "page": 1,
+      "total": 48,
+      "hasContinuation": true
+    },
+    {
+      "page": 2,
+      "total": 96,
+      "hasContinuation": true
+    },
+    {
+      "page": 3,
+      "total": 144,
+      "hasContinuation": true
+    },
+    {
+      "page": 4,
+      "total": 192,
+      "hasContinuation": true
+    },
+    {
+      "page": 5,
+      "total": 240,
+      "hasContinuation": true
+    },
+    {
+      "page": 6,
+      "total": 267,
+      "hasContinuation": false
+    }
+  ],
+  "method": "Reviewed public Shorts titles; 9 ambiguous descriptions were checked but were blank. Species names prefer the main title over promotional hashtags. Unspecified subjects use common/other categories.",
+  "notes": {
+    "_hWIsOTsYm0": "낙우송 is explicit; ambiguous 메타 hashtag was not converted into an additional species.",
+    "u7z1PIcr8NY": "Main title says 초피나무; unrelated 산초 hashtag does not override it.",
+    "JYivr4Cj-Gk": "Main title says 문그로우; generic 측백/편백 hashtags were not treated as species identification.",
+    "M4thvakbPhw": "Main title says 유주나무; 귤/낑깡 hashtags were not treated as extra species.",
+    "Hb388rkdLLE": "Vague title and blank description; categorized as 기타 without inferring content."
+  },
+  "speciesCounts": {
+    "가죽나무": 1,
+    "감나무": 8,
+    "개나리": 5,
+    "개복숭아": 11,
+    "개암나무": 5,
+    "공통": 14,
+    "금귤나무": 1,
+    "금송": 1,
+    "기타": 1,
+    "꾸지뽕나무": 1,
+    "낙우송": 1,
+    "남천나무": 3,
+    "느티나무": 1,
+    "다래나무": 9,
+    "단풍나무": 1,
+    "대추나무": 14,
+    "동백나무": 1,
+    "두릅나무": 3,
+    "레드향나무": 1,
+    "레몬나무": 1,
+    "매실나무": 6,
+    "무궁화": 1,
+    "무화과나무": 4,
+    "문그로우": 1,
+    "밤나무": 9,
+    "배나무": 2,
+    "배롱나무": 2,
+    "보리수나무": 2,
+    "복분자": 1,
+    "복숭아나무": 1,
+    "블랙베리": 1,
+    "블루베리": 7,
+    "뽕나무": 1,
+    "사과나무": 3,
+    "사철나무": 12,
+    "산초나무": 1,
+    "살구나무": 2,
+    "셀릭스": 2,
+    "소나무": 42,
+    "수사해당화": 6,
+    "앵두나무": 5,
+    "엄나무": 2,
+    "오가피나무": 1,
+    "유자나무": 2,
+    "유주나무": 1,
+    "으름": 1,
+    "자두나무": 4,
+    "자작나무": 4,
+    "잣나무": 1,
+    "전나무": 3,
+    "주목나무": 2,
+    "참죽나무": 1,
+    "천리향": 1,
+    "철쭉": 1,
+    "체리나무": 4,
+    "초피나무": 5,
+    "측백나무": 4,
+    "키위나무": 5,
+    "편백나무": 6,
+    "포도나무": 1,
+    "포포나무": 4,
+    "피라칸타스": 2,
+    "피칸나무": 4,
+    "향나무": 2,
+    "홍가시나무": 8,
+    "화살나무": 2,
+    "황칠나무": 1,
+    "회화나무": 4
+  },
+  "topicCounts": {
+    "가격·구입": 225,
+    "기타": 1,
+    "나무 특성": 7,
+    "농원·정원관리": 4,
+    "농지·경영": 2,
+    "목재 활용": 1,
+    "묘목 선택": 1,
+    "묘목 재배": 6,
+    "병해충": 2,
+    "분달이·포트재배": 82,
+    "삽목": 1,
+    "식재": 11,
+    "울타리·조경": 38,
+    "월동": 2,
+    "전정": 3,
+    "접목": 4,
+    "포장·운송": 7,
+    "품종·열매": 43
+  },
+  "items": [
+    {
+      "videoId": "9TEkAdy6vmk",
+      "basis": "public_title",
+      "species": [
+        "사철나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "Z9vnlEJOHgc",
+      "basis": "public_title",
+      "species": [
+        "밤나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "_hWIsOTsYm0",
+      "basis": "public_title",
+      "species": [
+        "낙우송"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "nMHj5Sk4cck",
+      "basis": "public_title",
+      "species": [
+        "개복숭아"
+      ],
+      "topics": [
+        "가격·구입",
+        "농지·경영"
+      ]
+    },
+    {
+      "videoId": "-DwGt4rQoZE",
+      "basis": "public_title",
+      "species": [
+        "소나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "-a6joJYhxy0",
+      "basis": "public_title",
+      "species": [
+        "편백나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "NbSZpTYgxqM",
+      "basis": "public_title",
+      "species": [
+        "보리수나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "O6cT8ZipeHw",
+      "basis": "public_title",
+      "species": [
+        "홍가시나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "울타리·조경"
+      ]
+    },
+    {
+      "videoId": "kcbaeIhNV4Y",
+      "basis": "public_title",
+      "species": [
+        "개암나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배"
+      ]
+    },
+    {
+      "videoId": "lG-0bETBwLE",
+      "basis": "public_title",
+      "species": [
+        "개복숭아"
+      ],
+      "topics": [
+        "가격·구입",
+        "농지·경영"
+      ]
+    },
+    {
+      "videoId": "AbGp4bPkNNE",
+      "basis": "public_title",
+      "species": [
+        "무화과나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배"
+      ]
+    },
+    {
+      "videoId": "DmDQq3bYTnw",
+      "basis": "public_title",
+      "species": [
+        "오가피나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "izbhUqJSbqU",
+      "basis": "public_title",
+      "species": [
+        "매실나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "qbCehN_1cgU",
+      "basis": "public_title",
+      "species": [
+        "소나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "울타리·조경"
+      ]
+    },
+    {
+      "videoId": "E3Yz5XhhJu8",
+      "basis": "public_title",
+      "species": [
+        "향나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "KiK9K4ycGDk",
+      "basis": "public_title",
+      "species": [
+        "엄나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "GQyLWtSFZOQ",
+      "basis": "public_title",
+      "species": [
+        "사과나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "품종·열매"
+      ]
+    },
+    {
+      "videoId": "yPshKzY5r1s",
+      "basis": "public_title",
+      "species": [
+        "개나리"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "VQFsOuOPZ2E",
+      "basis": "public_title",
+      "species": [
+        "소나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "울타리·조경"
+      ]
+    },
+    {
+      "videoId": "AAIZk4veCXQ",
+      "basis": "public_title",
+      "species": [
+        "자두나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "jEtyW5fayp8",
+      "basis": "public_title",
+      "species": [
+        "개나리"
+      ],
+      "topics": [
+        "가격·구입",
+        "울타리·조경"
+      ]
+    },
+    {
+      "videoId": "bninvQdjeAs",
+      "basis": "public_title",
+      "species": [
+        "엄나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "H7p1184Ec3s",
+      "basis": "public_title",
+      "species": [
+        "밤나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "uIpy9oxuIt0",
+      "basis": "public_title",
+      "species": [
+        "무화과나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "품종·열매"
+      ]
+    },
+    {
+      "videoId": "l-9VE6gKw0I",
+      "basis": "public_title",
+      "species": [
+        "피라칸타스"
+      ],
+      "topics": [
+        "가격·구입",
+        "울타리·조경"
+      ]
+    },
+    {
+      "videoId": "3dn-ihoGZgE",
+      "basis": "public_title",
+      "species": [
+        "개나리"
+      ],
+      "topics": [
+        "가격·구입",
+        "울타리·조경"
+      ]
+    },
+    {
+      "videoId": "w-gZPInuwyA",
+      "basis": "public_title",
+      "species": [
+        "측백나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "M4thvakbPhw",
+      "basis": "public_title",
+      "species": [
+        "유주나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "품종·열매"
+      ]
+    },
+    {
+      "videoId": "M3SY0svseaA",
+      "basis": "public_title",
+      "species": [
+        "소나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "울타리·조경"
+      ]
+    },
+    {
+      "videoId": "35hx9M2KwA0",
+      "basis": "public_title",
+      "species": [
+        "금귤나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "45Hf8-FLVsI",
+      "basis": "public_title",
+      "species": [
+        "수사해당화"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배"
+      ]
+    },
+    {
+      "videoId": "cXT68rl52BQ",
+      "basis": "public_title",
+      "species": [
+        "밤나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "품종·열매"
+      ]
+    },
+    {
+      "videoId": "3OdNKN4zs2c",
+      "basis": "public_title",
+      "species": [
+        "다래나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "품종·열매"
+      ]
+    },
+    {
+      "videoId": "GcoflCq5dzw",
+      "basis": "public_title",
+      "species": [
+        "단풍나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "mZaZeTJ0hiA",
+      "basis": "public_title",
+      "species": [
+        "유자나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "GhDluBfBBJc",
+      "basis": "public_title",
+      "species": [
+        "배나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "pethmOfBrU8",
+      "basis": "public_title",
+      "species": [
+        "초피나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "V1OjmnQTFtM",
+      "basis": "public_title",
+      "species": [
+        "키위나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "vPHVUc2o-dI",
+      "basis": "public_title",
+      "species": [
+        "참죽나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "loizkHK3Vwo",
+      "basis": "public_title",
+      "species": [
+        "사과나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "품종·열매"
+      ]
+    },
+    {
+      "videoId": "Wge1XSKi2sI",
+      "basis": "public_title",
+      "species": [
+        "대추나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "품종·열매"
+      ]
+    },
+    {
+      "videoId": "kR9jSI8_QFg",
+      "basis": "public_title",
+      "species": [
+        "무화과나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "tvaKRvE3EwE",
+      "basis": "public_title",
+      "species": [
+        "개복숭아"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "APDNzrKLltk",
+      "basis": "public_title",
+      "species": [
+        "소나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배",
+        "울타리·조경"
+      ]
+    },
+    {
+      "videoId": "vbOauNUuEsQ",
+      "basis": "public_title",
+      "species": [
+        "밤나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배",
+        "품종·열매"
+      ]
+    },
+    {
+      "videoId": "iGENIV4RbTw",
+      "basis": "public_title",
+      "species": [
+        "개암나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배"
+      ]
+    },
+    {
+      "videoId": "zNF79_DD4W8",
+      "basis": "public_title",
+      "species": [
+        "개나리"
+      ],
+      "topics": [
+        "가격·구입",
+        "포장·운송"
+      ]
+    },
+    {
+      "videoId": "4KjMkdcvp3k",
+      "basis": "public_title",
+      "species": [
+        "개나리"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배",
+        "울타리·조경",
+        "접목"
+      ]
+    },
+    {
+      "videoId": "dDnd3vuofLw",
+      "basis": "public_title",
+      "species": [
+        "사철나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배"
+      ]
+    },
+    {
+      "videoId": "g6HTNvbZxxk",
+      "basis": "public_title",
+      "species": [
+        "개복숭아"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배",
+        "접목"
+      ]
+    },
+    {
+      "videoId": "eOWqIZsBfFI",
+      "basis": "public_title",
+      "species": [
+        "키위나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배"
+      ]
+    },
+    {
+      "videoId": "etWLIqv3HHA",
+      "basis": "public_title",
+      "species": [
+        "배롱나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "CJ-LFXAl1_k",
+      "basis": "public_title",
+      "species": [
+        "전나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "HAZMQ1O6rw8",
+      "basis": "public_title",
+      "species": [
+        "앵두나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "품종·열매"
+      ]
+    },
+    {
+      "videoId": "27g-zap5rog",
+      "basis": "public_title",
+      "species": [
+        "보리수나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "GM7ZZbonPmA",
+      "basis": "public_title",
+      "species": [
+        "개복숭아"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배"
+      ]
+    },
+    {
+      "videoId": "a7OZOkA3uCI",
+      "basis": "public_title",
+      "species": [
+        "사철나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배",
+        "울타리·조경"
+      ]
+    },
+    {
+      "videoId": "tTseuFmqquY",
+      "basis": "public_title",
+      "species": [
+        "개복숭아"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배"
+      ]
+    },
+    {
+      "videoId": "_DurpczhUMY",
+      "basis": "public_title",
+      "species": [
+        "수사해당화"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "UYgpz28G6Qs",
+      "basis": "public_title",
+      "species": [
+        "소나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "울타리·조경"
+      ]
+    },
+    {
+      "videoId": "0zzmkLaVOqE",
+      "basis": "public_title",
+      "species": [
+        "포포나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "zXMgoFc1PdY",
+      "basis": "public_title",
+      "species": [
+        "밤나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "품종·열매"
+      ]
+    },
+    {
+      "videoId": "BbCUYFA66S0",
+      "basis": "public_title",
+      "species": [
+        "피라칸타스"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "6Glv6UHYO28",
+      "basis": "public_title",
+      "species": [
+        "블루베리"
+      ],
+      "topics": [
+        "가격·구입",
+        "품종·열매"
+      ]
+    },
+    {
+      "videoId": "mQ1sK4j6Avs",
+      "basis": "public_title",
+      "species": [
+        "소나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배",
+        "울타리·조경"
+      ]
+    },
+    {
+      "videoId": "k1h2CVddEg0",
+      "basis": "public_title",
+      "species": [
+        "앵두나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배"
+      ]
+    },
+    {
+      "videoId": "sqp8dof4oco",
+      "basis": "public_title",
+      "species": [
+        "대추나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "kXMkEfl4r3U",
+      "basis": "public_title",
+      "species": [
+        "매실나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배"
+      ]
+    },
+    {
+      "videoId": "JJVoKN8lfiA",
+      "basis": "public_title",
+      "species": [
+        "대추나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배"
+      ]
+    },
+    {
+      "videoId": "SDryrIrhnik",
+      "basis": "public_title",
+      "species": [
+        "소나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "울타리·조경"
+      ]
+    },
+    {
+      "videoId": "CBDiizooeMM",
+      "basis": "public_title",
+      "species": [
+        "복숭아나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배"
+      ]
+    },
+    {
+      "videoId": "0NK89vreCww",
+      "basis": "public_title",
+      "species": [
+        "전나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배"
+      ]
+    },
+    {
+      "videoId": "bfhmOmTMobQ",
+      "basis": "public_title",
+      "species": [
+        "대추나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배"
+      ]
+    },
+    {
+      "videoId": "C3F78Jy_Vyw",
+      "basis": "public_title",
+      "species": [
+        "공통"
+      ],
+      "topics": [
+        "농원·정원관리"
+      ]
+    },
+    {
+      "videoId": "-MhZm8NZN8I",
+      "basis": "public_title",
+      "species": [
+        "소나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배"
+      ]
+    },
+    {
+      "videoId": "P5Ee_vNe2Tw",
+      "basis": "public_title",
+      "species": [
+        "매실나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "brLWvdlDN9I",
+      "basis": "public_title",
+      "species": [
+        "소나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "68jPxRkSrHg",
+      "basis": "public_title",
+      "species": [
+        "전나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "JL_wpSuEXys",
+      "basis": "public_title",
+      "species": [
+        "뽕나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배"
+      ]
+    },
+    {
+      "videoId": "DFHZIgbd1o0",
+      "basis": "public_title",
+      "species": [
+        "편백나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배"
+      ]
+    },
+    {
+      "videoId": "wAIwls3Zxgs",
+      "basis": "public_title",
+      "species": [
+        "자작나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배"
+      ]
+    },
+    {
+      "videoId": "oDQCVJxo1ZM",
+      "basis": "public_title",
+      "species": [
+        "앵두나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배"
+      ]
+    },
+    {
+      "videoId": "waIQjtTLSL8",
+      "basis": "public_title",
+      "species": [
+        "잣나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "포장·운송"
+      ]
+    },
+    {
+      "videoId": "SPE4WSxUNW8",
+      "basis": "public_title",
+      "species": [
+        "밤나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배",
+        "품종·열매"
+      ]
+    },
+    {
+      "videoId": "6btqaQO815g",
+      "basis": "public_title",
+      "species": [
+        "개복숭아"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "QvxGHZ867vA",
+      "basis": "public_title",
+      "species": [
+        "홍가시나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "3kJCFusqSYc",
+      "basis": "public_title",
+      "species": [
+        "대추나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "2EROobzoK4Y",
+      "basis": "public_title",
+      "species": [
+        "감나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배"
+      ]
+    },
+    {
+      "videoId": "vvEzqW28QDY",
+      "basis": "public_title",
+      "species": [
+        "철쭉"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배",
+        "울타리·조경"
+      ]
+    },
+    {
+      "videoId": "MxZY88h_ssA",
+      "basis": "public_title",
+      "species": [
+        "홍가시나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "q413advhOeU",
+      "basis": "public_title",
+      "species": [
+        "화살나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "v49Hi_qiiaI",
+      "basis": "public_title",
+      "species": [
+        "개암나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배"
+      ]
+    },
+    {
+      "videoId": "KXLlFJJ1aUk",
+      "basis": "public_title",
+      "species": [
+        "포포나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "품종·열매"
+      ]
+    },
+    {
+      "videoId": "7Dv4AazvQq0",
+      "basis": "public_title",
+      "species": [
+        "사철나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "울타리·조경"
+      ]
+    },
+    {
+      "videoId": "B7pI9dbLgFo",
+      "basis": "public_title",
+      "species": [
+        "개복숭아"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "fj4C08I4ZhA",
+      "basis": "public_title",
+      "species": [
+        "다래나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "품종·열매"
+      ]
+    },
+    {
+      "videoId": "vkoLkBEPABQ",
+      "basis": "public_title",
+      "species": [
+        "대추나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "3JqTJjN-bqQ",
+      "basis": "public_title",
+      "species": [
+        "사철나무"
+      ],
+      "topics": [
+        "식재",
+        "묘목 재배"
+      ]
+    },
+    {
+      "videoId": "w9l6meNZ3Bg",
+      "basis": "public_title",
+      "species": [
+        "대추나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "품종·열매"
+      ]
+    },
+    {
+      "videoId": "Uo47bBBVv8I",
+      "basis": "public_title",
+      "species": [
+        "사철나무"
+      ],
+      "topics": [
+        "식재",
+        "묘목 재배"
+      ]
+    },
+    {
+      "videoId": "CkUeIjsQncQ",
+      "basis": "public_title",
+      "species": [
+        "사철나무"
+      ],
+      "topics": [
+        "묘목 재배"
+      ]
+    },
+    {
+      "videoId": "WNZHl-3c330",
+      "basis": "public_title",
+      "species": [
+        "자두나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "품종·열매"
+      ]
+    },
+    {
+      "videoId": "-hlcIaT-TM4",
+      "basis": "public_title",
+      "species": [
+        "자작나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "R5yq008mijw",
+      "basis": "public_title",
+      "species": [
+        "레드향나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "ayi8ENrUFbg",
+      "basis": "public_title",
+      "species": [
+        "편백나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배"
+      ]
+    },
+    {
+      "videoId": "nPT8a5ByvQw",
+      "basis": "public_title",
+      "species": [
+        "공통"
+      ],
+      "topics": [
+        "포장·운송"
+      ]
+    },
+    {
+      "videoId": "hiSZu8J7Hn0",
+      "basis": "public_title",
+      "species": [
+        "자작나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "vmRqkZTIaLk",
+      "basis": "public_title",
+      "species": [
+        "측백나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "vUbQ_j7ToGE",
+      "basis": "public_title",
+      "species": [
+        "소나무"
+      ],
+      "topics": [
+        "식재",
+        "분달이·포트재배",
+        "울타리·조경"
+      ]
+    },
+    {
+      "videoId": "3FjmIisPXqY",
+      "basis": "public_title",
+      "species": [
+        "대추나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "p3o7o37nPms",
+      "basis": "public_title",
+      "species": [
+        "소나무"
+      ],
+      "topics": [
+        "식재",
+        "울타리·조경"
+      ]
+    },
+    {
+      "videoId": "-olFjCwRpLU",
+      "basis": "public_title",
+      "species": [
+        "소나무"
+      ],
+      "topics": [
+        "울타리·조경",
+        "포장·운송"
+      ]
+    },
+    {
+      "videoId": "NCzqW_inFZw",
+      "basis": "public_title",
+      "species": [
+        "소나무"
+      ],
+      "topics": [
+        "식재",
+        "분달이·포트재배"
+      ]
+    },
+    {
+      "videoId": "1Y35vLc_eRg",
+      "basis": "public_title",
+      "species": [
+        "배롱나무"
+      ],
+      "topics": [
+        "묘목 선택"
+      ]
+    },
+    {
+      "videoId": "_UmNDRjrPoQ",
+      "basis": "public_title",
+      "species": [
+        "소나무"
+      ],
+      "topics": [
+        "식재",
+        "분달이·포트재배",
+        "울타리·조경"
+      ]
+    },
+    {
+      "videoId": "4VWklByvm98",
+      "basis": "public_title",
+      "species": [
+        "소나무"
+      ],
+      "topics": [
+        "식재",
+        "전정",
+        "울타리·조경"
+      ]
+    },
+    {
+      "videoId": "HiPtNRZCBmw",
+      "basis": "public_title",
+      "species": [
+        "소나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "식재",
+        "울타리·조경"
+      ]
+    },
+    {
+      "videoId": "4bYqaV-U_dA",
+      "basis": "public_title",
+      "species": [
+        "소나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배"
+      ]
+    },
+    {
+      "videoId": "K9CweN-m3ns",
+      "basis": "public_title",
+      "species": [
+        "황칠나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배"
+      ]
+    },
+    {
+      "videoId": "5qZxZXaZHh8",
+      "basis": "public_title",
+      "species": [
+        "다래나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "품종·열매"
+      ]
+    },
+    {
+      "videoId": "pHTGVKKfzFY",
+      "basis": "public_title",
+      "species": [
+        "소나무"
+      ],
+      "topics": [
+        "전정",
+        "묘목 재배"
+      ]
+    },
+    {
+      "videoId": "0eF9gTNCkPk",
+      "basis": "public_title",
+      "species": [
+        "공통"
+      ],
+      "topics": [
+        "병해충"
+      ]
+    },
+    {
+      "videoId": "IQRNwUjSjhY",
+      "basis": "public_title",
+      "species": [
+        "피칸나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배"
+      ]
+    },
+    {
+      "videoId": "gL39dKWCebY",
+      "basis": "public_title",
+      "species": [
+        "공통"
+      ],
+      "topics": [
+        "농원·정원관리"
+      ]
+    },
+    {
+      "videoId": "OJmvhhAPBKM",
+      "basis": "public_title",
+      "species": [
+        "공통"
+      ],
+      "topics": [
+        "식재",
+        "분달이·포트재배"
+      ]
+    },
+    {
+      "videoId": "01iMaRAb8Vg",
+      "basis": "public_title",
+      "species": [
+        "자두나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "5fzQSF6y5iA",
+      "basis": "public_title",
+      "species": [
+        "소나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "울타리·조경"
+      ]
+    },
+    {
+      "videoId": "Q9pFkjBwL_o",
+      "basis": "public_title",
+      "species": [
+        "포도나무"
+      ],
+      "topics": [
+        "분달이·포트재배",
+        "묘목 재배"
+      ]
+    },
+    {
+      "videoId": "wnp81KBltJ8",
+      "basis": "public_title",
+      "species": [
+        "복분자",
+        "블랙베리"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배",
+        "나무 특성"
+      ]
+    },
+    {
+      "videoId": "Re_-MiDFoss",
+      "basis": "public_title",
+      "species": [
+        "감나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배"
+      ]
+    },
+    {
+      "videoId": "9c6rauJl2oo",
+      "basis": "public_title",
+      "species": [
+        "키위나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배"
+      ]
+    },
+    {
+      "videoId": "EPWgrO1hlfU",
+      "basis": "public_title",
+      "species": [
+        "수사해당화"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배",
+        "울타리·조경"
+      ]
+    },
+    {
+      "videoId": "3r6ERb3EaRM",
+      "basis": "public_title",
+      "species": [
+        "소나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배",
+        "울타리·조경"
+      ]
+    },
+    {
+      "videoId": "tVverUu-AHg",
+      "basis": "public_title",
+      "species": [
+        "블루베리"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배",
+        "품종·열매"
+      ]
+    },
+    {
+      "videoId": "3kcs3XY61_Y",
+      "basis": "public_title",
+      "species": [
+        "회화나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "lkQ-v5isARo",
+      "basis": "public_title",
+      "species": [
+        "개암나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배"
+      ]
+    },
+    {
+      "videoId": "OLwovFwX8tI",
+      "basis": "public_title",
+      "species": [
+        "홍가시나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "cLzmJVuLanA",
+      "basis": "public_title",
+      "species": [
+        "초피나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "나무 특성"
+      ]
+    },
+    {
+      "videoId": "lgC8rVlIZ0E",
+      "basis": "public_title",
+      "species": [
+        "홍가시나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "울타리·조경"
+      ]
+    },
+    {
+      "videoId": "Me5-cICpEow",
+      "basis": "public_title",
+      "species": [
+        "유자나무",
+        "레몬나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "품종·열매"
+      ]
+    },
+    {
+      "videoId": "Yq3EW7IhpQQ",
+      "basis": "public_title",
+      "species": [
+        "소나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배"
+      ]
+    },
+    {
+      "videoId": "tmzzzb_z3vk",
+      "basis": "public_title",
+      "species": [
+        "대추나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "JuOBSQI8aQY",
+      "basis": "public_title",
+      "species": [
+        "사철나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "2deHgeEV_kg",
+      "basis": "public_title",
+      "species": [
+        "소나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "u7z1PIcr8NY",
+      "basis": "public_title",
+      "species": [
+        "초피나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배"
+      ]
+    },
+    {
+      "videoId": "6s-PoM8bz4I",
+      "basis": "public_title",
+      "species": [
+        "소나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "3II6ytaS6U0",
+      "basis": "public_title",
+      "species": [
+        "밤나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "fnpRKHdTQUY",
+      "basis": "public_title",
+      "species": [
+        "두릅나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "kZZsNe6l9dk",
+      "basis": "public_title",
+      "species": [
+        "피칸나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "-NBzfEECtqM",
+      "basis": "public_title",
+      "species": [
+        "체리나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배",
+        "품종·열매"
+      ]
+    },
+    {
+      "videoId": "eojceMu242U",
+      "basis": "public_title",
+      "species": [
+        "초피나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "AA0eT0NbdsI",
+      "basis": "public_title",
+      "species": [
+        "앵두나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배"
+      ]
+    },
+    {
+      "videoId": "uOZYXIqKEt8",
+      "basis": "public_title",
+      "species": [
+        "초피나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "나무 특성"
+      ]
+    },
+    {
+      "videoId": "t1CK-p7OUs8",
+      "basis": "public_title",
+      "species": [
+        "회화나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배"
+      ]
+    },
+    {
+      "videoId": "uh3vxbapSiY",
+      "basis": "public_title",
+      "species": [
+        "다래나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "품종·열매"
+      ]
+    },
+    {
+      "videoId": "nps-WrGTqNE",
+      "basis": "public_title",
+      "species": [
+        "키위나무"
+      ],
+      "topics": [
+        "삽목"
+      ]
+    },
+    {
+      "videoId": "9oQPRRpMLt8",
+      "basis": "public_title",
+      "species": [
+        "매실나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배"
+      ]
+    },
+    {
+      "videoId": "zCd2VUmLz2U",
+      "basis": "public_title",
+      "species": [
+        "피칸나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배"
+      ]
+    },
+    {
+      "videoId": "YjjjxkOHAw4",
+      "basis": "public_title",
+      "species": [
+        "소나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배"
+      ]
+    },
+    {
+      "videoId": "zmKljfQIo8Y",
+      "basis": "public_title",
+      "species": [
+        "소나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "XAsYhmHFaDA",
+      "basis": "public_title",
+      "species": [
+        "체리나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배",
+        "품종·열매"
+      ]
+    },
+    {
+      "videoId": "H9k0BDu6ChU",
+      "basis": "public_title",
+      "species": [
+        "피칸나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배"
+      ]
+    },
+    {
+      "videoId": "uIn-FwFUxDQ",
+      "basis": "public_title",
+      "species": [
+        "앵두나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배"
+      ]
+    },
+    {
+      "videoId": "SmI8leIJk78",
+      "basis": "public_title",
+      "species": [
+        "회화나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배"
+      ]
+    },
+    {
+      "videoId": "g4rES-I9ll0",
+      "basis": "public_title",
+      "species": [
+        "천리향"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배"
+      ]
+    },
+    {
+      "videoId": "Fm09DBZPU6k",
+      "basis": "public_title",
+      "species": [
+        "배나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배"
+      ]
+    },
+    {
+      "videoId": "zBplOVCOiQo",
+      "basis": "public_title",
+      "species": [
+        "편백나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배"
+      ]
+    },
+    {
+      "videoId": "IX1o99pUx2Y",
+      "basis": "public_title",
+      "species": [
+        "개복숭아"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배"
+      ]
+    },
+    {
+      "videoId": "-zbrmb4-mok",
+      "basis": "public_title",
+      "species": [
+        "소나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배"
+      ]
+    },
+    {
+      "videoId": "neIS7nc2Zp8",
+      "basis": "public_title",
+      "species": [
+        "살구나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배"
+      ]
+    },
+    {
+      "videoId": "YX2hAY-AsQg",
+      "basis": "public_title",
+      "species": [
+        "소나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "울타리·조경"
+      ]
+    },
+    {
+      "videoId": "Ah_sAVZLYqQ",
+      "basis": "public_title",
+      "species": [
+        "소나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "QvvQTi-V-CM",
+      "basis": "public_title",
+      "species": [
+        "다래나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "품종·열매"
+      ]
+    },
+    {
+      "videoId": "_iYzSS9UM5A",
+      "basis": "public_title",
+      "species": [
+        "소나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "FrfSWK-19E8",
+      "basis": "public_title",
+      "species": [
+        "밤나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배",
+        "품종·열매"
+      ]
+    },
+    {
+      "videoId": "W3vwyDvSlLs",
+      "basis": "public_title",
+      "species": [
+        "대추나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배",
+        "품종·열매"
+      ]
+    },
+    {
+      "videoId": "8Er5n4eWlwU",
+      "basis": "public_title",
+      "species": [
+        "회화나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "GJcQDT5Zgc0",
+      "basis": "public_title",
+      "species": [
+        "개복숭아"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "oUuYmN5LKg0",
+      "basis": "public_title",
+      "species": [
+        "공통"
+      ],
+      "topics": [
+        "포장·운송",
+        "농원·정원관리"
+      ]
+    },
+    {
+      "videoId": "HNUcF89c13w",
+      "basis": "public_title",
+      "species": [
+        "화살나무"
+      ],
+      "topics": [
+        "묘목 재배",
+        "나무 특성"
+      ]
+    },
+    {
+      "videoId": "70mZchZrssI",
+      "basis": "public_title",
+      "species": [
+        "공통"
+      ],
+      "topics": [
+        "포장·운송"
+      ]
+    },
+    {
+      "videoId": "Wrdu3Ane8ic",
+      "basis": "public_title",
+      "species": [
+        "포포나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "9lAX7rRNI9s",
+      "basis": "public_title",
+      "species": [
+        "소나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "X39-ULqGA48",
+      "basis": "public_title",
+      "species": [
+        "감나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배"
+      ]
+    },
+    {
+      "videoId": "Ar1X-tMEyQI",
+      "basis": "public_title",
+      "species": [
+        "밤나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "품종·열매"
+      ]
+    },
+    {
+      "videoId": "7_8q9EnY1bY",
+      "basis": "public_title",
+      "species": [
+        "블루베리"
+      ],
+      "topics": [
+        "가격·구입",
+        "품종·열매"
+      ]
+    },
+    {
+      "videoId": "x-itXKaEJ3g",
+      "basis": "public_title",
+      "species": [
+        "금송"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "mTOTk_lvD6M",
+      "basis": "public_title",
+      "species": [
+        "으름"
+      ],
+      "topics": [
+        "품종·열매"
+      ]
+    },
+    {
+      "videoId": "qMQ0fgyIEqY",
+      "basis": "public_title",
+      "species": [
+        "공통"
+      ],
+      "topics": [
+        "울타리·조경",
+        "포장·운송"
+      ]
+    },
+    {
+      "videoId": "xQs3bWjfDEY",
+      "basis": "public_title",
+      "species": [
+        "공통"
+      ],
+      "topics": [
+        "가격·구입",
+        "울타리·조경"
+      ]
+    },
+    {
+      "videoId": "PA1KecWRGhA",
+      "basis": "public_title",
+      "species": [
+        "다래나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "품종·열매"
+      ]
+    },
+    {
+      "videoId": "cr2Zx5ngpvE",
+      "basis": "public_title",
+      "species": [
+        "느티나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "5ynNBKwimZ8",
+      "basis": "public_title",
+      "species": [
+        "소나무"
+      ],
+      "topics": [
+        "식재",
+        "나무 특성"
+      ]
+    },
+    {
+      "videoId": "69h1c6pCm7c",
+      "basis": "public_title",
+      "species": [
+        "홍가시나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배",
+        "울타리·조경"
+      ]
+    },
+    {
+      "videoId": "E_3oXe28kc0",
+      "basis": "public_title",
+      "species": [
+        "사철나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "tsn5w9e6IeI",
+      "basis": "public_title",
+      "species": [
+        "소나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배"
+      ]
+    },
+    {
+      "videoId": "t5mrQ9iA9Kg",
+      "basis": "public_title",
+      "species": [
+        "감나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배",
+        "접목"
+      ]
+    },
+    {
+      "videoId": "M4yQU4ou-SM",
+      "basis": "public_title",
+      "species": [
+        "블루베리"
+      ],
+      "topics": [
+        "가격·구입",
+        "품종·열매"
+      ]
+    },
+    {
+      "videoId": "gOLahaFsQik",
+      "basis": "public_title",
+      "species": [
+        "소나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "UOkSuuqeY5c",
+      "basis": "public_title",
+      "species": [
+        "사철나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배",
+        "울타리·조경"
+      ]
+    },
+    {
+      "videoId": "R_HtuiWtTiw",
+      "basis": "public_title",
+      "species": [
+        "소나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "울타리·조경"
+      ]
+    },
+    {
+      "videoId": "sUZ21lXNfQk",
+      "basis": "public_title",
+      "species": [
+        "대추나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "품종·열매"
+      ]
+    },
+    {
+      "videoId": "OoZH-ewYvHw",
+      "basis": "public_title",
+      "species": [
+        "주목나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배"
+      ]
+    },
+    {
+      "videoId": "zSekAna4YVM",
+      "basis": "public_title",
+      "species": [
+        "수사해당화"
+      ],
+      "topics": [
+        "품종·열매"
+      ]
+    },
+    {
+      "videoId": "_h5LSw9bjm8",
+      "basis": "public_title",
+      "species": [
+        "남천나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배"
+      ]
+    },
+    {
+      "videoId": "IGjNZ25lRMA",
+      "basis": "public_title",
+      "species": [
+        "소나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배"
+      ]
+    },
+    {
+      "videoId": "G6yIXdMZVBs",
+      "basis": "public_title",
+      "species": [
+        "두릅나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배"
+      ]
+    },
+    {
+      "videoId": "ZwJvjsjUeIg",
+      "basis": "public_title",
+      "species": [
+        "다래나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "jVOC67pn38I",
+      "basis": "public_title",
+      "species": [
+        "자작나무"
+      ],
+      "topics": [
+        "울타리·조경"
+      ]
+    },
+    {
+      "videoId": "xbd5i7M-_xQ",
+      "basis": "public_title",
+      "species": [
+        "무궁화"
+      ],
+      "topics": [
+        "품종·열매"
+      ]
+    },
+    {
+      "videoId": "hYQEhV8-SYM",
+      "basis": "public_title",
+      "species": [
+        "포포나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "HzO4QieUI_s",
+      "basis": "public_title",
+      "species": [
+        "공통"
+      ],
+      "topics": [
+        "농원·정원관리"
+      ]
+    },
+    {
+      "videoId": "T_Kwh7H50WQ",
+      "basis": "public_title",
+      "species": [
+        "체리나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배",
+        "접목"
+      ]
+    },
+    {
+      "videoId": "TcjYY6ODpTo",
+      "basis": "public_title",
+      "species": [
+        "편백나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "Hb388rkdLLE",
+      "basis": "public_title",
+      "species": [
+        "기타"
+      ],
+      "topics": [
+        "기타"
+      ]
+    },
+    {
+      "videoId": "V23sZNQEFi4",
+      "basis": "public_title",
+      "species": [
+        "블루베리"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "B02AFprZgwk",
+      "basis": "public_title",
+      "species": [
+        "소나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "울타리·조경"
+      ]
+    },
+    {
+      "videoId": "eneJHvem7sU",
+      "basis": "public_title",
+      "species": [
+        "자두나무",
+        "살구나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "품종·열매"
+      ]
+    },
+    {
+      "videoId": "l5PU3dbmuZE",
+      "basis": "public_title",
+      "species": [
+        "다래나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배",
+        "품종·열매"
+      ]
+    },
+    {
+      "videoId": "yWZyZj6zFII",
+      "basis": "public_title",
+      "species": [
+        "감나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "JafmWIB-FZ4",
+      "basis": "public_title",
+      "species": [
+        "측백나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "d96qM3VNAjQ",
+      "basis": "public_title",
+      "species": [
+        "수사해당화"
+      ],
+      "topics": [
+        "가격·구입",
+        "울타리·조경"
+      ]
+    },
+    {
+      "videoId": "FEU2x_wDTpA",
+      "basis": "public_title",
+      "species": [
+        "무화과나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "RW1gw_fkXnc",
+      "basis": "public_title",
+      "species": [
+        "셀릭스"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "LbE9YaG9eAw",
+      "basis": "public_title",
+      "species": [
+        "체리나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "품종·열매"
+      ]
+    },
+    {
+      "videoId": "JYivr4Cj-Gk",
+      "basis": "public_title",
+      "species": [
+        "문그로우"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "iIGS6CwPRNU",
+      "basis": "public_title",
+      "species": [
+        "소나무"
+      ],
+      "topics": [
+        "나무 특성"
+      ]
+    },
+    {
+      "videoId": "BtGZJM6VXzU",
+      "basis": "public_title",
+      "species": [
+        "매실나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "품종·열매"
+      ]
+    },
+    {
+      "videoId": "K63IUHWFLtI",
+      "basis": "public_title",
+      "species": [
+        "사과나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "품종·열매"
+      ]
+    },
+    {
+      "videoId": "GvHC6aDTEl0",
+      "basis": "public_title",
+      "species": [
+        "동백나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "_bsKva7gkAk",
+      "basis": "public_title",
+      "species": [
+        "사철나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "LbFjOfn5Nd8",
+      "basis": "public_title",
+      "species": [
+        "홍가시나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "BxKP6Hktu3k",
+      "basis": "public_title",
+      "species": [
+        "꾸지뽕나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "품종·열매"
+      ]
+    },
+    {
+      "videoId": "xXdL8sqxJrM",
+      "basis": "public_title",
+      "species": [
+        "소나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "Eo_-dVnseSo",
+      "basis": "public_title",
+      "species": [
+        "향나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "nrFzu4fDSxc",
+      "basis": "public_title",
+      "species": [
+        "주목나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "-6KRgiSKECo",
+      "basis": "public_title",
+      "species": [
+        "매실나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "yJymWMb46v0",
+      "basis": "public_title",
+      "species": [
+        "사철나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "울타리·조경"
+      ]
+    },
+    {
+      "videoId": "brtVkCjNJd4",
+      "basis": "public_title",
+      "species": [
+        "셀릭스"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "m1p_gmA8Tf8",
+      "basis": "public_title",
+      "species": [
+        "두릅나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "pwlkiZTY7W0",
+      "basis": "public_title",
+      "species": [
+        "개복숭아"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "d1IJ2NcYcqk",
+      "basis": "public_title",
+      "species": [
+        "블루베리"
+      ],
+      "topics": [
+        "가격·구입",
+        "품종·열매"
+      ]
+    },
+    {
+      "videoId": "XNR3Cx7T15M",
+      "basis": "public_title",
+      "species": [
+        "측백나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "RYDh6ZR3v5E",
+      "basis": "public_title",
+      "species": [
+        "감나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배"
+      ]
+    },
+    {
+      "videoId": "ttbGGQPnovc",
+      "basis": "public_title",
+      "species": [
+        "산초나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "nt--SZ0tvg4",
+      "basis": "public_title",
+      "species": [
+        "키위나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "uapRo_NnAQY",
+      "basis": "public_title",
+      "species": [
+        "대추나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "CQOFTSQXaxo",
+      "basis": "public_title",
+      "species": [
+        "남천나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배"
+      ]
+    },
+    {
+      "videoId": "HIvKn1k5EsQ",
+      "basis": "public_title",
+      "species": [
+        "감나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "l54lFGQ0RVY",
+      "basis": "public_title",
+      "species": [
+        "수사해당화"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "RGMS2Y-9Kn0",
+      "basis": "public_title",
+      "species": [
+        "감나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "품종·열매"
+      ]
+    },
+    {
+      "videoId": "NfGKIMi1gkY",
+      "basis": "public_title",
+      "species": [
+        "소나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "울타리·조경"
+      ]
+    },
+    {
+      "videoId": "KWn4BjjtEIw",
+      "basis": "public_title",
+      "species": [
+        "개암나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배"
+      ]
+    },
+    {
+      "videoId": "30Pq8WHE49I",
+      "basis": "public_title",
+      "species": [
+        "대추나무"
+      ],
+      "topics": [
+        "가격·구입"
+      ]
+    },
+    {
+      "videoId": "YbQBpNSf8oU",
+      "basis": "public_title",
+      "species": [
+        "다래나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배"
+      ]
+    },
+    {
+      "videoId": "LjVA2vpD6kM",
+      "basis": "public_title",
+      "species": [
+        "블루베리"
+      ],
+      "topics": [
+        "품종·열매"
+      ]
+    },
+    {
+      "videoId": "N0Qu4Amojro",
+      "basis": "public_title",
+      "species": [
+        "편백나무"
+      ],
+      "topics": [
+        "분달이·포트재배"
+      ]
+    },
+    {
+      "videoId": "GoEm-cJKx5A",
+      "basis": "public_title",
+      "species": [
+        "홍가시나무"
+      ],
+      "topics": [
+        "월동"
+      ]
+    },
+    {
+      "videoId": "v9eXuKKkEa4",
+      "basis": "public_title",
+      "species": [
+        "공통"
+      ],
+      "topics": [
+        "울타리·조경"
+      ]
+    },
+    {
+      "videoId": "LSr67ak7XMM",
+      "basis": "public_title",
+      "species": [
+        "소나무"
+      ],
+      "topics": [
+        "울타리·조경",
+        "월동"
+      ]
+    },
+    {
+      "videoId": "rmEpBnyfPes",
+      "basis": "public_title",
+      "species": [
+        "공통"
+      ],
+      "topics": [
+        "병해충"
+      ]
+    },
+    {
+      "videoId": "sZlN712yG0o",
+      "basis": "public_title",
+      "species": [
+        "소나무"
+      ],
+      "topics": [
+        "전정"
+      ]
+    },
+    {
+      "videoId": "LCTeuSrRsWQ",
+      "basis": "public_title",
+      "species": [
+        "공통"
+      ],
+      "topics": [
+        "식재"
+      ]
+    },
+    {
+      "videoId": "OoY85ee4z28",
+      "basis": "public_title",
+      "species": [
+        "공통"
+      ],
+      "topics": [
+        "나무 특성"
+      ]
+    },
+    {
+      "videoId": "k02samMhb6Y",
+      "basis": "public_title",
+      "species": [
+        "대추나무"
+      ],
+      "topics": [
+        "분달이·포트재배"
+      ]
+    },
+    {
+      "videoId": "_a-GCsBSshQ",
+      "basis": "public_title",
+      "species": [
+        "가죽나무"
+      ],
+      "topics": [
+        "목재 활용"
+      ]
+    },
+    {
+      "videoId": "_r8KlJIn0UE",
+      "basis": "public_title",
+      "species": [
+        "남천나무"
+      ],
+      "topics": [
+        "품종·열매"
+      ]
+    }
+  ]
+}

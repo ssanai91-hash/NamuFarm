@@ -2540,14 +2540,18 @@ body { background:#fafbf7; }
 .video-search { position: relative; }
 .video-search>svg { position: absolute; left: .85rem; top: 50%; transform: translateY(-50%); width: 1.2rem; color: #657764; }
 .video-search input { min-height: 3rem; padding-left: 2.6rem; background: #fff; font-size: 1rem; }
+.video-format-buttons { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .6rem; margin-bottom: 1rem; }
+.video-format-buttons button { min-height: 3.5rem; padding: .6rem; white-space: normal; font-size: 1rem; flex-wrap: wrap; }
+.video-format-buttons button[aria-pressed=true] { background: #205844; border-color: #205844; color: #fff; }
+.video-format-buttons small { font-size: .85rem; font-weight: 500; }
 .video-filters { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .75rem; margin-top: .75rem; }
 .video-filters label { display: grid; gap: .4rem; min-width: 0; white-space: nowrap; font-size: 1rem; font-weight: 600; color: #425a47; }
 .video-filters select { width: 100%; min-width: 0; min-height: 3rem; padding: .4rem .65rem; border: 1px solid #a8baa9; border-radius: .6rem; background: #fff; color: #24372e; }
 .video-filters select:focus-visible { outline: 3px solid #387953; outline-offset: 2px; }
 .video-list-toolbar { display: flex; align-items: center; justify-content: space-between; gap: .75rem; margin: .65rem 0 .4rem; }
-.video-list-toolbar p { display: flex; align-items: center; gap: .5rem; font-size: .9rem; color: #526350; }
+.video-list-toolbar p { display: flex; flex-wrap: wrap; align-items: center; min-width: 0; gap: .5rem; font-size: .9rem; color: #526350; }
 .video-list-toolbar p>svg { width: 1rem; height: 1rem; }
-.video-list-toolbar button { min-height: 2.75rem; padding: .45rem .65rem; font-size: .9rem; }
+.video-list-toolbar button { flex-shrink: 0; min-height: 2.75rem; padding: .45rem .65rem; font-size: .9rem; }
 .video-list { display: grid; grid-template-columns: 1fr 1fr; gap: .7rem; }
 .video-card { display: flex; align-items: center; gap: .8rem; width: 100%; padding: .65rem; border: 1px solid #d4e0d1; border-radius: .85rem; background: #fff; text-align: left; }
 .video-card:hover { background: #f0f6ee; border-color: #83a38a; }
@@ -2566,6 +2570,16 @@ body { background:#fafbf7; }
 .video-back { margin: -.5rem 0 .15rem -.5rem; }
 .video-player { width: 100%; aspect-ratio: 16/9; background: #112319; border-radius: .6rem; overflow: hidden; }
 .video-player iframe { display: block; width: 100%; height: 100%; border: 0; }
+.video-player.video-player-short { width: min(100%,32.625dvh,22rem); aspect-ratio: 9/16; justify-self: center; }
+.video-list.video-short-list { grid-template-columns: repeat(4,minmax(0,1fr)); align-items: stretch; }
+.video-short-list .video-card { flex-direction: column; align-items: stretch; gap: .6rem; padding: .5rem; }
+.video-short-list .video-thumbnail { flex: none; width: 100%; aspect-ratio: 9/16; }
+.video-short-list .video-card-copy strong { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; font-size: 1rem; }
+.video-short-list .video-source { font-size: .875rem; }
+.video-short-list .video-tags>span { font-size: .8rem; }
+.video-load-more { display: grid; justify-items: center; gap: .65rem; padding: 1rem 0 .25rem; }
+.video-load-more p { font-size: .95rem; color: #526350; }
+.video-load-more button { min-height: 3.25rem; width: min(100%,22rem); font-size: 1.125rem; }
 .video-detail h3 { font-size: 1.2rem; margin-top: .4rem; }
 .video-play-help { font-size: .9rem; color: #526350; }
 @media(min-width:48.01rem) { .desktop-nav { gap: clamp(.7rem,1.4vw,1.5rem); } }
@@ -2585,6 +2599,7 @@ body { background:#fafbf7; }
   .video-filters { grid-template-columns: 1fr; }
   .video-filters label { grid-template-columns: 2.5rem minmax(0,1fr); align-items: center; }
   .video-list { grid-template-columns: 1fr; gap: .5rem; }
+  .video-list.video-short-list { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .video-card { padding: .55rem; gap: .65rem; }
   .video-thumbnail { flex-basis: 6.5rem; }
   .video-card-copy strong { font-size: 1.125rem; }

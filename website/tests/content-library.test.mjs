@@ -5,19 +5,21 @@ import vm from 'node:vm';
 import { filterVideos, initialVideos, readVideoCatalog, youtubeVideoId, youtubeEmbedUrl } from '../lib/content-library.ts';
 
 const id = 'HgNJrIhC3rk';
+const regularVideos = initialVideos.filter(video => video.format === 'video');
+const shortVideos = initialVideos.filter(video => video.format === 'short');
 const validUrls = [`https://youtu.be/${id}?si=abc`, `https://www.youtube.com/watch?v=${id}&t=1`, `https://m.youtube.com/shorts/${id}`, `https://youtube.com/live/${id}`, `https://www.youtube-nocookie.com/embed/${id}`];
 const invalidUrls = ['javascript:alert(1)', `https://youtube.com.evil.test/watch?v=${id}`, `https://evil.test/?v=${id}`, `https://user@youtube.com/watch?v=${id}`, `https://youtu.be/${id}/other`, `https://youtube.com/watch?v=${id}extra`, 'https://youtube.com/playlist?list=abc'];
 
 test('bundled catalog includes the complete verified Videos tab and excludes every captured Short', () => {
   const raw = JSON.parse(readFileSync(new URL('../lib/video-catalog.json', import.meta.url), 'utf8'));
   const audit = JSON.parse(readFileSync(new URL('../docs/namujunggaesa-catalog-20261020.json', import.meta.url), 'utf8'));
-  assert.equal(initialVideos.length, raw.length, 'invalid records must not silently disappear');
-  assert.equal(new Set(initialVideos.map(video => video.id)).size, raw.length);
-  assert.deepEqual(initialVideos.map(video => video.videoId), audit.includedVideoIds);
+  assert.equal(regularVideos.length, raw.length, 'invalid records must not silently disappear');
+  assert.equal(new Set(regularVideos.map(video => video.id)).size, raw.length);
+  assert.deepEqual(regularVideos.map(video => video.videoId), audit.includedVideoIds);
   assert.equal(new Set(audit.includedVideoIds).size, audit.includedVideoIds.length);
   assert.equal(audit.videoPages.at(-1).hasContinuation, false);
   const shorts = new Set(audit.excludedShortsIds);
-  assert.ok(initialVideos.every(video => !shorts.has(video.videoId)));
+  assert.ok(regularVideos.every(video => !shorts.has(video.videoId)));
   assert.equal(initialVideos[0].videoId, id);
   assert.ok(initialVideos.some(video => video.videoId === 'FTdLhnyfyYs'), 'short horizontal videos in Videos are retained');
 });
@@ -51,18 +53,49 @@ test('search combines title/channel with independent species and topic filters',
 
 test('reviewed species and topics support combined filters and description-based name corrections', () => {
   const audit = JSON.parse(readFileSync(new URL('../docs/video-classification-20261020.json', import.meta.url), 'utf8'));
-  assert.equal(audit.items.length, initialVideos.length);
-  assert.ok(initialVideos.every(video => video.species.length > 0 && video.topics.length > 0));
-  assert.deepEqual(filterVideos(initialVideos, '', '소나무', '전정').map(video => video.videoId), ['6xQbzSbMzfU']);
-  assert.deepEqual(filterVideos(initialVideos, '', '남천나무', '식재').map(video => video.videoId), ['7srVLOj6Tbw', 'KmpUFESEkIw']);
-  assert.equal(filterVideos(initialVideos, '', '공통', '토양')[0].videoId, 'Luk4aMQqyb4');
-  assert.equal(filterVideos(initialVideos, '회화나무', '전체', '전체')[0].videoId, 'Cs_VIa77d6c');
-  assert.ok(filterVideos(initialVideos, '', '측백나무', '묘목 선택').some(video => video.videoId === 'rax_iq05wd8'));
-  for (const video of initialVideos) {
+  assert.equal(audit.items.length, regularVideos.length);
+  assert.ok(regularVideos.every(video => video.species.length > 0 && video.topics.length > 0));
+  assert.deepEqual(filterVideos(regularVideos, '', '소나무', '전정').map(video => video.videoId), ['6xQbzSbMzfU']);
+  assert.deepEqual(filterVideos(regularVideos, '', '남천나무', '식재').map(video => video.videoId), ['7srVLOj6Tbw', 'KmpUFESEkIw']);
+  assert.equal(filterVideos(regularVideos, '', '공통', '토양')[0].videoId, 'Luk4aMQqyb4');
+  assert.equal(filterVideos(regularVideos, '회화나무', '전체', '전체')[0].videoId, 'Cs_VIa77d6c');
+  assert.ok(filterVideos(regularVideos, '', '측백나무', '묘목 선택').some(video => video.videoId === 'rax_iq05wd8'));
+  for (const video of regularVideos) {
     const entry = audit.items.find(item => item.videoId === video.videoId);
     assert.deepEqual(video.species, entry.species);
     assert.deepEqual(video.topics, entry.topics);
   }
+});
+
+test('Shorts include the entire verified tab without mixing into regular videos', () => {
+  const raw = JSON.parse(readFileSync(new URL('../lib/short-video-catalog.json', import.meta.url), 'utf8'));
+  const audit = JSON.parse(readFileSync(new URL('../docs/short-video-classification-20261020.json', import.meta.url), 'utf8'));
+  const previous = JSON.parse(readFileSync(new URL('../docs/namujunggaesa-catalog-20261020.json', import.meta.url), 'utf8'));
+  assert.equal(shortVideos.length, raw.length);
+  assert.equal(audit.pages.at(-1).hasContinuation, false);
+  assert.deepEqual(shortVideos.map(video => video.videoId).sort(), [...previous.excludedShortsIds].sort());
+  assert.equal(new Set(initialVideos.map(video => video.videoId)).size, initialVideos.length);
+  assert.ok(shortVideos.every(video => video.url.startsWith('https://www.youtube.com/shorts/') && video.species.length && video.topics.length));
+  const blueberry = filterVideos(initialVideos, '', '블루베리', '가격·구입', 'short');
+  assert.ok(blueberry.length > 0);
+  assert.ok(blueberry.every(video => video.format === 'short'));
+  assert.deepEqual(filterVideos(initialVideos, '', '소나무', '전정', 'video').map(video => video.videoId), ['6xQbzSbMzfU']);
+  assert.deepEqual(shortVideos.find(video => video.videoId === 'u7z1PIcr8NY').species, ['초피나무']);
+  assert.deepEqual(shortVideos.find(video => video.videoId === 'R5yq008mijw').species, ['레드향나무']);
+  assert.deepEqual(shortVideos.find(video => video.videoId === 'Hb388rkdLLE').topics, ['기타']);
+});
+
+test('legacy Apps Script watch-URL normalization preserves Shorts through stable content IDs', () => {
+  const short = shortVideos[0];
+  const row = [short.id, 'youtube', short.title, short.url, short.species.join(','), short.topics.join(','), true, short.order, short.source];
+  const { result } = gasCatalog([row]);
+  assert.ok(result.items[0].url.includes('/watch?v='));
+  const videos = readVideoCatalog(result);
+  assert.equal(videos[0].format, 'short');
+  assert.equal(videos[0].url, short.url);
+  assert.equal(readVideoCatalog({ ok: true, catalogVersion: 1, items: [{ ...short, id: 'plain-id' }] })[0].format, 'short');
+  assert.equal(regularVideos.find(video => video.videoId === 'FTdLhnyfyYs').format, 'video');
+  assert.deepEqual(readVideoCatalog(gasCatalog([[...row.slice(0, 6), false, short.order, short.source]]).result), []);
 });
 
 function gasCatalog(rows, headers = ['콘텐츠ID','종류','제목','주소','묘목','주제','게시','순서','출처']) {

@@ -1,8 +1,12 @@
 import bundledVideos from "./video-catalog.json" with { type: "json" };
+import bundledShorts from "./short-video-catalog.json" with { type: "json" };
+
+export type VideoFormat = "video" | "short";
 
 export type VideoResource = {
   id: string;
   kind: "youtube";
+  format: VideoFormat;
   title: string;
   videoId: string;
   url: string;
@@ -12,11 +16,11 @@ export type VideoResource = {
   order: number;
 };
 
-// Verified channel Videos-tab snapshot, excluding Shorts. Keep the owner's first
-// reference pinned. A successful Sheets response still controls the live catalog,
+// Verified regular-video and Shorts snapshots. Keep the owner's first reference
+// pinned. A successful Sheets response still controls the live catalog,
 // including removals and an intentionally empty list; failures retain this snapshot.
 export const initialVideos: VideoResource[] = readVideoCatalog({
-  ok: true, catalogVersion: 1, items: bundledVideos,
+  ok: true, catalogVersion: 1, items: [...bundledVideos, ...bundledShorts],
 }) ?? [];
 
 export function youtubeVideoId(value: unknown): string | null {
@@ -55,24 +59,31 @@ export function readVideoCatalog(value: unknown): VideoResource[] | null {
   if (body.ok !== true || body.catalogVersion !== 1 || !Array.isArray(body.items) || body.items.length > 1000) return null;
   const videos: VideoResource[] = [];
   const seen = new Set<string>();
+  const seenVideos = new Set<string>();
   for (const raw of body.items) {
     if (!raw || typeof raw !== "object") continue;
     const item = raw as Record<string, unknown>;
     if (item.kind !== "youtube") continue; // Blog records are reserved for a later release.
     const id = shortText(item.id, 80), title = shortText(item.title, 200);
     const videoId = youtubeVideoId(item.url);
-    if (!/^[A-Za-z0-9_-]+$/.test(id) || !title || !videoId || seen.has(id)) continue;
+    if (!/^[A-Za-z0-9_-]+$/.test(id) || !title || !videoId || seen.has(id) || seenVideos.has(videoId)) continue;
     seen.add(id);
-    videos.push({ id, kind: "youtube", title, videoId, url: `https://www.youtube.com/watch?v=${videoId}`,
+    seenVideos.add(videoId);
+    // Legacy Apps Script normalizes URLs to /watch but preserves the content ID.
+    // shorts-<videoId> therefore keeps the format without changing the live script.
+    const format: VideoFormat = item.format === "short" || id === `shorts-${videoId}` ||
+      new URL(item.url as string).pathname.startsWith("/shorts/") ? "short" : "video";
+    videos.push({ id, kind: "youtube", format, title, videoId,
+      url: format === "short" ? `https://www.youtube.com/shorts/${videoId}` : `https://www.youtube.com/watch?v=${videoId}`,
       species: tags(item.species), topics: tags(item.topics), source: shortText(item.source, 100),
       order: typeof item.order === "number" && Number.isFinite(item.order) ? item.order : 9999 });
   }
   return videos.sort((a, b) => a.order - b.order || a.title.localeCompare(b.title, "ko"));
 }
 
-export function filterVideos(items: VideoResource[], query: string, species: string, topic: string) {
+export function filterVideos(items: VideoResource[], query: string, species: string, topic: string, format?: VideoFormat) {
   const needle = query.trim().normalize("NFKC").toLocaleLowerCase("ko").replace(/\s+/g, "");
-  return items.filter(item => (species === "전체" || item.species.includes(species)) &&
+  return items.filter(item => (!format || item.format === format) && (species === "전체" || item.species.includes(species)) &&
     (topic === "전체" || item.topics.includes(topic)) &&
     (!needle || [item.title, item.source, ...item.species, ...item.topics].join(" ").normalize("NFKC").toLocaleLowerCase("ko").replace(/\s+/g, "").includes(needle)));
 }
