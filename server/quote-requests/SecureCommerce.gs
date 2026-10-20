@@ -36,7 +36,7 @@ function secureServiceInfo_() {
     receiptFormat:'NAMU-YYYYMMDD-NNNN',receiptTimeZone:'Asia/Seoul',connectionFile:true,requestSnapshot:true,
     connectionAuth:'auto-v1',quoteReadMode:twoBookActive_()?'annual-two-tabs':'legacy-storage',legacyDeviceAuth:true,
     quoteEmail:true,quoteEmailSender:QUOTE_SENDER_EMAIL,
-    quoteSms:true,quoteSmsProvider:'SOLAPI',
+    quoteSms:true,quoteSmsProvider:'SOLAPI',soldNumberReservation:1,
     commerceStates:['입금확인','배송완료','구매취소']};
 }
 function byteString_(value, minimum, maximum) {
@@ -269,6 +269,7 @@ function saveSale_(body) {
   const digest=saleDigest_(meta,personal,plain); assert_(body.fingerprint===digest);
   assert_(body.sourceRequestId==='' || UUID_PATTERN.test(body.sourceRequestId));
   return lock_(()=>{
+    assertSoldNumberReserved_(meta.orderNumber);
     const events=namedSheet_(SALE_EVENT_SHEET,SALE_EVENT_HEADERS,false);
     assert_(!saleDeletionRows_().some(row=>row[0]===meta.orderNumber),'CONFLICT');
     const records=saleRecords_(),rows=records.map(r=>r.row);
@@ -722,5 +723,6 @@ function purgeExpiredCustomerData() {
     });SpreadsheetApp.flush();
   });
 }
+
 
 

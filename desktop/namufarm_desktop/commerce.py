@@ -216,15 +216,15 @@ def quote_document(draft):
             "customerRequestNote": draft.get("requestNote", ""), "paymentAccount": draft.get("paymentAccount", "")}
 
 
-def order_from_draft(draft):
+def order_from_draft(draft, order_number=None):
     validate_draft(draft)
     amount, stamp = draft_amounts(draft), now_ms()
     order = {k: draft.get(k, "").strip() for k in EDITABLE}
-    order.update(orderId=None, orderNumber="PC_" + draft["id"], orderDate=datetime.fromtimestamp(stamp / 1000, SEOUL).strftime("%Y-%m-%d %H:%M"),
+    order.update(orderId=None, orderNumber=order_number or "PC_" + draft["id"], orderDate=datetime.fromtimestamp(stamp / 1000, SEOUL).strftime("%Y-%m-%d %H:%M"),
                  status="입금확인", revision=1, totalQty=amount["quantity"], totalPrice=amount["supply"], isPrepaid=draft["isPrepaid"], shippingFee=draft["shippingFee"],
                  purchasedAt=stamp, paidAt=stamp, deliveredAt=0, completedAt=0, updatedAt=stamp, costTotal=amount["cost"], expenseTotal=0,
                  costConfirmed=draft["costConfirmed"], profitMode="resale", commissionBps=3000, taxAmount=amount["tax"],
-                 sourceRequestId=draft["sourceRequestId"],
+                 sourceRequestId=draft["sourceRequestId"], sourceDraftId=draft["id"],
                  sourceQuoteNumber=draft.get("requestReceiptNumber") or "PCQ_" + draft["id"])
     # Existing Android codec explicitly treats this farm label as non-stock-backed.
     order["itemSummary"] = "\n".join("|".join([i["species"].strip(), "", "", i["specification"], "", str(i["quantity"]), str(i["unitPrice"]), "수기견적", str(i["unitCost"])]) for i in draft["items"])
@@ -274,6 +274,19 @@ def shipping_problem(order):
     if not order.get("roadAddress", "").strip():
         return "배송주소 입력"
     return ""
+
+
+def shipping_fingerprint(order):
+    values = [order.get(key, "") for key in
+              ("receiverName", "customerPhone", "zipNo", "roadAddress", "detailAddress")]
+    values.append(tracking_number(order))
+    return hashlib.sha256(json.dumps(values, ensure_ascii=False, separators=(",", ":")).encode()).hexdigest()
+
+
+def shipping_ready(order):
+    stamp = order.get("shippingReadyAt", 0)
+    return (type(stamp) is int and stamp > 0 and not shipping_problem(order) and
+            bool(tracking_number(order)) and order.get("shippingReadyFingerprint") == shipping_fingerprint(order))
 
 
 def csv_text(value):

@@ -11,11 +11,13 @@ from .crypto import canonical, digest, customer_digest, SellerKey
 from .domain import (changed, integer, metadata, now_ms, require, valid_id, validate_metadata, validate_request, sale_expired)
 from .errors import AuthenticationError, UserError, ConflictError
 from .commerce import (validate_draft, order_from_draft, quote_document, tracking_fields,
-                       tracking_number, normalize_tracking, quote_delivery_fingerprint, seller_note_draft)
+                       tracking_number, normalize_tracking, quote_delivery_fingerprint, seller_note_draft,
+                       shipping_problem, shipping_fingerprint, shipping_ready)
 from .sales_workspace import SalesWorkspace
+from .sold_numbers import SoldNumbers
 
 
-class Manager(SalesWorkspace):
+class Manager(SoldNumbers, SalesWorkspace):
     def __init__(self, vault, api=None):
         self.vault = vault
         self.credentials = vault.credentials()
@@ -231,6 +233,7 @@ class Manager(SalesWorkspace):
         self.request_snapshot = info.get("requestSnapshot") is True
         mode = info.get("quoteReadMode")
         self.quote_read_mode = mode if mode in ("annual-two-tabs", "legacy-storage") else None
+        self.sold_reservation_supported = info.get("soldNumberReservation") == 1
         return info
 
     def pair(self, invite):
@@ -279,13 +282,16 @@ class Manager(SalesWorkspace):
                       | set(self.vault.preference("hidden_sales", [])))
         registered_sources = {r["private"]["order"].get("sourceRequestId") for r in decoded_sales
                               if r["private"]["order"].get("sourceRequestId")}
+        registered_drafts = {r["private"]["order"].get("sourceDraftId") for r in decoded_sales}
         # Keep paid quote history in the DB, but show the order only in sales.
         active = [{**copy.deepcopy(d), "paymentRegistered": d["quoteStatus"] == "입금확인" or
                    "PC_" + d["id"] in registered or d.get("sourceRequestId") in registered_sources}
                   for d in quotes if d["quoteStatus"] != "입금확인" and
-                  "PC_" + d["id"] not in registered and d.get("sourceRequestId") not in registered_sources]
+                   "PC_" + d["id"] not in registered and d.get("sourceRequestId") not in registered_sources and
+                   d["id"] not in registered_drafts]
         drafts = self.vault.preference("drafts", [])
         active_drafts = [d for d in drafts if d["createdAt"] > now_ms() - 30 * 86400000
+                         and d["id"] not in registered_drafts
                          and not any(r["metadata"]["orderNumber"] == "PC_" + d["id"] for r in sales)]
         if active_drafts != drafts:
             self.vault.save_preference("drafts", active_drafts)
@@ -310,7 +316,7 @@ class Manager(SalesWorkspace):
     def _save_draft(self, draft):
         validate_draft(draft)
         require(not self.vault.preference("quote_write_pending"), "먼저 가져오기로 견적 저장 확인을 완료해주세요.")
-        require(not any(r["metadata"]["orderNumber"] == "PC_" + draft["id"] for r in self.vault.rows("sales")), "구매 확정된 견적은 수정할 수 없습니다.")
+        require(self._sale_for_draft(draft) is None, "구매 확정된 견적은 수정할 수 없습니다.")
         local = next((d for d in self._local_quotes() if d["id"] == draft["id"]), None)
         if local:
             self._store_local_quote(draft, local["quoteStatus"])
@@ -440,6 +446,9 @@ class Manager(SalesWorkspace):
         return self.payment_delivery_state(identifier)
 
     def send_payment_sms(self, draft, text):
+        # Reserve before sending the notice; unsupported servers must not fail only
+        # after the customer was already told their payment was received.
+        self._sold_number_for_draft(draft)
         return self.send_quote_sms(draft, text, payment=True)
 
     def refresh_payment_sms_status(self, identifier):
@@ -588,10 +597,9 @@ class Manager(SalesWorkspace):
 
     def confirm_draft(self, draft):
         validate_draft(draft)
-        # Reuse the original quote ID; local registration must not wait on a cloud read.
+        # Retain the original draft link while assigning a reserved SOLD number.
         snapshot = self.view()
-        number = "PC_" + draft["id"]
-        require(not any(r["metadata"]["orderNumber"] == number for r in snapshot["sales"]),
+        require(self._sale_for_draft(draft) is None,
                 "이미 판매 · 고객 관리로 이동한 견적입니다.")
         source = draft["sourceRequestId"]
         local = self._confirmed_source(draft)
@@ -602,7 +610,7 @@ class Manager(SalesWorkspace):
                     "이미 판매 · 고객 관리로 이동한 문의입니다.")
 
         self.save_draft(draft)
-        order = order_from_draft(draft)
+        order = order_from_draft(draft, self._sold_number_for_draft(draft))
         private = {"order": order, "quoteDocumentJson": canonical(quote_document(draft))}
         meta, event_id = metadata(order), str(uuid.uuid4())
         payload = {"eventId": event_id, "metadata": meta, "personalData": private,
@@ -614,12 +622,11 @@ class Manager(SalesWorkspace):
         validate_draft(draft)
         # Local validation only; SMS delivery is the separate network-dependent step.
         view = self.view()
-        number = "PC_" + draft["id"]
+        number = self._sold_state()["assignments"].get(draft["id"], "PC_" + draft["id"])
         require(number not in self.vault.snapshot_marker().get("deletedSales", []),
                 "이미 판매자료에서 삭제한 주문입니다. 같은 견적으로 다시 등록할 수 없습니다.")
         require(number not in self.vault.preference("hidden_sales", []), "이 PC에서 삭제한 주문입니다.")
-        existing = next((r for r in view["sales"] if r["metadata"]["orderNumber"] == number or
-                         (draft.get("sourceRequestId") and r["private"]["order"].get("sourceRequestId") == draft["sourceRequestId"])), None)
+        existing = self._sale_for_draft(draft)
         if existing:
             return {"alreadyRegistered": True, "view": view}
         local = self._confirmed_source(draft)
@@ -639,7 +646,7 @@ class Manager(SalesWorkspace):
             require(state.get("smsState") == "success" and
                     state.get("smsQuoteFingerprint") == quote_delivery_fingerprint(draft),
                     "현재 주문·입금 금액의 문자 전송 성공을 확인한 뒤 판매 등록할 수 있습니다.")
-        order = order_from_draft(draft)
+        order = order_from_draft(draft, self._sold_number_for_draft(draft))
         private = {"order": order, "quoteDocumentJson": canonical(quote_document(draft))}
         meta, event_id = metadata(order), str(uuid.uuid4())
         payload = {"eventId": event_id, "metadata": meta, "personalData": private,
@@ -872,6 +879,7 @@ class Manager(SalesWorkspace):
         self.vault.replace_requests(requests, cursor, deleted,
                                     quote_read_mode=self.quote_read_mode, authoritative=True)
         self.inbox_requests = [r for r in requests if r.get("status", "신규") == "신규"]
+        self._prefetch_sold_numbers()
         value = self.local_copy_view()
         value["copyError"] = " · ".join(filter(None, (value.get("copyError"), recovery_error)))
         return value
@@ -884,10 +892,25 @@ class Manager(SalesWorkspace):
             self.sync_requests()
         return self.download_sales(connected=True)
 
-    def save_sale(self, number, expected_revision, fields, target=None):
+    def save_sale(self, number, expected_revision, fields, target=None, *, prepare_shipping=False):
         row = next((r for r in self.vault.rows("sales") if r["metadata"]["orderNumber"] == number), None)
         require(row is not None and row["metadata"]["revision"] == expected_revision, "선택한 판매 기록을 새로 조회해주세요.")
         private = changed(self.decode_sale(row), fields, target)
+        order = private["order"]
+        tracking = tracking_number(order)
+        require(not tracking or all(r["metadata"]["orderNumber"] == number or
+                    tracking_number(self.decode_sale(r)["order"]) != tracking for r in self.vault.rows("sales")),
+                "다른 주문에 등록된 송장번호입니다.")
+        if prepare_shipping:
+            require(order["status"] == "입금확인", "입금확인 주문만 배송준비완료로 처리할 수 있습니다.")
+            problem = shipping_problem(order)
+            require(not problem, problem)
+            require(bool(tracking), "로젠 송장번호 11자리를 먼저 입력해주세요.")
+            order.update(shippingReadyAt=now_ms(), shippingReadyFingerprint=shipping_fingerprint(order))
+        elif order.get("shippingReadyFingerprint") != shipping_fingerprint(order):
+            order.update(shippingReadyAt=0, shippingReadyFingerprint="")
+        if target == "배송완료":
+            require(shipping_ready(order), "배송정보와 송장번호를 확인하고 배송준비완료를 먼저 눌러주세요.")
         meta = metadata(private["order"])
         event_id = str(uuid.uuid4())
         payload = {"eventId": event_id, "metadata": meta, "personalData": private,
@@ -921,7 +944,8 @@ class Manager(SalesWorkspace):
         quotes = self._local_quotes()
         source = self.decode_sale(row)["order"].get("sourceRequestId")
         for quote in quotes:
-            if "PC_" + quote["id"] == number or (source and quote.get("sourceRequestId") == source):
+            if ("PC_" + quote["id"] == number or self.decode_sale(row)["order"].get("sourceDraftId") == quote["id"]
+                    or (source and quote.get("sourceRequestId") == source)):
                 quote["quoteStatus"] = "입금확인"
         self.vault.save_local_sales(remaining, operations,
                                    [*self.vault.preference("hidden_sales", []), number], quotes=quotes)

@@ -24,7 +24,7 @@ from .ui_icons import set_button_icon, ui_icon
 from .app import MainWindow, Task, table, fill_table, money, timestamp
 from .commerce import (ISSUER, new_draft, new_manual_draft, draft_amounts, validate_draft, quote_html, quote_document_html, shipping_html,
                        shipping_problem, parse_tracking_csv, tracking_number, payment_account_text, payment_notice, quote_delivery_fingerprint,
-                       payment_confirmation_message, seller_note_draft)
+                       payment_confirmation_message, seller_note_draft, customer_note, tracking_fields, shipping_ready)
 from .domain import SEOUL, profit, require
 from .errors import UserError
 from .shipping_excel import shipping_xls, parse_tracking_xls, export_orders, UPLOAD_SHEET
@@ -1950,7 +1950,7 @@ class QuoteSmsDialog(QDialog):
             self.message.setEnabled(True)
             self.send_button.setEnabled(True)
             self.check_button.setEnabled(bool(self.delivery_state.get("smsMessageId")))
-            self.status.setText("문자전송 실패")
+            self.status.setText("문자전송 실패 · " + error)
             return
         if not isinstance(value, dict):
             self.message.setEnabled(True)
@@ -2703,7 +2703,14 @@ class CustomerOrderDialog(QDialog):
         form.setColumnStretch(3, 1)
         info_layout.addLayout(form)
 
-        self.note = QPlainTextEdit(str(self.order.get("note", "") or ""))
+        self.tracking_number_edit = QLineEdit(tracking_number(self.order))
+        self.tracking_number_edit.setAccessibleName("로젠 송장번호")
+        self.tracking_number_edit.setPlaceholderText("로젠에서 발급받은 송장번호 11자리")
+        self.tracking_number_edit.setMaxLength(20)
+        form.addWidget(label("송장번호", "infoCaption"), 5, 0)
+        form.addWidget(self.tracking_number_edit, 5, 1, 1, 3)
+
+        self.note = QPlainTextEdit(customer_note(self.order))
         self.note.setAccessibleName("배송 메모")
         self.note.setFixedHeight(64)
         info_layout.addWidget(collapsible("배송 메모", self.note))
@@ -2805,19 +2812,24 @@ class CustomerOrderDialog(QDialog):
         close_button = button("닫기", self.reject)
         self.save_button = button("수정 저장", lambda: self.finish("save"))
         self.save_button.setEnabled(not terminal)
+        self.preparation_button = button("배송준비완료", lambda: self.finish("prepare"), True)
+        self.preparation_button.setEnabled(self.meta["status"] == "입금확인")
+        self.preparation_button.setToolTip("수령인·연락처·주소·송장번호를 저장하고 배송·송장 목록에 표시합니다.")
         self.delivery_button = button("배송 완료", lambda: self.finish("deliver"), True)
-        self.delivery_button.setEnabled(self.meta["status"] in ("입금확인", "구매확정", "배송확인"))
+        self.delivery_button.setEnabled(self.meta["status"] in ("입금확인", "구매확정", "배송확인") and shipping_ready(self.order))
 
         actions.addWidget(self.cancel_order_button)
-        self.edit_state = label("PC에 불러온 기록", "muted")
+        self.edit_state = label("배송준비완료" if shipping_ready(self.order) else "배송정보·송장 입력 후 배송준비완료를 누르세요.", "muted")
         actions.addWidget(self.edit_state, 1)
         actions.addWidget(close_button)
         actions.addWidget(self.save_button)
+        actions.addWidget(self.preparation_button)
         actions.addWidget(self.delivery_button)
         layout.addLayout(actions)
         for field in (*self.customer_fields.values(), self.cost_total, self.expense_total):
             field.textChanged.connect(lambda _text: self.edit_state.setText("수정 중 · 저장 필요"))
         self.note.textChanged.connect(lambda: self.edit_state.setText("수정 중 · 저장 필요"))
+        self.tracking_number_edit.textChanged.connect(lambda: self.edit_state.setText("수정 중 · 저장 필요"))
         self.commission.valueChanged.connect(lambda _value: self.edit_state.setText("수정 중 · 저장 필요"))
         self.cost_confirmed.toggled.connect(lambda _value: self.edit_state.setText("수정 중 · 저장 필요"))
         self.profit_mode.currentIndexChanged.connect(lambda _value: self.edit_state.setText("수정 중 · 저장 필요"))
@@ -2830,6 +2842,9 @@ class CustomerOrderDialog(QDialog):
     def collect_fields(self):
         result = {name: edit.text().strip() for name, edit in self.customer_fields.items()}
         result["note"] = self.note.toPlainText().strip()
+        tracking = self.tracking_number_edit.text().strip()
+        if tracking:
+            result.update(tracking_fields({**self.order, **result}, tracking))
         for edit, caption in ((self.cost_total, "원가 합계"), (self.expense_total, "기타 비용")):
             require(edit.text().isascii() and edit.text().isdigit(), f"{caption}를 숫자로 입력해주세요.")
         result.update(
@@ -2844,7 +2859,13 @@ class CustomerOrderDialog(QDialog):
     def finish(self, mode):
         try:
             fields = self.collect_fields()
-            if mode == "deliver":
+            if mode == "prepare":
+                order = {**self.order, **fields}
+                problem = shipping_problem(order)
+                require(not problem, problem)
+                require(bool(tracking_number(order)), "로젠 송장번호 11자리를 먼저 입력해주세요.")
+            elif mode == "deliver":
+                require(shipping_ready({**self.order, **fields}), "배송정보를 변경했다면 배송준비완료를 다시 눌러주세요.")
                 require(fields["costConfirmed"], "배송완료 전에 원가와 비용을 확인해주세요.")
                 answer = QMessageBox.question(
                     self, "배송완료", "실제 배송과 원가·비용 확인을 마쳤나요?",
@@ -3457,7 +3478,7 @@ class SellerWindow(MainWindow):
         self.shipping_search.setPlaceholderText("주문번호 · 수령인 · 주소 · 송장번호 검색")
         self.shipping_search.textChanged.connect(self.refresh_shipping)
         self.shipping_filter = QComboBox()
-        self.shipping_filter.addItems(["출고 대기", "송장 미등록", "송장 등록", "전체 배송 주문"])
+        self.shipping_filter.addItems(["출고 대기", "배송완료", "전체 배송 주문"])
         self.shipping_filter.currentIndexChanged.connect(self.refresh_shipping)
         bar.addWidget(self.shipping_search, 1)
         bar.addWidget(self.shipping_filter)
@@ -3953,21 +3974,24 @@ class SellerWindow(MainWindow):
         target = {"deliver": "배송완료", "cancel": "구매취소"}.get(dialog.mode)
         messages = {
             "save": "고객·배송 정보 저장 중…",
+            "prepare": "배송준비완료로 저장 중…",
             "deliver": "배송완료 상태 저장 중…",
             "cancel": "구매취소 상태 저장 중…",
         }
         self.run_job(
             messages[dialog.mode],
             lambda: self.manager.save_sale(
-                meta["orderNumber"], meta["revision"], fields, target
+                meta["orderNumber"], meta["revision"], fields, target,
+                prepare_shipping=dialog.mode == "prepare"
             ),
-            self.customer_order_saved,
+            lambda value: self.customer_order_saved(value, shipping_prepared=dialog.mode == "prepare"),
         )
 
-    def customer_order_saved(self, value):
+    def customer_order_saved(self, value, shipping_prepared=False):
         self.apply_view(value)
-        self.message.setText("판매 · 고객 관리 내용을 로컬 DB에 저장했습니다. ‘서버에 올리기’로 백업하세요.")
-        self.navigate(self.PAGE_SALES)
+        self.message.setText("배송준비완료 · 배송·송장에서 로젠 XLS를 저장할 수 있습니다." if shipping_prepared else
+                             "판매 · 고객 관리 내용을 로컬 DB에 저장했습니다. ‘서버에 올리기’로 백업하세요.")
+        self.navigate(self.PAGE_SHIPPING if shipping_prepared else self.PAGE_SALES)
 
     def refresh_shipping(self):
         if not hasattr(self, "shipping_table"):
@@ -3977,20 +4001,18 @@ class SellerWindow(MainWindow):
         rows = []
         for row in self.data["sales"]:
             order = row["private"]["order"]
-            if order["status"] == "주문취소" or query not in str(order).casefold():
+            if not shipping_ready(order) or query not in str(order).casefold():
                 continue
             number = tracking_number(order)
             if mode == 0 and order["status"] != "입금확인":
                 continue
-            if mode == 1 and (order["status"] != "입금확인" or number):
-                continue
-            if mode == 2 and not number:
+            if mode == 1 and order["status"] not in ("배송완료", "판매완료"):
                 continue
             rows.append(row)
         self.set_page_count(self.PAGE_SHIPPING, len(rows))
         self.shipping_rows = rows
         self.shipping_table.blockSignals(True)
-        self.shipping_table.set_empty_message("조건에 맞는 배송 주문이 없습니다.\n상태 필터 또는 가져오기를 확인하세요.")
+        self.shipping_table.set_empty_message("배송준비완료 주문이 없습니다.\n판매관리에서 주소·송장번호를 입력하고 배송준비완료를 눌러주세요.")
         fill_table(self.shipping_table, [(r["metadata"]["orderNumber"], r["private"]["order"].get("receiverName", ""), r["private"]["order"]["customerPhone"],
             r["private"]["order"].get("roadAddress", ""), r["metadata"]["totalQty"], shipping_problem(r["private"]["order"]) or r["metadata"]["status"], tracking_number(r["private"]["order"]) or "미등록") for r in rows])
         self.shipping_table.clearSelection()
@@ -4116,6 +4138,7 @@ class SellerWindow(MainWindow):
         delivery_state = self.manager.quote_delivery_state(draft["id"])
         sale = next((row for row in self.data.get("sales", [])
                      if row["metadata"]["orderNumber"] == "PC_" + draft["id"] or
+                     row["private"]["order"].get("sourceDraftId") == draft["id"] or
                      (draft.get("sourceRequestId") and
                       row["private"]["order"].get("sourceRequestId") == draft["sourceRequestId"])), None)
         dialog = QuoteDeliveryDialog(draft, status, manager=self.manager, delivery_state=delivery_state,

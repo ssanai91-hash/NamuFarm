@@ -113,6 +113,7 @@ class SalesWorkspace:
         # Missing or remotely deleted rows never erase a local order during a union download.
         marker = {**self.vault.snapshot_marker(), "sales": cursor, "deletedSales": sorted(deleted)}
         self._merge_sales(rows, server=True, marker=marker)
+        self._prefetch_sold_numbers()
         return self.local_copy_view()
 
     def upload_sales(self):
@@ -191,6 +192,7 @@ class SalesWorkspace:
             self.vault.acknowledge(op["id"])
             sent += 1
         self.transfer_notice = f"서버에 올리기 완료 · 변경 {sent}건 · 로컬 삭제는 서버에 반영하지 않습니다."
+        self._prefetch_sold_numbers()
         return self.local_copy_view()
 
     def export_local(self, folder):

@@ -61,6 +61,8 @@ def export_orders(rows):
         require(number not in seen, "같은 주문을 두 번 내보낼 수 없습니다.")
         seen.add(number)
         require(order["status"] == "입금확인", "출고자료는 입금 확인된 주문만 내보낼 수 있습니다.")
+        from .commerce import shipping_ready
+        require(shipping_ready(order), f"{number}: 판매관리에서 배송준비완료를 먼저 눌러주세요.")
         problem = shipping_problem(order)
         require(not problem, f"{number}: {problem}")
     return rows
@@ -156,3 +158,4 @@ def parse_tracking_xls(raw, rows):
         raise
     except (xlrd.XLRDError, xlrd.compdoc.CompDocError, struct.error, ValueError, IndexError, KeyError, UnicodeError, OSError):
         raise UserError("송장 XLS 파일을 읽지 못했습니다. Excel 97-2003 형식으로 다시 저장해주세요.") from None
+
