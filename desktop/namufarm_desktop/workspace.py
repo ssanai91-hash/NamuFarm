@@ -7,7 +7,7 @@ from importlib.resources import files as package_files
 from pathlib import Path
 from html import escape as html_escape
 
-from PySide6.QtCore import QSettings, Qt, QUrl, QSaveFile, QIODevice, QTimer, Signal, Slot, QRectF, QSize, QEvent
+from PySide6.QtCore import QSettings, Qt, QUrl, QSaveFile, QIODevice, QTimer, Signal, Slot, QRectF, QSize, QEvent, QPoint
 from PySide6.QtGui import (QColor, QDesktopServices, QFont, QFontMetricsF, QImage, QIntValidator,
     QKeySequence, QPainter, QPdfWriter, QPen, QPixmap, QShortcut, QTextDocument, QTextOption, QPageSize)
 from PySide6.QtPrintSupport import QPrinter, QPrintDialog
@@ -685,6 +685,7 @@ class QuoteDeliveryTools:
         document_buttons.setSpacing(12)
         self.generate_quote_button = QPushButton("공식견적서 생성")
         self.generate_quote_button.setObjectName("pdfAction")
+        self.generate_quote_button.setProperty("documentGenerate", True)
         self.generate_quote_button.clicked.connect(self.generate_official_quote)
         self.preview_quote_button = QPushButton("미리보기")
         self.preview_quote_button.setObjectName("pdfAction")
@@ -718,6 +719,8 @@ class QuoteDeliveryTools:
         send_buttons = QHBoxLayout()
         self.delivery_send_layout = send_buttons
         send_buttons.setSpacing(12)
+        if integrated:
+            send_buttons.addStretch(1)
         if integrated:
             self.sms_button = DeliveryActionButton("문자 보내기", "message", "smsAction")
             self.email_button = DeliveryActionButton("메일 보내기", "mail", "mailAction")
@@ -1187,15 +1190,15 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         content = QVBoxLayout(right)
         content.setContentsMargins(16, 14, 16, 8)
         content.setSpacing(6)
-        items_heading = QHBoxLayout()
-        items_heading.addWidget(section_heading("견적 품목", "leaf", 28), 1)
+        content.addWidget(section_heading("견적 품목", "leaf", 28))
+        item_tools = QHBoxLayout()
+        item_tools.addWidget(label("묘목명은 직접 입력하거나 초성검색 · 수량·비고는 두 번 클릭해 수정", "deliveryCaption", True), 1)
         self.add_item_button = button("+ 묘목 추가", self.add_item)
         self.remove_item_button = button("선택 묘목 삭제", self.remove_item)
-        items_heading.addWidget(self.add_item_button)
-        items_heading.addWidget(self.remove_item_button)
-        content.addLayout(items_heading)
+        item_tools.addWidget(self.add_item_button)
+        item_tools.addWidget(self.remove_item_button)
+        content.addLayout(item_tools)
         # Logical indices stay stable for collection; visual order puts price before amount.
-        content.addWidget(label("묘목명은 직접 입력하거나 초성검색 · 수량·비고는 두 번 클릭해 수정", "deliveryCaption", True))
         self.items = table(["묘목명", "수량", "판매 금액", "판매 단가", "순번", "비고"])
         self.items.setEditTriggers(self.items.EditTrigger.DoubleClicked | self.items.EditTrigger.EditKeyPressed | self.items.EditTrigger.AnyKeyPressed)
         self.items.setObjectName("workbenchItems")
@@ -1205,7 +1208,7 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         self.items.verticalHeader().setDefaultSectionSize(48 if large else 40)
         # Reserve real gaps around the step buttons; names and remarks share spare width.
         self.items.set_column_layout(((4, 0, 48 if large else 44), (0, 2.5, 172),
-                                      (1, 0, 72 if large else 64),
+                                      (1, 0, 108 if large else 96),
                                       (3, 0, 232 if large else 212), (2, .5, 96), (5, 5, 96)))
         self.items.horizontalHeader().setMinimumSectionSize(32)
         self.items.setItemDelegateForColumn(5, QuoteRemarksDelegate(self.items))
@@ -1268,10 +1271,10 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
 
         self.workbench_original_area = QFrame()
         self.workbench_original_area.setObjectName("workbenchOriginalRequest")
-        original = QHBoxLayout(self.workbench_original_area)
-        original.setContentsMargins(12, 10, 12, 10)
-        original.setSpacing(16)
-        original.addWidget(label("고객 원문보기", "deliverySectionTitle"), 0, Qt.AlignmentFlag.AlignTop)
+        original = QVBoxLayout(self.workbench_original_area)
+        original.setContentsMargins(0, 0, 0, 0)
+        original.setSpacing(8)
+        original.addWidget(label("고객 원문보기", "deliverySectionTitle"))
         self.request_note_view = QPlainTextEdit(self.draft.get("requestNote", ""))
         self.request_note_view.setObjectName("workbenchOriginalText")
         self.request_note_view.setReadOnly(True)
@@ -1296,6 +1299,8 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         self.note.textChanged.connect(self.recalculate)
         notes.addWidget(self.note)
         document_content.addWidget(self.workbench_note_area)
+        self.note.installEventFilter(self)
+        self.workbench_original_area.installEventFilter(self)
 
         footer.addStretch(1)
         self.close_button = button("닫기", self.reject)
@@ -1303,7 +1308,7 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         footer.addWidget(self.close_button)
         self.confirm_button = button("견적 저장" if self.manual_quote else "견적완료",
                                      lambda: self.finish("save_manual" if self.manual_quote else "finalize"), True)
-        self.confirm_button.setMinimumWidth(132)
+        self.confirm_button.setFixedWidth(198)
         self.confirm_button.setProperty("deliveryCompletion", True)
         self.confirm_button.setEnabled(self.request_status in ("", "신규"))
         set_button_icon(self.confirm_button, "check", "#ffffff")
@@ -1375,6 +1380,13 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
             size = (20 if large else 18) if narrow else (22 if large else 20)
             action.title_label.setStyleSheet(f"font-size:{size}px;font-weight:700;")
             action.status_badge.setStyleSheet("font-size:12px;padding:2px 4px;" if narrow else "")
+        available = max(1, self.workbench_scroll.viewport().width() - 32)
+        # Two thirds of the former equal-width channel buttons; completion is 1.5x.
+        channel_width = max(160, (available - 132 - 24) // 3)
+        if available < 700:
+            channel_width = max(120, (available - 198 - 24) // 2)
+        for action in (self.sms_button, self.email_button):
+            action.setFixedWidth(channel_width)
         row_height = 48 if large else 40
         for row in range(self.items.rowCount()):
             self.items.setRowHeight(row, row_height)
@@ -1382,6 +1394,24 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         # Eight compact rows on a normal desktop; smaller windows scroll the table.
         self.items.setMinimumHeight(header + 4 * row_height + 4)
         self.items.setMaximumHeight(header + 8 * row_height + 4)
+        QTimer.singleShot(0, self.align_workbench_notes)
+
+    def eventFilter(self, watched, event):
+        if event.type() == QEvent.Type.Resize and watched in (
+                getattr(self, "note", None), getattr(self, "workbench_original_area", None)):
+            QTimer.singleShot(0, self.align_workbench_notes)
+        return super().eventFilter(watched, event)
+
+    def align_workbench_notes(self):
+        if not self.isVisible() or not hasattr(self, "workbench_original_area"):
+            return
+        note_bottom = self.note.mapTo(self, QPoint(0, self.note.height())).y()
+        visible_bottom = self.workbench_scroll.viewport().mapTo(
+            self, QPoint(0, self.workbench_scroll.viewport().height())).y() - 8
+        top = self.request_note_view.mapTo(self, QPoint()).y()
+        height = max(48, min(note_bottom, visible_bottom) - top)
+        if self.request_note_view.height() != height:
+            self.request_note_view.setFixedHeight(height)
 
     def add_item(self, item=None):
         is_new = not isinstance(item, dict)
@@ -1409,7 +1439,7 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
                 if column == 0:
                     cell.setToolTip(str(value))
                     font = cell.font()
-                    font.setBold(True)
+                    font.setBold(False)
                     cell.setFont(font)
                 elif column == 1:
                     cell.setTextAlignment(Qt.AlignmentFlag.AlignCenter)

@@ -138,8 +138,8 @@ QDialog#quoteWorkbench QLabel#workbenchCustomerTitle{font-size:22px;font-weight:
 QDialog#quoteWorkbench QLabel#workbenchCaption{font-size:@field@px;font-weight:600;color:#465a50;background:#e1eae5;border:1px solid #cbdacf;border-radius:4px;padding:4px 8px;}
 QDialog#quoteWorkbench QFrame#workbenchCustomerHeadingRule{background:#315c47;border:0;}
 QDialog#quoteWorkbench QFrame#workbenchDocumentTools{background:#ffffff;border:1px solid #d6e1da;border-radius:6px;}
-QDialog#quoteWorkbench QFrame#workbenchOriginalRequest{background:#f7faf8;border:1px solid #d6e1da;border-radius:6px;}
-QDialog#quoteWorkbench QPlainTextEdit#workbenchOriginalText{background:transparent;border:0;padding:0;color:#465a50;}
+QDialog#quoteWorkbench QFrame#workbenchOriginalRequest{background:transparent;border:0;}
+QDialog#quoteWorkbench QPlainTextEdit#workbenchOriginalText{background:#f7faf8;border:1px solid #b8c9bf;border-radius:6px;padding:8px 12px;color:#465a50;}
 QDialog#quoteWorkbench QTextBrowser#workbenchCustomerName{background:transparent;border:0;padding:0;font-size:24px;font-weight:700;color:#193c32;}
 QDialog#quoteWorkbench QTextBrowser#workbenchInfo{background:transparent;border:0;padding:0;font-size:@body@px;color:#24313a;}
 QDialog#quoteWorkbench QTextBrowser#workbenchReceipt{background:transparent;border:0;padding:0;font-size:@body@px;font-weight:700;color:#24313a;}
@@ -152,7 +152,7 @@ QDialog#quoteWorkbench QTableWidget#workbenchItems::item{padding:2px 8px;border-
 QDialog#quoteWorkbench QTableWidget#workbenchItems QHeaderView::section{background:#2c6852;color:#ffffff;font-size:@body@px;font-weight:700;padding:4px 6px;border:0;border-right:1px solid #548470;}
 QDialog#quoteWorkbench QWidget#unitPriceEditor{background:transparent;}
 QDialog#quoteWorkbench QWidget#quoteSpeciesEditor{background:transparent;}
-QDialog#quoteWorkbench QWidget#quoteSpeciesEditor QLineEdit{min-height:0;max-height:30px;padding:0;border:0;background:transparent;font-size:@body@px;font-weight:700;}
+QDialog#quoteWorkbench QWidget#quoteSpeciesEditor QLineEdit{font-family:'Malgun Gothic','NanumGothic',sans-serif;min-height:0;max-height:30px;padding:0;border:0;background:transparent;font-size:@body@px;font-weight:400;}
 QDialog#quoteWorkbench QWidget#quoteSpeciesEditor QLineEdit:focus{border:1px solid #315c47;padding:0;}
 QDialog#quoteWorkbench QWidget#quoteSpeciesEditor QPushButton{min-height:0;max-height:28px;padding:0 4px;font-size:12px;background:#e8f2ec;color:#23593a;border:1px solid #a8c6ab;border-radius:4px;}
 QDialog#quoteWorkbench QWidget#unitPriceEditor QPushButton{min-height:0;max-height:@priceheight@px;padding:0;border:1px solid #a8bcb0;border-radius:4px;background:#f7faf8;color:#193c32;font-size:18px;}
@@ -183,6 +183,8 @@ QDialog#quoteWorkbench QPushButton#smsAction{background:#25634b;color:#ffffff;}
 QDialog#quoteWorkbench QPushButton#smsAction:hover{background:#194c37;}
 QDialog#quoteWorkbench QPushButton#smsAction:disabled{background:#e1e9e4;color:#6a7b71;border-color:#bdcec3;}
 QDialog#quoteWorkbench QPushButton#pdfAction{font-size:@field@px;padding:0 6px;}
+QDialog#quoteWorkbench QPushButton#pdfAction[documentGenerate="true"]{background:#dcece2;color:#193c32;border:1px solid #8ab49b;font-weight:700;}
+QDialog#quoteWorkbench QPushButton#pdfAction[documentGenerate="true"]:hover{background:#c7e1d1;}
 QDialog#quoteWorkbench QPushButton#smsAction,QDialog#quoteWorkbench QPushButton#mailAction,QDialog#quoteWorkbench QPushButton[deliveryCompletion="true"]{font-size:@action@px;font-weight:700;min-height:@actionheight@px;max-height:@actionheight@px;padding:0 8px;}
 QDialog#quoteWorkbench QLabel#deliveryActionTitle{font-size:@action@px;font-weight:700;}
 QDialog#quoteWorkbench QPushButton#smsAction QLabel#deliveryActionTitle{color:#ffffff;}
