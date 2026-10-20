@@ -1,6 +1,17 @@
 import type { VideoResource } from "./content-library.ts";
 import { speciesCatalog } from "./species-catalog.ts";
-import { addCatalogLine, type QuoteLine } from "./quote-form.ts";
+import { addCatalogLine, emptyLine, type QuoteLine } from "./quote-form.ts";
+
+export type VideoQuoteDraft = { lines: QuoteLine[]; message: string };
+
+// A new video starts independently of the main quote and every other video.
+export function createVideoQuoteDraft(video: Pick<VideoResource, "species" | "title" | "url">, lineId: number, maxLength = 1000): VideoQuoteDraft {
+  const candidates = videoQuoteSpecies(video);
+  return {
+    lines: [{ ...emptyLine(lineId), ...(candidates.length === 1 ? { species: candidates[0], quantity: "1" } : {}) }],
+    message: appendVideoReference("", video, maxLength),
+  };
+}
 
 const normalize = (value: string) => value.normalize("NFKC").replace(/\s+/g, "").toLocaleLowerCase("ko");
 const catalogNames = new Map(speciesCatalog.map(species => [normalize(species.name), species.name]));

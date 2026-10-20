@@ -3,9 +3,36 @@ import assert from 'node:assert/strict';
 import { initialVideos } from '../lib/content-library.ts';
 import { emptyLine } from '../lib/quote-form.ts';
 import { quoteSchema } from '../lib/quote-schema.ts';
-import { appendVideoReference, stageVideoQuote, videoQuoteSpecies } from '../lib/video-quote.ts';
+import { appendVideoReference, createVideoQuoteDraft, stageVideoQuote, videoQuoteSpecies } from '../lib/video-quote.ts';
 
 const quince = initialVideos.find(video => video.videoId === 'BCSPY_TAhmM');
+
+test('different videos start with only their own seedling and reference, including the same species in two videos', () => {
+  const first = createVideoQuoteDraft(quince, 1);
+  first.lines[0].quantity = '27';
+  first.lines[0].specification = '3년생';
+  first.message += '\n고객이 작성한 요청';
+  const otherVideo = { ...quince, title: '다른 모과 영상', url: 'https://www.youtube.com/watch?v=OTHER_VIDEO' };
+  const second = createVideoQuoteDraft(otherVideo, 2);
+  assert.deepEqual(second.lines, [{ id: 2, species: '모과', quantity: '1', specification: '' }]);
+  assert.equal(second.message, `[참고 영상] ${otherVideo.title}\n${otherVideo.url}`);
+  assert.ok(!second.message.includes(quince.url));
+  assert.ok(!second.message.includes('고객이 작성한 요청'));
+  assert.equal(first.lines[0].quantity, '27');
+  assert.equal(first.lines[0].specification, '3년생');
+  assert.ok(first.message.includes(quince.url));
+  assert.ok(!first.message.includes(otherVideo.url));
+});
+
+test('multi-species video starts empty and adding its seedlings does not add more video links', () => {
+  const video = { ...quince, species: ['모과', '블루베리'] };
+  const draft = createVideoQuoteDraft(video, 1, 900);
+  assert.deepEqual(draft.lines, [emptyLine(1)]);
+  draft.lines = stageVideoQuote(draft.lines, video, '모과', 2, false).lines;
+  draft.lines = stageVideoQuote(draft.lines, video, '블루베리', 3, false).lines;
+  assert.deepEqual(draft.lines.map(line => line.species), ['모과', '블루베리']);
+  assert.equal(draft.message, `[참고 영상] ${video.title}\n${video.url}`);
+});
 
 test('the pictured quince video and Shorts use reviewed species; generic videos do not guess from titles', () => {
   assert.deepEqual(videoQuoteSpecies(quince), ['모과']);

@@ -20,7 +20,7 @@ import { validatedQuoteReceipt, receiptTimeSeoul, type QuoteReceipt } from "@/li
 import { retainPendingReceipt } from "@/lib/quote-upstream";
 import { toggleCatalogLine, emptyLine, isEmptyLine, quoteFieldProblems, type FieldProblem, type RemovedQuoteLine, type QuoteLine as Line } from "@/lib/quote-form";
 import type { VideoResource } from "@/lib/content-library";
-import { appendVideoReference, stageVideoQuote, videoQuoteSpecies, videoQuoteSpeciesName } from "@/lib/video-quote";
+import { createVideoQuoteDraft, stageVideoQuote, videoQuoteSpecies, videoQuoteSpeciesName, type VideoQuoteDraft } from "@/lib/video-quote";
 
 export default function QuoteHome({ initialTestMode = false, initialConfigured = false }: { initialTestMode?: boolean; initialConfigured?: boolean }) {
   const [lines, setLines] = useState<Line[]>([emptyLine(0)]);
@@ -56,6 +56,9 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
   const [videoQuoteNotice, setVideoQuoteNotice] = useState("");
   const videoQuoteOpener = useRef<HTMLButtonElement>(null);
   const videoQuoteTitleRef = useRef<HTMLHeadingElement>(null);
+  const videoQuoteDrafts = useRef(new Map<string, VideoQuoteDraft>());
+  const mainQuoteDraft = useRef<VideoQuoteDraft | null>(null);
+  const activeVideoQuote = useRef<string | null>(null);
   const [blogOpen, setBlogOpen] = useState(false);
   const blogOpener = useRef<HTMLButtonElement>(null);
   const heroBlogButton = useRef<HTMLButtonElement>(null);
@@ -80,6 +83,22 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
   const [copyNotice, setCopyNotice] = useState("");
   const [successContact, setSuccessContact] = useState<{ phoneTail: string; channel: string; formal: boolean } | null>(null);
   const locked = busy || uncertain;
+
+  useEffect(() => {
+    // A pending receipt must keep its exact inputs until its outcome is known,
+    // even if the customer closes the popup while waiting.
+    if (videoQuoteOpen || locked || activeVideoQuote.current === null) return;
+    const videoId = activeVideoQuote.current;
+    if (success) videoQuoteDrafts.current.delete(videoId);
+    else videoQuoteDrafts.current.set(videoId, { lines, message });
+    activeVideoQuote.current = null;
+    const main = mainQuoteDraft.current;
+    mainQuoteDraft.current = null;
+    if (main) { setLines(main.lines); setMessage(main.message); }
+    setVideoQuoteSource(null); setVideoQuoteNotice(""); setPickerLineId(null);
+    setNotice(""); setRemoved(null); setProblems([]); setError("");
+    setReview(null); setReviewOpen(false); attempt.current = null;
+  }, [videoQuoteOpen, locked, success, lines, message]);
 
   useEffect(() => {
     // A tab-scoped pending receipt survives reload. It is not the authoritative request store.
@@ -187,15 +206,20 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
     setVideoQuoteNotice(result.notice);
     if (!result.staged) return;
     setLines(result.lines); setSuccess(null); setRemoved(null); setProblems([]); setError("");
-    setMessage(current => appendVideoReference(current, video, testMode ? 900 : 1000));
     if (focus && result.lineId !== null) focusField(`quantity-${result.lineId}`);
   }
   function openVideoQuote(video: VideoResource, opener: HTMLButtonElement) {
     if (locked) return;
     const candidates = videoQuoteSpecies(video);
     if (!candidates.length) return;
+    mainQuoteDraft.current = { lines, message };
+    const draft = videoQuoteDrafts.current.get(video.videoId)
+      ?? createVideoQuoteDraft(video, nextLine.current++, testMode ? 900 : 1000);
+    activeVideoQuote.current = video.videoId;
+    setLines(draft.lines); setMessage(draft.message);
+    setNotice(""); setRemoved(null); setProblems([]); setError("");
+    setReview(null); setReviewOpen(false); attempt.current = null;
     videoQuoteOpener.current = opener; setVideoQuoteSource(video); setVideoQuoteNotice(""); setSuccess(null);
-    if (candidates.length === 1) addVideoSpecies(video, candidates[0]);
     setVideoQuoteOpen(true);
   }
   function removeLine(id: number) {
@@ -233,6 +257,11 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
     setName(""); setPhone(""); setRegion(""); setMessage(""); setEmail("");
     setFormalQuote(false); setRecipient(""); setReplyChannel("sms"); setWebsite("");
     setLines([emptyLine(nextLine.current++)]); setPickerLineId(null);
+    if (activeVideoQuote.current && videoQuoteSource) {
+      videoQuoteDrafts.current.delete(activeVideoQuote.current);
+      const draft = createVideoQuoteDraft(videoQuoteSource, nextLine.current++, testMode ? 900 : 1000);
+      setLines(draft.lines); setMessage(draft.message);
+    }
     setNotice(""); setRemoved(null); setProblems([]);
   }
   function requestQuoteReset(target: "form" | "home") {
@@ -255,6 +284,9 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
     setConfirmedNotReceived(false); setResetOpen(false);
     setError(""); setSuccess(null); setSuccessContact(null); setCopyNotice("");
     clearQuoteInputs();
+    videoQuoteDrafts.current.clear(); mainQuoteDraft.current = null; activeVideoQuote.current = null;
+    setVideoQuoteOpen(false); setVideoQuoteSource(null); setVideoQuoteNotice("");
+    setLines([emptyLine(nextLine.current++)]); setMessage("");
     setCatalogRevision(value => value + 1);
     setMenuOpen(false); setSampleOpen(false);
   }
@@ -443,7 +475,7 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
         <div className="video-library-body video-quote-body">
           {videoQuoteSource && !success && <section className="video-quote-context" aria-label="영상 관련 묘목 선택">
             <p className="video-quote-source-title">참고 영상 · {videoQuoteSource.title}</p>
-            <p>{videoQuoteSpecies(videoQuoteSource).length > 1 ? "영상에 나온 묘목 중 요청할 묘목을 골라주세요." : "영상에 분류된 묘목입니다. 이름과 희망 규격을 확인해주세요."} 기존에 담은 묘목도 함께 표시됩니다.</p>
+            <p>{videoQuoteSpecies(videoQuoteSource).length > 1 ? "영상에 나온 묘목 중 요청할 묘목을 골라주세요." : "영상에 분류된 묘목입니다. 이름과 희망 규격을 확인해주세요."} 묘목과 요청사항은 영상별로 따로 작성됩니다. 연락처는 함께 사용합니다.</p>
             <div className="video-quote-candidates">{videoQuoteSpecies(videoQuoteSource).map(species => {
               const added = lines.some(line => videoQuoteSpeciesName(line.species) === species);
               return <Button type="button" key={species} variant="outline" disabled={locked} aria-pressed={added} onClick={() => addVideoSpecies(videoQuoteSource, species, true)}>{added ? <CheckCheck aria-hidden="true" /> : <Plus aria-hidden="true" />}{species} · {added ? "담김" : "담기"}</Button>;
