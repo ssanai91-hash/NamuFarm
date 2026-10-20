@@ -32,7 +32,7 @@ def payment_notice(draft):
 
 
 def payment_confirmation_message(draft):
-    """Payment notice for the current order, including its adjusted delivery fee."""
+    """Payment notice for the saved confirmed quotation, including its delivery fee."""
     amount = draft_amounts(draft)["total"]
     number = draft.get("requestReceiptNumber") or "PCQ_" + draft["id"][:8]
     lines = [f"{draft.get('customerName') or '고객'}님, 안녕하세요.", "", "나무팜농원입니다.", "",
@@ -49,6 +49,21 @@ def payment_confirmation_message(draft):
                   f"{amount:,}원 입금 확인했습니다.", "주문하신 묘목을 준비하겠습니다.", "",
                   "문의 : 043-732-0980", "감사합니다."])
     return "\n".join(lines)
+
+
+def seller_note_draft(draft):
+    """Keep the customer's original text out of the seller's document notes.
+
+    Older quotes copied the same customer message into both fields. Preserve
+    the original and clear only that duplicate; retain separately entered notes.
+    """
+    result = copy.deepcopy(draft)
+    if result.get("sourceRequestId"):
+        original = result.setdefault("requestNote", result.get("note", ""))
+        note = result.get("note", "")
+        if isinstance(original, str) and isinstance(note, str) and note.strip() == original.strip():
+            result["note"] = ""
+    return result
 
 
 def quote_delivery_fingerprint(draft):
@@ -84,7 +99,7 @@ def new_draft(request=None):
             "formalQuoteRequested": bool(person.get("formalQuoteRequested", False)),
             "quoteRecipientName": person.get("recipientName", ""),
             "quoteReplyChannel": person.get("replyChannel", "sms"),
-            "zipNo": "", "roadAddress": "", "detailAddress": "", "requestRegion": person.get("region", ""), "note": person.get("message", ""),
+            "zipNo": "", "roadAddress": "", "detailAddress": "", "requestRegion": person.get("region", ""), "note": "",
             "requestNote": person.get("message", ""),
             "items": [{"species": i["species"], "specification": i.get("specification", ""), "quantity": i["quantity"],
                        "unitPrice": priced[n].get("unitPrice", 0) if pricing else 0, "unitCost": 0,
@@ -178,6 +193,7 @@ def validate_draft(draft):
 
 
 def quote_document(draft):
+    draft = seller_note_draft(draft)
     validate_draft(draft)
     amounts = draft_amounts(draft)
     stamp = draft["createdAt"]
@@ -186,7 +202,7 @@ def quote_document(draft):
     if draft["isPrepaid"]:
         lines.append({"name": "운반비", "specification": "선불", "quantity": 1, "unitPrice": draft["shippingFee"], "unit": "건"})
     return {"schemaVersion": 1, "id": draft["id"], "number": f"NQ-{date}-{draft['id'][:8].upper()}",
-            "sourceQuoteNumber": (draft.get("requestReceiptNumber") if draft.get("manualStatus") else "PCQ_" + draft["id"]), "issuedAt": stamp, "customerPhone": draft["customerPhone"],
+            "sourceQuoteNumber": draft.get("requestReceiptNumber") or "PCQ_" + draft["id"], "issuedAt": stamp, "customerPhone": draft["customerPhone"],
             "recipient": {"customerName": draft["customerName"], "customerEmail": draft["customerEmail"],
                           "recipientName": draft.get("quoteRecipientName") or draft["customerName"],
                           "replyChannel": draft.get("quoteReplyChannel", "sms"),
@@ -196,7 +212,8 @@ def quote_document(draft):
             "totalAmount": amounts["total"],
             "shippingNote": (f"택배비 선불 {draft['shippingFee']:,}원 · 합계 포함" if draft["isPrepaid"]
                              else f"택배비 후불 · 선불 시 {draft['shippingFee']:,}원"),
-            "validUntil": draft["validUntil"], "notes": draft["note"].replace("\t", " "), "paymentAccount": draft.get("paymentAccount", "")}
+            "validUntil": draft["validUntil"], "notes": draft["note"].replace("\t", " "),
+            "customerRequestNote": draft.get("requestNote", ""), "paymentAccount": draft.get("paymentAccount", "")}
 
 
 def order_from_draft(draft):
@@ -208,7 +225,7 @@ def order_from_draft(draft):
                  purchasedAt=stamp, paidAt=stamp, deliveredAt=0, completedAt=0, updatedAt=stamp, costTotal=amount["cost"], expenseTotal=0,
                  costConfirmed=draft["costConfirmed"], profitMode="resale", commissionBps=3000, taxAmount=amount["tax"],
                  sourceRequestId=draft["sourceRequestId"],
-                 sourceQuoteNumber=(draft.get("requestReceiptNumber") if draft.get("manualStatus") else "PCQ_" + draft["id"]))
+                 sourceQuoteNumber=draft.get("requestReceiptNumber") or "PCQ_" + draft["id"])
     # Existing Android codec explicitly treats this farm label as non-stock-backed.
     order["itemSummary"] = "\n".join("|".join([i["species"].strip(), "", "", i["specification"], "", str(i["quantity"]), str(i["unitPrice"]), "수기견적", str(i["unitCost"])]) for i in draft["items"])
     metadata(order)

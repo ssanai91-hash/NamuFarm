@@ -83,7 +83,7 @@ class ScriptApi:
                             "INVALID_ACTION": "현재 연결된 Apps Script /exec 배포가 이전 버전입니다. 기존 웹앱을 새 버전으로 다시 배포해주세요.",
                             "UNAVAILABLE": "Apps Script 실행 중 오류가 발생했습니다. Apps Script의 실행 기록에서 실패 원인을 확인해주세요.",
                             "INVALID": "입력값과 앱·서버 버전을 확인해주세요.", "BUSY": "서버가 처리 중입니다. 잠시 후 동기화해주세요."}
-                raise UserError(messages.get(code, "서버가 저장을 확인하지 못했습니다. 전송 대기는 유지됩니다."))
+                raise UserError(f"{label}: " + messages.get(code, "서버가 저장을 확인하지 못했습니다. 전송 대기는 유지됩니다."))
             return result
         except (UserError, ConflictError):
             raise

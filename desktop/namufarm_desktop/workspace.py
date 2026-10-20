@@ -24,7 +24,7 @@ from .ui_icons import set_button_icon, ui_icon
 from .app import MainWindow, Task, table, fill_table, money, timestamp
 from .commerce import (ISSUER, new_draft, new_manual_draft, draft_amounts, validate_draft, quote_html, quote_document_html, shipping_html,
                        shipping_problem, parse_tracking_csv, tracking_number, payment_account_text, payment_notice, quote_delivery_fingerprint,
-                       payment_confirmation_message)
+                       payment_confirmation_message, seller_note_draft)
 from .domain import SEOUL, profit, require
 from .errors import UserError
 from .shipping_excel import shipping_xls, parse_tracking_xls, export_orders, UPLOAD_SHEET
@@ -716,7 +716,8 @@ class QuoteDeliveryTools:
         delivery = QVBoxLayout() if delivery_content is None else None
         if delivery is not None:
             delivery.setSpacing(8)
-            delivery.addWidget(label("고객 전달", "deliverySectionTitle"))
+            self.delivery_heading = label("고객 전달", "deliverySectionTitle")
+            delivery.addWidget(self.delivery_heading)
         send_buttons = QHBoxLayout()
         self.delivery_send_layout = send_buttons
         send_buttons.setSpacing(12)
@@ -912,6 +913,7 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
     """Website and seller-entered quotes share document, item and delivery tools."""
     def __init__(self, draft, parent=None, request_status='', manager=None, *, items_only=False):
         super().__init__(parent)
+        draft = seller_note_draft(draft)
         self.draft, self.mode, self.request_status = (copy.deepcopy(draft), '', request_status)
         self.items_only = items_only
         self.simple_request = bool(draft.get('sourceRequestId'))
@@ -1221,6 +1223,7 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         content.addWidget(self.items, 1)
 
         shipping = QFrame()
+        self.workbench_shipping = shipping
         shipping.setObjectName("workbenchShipping")
         shipping_row = QHBoxLayout(shipping)
         shipping_row.setContentsMargins(12, 4, 12, 4)
@@ -1297,8 +1300,8 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         notes.setContentsMargins(0, 6, 0, 0)
         notes.setSpacing(8)
         notes.addWidget(label("요청사항", "deliverySectionTitle"))
-        self.note.setPlaceholderText("배송 일정·납품 조건 등을 입력하세요")
-        self.note.setAccessibleName("판매자 요청사항")
+        self.note.setPlaceholderText("공식견적서 중요사항에 넣을 안내를 입력하세요")
+        self.note.setAccessibleName("공식견적서 중요사항 · 판매자 입력")
         self.note.textChanged.connect(self.recalculate)
         notes.addWidget(self.note)
         document_content.addWidget(self.workbench_note_area)
@@ -1553,8 +1556,12 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
                 draft["customerPhone"] = draft["customerPhone"].replace("-", "").replace(" ", "")
                 draft["receiverName"] = draft["customerName"]
             fee = self.shipping_fee.text().strip()
-            require(fee.isascii() and fee.isdigit(), "선불 택배비를 0 이상의 정수로 입력해주세요.")
-            draft.update(shippingFee=int(fee), isPrepaid=self.shipping_prepaid.isChecked(), taxAmount=0, costConfirmed=False, items=[], note=self.note.toPlainText().strip())
+            prepaid = self.shipping_prepaid.isChecked()
+            require(not prepaid or (fee.isascii() and fee.isdigit()), "선불 택배비를 0 이상의 정수로 입력해주세요.")
+            draft.update(shippingFee=int(fee) if prepaid else 0, isPrepaid=prepaid,
+                         taxAmount=draft.get("taxAmount", 0) if self.items_only else 0,
+                         costConfirmed=draft.get("costConfirmed", False) if self.items_only else False,
+                         items=[], note=self.note.toPlainText().strip())
             for row in range(self.items.rowCount()):
                 species = self.items.item(row, 0).text().strip()
                 quantity = self.items.item(row, 1).text().strip()
@@ -1639,8 +1646,7 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
                 self.email_button.setEnabled(bool(self.fields["customerEmail"].text().strip()))
             self.update_delivery_badges()
             if self.items_only:
-                for control in (self.shipping_cod, self.shipping_prepaid, self.shipping_fee,
-                                self.sms_button, self.email_button):
+                for control in (self.sms_button, self.email_button):
                     control.setEnabled(False)
 
     def edit_issuer(self):
@@ -2263,7 +2269,7 @@ class QuoteDeliveryDialog(QuoteDialog):
 
     def __init__(self, draft, request_status, manager=None, delivery_state=None, parent=None,
                  payment_order=None):
-        snapshot = copy.deepcopy(draft)
+        snapshot = seller_note_draft(draft)
         self.payment_registered = bool(snapshot.pop("paymentRegistered", False) or
                                        snapshot.get("quoteStatus") == "입금확인" or payment_order)
         self.confirmed_result = True
@@ -2277,7 +2283,11 @@ class QuoteDeliveryDialog(QuoteDialog):
         for field in self.fields.values():
             field.setReadOnly(True)
         self.note.setReadOnly(True)
-        self.note.setAccessibleName("확정견적 요청사항")
+        self.note.setAccessibleName("공식견적서 중요사항 · 저장된 판매자 안내")
+        self.workbench_shipping.hide()
+        self.sms_button.hide()
+        self.email_button.hide()
+        self.delivery_heading.hide()
         self.workbench_items_hint.setText("확정 품목은 읽기 전용입니다. 변경하려면 묘목정보 수정을 눌러주세요.")
         self.add_item_button.clicked.disconnect()
         self.add_item_button.setText("묘목정보 수정")
@@ -2289,10 +2299,6 @@ class QuoteDeliveryDialog(QuoteDialog):
         self.workbench_scroll.widget().layout().insertWidget(
             self.workbench_scroll.widget().layout().indexOf(self.workbench_original_area), self.payment_status)
         self._render_confirmed_items()
-        shipping = payment_order or snapshot
-        self.shipping_fee.setText(str(int(shipping.get("shippingFee", 0) or 0)))
-        self.shipping_prepaid.setChecked(bool(shipping.get("isPrepaid")))
-        self.shipping_cod.setChecked(not self.shipping_prepaid.isChecked())
         self._set_actions_enabled()
         self.recalculate()
         self.initial = self.raw_state()
@@ -2338,15 +2344,10 @@ class QuoteDeliveryDialog(QuoteDialog):
     def collect(self, validate=True):
         draft = copy.deepcopy(self.draft)
         draft.pop("paymentRegistered", None)
-        fee = self.shipping_fee.text().strip()
-        prepaid = self.shipping_prepaid.isChecked()
-        require(not prepaid or (fee.isascii() and fee.isdigit()),
-                "선불 택배비를 0 이상의 정수로 입력해주세요.")
-        draft.update(isPrepaid=prepaid, shippingFee=int(fee) if prepaid else 0)
         return validate_draft(draft) if validate else draft
 
     def raw_state(self):
-        return self.shipping_prepaid.isChecked(), self.shipping_fee.text()
+        return None  # Review is read-only; the separate editor saves explicitly.
 
     def recalculate(self, *args):
         if not hasattr(self, "shipping_fee") or not hasattr(self, "total"):
@@ -2356,18 +2357,13 @@ class QuoteDeliveryDialog(QuoteDialog):
             self.preview_quote_button.setEnabled(False)
             self.generate_quote_button.setText("공식견적서 생성")
             self.quote_file_label.setText("공식 견적서 미생성")
-        self.shipping_fee.setEnabled(self.shipping_prepaid.isChecked() and
-                                     not self.payment_registered and self.action_task is None)
+        self.shipping_fee.setEnabled(False)
         invalid = False
         try:
             current = self.collect(False)
             amount = draft_amounts(current)
-            original_total = draft_amounts(self.original_quote)["total"]
             self.total.setText(f"{amount['total']:,}원")
-            self.amount_detail.setText(f"총 수량 {amount['quantity']:,}주 · 견적 당시 {original_total:,}원")
-            delta = amount["total"] - original_total
-            change = f" · 견적 대비 {delta:+,}원" if delta else ""
-            self.shipping_status.setText(("선불 · 합계 포함" if current["isPrepaid"] else "후불 · 별도") + change)
+            self.amount_detail.setText(f"총 수량 {amount['quantity']:,}주 · 확정견적 금액")
         except UserError:
             invalid = True
             self.total.setText("택배비를 확인해주세요")
@@ -2383,11 +2379,11 @@ class QuoteDeliveryDialog(QuoteDialog):
         self.add_item_button.setEnabled(editable)
         self.confirm_button.setEnabled(editable)
         self.confirm_button.setText("입금확인 완료" if self.payment_registered else "입금확인")
-        self.shipping_cod.setEnabled(editable)
-        self.shipping_prepaid.setEnabled(editable)
-        self.shipping_fee.setEnabled(editable and self.shipping_prepaid.isChecked())
-        self.sms_button.setEnabled(editable and bool(self.draft.get("customerPhone")))
-        self.email_button.setEnabled(editable and bool(self.draft.get("customerEmail")))
+        self.shipping_cod.setEnabled(False)
+        self.shipping_prepaid.setEnabled(False)
+        self.shipping_fee.setEnabled(False)
+        self.sms_button.setEnabled(False)
+        self.email_button.setEnabled(False)
         self.generate_quote_button.setEnabled(idle)
         self.preview_quote_button.setEnabled(idle and bool(self.generated_quote_path))
         self.close_button.setEnabled(idle)
@@ -2423,10 +2419,12 @@ class QuoteDeliveryDialog(QuoteDialog):
         editor.findChild(QLabel, "workbenchTitle").setText("묘목정보 수정")
         for field in editor.fields.values():
             field.setReadOnly(True)
-        editor.note.setReadOnly(True)
-        for control in (editor.shipping_cod, editor.shipping_prepaid, editor.shipping_fee,
-                        editor.sms_button, editor.email_button):
-            control.setEnabled(False)
+        editor.note.setReadOnly(False)
+        editor.shipping_fee.setText(str(self.original_quote["shippingFee"]))
+        editor.sms_button.hide()
+        editor.email_button.hide()
+        editor.delivery_heading.hide()
+        editor.recalculate()
         editor.confirm_button.clicked.disconnect()
         editor.confirm_button.setText("수정 저장")
         editor.confirm_button.setEnabled(True)
@@ -2434,7 +2432,9 @@ class QuoteDeliveryDialog(QuoteDialog):
         def save_items():
             try:
                 edited = copy.deepcopy(self.original_quote)
-                edited["items"] = editor.collect()["items"]
+                values = editor.collect()
+                for key in ("items", "shippingFee", "isPrepaid", "note"):
+                    edited[key] = values[key]
                 editor.draft = validate_draft(edited)
                 editor.accept()
             except UserError as error:
@@ -2452,12 +2452,14 @@ class QuoteDeliveryDialog(QuoteDialog):
     def _items_saved(self, value, error, conflict):
         if not self._finish_action(error):
             return
-        # Shipping adjustments stay staged; editing items never overwrites the quoted fee.
         self.original_quote = copy.deepcopy(self._pending_item_edit)
         self.draft = copy.deepcopy(self.original_quote)
+        self.note.blockSignals(True)
+        self.note.setPlainText(self.draft.get("note", ""))
+        self.note.blockSignals(False)
         self._render_confirmed_items()
         self.recalculate()
-        self.payment_status.setText("묘목정보를 저장했습니다.")
+        self.payment_status.setText("묘목정보·택배비·판매자 요청사항을 저장했습니다.")
 
     def receive_payment(self):
         if self.payment_registered or self.action_task or self.manager is None:
@@ -2467,43 +2469,12 @@ class QuoteDeliveryDialog(QuoteDialog):
         except UserError as error:
             QMessageBox.warning(self, "입금확인", str(error))
             return
-        self._run_action("판매 등록 내역을 확인하고 있습니다…",
-                         lambda: self.manager.prepare_received_payment(self._payment_draft),
-                         self._payment_prepared)
-
-    @Slot(object, str, bool)
-    def _payment_prepared(self, value, error, conflict):
-        if not self._finish_action(error):
-            return
-        if value["alreadyRegistered"]:
-            self.payment_view = value["view"]
-            QMessageBox.information(self, "입금확인", "이미 판매관리에 등록된 주문입니다.")
-            self.accept()
-            return
-        amount = draft_amounts(self._payment_draft)["total"]
-        prompt = QMessageBox(self)
-        prompt.setWindowTitle("입금확인")
-        prompt.setText("입금확인 문자를 보낼까요?")
-        prompt.setInformativeText(f"입금확인 금액: {amount:,}원\n문자 전송 성공 후 판매관리에 등록합니다.")
-        send = prompt.addButton("문자 보내기", QMessageBox.ButtonRole.YesRole)
-        without = prompt.addButton("문자 없이 등록", QMessageBox.ButtonRole.NoRole)
-        cancel = prompt.addButton("취소", QMessageBox.ButtonRole.RejectRole)
-        prompt.setDefaultButton(send)
-        prompt.setEscapeButton(cancel)
-        prompt.exec()
-        if prompt.clickedButton() == send:
-            sms = QuoteSmsDialog(self._payment_draft, self.manager, self, payment=True)
-            if sms.exec() != QDialog.DialogCode.Accepted or not sms.success_confirmed:
-                self.payment_status.setText("입금확인 문자 전송 성공 후 판매 등록을 진행해주세요.")
-                return
-            sms_required = True
-        elif prompt.clickedButton() == without:
-            sms_required = False
-        else:
-            self.payment_status.setText("")
+        sms = QuoteSmsDialog(self._payment_draft, self.manager, self, payment=True)
+        if sms.exec() != QDialog.DialogCode.Accepted or not sms.success_confirmed:
+            self.payment_status.setText("입금확인 문자 전송이 완료되지 않아 판매 등록하지 않았습니다.")
             return
         self._run_action("입금확인 주문을 판매관리에 저장하고 있습니다…",
-                         lambda: self.manager.confirm_received_payment(self._payment_draft, sms_required=sms_required),
+                         lambda: self.manager.confirm_received_payment(self._payment_draft, sms_required=True),
                          self._payment_saved)
 
     @Slot(object, str, bool)
@@ -2516,11 +2487,6 @@ class QuoteDeliveryDialog(QuoteDialog):
     def reject(self):
         if self.action_task is not None:
             return
-        if hasattr(self, "initial") and self.raw_state() != self.initial:
-            if QMessageBox.question(self, "확정견적 닫기", "적용하지 않은 택배비 변경을 버리고 닫을까요?",
-                                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                                    QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
-                return
         QDialog.reject(self)
 
 
