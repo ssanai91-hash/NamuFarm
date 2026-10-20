@@ -3306,6 +3306,12 @@ class SellerWindow(MainWindow):
         layout = QVBoxLayout(page)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(10)
+        self.draft_search = QLineEdit()
+        self.draft_search.setPlaceholderText("고객명 · 견적번호 · 연락처 · 묘목 검색")
+        self.draft_search.setToolTip("견적번호·고객명·연락처·메일주소·묘목·비고·판매자 요청사항을 검색합니다.")
+        self.draft_search.setClearButtonEnabled(True)
+        self.draft_search.textChanged.connect(self.refresh_workspace)
+        layout.addWidget(self.draft_search)
         self.draft_table = table(["견적번호", "상태", "작성일", "고객명", "연락처", "메일", "공식견적서", "품목", "판매금액", "자료 위치"])
         self.draft_sort_descending = False
         header = self.draft_table.horizontalHeader()
@@ -3654,6 +3660,20 @@ class SellerWindow(MainWindow):
             key=lambda pair: draft_quote_sort_key(pair[0]),
             reverse=self.draft_sort_descending,
         )
+        total_quotes = len(draft_pairs)
+        query = self.draft_search.text().strip().casefold()
+        phone_query = query.replace("-", "").replace(" ", "")
+        if query:
+            draft_pairs = [(draft, status) for draft, status in draft_pairs
+                           if query in " ".join((
+                               draft_quote_number(draft), draft.get("customerName", ""),
+                               draft.get("customerPhone", ""), draft.get("customerEmail", ""),
+                               draft.get("note", ""),
+                               " ".join(str(item.get(key, "")) for item in draft.get("items", [])
+                                        for key in ("species", "specification", "remarks")),
+                           )).casefold()
+                           or (phone_query.isdigit() and phone_query in
+                               draft.get("customerPhone", "").replace("-", "").replace(" ", ""))]
         previous_index = self.draft_table.currentRow()
         previous_rows = getattr(self, "draft_rows", [])
         previous_id = previous_rows[previous_index]["id"] if 0 <= previous_index < len(previous_rows) else None
@@ -3672,7 +3692,9 @@ class SellerWindow(MainWindow):
             money(draft_amounts(d)["total"]),
             "로컬 엑셀",
         ) for d, status in draft_pairs])
-        self.draft_table.set_empty_message("선택한 상태의 견적이 없습니다.\n이 PC에서 확정한 견적이 로컬 엑셀에 표시됩니다.")
+        self.draft_table.set_empty_message(
+            "검색 조건에 맞는 확정견적이 없습니다.\n검색어를 지워 전체 목록을 확인하세요." if query else
+            "표시할 확정견적이 없습니다.\n이 PC에서 확정한 견적이 로컬 엑셀에 표시됩니다.")
         center_table_columns(self.draft_table, (0, 1, 2, 3, 4, 6, 8))
         customer_reference(self.draft_table, 3, 0)
         self.draft_table.clearSelection()
@@ -3681,7 +3703,7 @@ class SellerWindow(MainWindow):
         if restored is not None:
             self.draft_table.selectRow(restored)
         self.draft_table.blockSignals(False)
-        self.set_page_count(self.PAGE_QUOTES, len(draft_pairs))
+        self.set_page_count(self.PAGE_QUOTES, total_quotes)
         self.draft_table.horizontalHeaderItem(9).setToolTip("이 PC의 나무팜-확정견적.xlsx에서 불러온 견적")
         self.refresh_sales()
         self.refresh_shipping()
@@ -3950,6 +3972,7 @@ class SellerWindow(MainWindow):
     def manual_quote_saved(self, value, identifier):
         self.apply_view(value)
         self.message.setText("직접 작성한 견적을 로컬 엑셀에 저장했습니다.")
+        self.draft_search.clear()
         self.navigate(self.PAGE_QUOTES)
         for index, draft in enumerate(self.draft_rows):
             if draft["id"] == identifier:
