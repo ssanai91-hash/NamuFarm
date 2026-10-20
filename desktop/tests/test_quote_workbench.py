@@ -45,7 +45,8 @@ class QuoteWorkbenchTest(QtTestCase):
         self.assertEqual('54,000원', dialog.total.text())
         self.assertEqual(0, dialog.items.verticalScrollBar().maximum())
         self.assertEqual(0, dialog.items.horizontalScrollBar().maximum())
-        self.assertAlmostEqual(.30, dialog.customer_scroll.width() / dialog.width(), delta=.02)
+        self.assertLessEqual(dialog.customer_scroll.width(), 330)
+        self.assertGreater(dialog.workbench_scroll.width(), 2 * dialog.customer_scroll.width())
         rule_y = dialog.workbench_total_rule.mapTo(dialog, QPoint()).y()
         self.assertGreater(rule_y, dialog.items.mapTo(dialog, QPoint()).y() + dialog.items.height())
         self.assertLess(rule_y + dialog.workbench_total_rule.height(),
@@ -285,14 +286,14 @@ class QuoteWorkbenchTest(QtTestCase):
         self.assertEqual(0, dialog.workbench_scroll.horizontalScrollBar().maximum())
         self.assertEqual(0, dialog.workbench_scroll.verticalScrollBar().maximum())
 
-    def test_request_and_manual_quotes_show_eight_rows_with_wide_names_and_remarks(self):
+    def test_request_and_manual_quotes_show_eight_rows_with_original_text_on_a_desktop(self):
         for manual in (False, True):
             with self.subTest(manual=manual):
                 draft = new_manual_draft() if manual else copy.deepcopy(self.draft)
                 draft['items'] = [dict(species='황금사철나무', specification='', quantity=2,
                                        unitPrice=2000, unitCost=0, remarks='') for _ in range(8)]
                 dialog = QuoteDialog(draft, request_status='신규')
-                dialog.resize(1280, 900)
+                dialog.resize(1460, 980)
                 dialog.show()
                 self.settle()
                 self.assertTrue(dialog.workbench)
@@ -307,13 +308,81 @@ class QuoteWorkbenchTest(QtTestCase):
                 for widget in (dialog.note, dialog.generate_quote_button, dialog.preview_quote_button):
                     self.assertTrue(dialog.workbench_document_area.isAncestorOf(widget))
                 self.assertEqual(dialog.note.width(), dialog.quote_file_label.width())
-                self.assertGreaterEqual(dialog.note.height(), 90)
+                self.assertEqual(dialog.note.width(), dialog.note.height())
+                self.assertLess(dialog.workbench_original_area.mapTo(dialog, QPoint()).y()
+                                + dialog.workbench_original_area.height(), dialog.close_button.mapTo(dialog, QPoint()).y())
                 dialog.add_item({'species': '추가 묘목', 'specification': '', 'quantity': 1,
                                  'unitPrice': 1000, 'unitCost': 0})
                 self.settle()
                 self.assertEqual(9, dialog.items.rowCount())
                 self.assertGreater(dialog.items.verticalScrollBar().maximum(), 0)
                 self.assertEqual(0, dialog.workbench_scroll.verticalScrollBar().maximum())
+
+    def test_square_note_and_separate_price_controls_survive_resizing_and_focus(self):
+        for large in (False, True):
+            self.app.setProperty('namufarmLargeFont', large)
+            self.app.setStyleSheet(workspace_style(large))
+            dialog = self.dialog(size=(1460, 980))
+            for size in ((1460, 980), (1000, 620), (1280, 900)):
+                with self.subTest(large=large, size=size):
+                    dialog.resize(*size)
+                    self.settle()
+                    self.assertEqual(dialog.note.width(), dialog.note.height())
+                    self.assertEqual(0, dialog.items.horizontalScrollBar().maximum())
+                    editor = dialog.unit_price_editor(0)
+                    for focus in (editor.input, editor.plus, editor.minus):
+                        focus.setFocus()
+                        self.settle()
+                        self.assertGreaterEqual(editor.input.x() - editor.minus.geometry().right() - 1, 6)
+                        self.assertGreaterEqual(editor.plus.x() - editor.input.geometry().right() - 1, 6)
+                        self.assertLess(editor.plus.geometry().right(), editor.width())
+                        self.assertEqual(editor.minus.height(), editor.input.height())
+                        self.assertEqual(editor.plus.height(), editor.input.height())
+                    dialog.customer_scroll.ensureWidgetVisible(dialog.note)
+                    dialog.workbench_scroll.ensureWidgetVisible(dialog.request_note_view)
+                    self.settle()
+                    self.assertGreaterEqual(dialog.note.mapTo(dialog.customer_scroll.viewport(), QPoint()).y(), 0)
+                    self.assertGreaterEqual(dialog.request_note_view.mapTo(dialog.workbench_scroll.viewport(), QPoint()).y(), 0)
+
+    def test_original_request_is_inline_below_sms_and_never_changes_with_seller_notes(self):
+        original = '고객 요청 원문입니다.\n둘째 줄과 <문자>도 그대로 표시합니다.'
+        self.draft['requestNote'] = original
+        dialog = self.dialog(size=(1460, 980))
+        self.assertTrue(dialog.request_note_view.isReadOnly())
+        self.assertEqual('고객 원문보기', dialog.request_note_view.accessibleName())
+        self.assertEqual(original, dialog.request_note_view.toPlainText())
+        self.assertGreater(dialog.workbench_original_area.mapTo(dialog, QPoint()).y(),
+                           dialog.sms_button.mapTo(dialog, QPoint()).y() + dialog.sms_button.height())
+        self.assertFalse(dialog.workbench_document_area.isAncestorOf(dialog.request_note_view))
+        dialog.note.setPlainText('판매자가 작성한 견적 조건')
+        dialog.set_unit_price(0, 5000)
+        self.assertEqual(original, dialog.request_note_view.toPlainText())
+        result = dialog.collect()
+        self.assertEqual(original, result['requestNote'])
+        self.assertEqual('판매자가 작성한 견적 조건', result['note'])
+        manual = QuoteDialog(new_manual_draft())
+        manual.show()
+        self.settle()
+        self.assertEqual('', manual.request_note_view.toPlainText())
+        self.assertEqual('고객 요청 원문이 없습니다.', manual.request_note_view.placeholderText())
+        self.assertLessEqual(manual.total.font().pixelSize(), 18)
+        manual.items.item(0, 0).setText('소나무')
+        self.assertEqual('0원', manual.total.text())
+        self.assertGreaterEqual(manual.total.font().pixelSize(), 32)
+
+    def test_square_note_does_not_toggle_the_sidebar_scrollbar_at_its_height_boundary(self):
+        dialog = QuoteDialog(new_manual_draft())
+        dialog.show()
+        for height in (960, 970, 975, 980, 985, 1000, 975):
+            with self.subTest(height=height):
+                dialog.resize(1460, height)
+                samples = []
+                for _ in range(30):
+                    self.app.processEvents()
+                    samples.append((dialog.note.width(), dialog.note.height(),
+                                    dialog.customer_scroll.verticalScrollBar().maximum()))
+                self.assertEqual(1, len(set(samples[-10:])))
+                self.assertEqual(dialog.note.width(), dialog.note.height())
 
     def test_empty_remarks_hint_is_italic_display_only_and_never_saved_or_exported(self):
         dialog = self.dialog()
