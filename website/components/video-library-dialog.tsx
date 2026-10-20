@@ -1,15 +1,18 @@
 "use client";
 
 import { useEffect, useReducer, useRef, useState, type RefObject } from "react";
-import { ArrowLeft, ExternalLink, LoaderCircle, Play, RotateCcw, Search, X } from "lucide-react";
+import { ArrowLeft, ExternalLink, FileText, LoaderCircle, Play, RotateCcw, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { filterVideos, initialVideos, readVideoCatalog, youtubeEmbedUrl, type VideoFormat, type VideoResource } from "@/lib/content-library";
 import { createVideoLibraryState, videoLibraryReducer, VIDEO_PAGE_SIZE } from "@/lib/video-library-state";
+import { videoQuoteSpecies } from "@/lib/video-quote";
 
-export default function VideoLibraryDialog({ open, onOpenChange, opener }: {
+export default function VideoLibraryDialog({ open, onOpenChange, opener, onRequestQuote, quoteOpen, quoteLocked }: {
   open: boolean; onOpenChange: (open: boolean) => void; opener: RefObject<HTMLButtonElement | null>;
+  onRequestQuote: (video: VideoResource, opener: HTMLButtonElement) => void;
+  quoteOpen: boolean; quoteLocked: boolean;
 }) {
   const [videos, setVideos] = useState<VideoResource[]>(initialVideos);
   const [view, dispatch] = useReducer(videoLibraryReducer, undefined, createVideoLibraryState);
@@ -59,6 +62,7 @@ export default function VideoLibraryDialog({ open, onOpenChange, opener }: {
     requestAnimationFrame(() => restoreList(true));
   }
   function handleOpenChange(nextOpen: boolean) {
+    if (quoteOpen) return;
     if (!nextOpen && selected) { backToList(); return; }
     if (!nextOpen) dispatch({ type: "scroll", scrollTop: bodyRef.current?.scrollTop ?? 0 });
     onOpenChange(nextOpen);
@@ -92,13 +96,16 @@ export default function VideoLibraryDialog({ open, onOpenChange, opener }: {
       <div className="video-library-body" ref={bodyRef}>
         {open && selected ? <div className="video-detail">
           <Button type="button" variant="ghost" className="video-back" onClick={backToList}><ArrowLeft />{selected.format === "short" ? "쇼츠 목록" : "영상 목록"}</Button>
-          <div className={"video-player" + (selected.format === "short" ? " video-player-short" : "")}><iframe key={selected.videoId} src={youtubeEmbedUrl(selected.videoId)}
+          <div className={"video-player" + (selected.format === "short" ? " video-player-short" : "")}>{quoteOpen ? <p className="video-player-paused">견적을 작성하고 있어요.</p> : <iframe key={selected.videoId} src={youtubeEmbedUrl(selected.videoId)}
             title={selected.title} allow="accelerometer; encrypted-media; gyroscope; picture-in-picture; web-share"
-            allowFullScreen referrerPolicy="strict-origin-when-cross-origin" /></div>
+            allowFullScreen referrerPolicy="strict-origin-when-cross-origin" />}</div>
           <h3 ref={detailTitleRef} tabIndex={-1}>{selected.title}</h3>
           {selected.source && <p className="video-source">출처 · {selected.source}</p>}
           <p className="video-play-help">재생되지 않으면 YouTube에서 시청해주세요.</p>
-          <Button asChild variant="outline"><a href={selected.url} target="_blank" rel="noopener noreferrer">{selected.format === "short" ? "YouTube에서 쇼츠 보기" : "YouTube에서 보기"}<ExternalLink aria-hidden="true" /><span className="sr-only"> · 새 창</span></a></Button>
+          <div className="video-detail-actions"><Button asChild variant="outline"><a href={selected.url} target="_blank" rel="noopener noreferrer">{selected.format === "short" ? "YouTube에서 쇼츠 보기" : "YouTube에서 보기"}<ExternalLink aria-hidden="true" /><span className="sr-only"> · 새 창</span></a></Button>
+            {videoQuoteSpecies(selected).length > 0 && <Button type="button" disabled={quoteLocked} aria-haspopup="dialog" onClick={event => onRequestQuote(selected, event.currentTarget)}><FileText aria-hidden="true" />{videoQuoteSpecies(selected).length === 1 ? "이 묘목 견적 요청" : "영상 속 묘목 견적 요청"}</Button>}
+          </div>
+          {quoteLocked && videoQuoteSpecies(selected).length > 0 && <p className="video-play-help" role="status">진행 중인 견적 접수 확인을 마친 뒤 새 묘목을 추가할 수 있어요.</p>}
         </div> : <>
           <div className="video-format-buttons" role="group" aria-label="영상 종류">
             {([["video", "일반 영상"], ["short", "짧은 영상(쇼츠)"]] as const).map(([value, label]) =>

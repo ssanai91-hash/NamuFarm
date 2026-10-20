@@ -19,6 +19,8 @@ import { quoteItemSchema, quoteSchema, normalizeQuotePhone, requestFingerprint, 
 import { validatedQuoteReceipt, receiptTimeSeoul, type QuoteReceipt } from "@/lib/quote-receipt";
 import { retainPendingReceipt } from "@/lib/quote-upstream";
 import { toggleCatalogLine, emptyLine, isEmptyLine, quoteFieldProblems, type FieldProblem, type RemovedQuoteLine, type QuoteLine as Line } from "@/lib/quote-form";
+import type { VideoResource } from "@/lib/content-library";
+import { appendVideoReference, stageVideoQuote, videoQuoteSpecies, videoQuoteSpeciesName } from "@/lib/video-quote";
 
 export default function QuoteHome({ initialTestMode = false, initialConfigured = false }: { initialTestMode?: boolean; initialConfigured?: boolean }) {
   const [lines, setLines] = useState<Line[]>([emptyLine(0)]);
@@ -49,6 +51,11 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
   const [menuOpen, setMenuOpen] = useState(false); const [atForm, setAtForm] = useState(false);
   const [videoOpen, setVideoOpen] = useState(false);
   const videoOpener = useRef<HTMLButtonElement>(null);
+  const [videoQuoteOpen, setVideoQuoteOpen] = useState(false);
+  const [videoQuoteSource, setVideoQuoteSource] = useState<VideoResource | null>(null);
+  const [videoQuoteNotice, setVideoQuoteNotice] = useState("");
+  const videoQuoteOpener = useRef<HTMLButtonElement>(null);
+  const videoQuoteTitleRef = useRef<HTMLHeadingElement>(null);
   const [blogOpen, setBlogOpen] = useState(false);
   const blogOpener = useRef<HTMLButtonElement>(null);
   const heroBlogButton = useRef<HTMLButtonElement>(null);
@@ -98,10 +105,13 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
       if (v.testMode !== true) setTestNoticeOpen(false);
       setReady(v.ready === true);
     }).catch(() => { /* Retain server-rendered settings when this refresh is interrupted. */ });
+    return () => configAbort.abort();
+  }, []);
+  useEffect(() => {
     const observer = new IntersectionObserver(([entry]) => setAtForm(entry.isIntersecting), { threshold: 0 });
     if (formRef.current) observer.observe(formRef.current);
-    return () => { configAbort.abort(); observer.disconnect(); };
-  }, []);
+    return () => observer.disconnect();
+  }, [videoQuoteOpen]);
   useEffect(() => { if (success) successRef.current?.focus(); }, [success]);
   useEffect(() => {
     if (!problems.length && error === "아래 항목을 확인해주세요.") setError("");
@@ -171,6 +181,22 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
     setLines(result.lines); setNotice(result.notice); setProblems([]);
     setRemoved(result.removed.length ? { lines: result.removed, label: species } : null);
     if (result.added) setSuccess(null);
+  }
+  function addVideoSpecies(video: VideoResource, species: string, focus = false) {
+    const result = stageVideoQuote(lines, video, species, nextLine.current++, locked);
+    setVideoQuoteNotice(result.notice);
+    if (!result.staged) return;
+    setLines(result.lines); setSuccess(null); setRemoved(null); setProblems([]); setError("");
+    setMessage(current => appendVideoReference(current, video, testMode ? 900 : 1000));
+    if (focus && result.lineId !== null) focusField(`quantity-${result.lineId}`);
+  }
+  function openVideoQuote(video: VideoResource, opener: HTMLButtonElement) {
+    if (locked) return;
+    const candidates = videoQuoteSpecies(video);
+    if (!candidates.length) return;
+    videoQuoteOpener.current = opener; setVideoQuoteSource(video); setVideoQuoteNotice(""); setSuccess(null);
+    if (candidates.length === 1) addVideoSpecies(video, candidates[0]);
+    setVideoQuoteOpen(true);
   }
   function removeLine(id: number) {
     if (locked) return;
@@ -292,38 +318,8 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
   const count = lines.filter(line => line.species.trim()).length;
   const total = lines.reduce((n, line) => n + (Number.isSafeInteger(Number(line.quantity)) && Number(line.quantity) > 0 ? Number(line.quantity) : 0), 0);
 
-  return <>
-    <a className="skip-link" href="#quote">견적 요청으로 바로 가기</a>
-    <header className="site-header"><div className="header-inner">
-      <a href="#home" ref={homeLinkRef} className="brand" aria-label="나무팜 홈 · 견적 입력 초기화" aria-haspopup="dialog" onClick={event => { event.preventDefault(); requestQuoteReset("home"); }}><Sprout strokeWidth={2} /><span>나무팜<small>NAMUFARM</small></span></a>
-      <nav className="desktop-nav" aria-label="주 메뉴"><a href="#trees">묘목 찾기</a><button type="button" className="video-nav-button" onClick={openVideos} aria-haspopup="dialog">묘목 재배 영상</button><button type="button" className="video-nav-button" onClick={openBlog} aria-haspopup="dialog">묘목 블로그</button><a href="#guide">이용 안내</a><a href="#questions">자주 묻는 질문</a></nav>
-      <Button asChild variant="outline" className="header-call"><a href={`tel:${businessInfo.mobile.replaceAll("-", "")}`} aria-label={`전화 상담 ${businessInfo.mobile}`}><Phone aria-hidden="true" />전화 상담</a></Button>
-      <Button asChild className="header-quote"><a href="#quote">견적 상담 요청</a></Button>
-      <Button type="button" variant="outline" className="header-videos" aria-label="묘목 재배 영상 보기" aria-haspopup="dialog" onClick={openVideos}>재배 영상</Button>
-      <Dialog open={menuOpen} onOpenChange={setMenuOpen}><DialogTrigger asChild><Button variant="ghost" className="menu-button" aria-label="메뉴 열기">메뉴</Button></DialogTrigger><DialogContent className="menu-dialog" showCloseButton={false}><DialogClose asChild><Button className="dialog-dismiss" variant="ghost" aria-label="메뉴 닫기"><X /></Button></DialogClose><DialogHeader><DialogTitle>나무팜</DialogTitle><DialogDescription>묘목 찾기와 견적 상담</DialogDescription></DialogHeader><nav aria-label="모바일 메뉴"><button type="button" onClick={openBlogFromMenu} aria-haspopup="dialog">묘목 정보·블로그 보기</button>{[["trees", "묘목 찾기"], ["quote", "견적 상담 요청"], ["guide", "이용 안내"], ["questions", "자주 묻는 질문"]].map(([id, title]) => <a key={id} href={`#${id}`} onClick={() => setMenuOpen(false)}>{title}</a>)}<a href={`tel:${businessInfo.mobile.replaceAll("-", "")}`}><Phone aria-hidden="true" />전화 상담 · {businessInfo.mobile}</a></nav></DialogContent></Dialog>
-    </div></header>
-    <main id="home">
-      <section className="hero" aria-labelledby="hero-title">
-        <img src="/nursery-hero.webp" alt="햇살 아래 자라는 어린 묘목" width="1672" height="940" fetchPriority="high" className="hero-image" /><div className="hero-shade" />
-        <div className="hero-inner">
-          <span className="eyebrow">충북 옥천 · 묘목 견적 상담</span>
-          <h1 id="hero-title">심고 싶은 나무,<br />견적부터 <em>편하게.</em></h1>
-          <p>원하는 묘목을 고르고 수량을 알려주세요.<br />규격과 배송은 상담을 통해 안내해 드립니다.</p>
-          <div className="hero-actions"><Button asChild className="hero-cta"><a href="#trees"><Sprout />묘목 찾아보기</a></Button><a className="hero-direct" href="#quote">견적 바로 작성 →</a></div>
-          <div className="hero-resource-actions"><Button type="button" variant="outline" className="hero-videos" aria-haspopup="dialog" onClick={openVideos}><Play aria-hidden="true" />묘목 재배 영상 보기</Button><Button type="button" variant="outline" className="hero-videos" aria-haspopup="dialog" ref={heroBlogButton} onClick={openBlog}><FileText aria-hidden="true" />묘목 정보·블로그 보기</Button></div>
-          <div className="hero-highlights" aria-label="견적 상담 특징"><span>회원가입 없이 요청</span><span>규격 상담 가능</span><span>결제는 상담 후 결정</span></div>
-        </div>
-      </section>
-      <div className="journey-strip wrap" aria-label="견적 상담 순서"><span><b>1</b>묘목 고르기</span><span><b>2</b>수량·연락처 입력</span><span><b>3</b>상담 후 결정</span></div>
-      <SpeciesBrowser key={catalogRevision} lines={lines} onSelect={selectSpecies} onRemove={removeLine} notice={notice} locked={locked} />
-      <section id="quote" className="quote-section" aria-labelledby="quote-title quote-mobile-title"><div className="quote-layout wrap">
-        <div className="quote-mobile-intro">
-          <h2 id="quote-mobile-title">묘목 견적 상담</h2>
-          <p>묘목과 수량을 알려주세요.</p>
-          <details className="quote-writing-guide"><summary>작성 안내 보기 <ChevronDown aria-hidden="true" /></summary><div><p>수량은 주 단위로 적어주세요.</p><p>규격을 모르면 비워두세요. 상담하면서 확인합니다.</p><a href="#trees">묘목 더 찾아보기</a></div></details>
-          <div className="quote-mobile-promise"><ShieldCheck aria-hidden="true" /><p>견적 요청만으로 <strong>주문이 확정되지 않아요.</strong></p></div>
-        </div>
-        <aside className="quote-intro"><span className="overline">묘목 견적 상담</span><h2 id="quote-title">필요한 만큼,<br />함께 알아볼게요.</h2><p>수량은 <strong>주 단위</strong>로 적어주세요.<br />규격을 몰라도 괜찮습니다.</p><div className="intro-promise"><ShieldCheck /><p>견적 요청만으로<br /><strong>주문이나 결제가 확정되지 않아요.</strong></p></div><a href="#trees" className="back-to-trees">묘목 더 찾아보기</a></aside>
+  // One form instance shares validation, pending receipts and submission across both locations.
+  const quoteForm = (
         <form className="quote-form" ref={formRef} onSubmit={prepare} noValidate aria-busy={busy}>
           {success ? <div className="success-panel" ref={successRef} tabIndex={-1} role="status"><CircleCheck /><span className="overline">접수 완료</span><h3>{testMode ? "테스트 요청을 저장했어요." : "견적 상담 요청이 접수됐어요."}</h3><p>{testMode ? "테스트 요청만 저장됐습니다. 실제 상담·견적서 발송은 진행하지 않습니다." : "판매자가 여러 농원의 재고와 규격을 확인한 뒤 남겨주신 연락처로 안내드립니다."}</p><div className="receipt"><span>견적접수번호</span><code>{success.receiptNumber}</code><Button type="button" variant="outline" onClick={copyReceipt}><Copy />접수번호 복사</Button><p className="copy-notice" role="status">{copyNotice}</p><span className="receipt-date-label">접수일시 · 한국시간</span><time dateTime={success.createdAt}>{receiptTimeSeoul(success.createdAt)}</time></div>{successContact && <p className="success-followup">상담 연락처: 끝 네 자리 <strong>{successContact.phoneTail}</strong><br />공식 견적서: {successContact.formal ? successContact.channel === "both" ? "이메일과 문자로 수신" : successContact.channel === "email" ? "이메일로 수신" : "문자로 수신" : "요청 안 함"}</p>}<p className="submit-note">아직 주문이나 결제가 확정된 것은 아닙니다.</p><Button type="button" variant="outline" onClick={() => { setSuccess(null); setNotice(""); }}>{testMode ? "다른 테스트 요청하기" : "다른 견적 요청하기"}</Button></div> : <>
             <div className="form-title"><div><FileText /><h3>견적 상담 요청</h3></div><span>아래 항목을 입력해주세요</span></div>
@@ -394,13 +390,70 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
             <p className="submit-note">주문과 결제는 상담 후 결정합니다.</p>
           </>}
         </form>
+  );
+
+  return <>
+    <a className="skip-link" href="#quote">견적 요청으로 바로 가기</a>
+    <header className="site-header"><div className="header-inner">
+      <a href="#home" ref={homeLinkRef} className="brand" aria-label="나무팜 홈 · 견적 입력 초기화" aria-haspopup="dialog" onClick={event => { event.preventDefault(); requestQuoteReset("home"); }}><Sprout strokeWidth={2} /><span>나무팜<small>NAMUFARM</small></span></a>
+      <nav className="desktop-nav" aria-label="주 메뉴"><a href="#trees">묘목 찾기</a><button type="button" className="video-nav-button" onClick={openVideos} aria-haspopup="dialog">묘목 재배 영상</button><button type="button" className="video-nav-button" onClick={openBlog} aria-haspopup="dialog">묘목 블로그</button><a href="#guide">이용 안내</a><a href="#questions">자주 묻는 질문</a></nav>
+      <Button asChild variant="outline" className="header-call"><a href={`tel:${businessInfo.mobile.replaceAll("-", "")}`} aria-label={`전화 상담 ${businessInfo.mobile}`}><Phone aria-hidden="true" />전화 상담</a></Button>
+      <Button asChild className="header-quote"><a href="#quote">견적 상담 요청</a></Button>
+      <Button type="button" variant="outline" className="header-videos" aria-label="묘목 재배 영상 보기" aria-haspopup="dialog" onClick={openVideos}>재배 영상</Button>
+      <Dialog open={menuOpen} onOpenChange={setMenuOpen}><DialogTrigger asChild><Button variant="ghost" className="menu-button" aria-label="메뉴 열기">메뉴</Button></DialogTrigger><DialogContent className="menu-dialog" showCloseButton={false}><DialogClose asChild><Button className="dialog-dismiss" variant="ghost" aria-label="메뉴 닫기"><X /></Button></DialogClose><DialogHeader><DialogTitle>나무팜</DialogTitle><DialogDescription>묘목 찾기와 견적 상담</DialogDescription></DialogHeader><nav aria-label="모바일 메뉴"><button type="button" onClick={openBlogFromMenu} aria-haspopup="dialog">묘목 정보·블로그 보기</button>{[["trees", "묘목 찾기"], ["quote", "견적 상담 요청"], ["guide", "이용 안내"], ["questions", "자주 묻는 질문"]].map(([id, title]) => <a key={id} href={`#${id}`} onClick={() => setMenuOpen(false)}>{title}</a>)}<a href={`tel:${businessInfo.mobile.replaceAll("-", "")}`}><Phone aria-hidden="true" />전화 상담 · {businessInfo.mobile}</a></nav></DialogContent></Dialog>
+    </div></header>
+    <main id="home">
+      <section className="hero" aria-labelledby="hero-title">
+        <img src="/nursery-hero.webp" alt="햇살 아래 자라는 어린 묘목" width="1672" height="940" fetchPriority="high" className="hero-image" /><div className="hero-shade" />
+        <div className="hero-inner">
+          <span className="eyebrow">충북 옥천 · 묘목 견적 상담</span>
+          <h1 id="hero-title">심고 싶은 나무,<br />견적부터 <em>편하게.</em></h1>
+          <p>원하는 묘목을 고르고 수량을 알려주세요.<br />규격과 배송은 상담을 통해 안내해 드립니다.</p>
+          <div className="hero-actions"><Button asChild className="hero-cta"><a href="#trees"><Sprout />묘목 찾아보기</a></Button><a className="hero-direct" href="#quote">견적 바로 작성 →</a></div>
+          <div className="hero-resource-actions"><Button type="button" variant="outline" className="hero-videos" aria-haspopup="dialog" onClick={openVideos}><Play aria-hidden="true" />묘목 재배 영상 보기</Button><Button type="button" variant="outline" className="hero-videos" aria-haspopup="dialog" ref={heroBlogButton} onClick={openBlog}><FileText aria-hidden="true" />묘목 정보·블로그 보기</Button></div>
+          <div className="hero-highlights" aria-label="견적 상담 특징"><span>회원가입 없이 요청</span><span>규격 상담 가능</span><span>결제는 상담 후 결정</span></div>
+        </div>
+      </section>
+      <div className="journey-strip wrap" aria-label="견적 상담 순서"><span><b>1</b>묘목 고르기</span><span><b>2</b>수량·연락처 입력</span><span><b>3</b>상담 후 결정</span></div>
+      <SpeciesBrowser key={catalogRevision} lines={lines} onSelect={selectSpecies} onRemove={removeLine} notice={notice} locked={locked} />
+      <section id="quote" className="quote-section" aria-labelledby="quote-title quote-mobile-title"><div className="quote-layout wrap">
+        <div className="quote-mobile-intro">
+          <h2 id="quote-mobile-title">묘목 견적 상담</h2>
+          <p>묘목과 수량을 알려주세요.</p>
+          <details className="quote-writing-guide"><summary>작성 안내 보기 <ChevronDown aria-hidden="true" /></summary><div><p>수량은 주 단위로 적어주세요.</p><p>규격을 모르면 비워두세요. 상담하면서 확인합니다.</p><a href="#trees">묘목 더 찾아보기</a></div></details>
+          <div className="quote-mobile-promise"><ShieldCheck aria-hidden="true" /><p>견적 요청만으로 <strong>주문이 확정되지 않아요.</strong></p></div>
+        </div>
+        <aside className="quote-intro"><span className="overline">묘목 견적 상담</span><h2 id="quote-title">필요한 만큼,<br />함께 알아볼게요.</h2><p>수량은 <strong>주 단위</strong>로 적어주세요.<br />규격을 몰라도 괜찮습니다.</p><div className="intro-promise"><ShieldCheck /><p>견적 요청만으로<br /><strong>주문이나 결제가 확정되지 않아요.</strong></p></div><a href="#trees" className="back-to-trees">묘목 더 찾아보기</a></aside>
+        {videoQuoteOpen ? <p className="quote-popup-placeholder">견적 팝업에서 작성 중입니다. 입력 내용은 함께 유지됩니다.</p> : quoteForm}
       </div></section>
       <section id="guide" className="guide-section wrap" aria-labelledby="guide-title"><div className="section-heading"><div><span className="overline">이용 안내</span><h2 id="guide-title">나무를 만나는 세 단계</h2></div><p>회원가입 없이 편하게 문의하세요.</p></div><div className="steps">{[{ icon: Sprout, title: "묘목과 수량 선택", text: "여러 묘목을 함께 담고, 필요한 수량을 주 단위로 적어주세요." }, { icon: FileText, title: "견적 상담 요청", text: "연락처와 배송 지역을 남기면 접수 완료 화면에서 번호를 안내해요." }, { icon: MessageCircle, title: "상담 후 주문 결정", text: "여러 농원의 재고와 규격, 배송비를 안내받고 상담한 뒤 결정하세요." }].map((step, i) => <article className="step" key={step.title}><div className="step-top"><step.icon /><span>0{i + 1}</span></div><h3>{step.title}</h3><p>{step.text}</p></article>)}</div></section>
       <section id="questions" className="faq-section wrap"><div><span className="overline">자주 묻는 질문</span><h2>문의 전에<br />궁금하셨나요?</h2></div><Accordion type="single" collapsible className="faq-list"><AccordionItem value="size"><AccordionTrigger>묘목 규격을 몰라도 요청할 수 있나요?</AccordionTrigger><AccordionContent>네. 묘목 이름과 필요한 수량만 적어주세요. 희망 규격은 비워두셔도 됩니다. 심을 장소와 용도를 요청사항에 남겨주시면 상담에 도움이 됩니다.</AccordionContent></AccordionItem><AccordionItem value="order"><AccordionTrigger>견적을 요청하면 바로 주문되나요?</AccordionTrigger><AccordionContent>견적 요청은 상담을 위한 문의입니다. 재고, 규격, 금액과 배송 방법을 확인하고 주문을 결정하시면 됩니다.</AccordionContent></AccordionItem><AccordionItem value="delivery"><AccordionTrigger>배송비와 배송 날짜는 어떻게 정하나요?</AccordionTrigger><AccordionContent>묘목 크기, 수량과 배송 지역에 따라 달라집니다. 접수한 요청을 확인한 후 가능한 배송 방법과 비용, 일정을 안내드립니다.</AccordionContent></AccordionItem><AccordionItem value="more"><AccordionTrigger>목록에 없는 묘목도 문의할 수 있나요?</AccordionTrigger><AccordionContent>네. 견적 요청란에 원하는 묘목 이름을 직접 적어주세요. 공급 가능 여부는 상담을 통해 확인합니다.</AccordionContent></AccordionItem></Accordion></section>
     </main>
     <footer className="site-footer"><div className="wrap footer-inner"><div><div className="footer-brand-row"><a href="#home" className="brand" aria-label="나무팜 홈 · 견적 입력 초기화" aria-haspopup="dialog" onClick={event => { event.preventDefault(); requestQuoteReset("home"); }}><Sprout /><span>나무팜<small>NAMUFARM</small></span></a><div className="footer-business"><span>{businessInfo.name} · 대표 {businessInfo.representative}</span><span>사업자등록번호 {businessInfo.number}</span></div></div><p>당신의 내일에, 푸르름을 더합니다.</p></div><div><a href="#quote">묘목 견적 상담</a><div className="footer-phone-row"><a href={`tel:${businessInfo.mobile.replaceAll("-", "")}`}>전화 상담 {businessInfo.mobile}</a><span aria-hidden="true">/</span><a href={`tel:${businessInfo.phone.replaceAll("-", "")}`}>대표전화 {businessInfo.phone}</a></div><a href="/privacy">개인정보 처리방침</a><small>© {new Date().getFullYear()} NAMUFARM</small></div></div></footer>
-    <div className={`mobile-cta ${atForm || reviewOpen || success || menuOpen || videoOpen || blogOpen || pickerLineId !== null || sampleOpen || testNoticeOpen ? "is-hidden" : ""}`} role="region" aria-label="빠른 상담"><span><strong>{count ? `담은 묘목 ${count}종` : "필요한 묘목을 알려주세요"}</strong><small>{count ? "계속 고르셔도 됩니다" : "결제 없이 견적 상담"}</small></span><div className="mobile-cta-actions"><Button asChild variant="outline" className="mobile-call"><a href={`tel:${businessInfo.mobile.replaceAll("-", "")}`} aria-label={`전화 상담 ${businessInfo.mobile}`}><Phone aria-hidden="true" />전화 상담</a></Button><Button asChild><a href="#quote">{count ? `수량 입력 (${count}종)` : "견적 바로 작성"}</a></Button></div></div>
-    <VideoLibraryDialog open={videoOpen} onOpenChange={setVideoOpen} opener={videoOpener} />
+    <div className={`mobile-cta ${atForm || reviewOpen || success || menuOpen || videoOpen || videoQuoteOpen || blogOpen || pickerLineId !== null || sampleOpen || testNoticeOpen ? "is-hidden" : ""}`} role="region" aria-label="빠른 상담"><span><strong>{count ? `담은 묘목 ${count}종` : "필요한 묘목을 알려주세요"}</strong><small>{count ? "계속 고르셔도 됩니다" : "결제 없이 견적 상담"}</small></span><div className="mobile-cta-actions"><Button asChild variant="outline" className="mobile-call"><a href={`tel:${businessInfo.mobile.replaceAll("-", "")}`} aria-label={`전화 상담 ${businessInfo.mobile}`}><Phone aria-hidden="true" />전화 상담</a></Button><Button asChild><a href="#quote">{count ? `수량 입력 (${count}종)` : "견적 바로 작성"}</a></Button></div></div>
+    <VideoLibraryDialog open={videoOpen} onOpenChange={setVideoOpen} opener={videoOpener} onRequestQuote={openVideoQuote} quoteOpen={videoQuoteOpen} quoteLocked={locked} />
+    <Dialog open={videoQuoteOpen} onOpenChange={setVideoQuoteOpen}>
+      <DialogContent className="video-library-dialog video-quote-dialog" showCloseButton={false}
+        onOpenAutoFocus={event => { event.preventDefault(); videoQuoteTitleRef.current?.focus(); }}
+        onCloseAutoFocus={event => { event.preventDefault(); const button = videoQuoteOpener.current; if (button && !button.disabled) button.focus({ preventScroll: true }); else button?.closest(".video-detail")?.querySelector<HTMLElement>("h3")?.focus({ preventScroll: true }); }}>
+        <div className="video-library-heading">
+          <DialogHeader><DialogTitle ref={videoQuoteTitleRef} tabIndex={-1}>영상 속 묘목 견적</DialogTitle><DialogDescription>묘목과 수량, 연락처를 확인하고 요청해주세요.</DialogDescription></DialogHeader>
+          <Button type="button" variant="outline" className="video-dismiss" onClick={() => setVideoQuoteOpen(false)} aria-label="견적 팝업 닫고 영상으로 돌아가기"><X aria-hidden="true" />견적 닫기</Button>
+        </div>
+        <div className="video-library-body video-quote-body">
+          {videoQuoteSource && !success && <section className="video-quote-context" aria-label="영상 관련 묘목 선택">
+            <p className="video-quote-source-title">참고 영상 · {videoQuoteSource.title}</p>
+            <p>{videoQuoteSpecies(videoQuoteSource).length > 1 ? "영상에 나온 묘목 중 요청할 묘목을 골라주세요." : "영상에 분류된 묘목입니다. 이름과 희망 규격을 확인해주세요."} 기존에 담은 묘목도 함께 표시됩니다.</p>
+            <div className="video-quote-candidates">{videoQuoteSpecies(videoQuoteSource).map(species => {
+              const added = lines.some(line => videoQuoteSpeciesName(line.species) === species);
+              return <Button type="button" key={species} variant="outline" disabled={locked} aria-pressed={added} onClick={() => addVideoSpecies(videoQuoteSource, species, true)}>{added ? <CheckCheck aria-hidden="true" /> : <Plus aria-hidden="true" />}{species} · {added ? "담김" : "담기"}</Button>;
+            })}</div>
+            {videoQuoteNotice && <p className="video-quote-notice" role="status">{videoQuoteNotice}</p>}
+          </section>}
+          {videoQuoteOpen && quoteForm}
+        </div>
+      </DialogContent>
+    </Dialog>
     <BlogLibraryDialog open={blogOpen} onOpenChange={setBlogOpen} opener={blogOpener} />
     <SpeciesPickerDialog open={pickerLineId !== null && !locked} onOpenChange={open => { if (!open) setPickerLineId(null); }} onChoose={choosePickedSpecies} selectedName={lines.find(line => line.id === pickerLineId)?.species ?? ""} />
     <Dialog open={resetOpen} onOpenChange={open => { setResetOpen(open); if (!open) setConfirmedNotReceived(false); }}>

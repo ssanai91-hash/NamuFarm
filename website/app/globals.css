@@ -2582,6 +2582,26 @@ body { background:#fafbf7; }
 .video-load-more button { min-height: 3.25rem; width: min(100%,22rem); font-size: 1.125rem; }
 .video-detail h3 { font-size: 1.2rem; margin-top: .4rem; }
 .video-play-help { font-size: .9rem; color: #526350; }
+.video-detail-actions { display: flex; flex-wrap: wrap; gap: .65rem; width: 100%; }
+.video-detail-actions>[data-slot=button] { min-height: 3.25rem; height: auto; padding: .75rem 1rem; font-size: 1.05rem; white-space: normal; line-height: 1.45; }
+.video-player-paused { display: grid; place-items: center; width: 100%; height: 100%; padding: 1rem; color: #fff; text-align: center; }
+.video-quote-dialog { width: min(48rem,calc(100% - 2rem)); max-width: 48rem!important; }
+.video-quote-body .quote-form { width: 100%; max-width: none; padding: 0; border: 0; border-radius: 0; box-shadow: none; background: transparent; }
+.video-quote-context { display: grid; gap: .7rem; padding: 1rem; margin-bottom: 1rem; border: 1px solid #bbcfbc; border-radius: .75rem; background: #edf4ec; }
+.video-quote-context p { color: #36523e; font-size: 1rem; line-height: 1.65; overflow-wrap: anywhere; }
+.video-quote-context .video-quote-source-title { font-weight: 700; color: #205844; }
+.video-quote-candidates { display: flex; flex-wrap: wrap; gap: .5rem; }
+.video-quote-candidates button { min-height: 3.25rem; height: auto; padding: .6rem .8rem; white-space: normal; font-size: 1.05rem; }
+.video-quote-candidates button[aria-pressed=true] { background: #205844; color: #fff; border-color: #205844; }
+.video-quote-notice { font-weight: 600; }
+.quote-popup-placeholder { padding: 2rem; color: #425a47; background: #fff; border-radius: 1rem; }
+@media(max-width:48rem) {
+  .video-detail-actions>[data-slot=button] { flex: 1 1 12rem; }
+  .video-quote-dialog { width: calc(100% - 1rem); }
+  .video-quote-body .quote-form>.quote-section-box { background: transparent; }
+  .video-quote-context { padding: .8rem; }
+  .video-quote-candidates button { flex: 1 1 9rem; }
+}
 .hero-resource-actions { display: flex; flex-wrap: wrap; gap: .65rem; margin-top: 1rem; }
 .hero-resource-actions .hero-videos { margin-top: 0; }
 .menu-dialog nav button { padding: 1rem; min-height: 3.25rem; border-bottom: 1px solid #dce5d6; text-align: left; font-size: 1.125rem; }
