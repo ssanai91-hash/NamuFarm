@@ -3483,9 +3483,12 @@ class SellerWindow(MainWindow):
         return page
 
     def navigate(self, index):
-        if index in (self.PAGE_FARMS, self.PAGE_SPECIES):
-            self.refresh_nursery()
         self.stack.setCurrentIndex(index)
+        if index in (self.PAGE_FARMS, self.PAGE_SPECIES):
+            # Do not rebuild the hidden species/inventory page when opening farms.
+            page = self.farms_page if index == self.PAGE_FARMS else self.species_page
+            page.refresh_local()
+            self.set_page_count(index, len(page.rows))
         self.update_page_title(index)
         for i, widget in enumerate(self.nav):
             widget.setChecked(i == index)

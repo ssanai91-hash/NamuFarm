@@ -127,6 +127,11 @@ class NurseryPage(QWidget):
         if not hasattr(self, 'table'):
             return
         query = self.search.text().strip().casefold()
+        rendered = (self.state, query, self.selected_initial)
+        if getattr(self, '_rendered', None) == rendered:
+            # Navigation and unrelated jobs must preserve the existing table/selection.
+            self.update_controls()
+            return
         values = (self.state or {}).get(self.kind, [])
         self.rows = sorted([r for r in values if not r.get('_deleted') and
             (not query or query in ' '.join(str(v) for k, v in r.items() if not k.startswith('_')).casefold()) and
@@ -143,7 +148,11 @@ class NurseryPage(QWidget):
                 display.append((i, row['speciesName'], initial(row['speciesName']), row['farmName'],
                     row['category'], '사용' if row['isActive'] else '중지', row['memo'], status))
         self.table.blockSignals(True)
-        fill_table(self.table, display)
+        self.table.setUpdatesEnabled(False)
+        try:
+            fill_table(self.table, display)
+        finally:
+            self.table.setUpdatesEnabled(True)
         self.table.clearSelection()
         self.table.setCurrentCell(-1, -1)
         if previous:
@@ -155,6 +164,7 @@ class NurseryPage(QWidget):
             for title, btn in self.initial_buttons.items():
                 btn.setChecked(title == (self.selected_initial or '전체'))
             self.refresh_stock()
+        self._rendered = rendered
         self.update_controls()
 
     def update_controls(self):
@@ -382,3 +392,4 @@ class NurseryPage(QWidget):
             self.changed()
         except UserError as error:
             QMessageBox.warning(self, '재고 삭제', str(error))
+
