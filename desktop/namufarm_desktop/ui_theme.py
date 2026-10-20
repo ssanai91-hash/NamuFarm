@@ -2,8 +2,8 @@
 import re
 
 from PySide6.QtCore import QEvent, Qt, QRectF, QTimer
-from PySide6.QtGui import QColor, QPainter
-from PySide6.QtWidgets import (QApplication, QHeaderView, QLabel, QScrollArea,
+from PySide6.QtGui import QColor, QPainter, QPalette
+from PySide6.QtWidgets import (QApplication, QHeaderView, QLabel, QLineEdit, QScrollArea,
                                QSizePolicy, QTableWidget, QVBoxLayout, QWidget,
                                QStyledItemDelegate, QStyleOptionViewItem, QStyle, QPushButton)
 
@@ -138,45 +138,45 @@ QDialog#quoteWorkbench QLabel#workbenchCustomerTitle{font-size:22px;font-weight:
 QDialog#quoteWorkbench QLabel#workbenchCaption{font-size:@field@px;font-weight:600;color:#465a50;background:#e1eae5;border:1px solid #cbdacf;border-radius:4px;padding:5px 8px;}
 QDialog#quoteWorkbench QFrame#workbenchCustomerHeadingRule{background:#315c47;border:0;}
 QDialog#quoteWorkbench QFrame#workbenchDocumentTools{background:#ffffff;border:1px solid #d6e1da;border-radius:6px;}
-QDialog#quoteWorkbench QTextBrowser#workbenchCustomerName{background:transparent;border:0;padding:0;font-size:28px;font-weight:700;color:#193c32;}
+QDialog#quoteWorkbench QTextBrowser#workbenchCustomerName{background:transparent;border:0;padding:0;font-size:24px;font-weight:700;color:#193c32;}
 QDialog#quoteWorkbench QTextBrowser#workbenchInfo{background:transparent;border:0;padding:0;font-size:@body@px;color:#24313a;}
 QDialog#quoteWorkbench QTextBrowser#workbenchReceipt{background:transparent;border:0;padding:0;font-size:@body@px;font-weight:700;color:#24313a;}
 QDialog#quoteWorkbench QFrame#workbenchFormal{background:#e4ece7;border:0;border-radius:6px;}
 QDialog#quoteWorkbench QFrame#workbenchFormal[requested="true"]{background:#ffe2a5;}
-QDialog#quoteWorkbench QLabel#workbenchFormalText{font-size:16px;font-weight:600;color:#79521a;}
+QDialog#quoteWorkbench QLabel#workbenchFormalText{font-size:@field@px;font-weight:600;color:#79521a;}
 QDialog#quoteWorkbench QFrame#workbenchCustomerRule{background:#c5d9ce;border:0;}
 QDialog#quoteWorkbench QTableWidget#workbenchItems{background:#ffffff;alternate-background-color:#f0f6f2;color:#24313a;font-size:@body@px;border:1px solid #cfddd4;border-radius:6px;selection-background-color:#e0eee5;selection-color:#193c32;}
-QDialog#quoteWorkbench QTableWidget#workbenchItems::item{padding:4px 12px;border-bottom:1px solid #e0e9e3;}
-QDialog#quoteWorkbench QTableWidget#workbenchItems QHeaderView::section{background:#2c6852;color:#ffffff;font-size:@body@px;font-weight:700;padding:8px 10px;border:0;border-right:1px solid #548470;}
+QDialog#quoteWorkbench QTableWidget#workbenchItems::item{padding:2px 8px;border-bottom:1px solid #e0e9e3;}
+QDialog#quoteWorkbench QTableWidget#workbenchItems QHeaderView::section{background:#2c6852;color:#ffffff;font-size:@body@px;font-weight:700;padding:4px 6px;border:0;border-right:1px solid #548470;}
 QDialog#quoteWorkbench QWidget#unitPriceEditor{background:transparent;}
-QDialog#quoteWorkbench QWidget#unitPriceEditor QPushButton{min-height:0;max-height:42px;padding:0;border:1px solid #a8bcb0;border-radius:6px;background:#f7faf8;color:#193c32;font-size:22px;}
+QDialog#quoteWorkbench QWidget#unitPriceEditor QPushButton{min-height:0;max-height:38px;padding:0;border:1px solid #a8bcb0;border-radius:4px;background:#f7faf8;color:#193c32;font-size:18px;}
 QDialog#quoteWorkbench QWidget#unitPriceEditor QPushButton:hover{background:#dcece2;}
-QDialog#quoteWorkbench QWidget#unitPriceEditor QLineEdit{min-height:0;max-height:42px;padding:0 8px;border:1px solid #a8bcb0;border-radius:6px;background:#ffffff;font-size:@body@px;}
-QDialog#quoteWorkbench QWidget#unitPriceEditor QLineEdit:focus{max-height:40px;border:2px solid #a36d17;padding:0 7px;}
+QDialog#quoteWorkbench QWidget#unitPriceEditor QLineEdit{min-height:0;max-height:38px;padding:0 4px;border:1px solid #a8bcb0;border-radius:4px;background:#ffffff;font-size:@body@px;}
+QDialog#quoteWorkbench QWidget#unitPriceEditor QLineEdit:focus{border:2px solid #a36d17;padding:0 3px;}
 QDialog#quoteWorkbench QFrame#workbenchTotalRule{background:#245f46;border:0;}
 QDialog#quoteWorkbench QFrame#workbenchSummary{background:#edf4ef;border:0;border-radius:8px;}
-QDialog#quoteWorkbench QLabel#workbenchSumTitle{font-size:26px;font-weight:700;color:#193c32;}
+QDialog#quoteWorkbench QLabel#workbenchSumTitle{font-size:24px;font-weight:700;color:#193c32;}
 QDialog#quoteWorkbench QLabel#workbenchAmountDetail{font-size:@caption@px;color:#52645c;}
 QDialog#quoteWorkbench QLabel#workbenchTotal{font-size:@total@px;font-weight:700;color:#193c32;}
 QDialog#quoteWorkbench QPlainTextEdit{font-size:@body@px;background:#ffffff;border:1px solid #b8c9bf;border-radius:6px;padding:8px 12px;}
 QDialog#quoteWorkbench QFrame#workbenchFooter{background:#ffffff;border:0;border-top:1px solid #cfddd4;}
-QDialog#quoteWorkbench QPushButton{font-size:@body@px;min-height:46px;max-height:46px;padding:0 18px;border-radius:6px;}
+QDialog#quoteWorkbench QPushButton{font-size:@body@px;min-height:42px;max-height:42px;padding:0 12px;border-radius:6px;}
 QDialog#quoteWorkbench QPushButton#primary{background:#25634b;color:#ffffff;border:1px solid #20553f;font-weight:700;}
 QDialog#quoteWorkbench QPushButton#primary:hover{background:#194c37;}
 QDialog#quoteWorkbench QPushButton#primary:disabled{background:#e1e9e4;color:#6a7b71;border-color:#bdcec3;}
 QDialog#quoteWorkbench QFrame#workbenchShipping{background:#f2f5f3;border:0;border-radius:6px;}
 QDialog#quoteWorkbench QLabel#deliverySectionTitle{font-size:18px;font-weight:700;color:#193c32;}
-QDialog#quoteWorkbench QLabel#deliveryCaption,QDialog#quoteWorkbench QLabel#deliveryPdfName{font-size:16px;color:#52645c;}
-QDialog#quoteWorkbench QRadioButton{font-size:18px;}
-QDialog#quoteWorkbench QLineEdit{font-size:18px;min-height:24px;max-height:24px;padding:6px 8px;}
+QDialog#quoteWorkbench QLabel#deliveryCaption,QDialog#quoteWorkbench QLabel#deliveryPdfName{font-size:@field@px;color:#52645c;}
+QDialog#quoteWorkbench QRadioButton{font-size:@body@px;}
+QDialog#quoteWorkbench QLineEdit{font-size:@body@px;min-height:24px;max-height:24px;padding:6px 8px;}
 QDialog#quoteWorkbench QLineEdit#workbenchCustomerInput{font-size:@body@px;min-height:30px;max-height:30px;padding:6px 8px;}
 QDialog#quoteWorkbench QLineEdit#workbenchCustomerInput:focus{padding:5px 7px;}
 QDialog#quoteWorkbench QPushButton#smsAction{background:#25634b;color:#ffffff;}
 QDialog#quoteWorkbench QPushButton#smsAction:hover{background:#194c37;}
 QDialog#quoteWorkbench QPushButton#smsAction:disabled{background:#e1e9e4;color:#6a7b71;border-color:#bdcec3;}
-QDialog#quoteWorkbench QPushButton#pdfAction,QDialog#quoteWorkbench QPushButton#smsAction,QDialog#quoteWorkbench QPushButton#mailAction{font-size:18px;padding:0 8px;}
-QDialog#quoteWorkbench QPushButton#smsAction,QDialog#quoteWorkbench QPushButton#mailAction,QDialog#quoteWorkbench QPushButton[deliveryCompletion="true"]{min-height:64px;max-height:64px;padding:0 8px;}
-QDialog#quoteWorkbench QLabel#deliveryActionTitle{font-size:18px;}
+QDialog#quoteWorkbench QPushButton#pdfAction{font-size:@body@px;padding:0 8px;}
+QDialog#quoteWorkbench QPushButton#smsAction,QDialog#quoteWorkbench QPushButton#mailAction,QDialog#quoteWorkbench QPushButton[deliveryCompletion="true"]{font-size:@action@px;font-weight:700;min-height:@actionheight@px;max-height:@actionheight@px;padding:0 8px;}
+QDialog#quoteWorkbench QLabel#deliveryActionTitle{font-size:@action@px;font-weight:700;}
 QDialog#quoteWorkbench QPushButton#smsAction QLabel#deliveryActionTitle{color:#ffffff;}
 QDialog#quoteWorkbench QPushButton:disabled QLabel#deliveryActionTitle{color:#6a7b71;}
 QDialog#quoteWorkbench QPushButton:focus{border:2px solid #b37a22;}
@@ -185,7 +185,7 @@ QDialog#quoteWorkbench QLabel#channelStatusBadge[state="success"]{background:#e2
 QDialog#quoteWorkbench QLabel#channelStatusBadge[state="failed"]{background:#fbe5e2;color:#a13d32;}
 QDialog#quoteWorkbench QLabel#channelStatusBadge[state="pending"]{background:#fff3d8;color:#78520d;}
 QDialog#quoteWorkbench QFrame#deliveryVerticalRule{background:#c5d9ce;border:0;}
-""".replace('@body@', '22' if large else '20').replace('@caption@', '20' if large else '18').replace('@field@', '18' if large else '16').replace('@title@', '32' if large else '30').replace('@section@', '26' if large else '24').replace('@total@', '40' if large else '36')
+""".replace('@body@', '18' if large else '16').replace('@caption@', '16' if large else '14').replace('@field@', '16' if large else '14').replace('@title@', '30' if large else '28').replace('@section@', '22' if large else '20').replace('@total@', '36' if large else '32').replace('@action@', '22' if large else '20').replace('@actionheight@', '60' if large else '56')
 
 
 def quote_delivery_style(large=False, compact=False):
@@ -236,6 +236,26 @@ class RowSelectionDelegate(QStyledItemDelegate):
     def initStyleOption(self, option, index):
         super().initStyleOption(option, index)
         option.state &= ~QStyle.StateFlag.State_HasFocus
+
+
+class QuoteRemarksDelegate(RowSelectionDelegate):
+    """An empty-cell hint is presentation only, never quote data or export text."""
+    def initStyleOption(self, option, index):
+        super().initStyleOption(option, index)
+        if not index.data(Qt.ItemDataRole.DisplayRole):
+            option.text = "입력가능"
+            option.font.setItalic(True)
+            option.palette.setColor(QPalette.ColorRole.Text, QColor("#84958b"))
+            option.palette.setColor(QPalette.ColorRole.HighlightedText, QColor("#60756b"))
+
+    def createEditor(self, parent, option, index):
+        editor = super().createEditor(parent, option, index)
+        if isinstance(editor, QLineEdit):
+            font = parent.font()
+            font.setItalic(False)
+            editor.setFont(font)
+            editor.setPlaceholderText("입력가능")
+        return editor
 
 
 class NavigationButton(QPushButton):
@@ -500,3 +520,4 @@ def collapsible(title, content, expanded=False):
     layout.addWidget(toggle)
     layout.addWidget(content)
     return section
+

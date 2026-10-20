@@ -5,8 +5,8 @@ os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 from unittest.mock import Mock, patch
 
 from PySide6.QtCore import QPoint, Qt
-from PySide6.QtWidgets import QDialog, QMessageBox
-from namufarm_desktop.commerce import new_draft, quote_delivery_fingerprint
+from PySide6.QtWidgets import QDialog, QMessageBox, QStyleOptionViewItem
+from namufarm_desktop.commerce import new_draft, new_manual_draft, quote_delivery_fingerprint, quote_document_html, quote_document
 from namufarm_desktop.ui_theme import workspace_style
 from namufarm_desktop.workspace import QuoteDialog
 from qt_support import QtTestCase
@@ -45,14 +45,14 @@ class QuoteWorkbenchTest(QtTestCase):
         self.assertEqual('54,000원', dialog.total.text())
         self.assertEqual(0, dialog.items.verticalScrollBar().maximum())
         self.assertEqual(0, dialog.items.horizontalScrollBar().maximum())
-        self.assertAlmostEqual(.33, dialog.customer_scroll.width() / dialog.width(), delta=.02)
+        self.assertAlmostEqual(.30, dialog.customer_scroll.width() / dialog.width(), delta=.02)
         rule_y = dialog.workbench_total_rule.mapTo(dialog, QPoint()).y()
         self.assertGreater(rule_y, dialog.items.mapTo(dialog, QPoint()).y() + dialog.items.height())
         self.assertLess(rule_y + dialog.workbench_total_rule.height(),
                         dialog.workbench_summary.mapTo(dialog, QPoint()).y())
         self.assertEqual(3, dialog.workbench_total_rule.height())
         self.assertEqual(3, dialog.items.rowCount())  # Reserve space, not fake business items.
-        self.assertGreaterEqual(dialog.items.height(), dialog.items.horizontalHeader().height() + 4 * 56)
+        self.assertGreaterEqual(dialog.items.height(), dialog.items.horizontalHeader().height() + 4 * 40)
         for row in range(3):
             self.assertEqual(str(row + 1), dialog.items.item(row, 4).text())
             self.assertFalse(dialog.items.item(row, 4).flags() & Qt.ItemFlag.ItemIsEditable)
@@ -262,7 +262,7 @@ class QuoteWorkbenchTest(QtTestCase):
                 self.assertEqual('finalize', dialog.mode)
                 self.assertEqual(QDialog.DialogCode.Accepted, dialog.result())
 
-    def test_inline_status_and_completion_share_a_taller_row_with_close_only_in_footer(self):
+    def test_inline_status_and_completion_share_a_bold_compact_row_with_close_only_in_footer(self):
         dialog = self.dialog(size=(1280, 988))
         summary_bottom = dialog.workbench_summary.mapTo(dialog, QPoint()).y() + dialog.workbench_summary.height()
         rule_y = dialog.workbench_delivery_rule.mapTo(dialog, QPoint()).y()
@@ -273,10 +273,68 @@ class QuoteWorkbenchTest(QtTestCase):
         actions = (dialog.sms_button, dialog.email_button, dialog.confirm_button)
         self.assertEqual(1, len({a.mapTo(dialog, QPoint()).y() for a in actions}))
         self.assertEqual(1, len({a.height() for a in actions}))
-        self.assertGreaterEqual(dialog.sms_button.height(), 64)
+        self.assertGreaterEqual(dialog.sms_button.height(), 56)
+        self.assertLessEqual(dialog.sms_button.height(), 60)
+        for action in (dialog.sms_button, dialog.email_button):
+            self.assertTrue(action.title_label.font().bold())
+            self.assertGreaterEqual(action.title_label.font().pixelSize(), 20)
         self.assertLess(dialog.sms_button.x(), dialog.email_button.x())
         self.assertLess(dialog.email_button.x(), dialog.confirm_button.x())
         self.assertFalse(dialog.workbench_footer.isAncestorOf(dialog.confirm_button))
         self.assertTrue(dialog.workbench_footer.isAncestorOf(dialog.close_button))
         self.assertEqual(0, dialog.workbench_scroll.horizontalScrollBar().maximum())
         self.assertEqual(0, dialog.workbench_scroll.verticalScrollBar().maximum())
+
+    def test_request_and_manual_quotes_show_eight_rows_with_wide_names_and_remarks(self):
+        for manual in (False, True):
+            with self.subTest(manual=manual):
+                draft = new_manual_draft() if manual else copy.deepcopy(self.draft)
+                draft['items'] = [dict(species='황금사철나무', specification='', quantity=2,
+                                       unitPrice=2000, unitCost=0, remarks='') for _ in range(8)]
+                dialog = QuoteDialog(draft, request_status='신규')
+                dialog.resize(1280, 900)
+                dialog.show()
+                self.settle()
+                self.assertTrue(dialog.workbench)
+                self.assertEqual(8, dialog.items.rowCount())
+                self.assertEqual(0, dialog.items.verticalScrollBar().maximum())
+                self.assertEqual(0, dialog.items.horizontalScrollBar().maximum())
+                self.assertEqual(0, dialog.workbench_scroll.verticalScrollBar().maximum())
+                self.assertGreater(dialog.items.columnWidth(0), dialog.items.columnWidth(3))
+                self.assertGreater(dialog.items.columnWidth(5), dialog.items.columnWidth(0))
+                last = dialog.items.visualItemRect(dialog.items.item(7, 0))
+                self.assertLess(last.bottom(), dialog.items.viewport().height())
+                for widget in (dialog.note, dialog.generate_quote_button, dialog.preview_quote_button):
+                    self.assertTrue(dialog.workbench_document_area.isAncestorOf(widget))
+                self.assertEqual(dialog.note.width(), dialog.quote_file_label.width())
+                self.assertGreaterEqual(dialog.note.height(), 90)
+                dialog.add_item({'species': '추가 묘목', 'specification': '', 'quantity': 1,
+                                 'unitPrice': 1000, 'unitCost': 0})
+                self.settle()
+                self.assertEqual(9, dialog.items.rowCount())
+                self.assertGreater(dialog.items.verticalScrollBar().maximum(), 0)
+                self.assertEqual(0, dialog.workbench_scroll.verticalScrollBar().maximum())
+
+    def test_empty_remarks_hint_is_italic_display_only_and_never_saved_or_exported(self):
+        dialog = self.dialog()
+        index = dialog.items.model().index(0, 5)
+        delegate = dialog.items.itemDelegateForColumn(5)
+        option = QStyleOptionViewItem()
+        delegate.initStyleOption(option, index)
+        self.assertEqual('입력가능', option.text)
+        self.assertTrue(option.font.italic())
+        self.assertEqual('', dialog.items.item(0, 5).text())
+        self.assertEqual('', dialog.collect()['items'][0]['remarks'])
+        self.assertNotIn('입력가능', quote_document_html(quote_document(dialog.collect())))
+        editor = delegate.createEditor(dialog.items, option, index)
+        delegate.setEditorData(editor, index)
+        self.assertEqual('', editor.text())
+        self.assertFalse(editor.font().italic())
+        editor.setText('3년생 / 키 80cm')
+        delegate.setModelData(editor, dialog.items.model(), index)
+        actual = QStyleOptionViewItem()
+        delegate.initStyleOption(actual, index)
+        self.assertEqual('3년생 / 키 80cm', actual.text)
+        self.assertFalse(actual.font.italic())
+        self.assertEqual('3년생 / 키 80cm', dialog.collect()['items'][0]['remarks'])
+

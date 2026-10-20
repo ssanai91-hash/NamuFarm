@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (QApplication, QBoxLayout, QButtonGroup, QCheckBox
 from . import __version__
 from .ui_theme import (align_table, fit_window, scroll_dialog, scroll_page, workspace_style,
                        CustomerDelegate, StatusDelegate, customer_reference, CompactDateDelegate,
-                       NavigationButton, size_table_to_rows, collapsible, quote_delivery_style, quote_workbench_style)
+                       NavigationButton, QuoteRemarksDelegate, size_table_to_rows, collapsible, quote_delivery_style, quote_workbench_style)
 from .ui_icons import set_button_icon, ui_icon
 from .app import MainWindow, Task, table, fill_table, money, timestamp
 from .commerce import (ISSUER, new_draft, new_manual_draft, draft_amounts, validate_draft, quote_html, quote_document_html, shipping_html,
@@ -80,16 +80,19 @@ class UnitPriceEditor(QWidget):
     STEP = 1000
     MAX_PRICE = 2147483647
 
-    def __init__(self, value=0, parent=None):
+    def __init__(self, value=0, parent=None, *, compact=False):
         super().__init__(parent)
         self.setObjectName("unitPriceEditor")
+        large = bool(QApplication.instance().property("namufarmLargeFont"))
+        control_height = (38 if large else 32) if compact else 44
+        control_width = (32 if large else 30) if compact else 44
         row = QHBoxLayout(self)
         row.setContentsMargins(3, 0, 3, 0)
         row.setSpacing(4)
 
         self.minus = QPushButton("-")
         self.minus.setToolTip("판매 단가 1,000원 내리기")
-        self.minus.setFixedSize(44, 44)
+        self.minus.setFixedSize(control_width, control_height)
         self.minus.setAccessibleName("판매 단가 1,000원 내리기")
         self.minus.clicked.connect(lambda: self.adjust(-self.STEP))
         row.addWidget(self.minus)
@@ -99,12 +102,15 @@ class UnitPriceEditor(QWidget):
         self.input.setAlignment(Qt.AlignmentFlag.AlignRight)
         self.input.setPlaceholderText("판매 단가")
         self.input.setAccessibleName("판매 단가 (원)")
+        if compact:
+            self.input.setFixedHeight(control_height)
+            self.input.setMinimumWidth(100 if large else 76)
         self.input.textChanged.connect(lambda _text: self.changed.emit())
         row.addWidget(self.input, 1)
 
         self.plus = QPushButton("+")
         self.plus.setToolTip("판매 단가 1,000원 올리기")
-        self.plus.setFixedSize(44, 44)
+        self.plus.setFixedSize(control_width, control_height)
         self.plus.setAccessibleName("판매 단가 1,000원 올리기")
         self.plus.clicked.connect(lambda: self.adjust(self.STEP))
         row.addWidget(self.plus)
@@ -1016,7 +1022,7 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         header.setObjectName("workbenchHeader")
         header.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         heading = QHBoxLayout(header)
-        heading.setContentsMargins(24, 18, 24, 18)
+        heading.setContentsMargins(24, 14, 24, 14)
         heading.setSpacing(20)
         heading.addWidget(workbench_icon("leaf", 40, "#91d39d"))
         heading.addWidget(label("나무팜(주)", "workbenchBrand"))
@@ -1042,12 +1048,12 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         self.customer_scroll.setObjectName("workbenchCustomerScroll")
         self.customer_scroll.setWidgetResizable(True)
         self.customer_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.customer_scroll.setMinimumWidth(342)
+        self.customer_scroll.setMinimumWidth(320 if large else 300)
         rail = QWidget()
         rail.setObjectName("workbenchCustomerRail")
         customer = QVBoxLayout(rail)
-        customer.setContentsMargins(24, 24, 24, 20)
-        customer.setSpacing(18)
+        customer.setContentsMargins(16, 16, 16, 12)
+        customer.setSpacing(12)
         formal = bool(self.draft.get("formalQuoteRequested"))
         self.workbench_customer_heading = QWidget()
         customer_title = QHBoxLayout(self.workbench_customer_heading)
@@ -1072,8 +1078,8 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         self.customer_values = {}
         self.customer_captions = {}
         identity = QGridLayout()
-        identity.setHorizontalSpacing(12)
-        identity.setVerticalSpacing(18)
+        identity.setHorizontalSpacing(8)
+        identity.setVerticalSpacing(8)
         identity.setColumnStretch(1, 1)
         self.workbench_identity = identity
 
@@ -1092,6 +1098,7 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
                 field.setMinimumWidth(0)
                 field.setMinimumHeight(44)
                 field.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
+                field.setCursorPosition(0)
                 self.fields[field_key] = field
                 field.textChanged.connect(self.recalculate)
                 identity.addWidget(field, row, 1)
@@ -1136,7 +1143,7 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         customer.addWidget(self.workbench_document_area)
         customer.addStretch(1)
         self.customer_scroll.setWidget(rail)
-        body.addWidget(self.customer_scroll, 33)
+        body.addWidget(self.customer_scroll, 30)
 
         self.workbench_scroll = QScrollArea()
         self.workbench_scroll.setWidgetResizable(True)
@@ -1144,20 +1151,24 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         right = QWidget()
         right.setObjectName("workbenchBody")
         content = QVBoxLayout(right)
-        content.setContentsMargins(24, 16, 24, 8)
-        content.setSpacing(5 if large else 8)
-        content.addWidget(section_heading("견적 품목", "leaf", 36))
+        content.setContentsMargins(16, 14, 16, 8)
+        content.setSpacing(6)
+        content.addWidget(section_heading("견적 품목", "leaf", 28))
         # Logical indices stay stable for collection; visual order puts price before amount.
-        content.addWidget(label("묘목명·수량·비고는 두 번 클릭해 수정할 수 있어요. 비고 예: 3년생 / 키 80cm / 포트묘", "muted", True))
+        content.addWidget(label("묘목명·수량·비고를 두 번 클릭해 수정", "muted", True))
         self.items = table(["묘목명", "수량", "판매 금액", "판매 단가", "순번", "비고"])
         self.items.setEditTriggers(self.items.EditTrigger.DoubleClicked | self.items.EditTrigger.EditKeyPressed | self.items.EditTrigger.AnyKeyPressed)
         self.items.setObjectName("workbenchItems")
         polish_table(self.items)
-        self.items.horizontalHeader().setFixedHeight(52 if large else 48)
-        self.items.verticalHeader().setMinimumSectionSize(64 if large else 56)
-        self.items.verticalHeader().setDefaultSectionSize(64 if large else 56)
-        self.items.set_column_layout(((4, .5, 42), (0, 3, 84), (1, 1, 50), (3, 3, 228), (2, 2, 80), (5, 3, 90)))
-        self.items.horizontalHeader().setMinimumSectionSize(42)
+        self.items.horizontalHeader().setFixedHeight(40 if large else 36)
+        self.items.verticalHeader().setMinimumSectionSize(48 if large else 40)
+        self.items.verticalHeader().setDefaultSectionSize(48 if large else 40)
+        # Price stays compact; spare width goes mainly to names and remarks.
+        self.items.set_column_layout(((4, 0, 48 if large else 44), (0, 3, 116),
+                                      (1, 0, 48 if large else 44),
+                                      (3, 0, 188 if large else 154), (2, .5, 96), (5, 4, 116)))
+        self.items.horizontalHeader().setMinimumSectionSize(32)
+        self.items.setItemDelegateForColumn(5, QuoteRemarksDelegate(self.items))
         self.items.fit_columns()
         self.items.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Ignored)
         self.items.itemChanged.connect(self.recalculate)
@@ -1202,9 +1213,9 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         self.workbench_summary.setObjectName("workbenchSummary")
         self.workbench_summary.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         summary = QHBoxLayout(self.workbench_summary)
-        summary.setContentsMargins(20, 12 if large else 16, 20, 12 if large else 16)
-        summary.setSpacing(16)
-        summary.addWidget(workbench_icon("calculator", 52))
+        summary.setContentsMargins(16, 10, 16, 10)
+        summary.setSpacing(12)
+        summary.addWidget(workbench_icon("calculator", 40))
         summary.addWidget(label("합계", "workbenchSumTitle"))
         self.amount_detail = label("", "workbenchAmountDetail", True)
         summary.addWidget(self.amount_detail, 1)
@@ -1212,40 +1223,37 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         self.total.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         summary.addWidget(self.total)
         content.addWidget(self.workbench_summary)
-        content.addSpacing(12)
+        content.addSpacing(4)
         self.workbench_delivery_rule = QFrame()
         self.workbench_delivery_rule.setObjectName("workbenchTotalRule")
         self.workbench_delivery_rule.setFixedHeight(3)
         content.addWidget(self.workbench_delivery_rule)
-        content.addSpacing(16)
+        content.addSpacing(4)
         self.workbench_footer = QFrame()
         self.workbench_footer.setObjectName("workbenchFooter")
         footer = QHBoxLayout(self.workbench_footer)
-        footer.setContentsMargins(24, 14, 24, 14)
+        footer.setContentsMargins(16, 8, 16, 8)
         footer.setSpacing(12)
-        self.build_delivery_tools(content, compact=True, document_content=document_content,
-                                  delivery_content=footer if self.manual_quote else None)
-        content.addStretch()
+        self.build_delivery_tools(content, compact=True, document_content=document_content)
         self.workbench_scroll.setWidget(right)
-        body.addWidget(self.workbench_scroll, 67)
+        body.addWidget(self.workbench_scroll, 70)
         root.addLayout(body, 1)
 
         self.workbench_note_area = QWidget()
-        notes = QHBoxLayout(self.workbench_note_area)
-        notes.setContentsMargins(24, 8, 24, 8)
-        notes.setSpacing(16)
-        notes.addWidget(section_heading("견적서 요청사항", "document", 32))
-        self.note.setFixedHeight(70 if large else 62)
-        self.note.setPlaceholderText("배송 일정·납품 조건 등 공식 견적서 하단에 표시할 내용을 입력하세요.")
+        notes = QVBoxLayout(self.workbench_note_area)
+        notes.setContentsMargins(0, 6, 0, 0)
+        notes.setSpacing(8)
+        notes.addWidget(label("견적서 요청사항", "deliverySectionTitle"))
+        self.note.setFixedHeight(104 if large else 96)
+        self.note.setPlaceholderText("배송 일정·납품 조건 등을 입력하세요")
         self.note.setAccessibleName("판매자 견적서 요청사항")
         self.note.textChanged.connect(self.recalculate)
-        notes.addWidget(self.note, 1)
+        notes.addWidget(self.note)
         if not self.manual_quote:
             notes.addWidget(button("고객 원문 보기", self.show_request_note))
-        root.addWidget(self.workbench_note_area)
+        document_content.addWidget(self.workbench_note_area)
 
-        if not self.manual_quote:
-            footer.addStretch(1)
+        footer.addStretch(1)
         self.close_button = button("닫기", self.reject)
         self.close_button.setMinimumWidth(120)
         footer.addWidget(self.close_button)
@@ -1264,7 +1272,7 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         row_height = self.items.verticalHeader().defaultSectionSize()
         table_header = self.items.horizontalHeader().height()
         self.items.setMinimumHeight(table_header + 4 * row_height + 4)
-        self.items.setMaximumHeight(table_header + max(4, self.items.rowCount()) * row_height + 4)
+        self.items.setMaximumHeight(table_header + 8 * row_height + 4)
         self.shipping_cod.toggled.connect(self.recalculate)
         self.shipping_prepaid.toggled.connect(self.recalculate)
         self.shipping_fee.textChanged.connect(self.recalculate)
@@ -1290,12 +1298,11 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         if compact == getattr(self, "_workbench_compact", None):
             return
         self._workbench_compact = compact
-        self.workbench_note_area.layout().setContentsMargins(24, 6 if compact else 8, 24, 6 if compact else 8)
-        self.workbench_footer.layout().setContentsMargins(24, 8 if compact else 14, 24, 8 if compact else 14)
+        self.workbench_footer.layout().setContentsMargins(16, 8, 16, 8)
         customer = self.customer_scroll.widget().layout()
-        customer.setContentsMargins(16 if compact else 24, 8 if compact else 24, 16 if compact else 24, 8 if compact else 20)
+        customer.setContentsMargins(16, 8 if compact else 16, 16, 8 if compact else 12)
         customer.setSpacing(8 if compact else 12)
-        self.workbench_identity.setVerticalSpacing(6 if compact else 10)
+        self.workbench_identity.setVerticalSpacing(6 if compact else 8)
 
     def fit_workbench_rows(self):
         large = bool(QApplication.instance().property("namufarmLargeFont"))
@@ -1315,15 +1322,16 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
             value.setFixedHeight(value.heightForWidth(value_width))
         narrow = self.workbench_scroll.viewport().width() < 700
         for action in (self.sms_button, self.email_button):
-            action.title_label.setStyleSheet("font-size:16px;" if narrow else "font-size:18px;")
+            size = (20 if large else 18) if narrow else (22 if large else 20)
+            action.title_label.setStyleSheet(f"font-size:{size}px;font-weight:700;")
             action.status_badge.setStyleSheet("font-size:12px;padding:2px 4px;" if narrow else "")
-        row_height = 64 if large else 56
+        row_height = 48 if large else 40
         for row in range(self.items.rowCount()):
             self.items.setRowHeight(row, row_height)
         header = self.items.horizontalHeader().height()
-        # Reserve four visible rows; adding/editing actions occupy the fifth-row space.
+        # Eight compact rows on a normal desktop; smaller windows scroll the table.
         self.items.setMinimumHeight(header + 4 * row_height + 4)
-        self.items.setMaximumHeight(header + max(4, self.items.rowCount()) * row_height + 4)
+        self.items.setMaximumHeight(header + 8 * row_height + 4)
 
     def add_item(self, item=None):
         is_new = not isinstance(item, dict)
@@ -1354,12 +1362,11 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
                 elif column == 1:
                     cell.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
                 self.items.setItem(index, column, cell)
-            price_editor = UnitPriceEditor(item["unitPrice"], self.items)
-            price_editor.input.setFixedHeight(44)
+            price_editor = UnitPriceEditor(item["unitPrice"], self.items, compact=True)
             price_editor.changed.connect(self.recalculate)
             self.items.setCellWidget(index, 3, price_editor)
             self.items.setItem(index, 5, QTableWidgetItem(item.get("remarks", "")))
-            self.items.setRowHeight(index, max(self.items.verticalHeader().defaultSectionSize(), 60))
+            self.items.setRowHeight(index, self.items.verticalHeader().defaultSectionSize())
         else:
             for column, key in enumerate(("species", "specification", "quantity", "unitPrice", "unitCost")):
                 cell = QTableWidgetItem(str(item[key]))
@@ -3954,6 +3961,7 @@ class SellerWindow(MainWindow):
         if self.manager and self.data["paired"] and self.auto_check.isChecked() and not self.task and not self.dirty and not self.conflict:
             pull = self.manager.sync if self.stack.currentIndex() in (self.PAGE_SALES, self.PAGE_SHIPPING, self.PAGE_REPORTS) else self.manager.sync_requests
             self.run_job("AUTO SYNC  >  서버 동기화 중…", pull)
+
 
 
 

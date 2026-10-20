@@ -186,7 +186,11 @@ class ManualQuoteTest(QtTestCase):
         for _ in range(8):
             self.app.processEvents()
         for action in (dialog.sms_button, dialog.email_button, dialog.confirm_button, dialog.close_button):
-            self.assertTrue(dialog.workbench_footer.isAncestorOf(action))
+            self.assertEqual(action is dialog.close_button, dialog.workbench_footer.isAncestorOf(action))
+            if action is not dialog.close_button:
+                dialog.workbench_scroll.ensureWidgetVisible(action)
+                for _ in range(8):
+                    self.app.processEvents()
             self.assertGreaterEqual(action.height(), 44)
             self.assertLess(action.mapTo(dialog, QPoint()).y() + action.height(), dialog.height())
 
@@ -218,4 +222,5 @@ class ManualQuoteTest(QtTestCase):
         self.assertEqual([], manager.view()['requests'])
         self.assertEqual([], manager.view()['sales'])
         self.assertNotIn('save_quote_pricing', manager.api.calls)
+
 
