@@ -763,6 +763,8 @@ class MainWindow(QMainWindow):
 
 
 def main():
+    if QApplication.instance() is None:
+        QApplication.setAttribute(Qt.ApplicationAttribute.AA_ShareOpenGLContexts)
     app = QApplication.instance() or QApplication(sys.argv)
     app.setApplicationName("NamuFarmDesktop")
     app.setOrganizationName("NamuFarm")
@@ -788,5 +790,6 @@ def main():
         return app.exec()
     QTimer.singleShot(0, window.open_vault)
     return app.exec()
+
 
 
