@@ -252,7 +252,7 @@ class Manager:
             except (UserError, OSError):
                 pass
         registered = {r["metadata"]["orderNumber"] for r in sales} | set(self.vault.snapshot_marker().get("deletedSales", []))
-        registered_sources = {r["private"]["order"].get("sourceRequestId") for r in sales
+        registered_sources = {r["private"]["order"].get("sourceRequestId") for r in decoded_sales
                               if r["private"]["order"].get("sourceRequestId")}
         # Paid orders retain the original local quotation as a readable history.
         active = [{**copy.deepcopy(d), "paymentRegistered": d["quoteStatus"] == "입금확인" or
