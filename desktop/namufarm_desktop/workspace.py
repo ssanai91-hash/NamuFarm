@@ -7,7 +7,7 @@ from importlib.resources import files as package_files
 from pathlib import Path
 from html import escape as html_escape
 
-from PySide6.QtCore import QSettings, Qt, QUrl, QSaveFile, QIODevice, QTimer, Signal, Slot, QRectF, QSize
+from PySide6.QtCore import QSettings, Qt, QUrl, QSaveFile, QIODevice, QTimer, Signal, Slot, QRectF, QSize, QEvent
 from PySide6.QtGui import (QColor, QDesktopServices, QFont, QFontMetricsF, QImage, QIntValidator,
     QKeySequence, QPainter, QPdfWriter, QPen, QPixmap, QShortcut, QTextDocument, QTextOption, QPageSize)
 from PySide6.QtPrintSupport import QPrinter, QPrintDialog
@@ -28,6 +28,8 @@ from .domain import SEOUL, profit, require
 from .errors import UserError
 from .shipping_excel import shipping_xls, parse_tracking_xls, export_orders, UPLOAD_SHEET
 from .nursery_ui import NurseryPage, DigitalClock
+from .nursery import NurseryStore
+from .quote_species import SpeciesNameEditor, QuoteSpeciesPicker
 
 STYLE = workspace_style()
 
@@ -90,16 +92,16 @@ class SquareNoteEdit(QPlainTextEdit):
 
 
 class UnitPriceEditor(QWidget):
-    """Manual unit-price input with 1,000-won step buttons.
+    """Manual unit-price input with 500-won step buttons.
 
     Keeping the price in a dedicated editor also gives a future Excel price
     lookup one stable place to inject an automatically resolved unit price.
     """
     changed = Signal()
-    STEP = 1000
+    STEP = 500
     MAX_PRICE = 2147483647
 
-    def __init__(self, value=0, parent=None, *, compact=False):
+    def __init__(self, value=2000, parent=None, *, compact=False):
         super().__init__(parent)
         self.setObjectName("unitPriceEditor")
         large = bool(QApplication.instance().property("namufarmLargeFont"))
@@ -110,9 +112,9 @@ class UnitPriceEditor(QWidget):
         row.setSpacing(6 if compact else 4)
 
         self.minus = QPushButton("-")
-        self.minus.setToolTip("판매 단가 1,000원 내리기")
+        self.minus.setToolTip("판매 단가 500원 내리기")
         self.minus.setFixedSize(control_width, control_height)
-        self.minus.setAccessibleName("판매 단가 1,000원 내리기")
+        self.minus.setAccessibleName("판매 단가 500원 내리기")
         self.minus.clicked.connect(lambda: self.adjust(-self.STEP))
         row.addWidget(self.minus)
 
@@ -128,9 +130,9 @@ class UnitPriceEditor(QWidget):
         row.addWidget(self.input, 1)
 
         self.plus = QPushButton("+")
-        self.plus.setToolTip("판매 단가 1,000원 올리기")
+        self.plus.setToolTip("판매 단가 500원 올리기")
         self.plus.setFixedSize(control_width, control_height)
-        self.plus.setAccessibleName("판매 단가 1,000원 올리기")
+        self.plus.setAccessibleName("판매 단가 500원 올리기")
         self.plus.clicked.connect(lambda: self.adjust(self.STEP))
         row.addWidget(self.plus)
 
@@ -642,6 +644,8 @@ class DeliveryActionButton(QPushButton):
         row.addWidget(self.status_badge)
         row.addStretch(1)
         symbol = QLabel()
+        self.symbol = symbol
+        self.symbol_name = icon
         symbol.setFixedSize(18, 18)
         symbol.setPixmap(ui_icon(icon, "#ffffff" if name == "smsAction" else "#24313a").pixmap(18, 18))
         row.addWidget(symbol)
@@ -651,6 +655,15 @@ class DeliveryActionButton(QPushButton):
         for child in (self.status_badge, symbol, self.title_label):
             child.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         self.setMinimumWidth(0)
+
+    def refresh_symbol(self):
+        color = "#6a7b71" if not self.isEnabled() else "#ffffff" if self.objectName() == "smsAction" else "#24313a"
+        self.symbol.setPixmap(ui_icon(self.symbol_name, color).pixmap(18, 18))
+
+    def changeEvent(self, event):
+        super().changeEvent(event)
+        if event.type() == QEvent.Type.EnabledChange and hasattr(self, "symbol_name"):
+            self.refresh_symbol()
 
 
 class QuoteDeliveryTools:
@@ -1003,12 +1016,12 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         screen = screen or QApplication.primaryScreen()
         if screen:
             available = screen.availableGeometry()
-            width = min(1460, max(480, available.width() - 40))
+            width = min(1580, max(480, available.width() - 40))
             height = min(1000, int(available.height() * .95), available.height() - 48)
             self.setMinimumSize(min(960, width), min(600, height))
             self.resize(width, height)
         else:
-            self.resize(1460, 980)
+            self.resize(1580, 980)
             self.setMinimumSize(960, 600)
         self.fields = {}
         self.cost = QCheckBox()
@@ -1069,7 +1082,7 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         self.customer_scroll.setWidgetResizable(True)
         self.customer_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.customer_scroll.setMinimumWidth(320 if large else 300)
-        self.customer_scroll.setMaximumWidth(350 if large else 330)
+        self.customer_scroll.setMaximumWidth(480 if large else 440)
         rail = QWidget()
         rail.setObjectName("workbenchCustomerRail")
         customer = QVBoxLayout(rail)
@@ -1152,10 +1165,10 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         identity.addWidget(formal_caption, 5, 0, Qt.AlignmentFlag.AlignVCenter)
         identity.addWidget(self.workbench_formal_banner, 5, 1, Qt.AlignmentFlag.AlignLeft)
         customer_row(6, "견적번호", self.draft.get("requestReceiptNumber") or self.draft.get("sourceRequestId"))
-        channel = {"sms": "문자", "email": "이메일", "both": "문자 + 이메일"}.get(self.draft.get("quoteReplyChannel", "sms"), "문자")
+        channel = {"sms": "문자", "email": "메일", "both": "문자 / 메일"}.get(self.draft.get("quoteReplyChannel", "sms"), "문자")
         if formal:
             customer_row(7, "견적서 수신인", self.draft.get("quoteRecipientName") or self.draft.get("customerName"))
-        customer_row(8 if formal else 7, "수신 방법", "문자 / 메일로 직접 전달" if self.manual_quote else channel)
+        customer_row(8 if formal else 7, "수신 방법", "문자 / 메일" if self.manual_quote else channel)
         customer.addLayout(identity)
         self.workbench_document_area = QFrame()
         self.workbench_document_area.setObjectName("workbenchDocumentTools")
@@ -1174,9 +1187,15 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         content = QVBoxLayout(right)
         content.setContentsMargins(16, 14, 16, 8)
         content.setSpacing(6)
-        content.addWidget(section_heading("견적 품목", "leaf", 28))
+        items_heading = QHBoxLayout()
+        items_heading.addWidget(section_heading("견적 품목", "leaf", 28), 1)
+        self.add_item_button = button("+ 묘목 추가", self.add_item)
+        self.remove_item_button = button("선택 묘목 삭제", self.remove_item)
+        items_heading.addWidget(self.add_item_button)
+        items_heading.addWidget(self.remove_item_button)
+        content.addLayout(items_heading)
         # Logical indices stay stable for collection; visual order puts price before amount.
-        content.addWidget(label("묘목명·수량·비고를 두 번 클릭해 수정", "deliveryCaption", True))
+        content.addWidget(label("묘목명은 직접 입력하거나 초성검색 · 수량·비고는 두 번 클릭해 수정", "deliveryCaption", True))
         self.items = table(["묘목명", "수량", "판매 금액", "판매 단가", "순번", "비고"])
         self.items.setEditTriggers(self.items.EditTrigger.DoubleClicked | self.items.EditTrigger.EditKeyPressed | self.items.EditTrigger.AnyKeyPressed)
         self.items.setObjectName("workbenchItems")
@@ -1185,23 +1204,15 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         self.items.verticalHeader().setMinimumSectionSize(48 if large else 40)
         self.items.verticalHeader().setDefaultSectionSize(48 if large else 40)
         # Reserve real gaps around the step buttons; names and remarks share spare width.
-        self.items.set_column_layout(((4, 0, 48 if large else 44), (0, 3, 84 if large else 96),
-                                      (1, 0, 48 if large else 44),
-                                      (3, 0, 232 if large else 212), (2, .5, 96), (5, 4, 84 if large else 96)))
+        self.items.set_column_layout(((4, 0, 48 if large else 44), (0, 2.5, 172),
+                                      (1, 0, 72 if large else 64),
+                                      (3, 0, 232 if large else 212), (2, .5, 96), (5, 5, 96)))
         self.items.horizontalHeader().setMinimumSectionSize(32)
         self.items.setItemDelegateForColumn(5, QuoteRemarksDelegate(self.items))
         self.items.fit_columns()
         self.items.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Ignored)
         self.items.itemChanged.connect(self.recalculate)
         content.addWidget(self.items, 1)
-
-        item_actions = QHBoxLayout()
-        self.add_item_button = button("+ 묘목 추가", self.add_item)
-        self.remove_item_button = button("선택 묘목 삭제", self.remove_item)
-        item_actions.addWidget(self.add_item_button)
-        item_actions.addWidget(self.remove_item_button)
-        item_actions.addStretch(1)
-        content.addLayout(item_actions)
 
         shipping = QFrame()
         shipping.setObjectName("workbenchShipping")
@@ -1279,9 +1290,9 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         notes = QVBoxLayout(self.workbench_note_area)
         notes.setContentsMargins(0, 6, 0, 0)
         notes.setSpacing(8)
-        notes.addWidget(label("견적서 요청사항", "deliverySectionTitle"))
+        notes.addWidget(label("요청사항", "deliverySectionTitle"))
         self.note.setPlaceholderText("배송 일정·납품 조건 등을 입력하세요")
-        self.note.setAccessibleName("판매자 견적서 요청사항")
+        self.note.setAccessibleName("판매자 요청사항")
         self.note.textChanged.connect(self.recalculate)
         notes.addWidget(self.note)
         document_content.addWidget(self.workbench_note_area)
@@ -1328,8 +1339,8 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
             return
         large = bool(QApplication.instance().property("namufarmLargeFont"))
         # Leave room for the table plus both scrollbars in short, narrow windows.
-        self.customer_scroll.setMaximumWidth(min(350 if large else 330,
-                                                  max(320 if large else 300, self.width() - 680)))
+        self.customer_scroll.setMaximumWidth(min(480 if large else 440,
+                                                  max(320 if large else 300, self.width() - 900)))
         QTimer.singleShot(0, self.fit_workbench_rows)
         compact = self.height() < 760
         if compact == getattr(self, "_workbench_compact", None):
@@ -1360,6 +1371,7 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
             value.setFixedHeight(value.heightForWidth(value_width))
         narrow = self.workbench_scroll.viewport().width() < 700
         for action in (self.sms_button, self.email_button):
+            action.refresh_symbol()
             size = (20 if large else 18) if narrow else (22 if large else 20)
             action.title_label.setStyleSheet(f"font-size:{size}px;font-weight:700;")
             action.status_badge.setStyleSheet("font-size:12px;padding:2px 4px;" if narrow else "")
@@ -1376,7 +1388,9 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         if is_new and self.items.rowCount() >= (50 if self.workbench else 100):
             QMessageBox.information(self, "묘목 추가", "견적 품목은 최대 50개까지 추가할 수 있습니다." if self.workbench else "견적 품목은 최대 100개까지 추가할 수 있습니다.")
             return
-        item = item if isinstance(item, dict) else {"species": "", "specification": "", "quantity": 1, "unitPrice": 0, "unitCost": 0}
+        item = copy.deepcopy(item) if isinstance(item, dict) else {"species": "", "specification": "", "quantity": 1, "unitPrice": 0, "unitCost": 0}
+        if self.workbench and not item.get("unitPrice"):
+            item["unitPrice"] = 2000
         self.items.blockSignals(True)
         index = self.items.rowCount()
         self.items.insertRow(index)
@@ -1400,6 +1414,12 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
                 elif column == 1:
                     cell.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
                 self.items.setItem(index, column, cell)
+                if column == 0:
+                    species_editor = SpeciesNameEditor(str(value), self.items)
+                    species_editor.changed.connect(cell.setText)
+                    species_editor.activated.connect(lambda target=cell: self.items.setCurrentItem(target))
+                    species_editor.pick_requested.connect(lambda target=cell: self.choose_quote_species(target))
+                    self.items.setCellWidget(index, 0, species_editor)
             price_editor = UnitPriceEditor(item["unitPrice"], self.items, compact=True)
             price_editor.changed.connect(self.recalculate)
             self.items.setCellWidget(index, 3, price_editor)
@@ -1420,7 +1440,25 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         self.recalculate()
         if is_new:
             self.items.setCurrentCell(index, 0)
-            self.items.editItem(self.items.item(index, 0))
+            if self.workbench:
+                self.items.cellWidget(index, 0).input.setFocus()
+            else:
+                self.items.editItem(self.items.item(index, 0))
+
+    def choose_quote_species(self, cell):
+        self.items.setCurrentItem(cell)
+        names = {self.items.item(row, 0).text().strip() for row in range(self.items.rowCount())}
+        notice = "PC에 동기화된 묘목 목록입니다. 묘목명을 직접 입력할 수도 있습니다."
+        if self.manager is not None and hasattr(self.manager, "vault"):
+            try:
+                rows = NurseryStore(self.manager).read().get("species", [])
+                names.update(row.get("speciesName", "") for row in rows
+                             if not row.get("_deleted") and row.get("isActive", 1) == 1)
+            except UserError as error:
+                notice = str(error)
+        picker = QuoteSpeciesPicker(names, cell.text(), self, notice=notice)
+        if picker.exec() == QDialog.DialogCode.Accepted and self.items.row(cell) >= 0:
+            cell.setText(picker.selected_name)
 
     def unit_price_editor(self, row):
         editor = self.items.cellWidget(row, 3) if self.workbench else None
@@ -1530,6 +1568,12 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
             self.items.blockSignals(True)
             if self.workbench:
                 for row, item in enumerate(draft["items"]):
+                    species_editor = self.items.cellWidget(row, 0)
+                    raw_species = self.items.item(row, 0).text()
+                    if isinstance(species_editor, SpeciesNameEditor) and species_editor.input.text() != raw_species:
+                        species_editor.input.blockSignals(True)
+                        species_editor.input.setText(raw_species)
+                        species_editor.input.blockSignals(False)
                     self.items.item(row, 2).setText(f"{item['quantity'] * item['unitPrice']:,}")
                     self.items.item(row, 0).setToolTip(item['species'])
                     self.items.item(row, 5).setToolTip(item.get('remarks', ''))
@@ -4005,6 +4049,7 @@ class SellerWindow(MainWindow):
         if self.manager and self.data["paired"] and self.auto_check.isChecked() and not self.task and not self.dirty and not self.conflict:
             pull = self.manager.sync if self.stack.currentIndex() in (self.PAGE_SALES, self.PAGE_SHIPPING, self.PAGE_REPORTS) else self.manager.sync_requests
             self.run_job("AUTO SYNC  >  서버 동기화 중…", pull)
+
 
 
 

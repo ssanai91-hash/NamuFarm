@@ -151,6 +151,10 @@ QDialog#quoteWorkbench QTableWidget#workbenchItems{background:#ffffff;alternate-
 QDialog#quoteWorkbench QTableWidget#workbenchItems::item{padding:2px 8px;border-bottom:1px solid #e0e9e3;}
 QDialog#quoteWorkbench QTableWidget#workbenchItems QHeaderView::section{background:#2c6852;color:#ffffff;font-size:@body@px;font-weight:700;padding:4px 6px;border:0;border-right:1px solid #548470;}
 QDialog#quoteWorkbench QWidget#unitPriceEditor{background:transparent;}
+QDialog#quoteWorkbench QWidget#quoteSpeciesEditor{background:transparent;}
+QDialog#quoteWorkbench QWidget#quoteSpeciesEditor QLineEdit{min-height:0;max-height:30px;padding:0;border:0;background:transparent;font-size:@body@px;font-weight:700;}
+QDialog#quoteWorkbench QWidget#quoteSpeciesEditor QLineEdit:focus{border:1px solid #315c47;padding:0;}
+QDialog#quoteWorkbench QWidget#quoteSpeciesEditor QPushButton{min-height:0;max-height:28px;padding:0 4px;font-size:12px;background:#e8f2ec;color:#23593a;border:1px solid #a8c6ab;border-radius:4px;}
 QDialog#quoteWorkbench QWidget#unitPriceEditor QPushButton{min-height:0;max-height:@priceheight@px;padding:0;border:1px solid #a8bcb0;border-radius:4px;background:#f7faf8;color:#193c32;font-size:18px;}
 QDialog#quoteWorkbench QWidget#unitPriceEditor QPushButton:hover{background:#dcece2;}
 QDialog#quoteWorkbench QWidget#unitPriceEditor QPushButton:focus{border:1px solid #a36d17;padding:0;}
@@ -525,4 +529,5 @@ def collapsible(title, content, expanded=False):
     layout.addWidget(toggle)
     layout.addWidget(content)
     return section
+
 
