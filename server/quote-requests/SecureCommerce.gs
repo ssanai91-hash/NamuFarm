@@ -36,7 +36,7 @@ function secureServiceInfo_() {
     receiptFormat:'NAMU-YYYYMMDD-NNNN',receiptTimeZone:'Asia/Seoul',connectionFile:true,requestSnapshot:true,
     connectionAuth:'auto-v1',quoteReadMode:twoBookActive_()?'annual-two-tabs':'legacy-storage',legacyDeviceAuth:true,
     quoteEmail:true,quoteEmailSender:QUOTE_SENDER_EMAIL,
-    quoteSms:true,quoteSmsProvider:'SOLAPI',soldNumberReservation:1,
+    quoteSms:true,quoteSmsProvider:'SOLAPI',soldNumberReservation:1,soldDisplayNumbers:1,
     commerceStates:['입금확인','배송완료','구매취소']};
 }
 function byteString_(value, minimum, maximum) {
@@ -207,7 +207,7 @@ function saleMetadata_(raw) {
   assert_(raw.totalQty===qty && raw.totalPrice===amount);
   if(['입금확인','배송완료','구매취소'].includes(raw.status)){
     assert_(raw.paidAt>=raw.purchasedAt && raw.paidAt<=raw.updatedAt);
-    if(raw.status==='배송완료')assert_(raw.deliveredAt>=raw.paidAt && raw.deliveredAt<=raw.updatedAt && raw.completedAt>=raw.deliveredAt && raw.completedAt<=raw.updatedAt && raw.costConfirmed);
+    if(raw.status==='배송완료')assert_(raw.deliveredAt>=raw.paidAt && raw.deliveredAt<=raw.updatedAt && raw.completedAt>=raw.deliveredAt && raw.completedAt<=raw.updatedAt);
   }else{
     const rank=['구매확정','입금확인','배송확인','판매완료'].indexOf(raw.status);
     if(rank>=1)assert_(raw.paidAt>=raw.purchasedAt && raw.paidAt<=raw.updatedAt);
@@ -288,9 +288,13 @@ function saveSale_(body) {
     if(!same){
       if(previous){
         assert_(!previous.archived && meta.revision===previous.revision+1,'CONFLICT');
-        assert_(!['배송완료','구매취소','판매완료','주문취소'].includes(previous.status),'CONFLICT');
+        const restoring=['구매취소','주문취소'].includes(previous.status) && meta.status==='입금확인';
+        const terminal=['배송완료','구매취소','판매완료','주문취소'].includes(previous.status);
+        const noteOnly=terminal && previous.status===meta.status &&
+          Object.keys(previous).filter(k=>!['revision','updatedAt'].includes(k)).every(k=>canonical_(previous[k])===canonical_(meta[k]));
+        assert_(!terminal || restoring || noteOnly,'CONFLICT');
         const next={'입금확인':'배송완료','구매확정':'배송완료','배송확인':'배송완료'};
-        assert_(meta.status===previous.status || meta.status===next[previous.status] ||
+        assert_(meta.status===previous.status || restoring || meta.status===next[previous.status] ||
           (previous.status==='구매확정' && meta.status==='입금확인') ||
           (meta.status==='구매취소' && ['입금확인','구매확정'].includes(previous.status)),'CONFLICT');
         ['orderNumber','orderDate','totalQty','totalPrice','isPrepaid','shippingFee','purchasedAt','taxAmount','items'].forEach(k=>assert_(canonical_(meta[k])===canonical_(previous[k]),'CONFLICT'));
@@ -318,7 +322,7 @@ function requestStatusTransitionAllowed_(from,status) {
   if(from===status)return true;
   if(status==='견적확정')return from==='신규';
   if(status==='견적발송완료')return from==='견적확정';
-  if(status==='입금확인')return ['견적확정','견적발송완료'].includes(from);
+  if(status==='입금확인')return ['견적확정','견적발송완료','구매취소','주문취소'].includes(from);
   if(status==='배송완료')return from==='입금확인';
   if(status==='구매취소')return from==='입금확인';
   return false;

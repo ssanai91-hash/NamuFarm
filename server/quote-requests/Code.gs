@@ -39,6 +39,7 @@ function doPost(e) {
       else if (body.action === 'register_push') value = registerPush_(body, device);
       else if (body.action === 'save_sale') value = saveSale_(body);
       else if (body.action === 'reserve_sold_numbers') value = reserveSoldNumbers_(body);
+      else if (body.action === 'sold_display_numbers') value = soldDisplayNumbers_(body);
       else if (body.action === 'list_sales') value = listSales_(body);
       else if (body.action === 'hide_sale') value = hideSale_(body);
       else if (body.action === 'delete_sale') value = deleteSale_(body);

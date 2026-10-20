@@ -9,6 +9,7 @@ from .confirmed_excel import NS, REL, OFFICE, _sheet
 from .request_excel import write_sale_copy
 from .domain import require
 from .errors import UserError
+from .commerce import sale_number
 
 
 def write_sales(path, rows, operations, server_url, decoded):
@@ -22,6 +23,8 @@ def write_sales(path, rows, operations, server_url, decoded):
         write_sale_copy(name, decoded)
         payload = {"kind": "namufarm-sales", "version": 1, "serverUrl": server_url,
                    "sales": rows, "operations": [op for op in operations if op["action"] == "save_sale"]}
+        payload["soldLabels"] = {r["metadata"]["orderNumber"]: sale_number(r) for r in decoded
+                                 if r["metadata"]["orderNumber"].startswith("PC_") and sale_number(r).startswith("SOLD-")}
         raw = json.dumps(payload, ensure_ascii=True, separators=(",", ":"), allow_nan=False)
         chunks = [["나무팜 판매관리 보관자료 v1 · 직접 수정하지 마세요"]]
         chunks += [[raw[i:i + 30000]] for i in range(0, len(raw), 30000)]

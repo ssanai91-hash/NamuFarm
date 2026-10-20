@@ -38,6 +38,7 @@ def write_request_copy(path, requests):
 
 def write_sale_copy(path, sales):
     """Readable sales copy. The local database remains authoritative."""
+    from .commerce import sale_number
     rows = [["순번", "주문번호", "견적번호", "입금확인시각(한국)", "고객명", "연락처", "이메일", "묘목명", "수량",
              "판매단가", "품목금액", "비고", "택배비", "선불여부", "세액", "총금액", "상태", "판매자 안내"]]
     for index, row in enumerate(sales, 1):
@@ -49,7 +50,7 @@ def write_sale_copy(path, sales):
         paid = datetime.fromtimestamp(meta["paidAt"] / 1000, SEOUL).strftime("%Y-%m-%d %H:%M:%S") if meta["paidAt"] else ""
         for n, item in enumerate(meta["items"]):
             remarks = lines[n].get("remarks", "") if n < len(lines) and isinstance(lines[n], dict) else ""
-            rows.append([index, meta["orderNumber"], document.get("sourceQuoteNumber") or order.get("sourceQuoteNumber", ""), paid,
+            rows.append([index, sale_number(row), document.get("sourceQuoteNumber") or order.get("sourceQuoteNumber", ""), paid,
                          order.get("customerName", ""), order.get("customerPhone", ""), order.get("customerEmail", ""),
                          item["species"], item["quantity"], item["unitPrice"], item["quantity"] * item["unitPrice"],
                          remarks, meta["shippingFee"] if meta["isPrepaid"] else 0,

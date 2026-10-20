@@ -304,7 +304,7 @@ def shipping_csv(rows):
         order = row["private"]["order"]
         require(order["status"] == "입금확인", "출고자료는 입금 확인된 주문만 내보낼 수 있습니다.")
         require(not shipping_problem(order), f"{order['orderNumber']}: {shipping_problem(order)}")
-        writer.writerow([csv_text(v) for v in (order["orderNumber"], order["receiverName"], order["customerPhone"], order["zipNo"],
+        writer.writerow([csv_text(v) for v in (sale_number(row), order["receiverName"], order["customerPhone"], order["zipNo"],
                        order["roadAddress"], order["detailAddress"], ", ".join(i["species"] for i in row["metadata"]["items"]), order["totalQty"],
                        customer_note(order), "선불" if order["isPrepaid"] else "착불", tracking_number(order))])
     return stream.getvalue()
@@ -324,13 +324,20 @@ def parse_tracking_csv(raw, rows):
     return parse_tracking_records(reader, rows)
 
 
+def sale_number(row):
+    number = row.get('displayNumber') or row.get('private', {}).get('order', {}).get('saleNumber') or row['metadata']['orderNumber']
+    return number if re.fullmatch(r'SOLD-\d{8}-\d{4,}', number) else 'SOLD 번호 발급 대기'
+
+
 def parse_tracking_records(records, rows):
     """Shared, all-or-nothing validation for CSV and legacy Excel imports."""
     known = {r["metadata"]["orderNumber"]: r for r in rows}
+    aliases = {sale_number(r): number for number, r in known.items() if sale_number(r).startswith('SOLD-')}
     assignments, used = {}, {}
     for index, record in enumerate(records, 2):
         require(index <= 501, "한 번에 최대 500건을 가져오세요.")
         number, value = (record.get("주문번호") or "").strip(), record.get("송장번호") or ""
+        number = aliases.get(number, number)
         require(number in known and number not in assignments, f"{index}행: 주문번호가 없거나 중복되었습니다.")
         tracking = normalize_tracking(value)
         require(tracking not in used, f"{index}행: 같은 송장번호를 여러 주문에 등록할 수 없습니다.")
@@ -564,7 +571,7 @@ def shipping_html(rows):
         number = tracking_number(order)
         require(number, "송장번호를 등록한 주문만 출력할 수 있습니다.")
         e = lambda value: escape(str(value))
-        body = f'<h2>로젠택배 · {e(number)}</h2><p>주문 {e(order["orderNumber"])}</p><p><b>{e(order["receiverName"])}</b> / {e(order["customerPhone"])}<br>({e(order["zipNo"])}) {e(order["roadAddress"])} {e(order["detailAddress"])}</p><table><tr><th>포장 확인</th><th>품목</th><th>수량</th></tr>'
+        body = f'<h2>로젠택배 · {e(number)}</h2><p>주문 {e(sale_number(row))}</p><p><b>{e(order["receiverName"])}</b> / {e(order["customerPhone"])}<br>({e(order["zipNo"])}) {e(order["roadAddress"])} {e(order["detailAddress"])}</p><table><tr><th>포장 확인</th><th>품목</th><th>수량</th></tr>'
         for item in row["metadata"]["items"]:
             body += f'<tr><td>□</td><td>{e(item["species"])}</td><td>{item["quantity"]:,}주</td></tr>'
         body += f'</table><p>{e(customer_note(order))}</p><p class="muted">출고 확인용 문서입니다. 택배 부착용 공식 운송장은 로젠 기업택배시스템에서 출력하세요.</p>'

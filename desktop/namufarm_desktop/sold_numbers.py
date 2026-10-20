@@ -1,5 +1,6 @@
 """Reserve disjoint daily sale-number blocks, then consume them without network I/O."""
 import copy
+import re
 import uuid
 from datetime import datetime
 
@@ -72,6 +73,42 @@ class SoldNumbers:
     def _prefetch_sold_numbers(self):
         if getattr(self, "sold_reservation_supported", False):
             try:
+                self.sync_sold_labels()
                 self.reserve_sold_numbers()
             except (UserError, OSError):
                 self.transfer_notice = getattr(self, "transfer_notice", "") + " · 다음 입금확인 전에 판매번호 예약을 재시도해주세요."
+
+    def sync_sold_labels(self):
+        """Old immutable order keys keep their links; everyone sees one shared SOLD label."""
+        if not getattr(self, "sold_labels_supported", False):
+            return
+        labels = self.vault.preference("sold_display_labels", {})
+        pending = self.vault.preference("sold_display_pending")
+        while True:
+            if not pending:
+                orders = []
+                for row in self.vault.rows("sales"):
+                    number = row["metadata"]["orderNumber"]
+                    if number.startswith("PC_") and number not in labels:
+                        stamp = row["metadata"].get("paidAt") or row["metadata"]["purchasedAt"]
+                        day = datetime.fromtimestamp(stamp / 1000, SEOUL).strftime("%Y%m%d")
+                        orders.append({"orderNumber": number, "day": day})
+                if not orders:
+                    return
+                pending = {"operationId": str(uuid.uuid4()), "orders": orders[:20]}
+                self.vault.save_preference("sold_display_pending", pending)
+            response = self.api.call("sold_display_numbers", **pending)
+            require(response.get("assigned") is True and response.get("operationId") == pending["operationId"]
+                    and isinstance(response.get("numbers"), list), "기존 판매번호의 SOLD 변환 응답을 확인하지 못했습니다.")
+            expected = {r["orderNumber"] for r in pending["orders"]}
+            received = set()
+            for item in response["numbers"]:
+                require(isinstance(item, dict) and item.get("orderNumber") in expected and item["orderNumber"] not in received
+                        and isinstance(item.get("soldNumber"), str) and re.fullmatch(r"SOLD-\d{8}-\d{4,}", item["soldNumber"]),
+                        "기존 판매번호의 SOLD 변환 내용이 일치하지 않습니다.")
+                labels[item["orderNumber"]] = item["soldNumber"]
+                received.add(item["orderNumber"])
+            require(received == expected and len(set(labels.values())) == len(labels), "판매번호 연결이 중복되거나 누락되었습니다.")
+            self.vault.save_preference("sold_display_labels", labels)
+            self.vault.save_preference("sold_display_pending", None)
+            pending = None

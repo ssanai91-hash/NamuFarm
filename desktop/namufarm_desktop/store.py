@@ -240,7 +240,7 @@ class Vault:
             source.backup(destination)
         return target
 
-    def save_local_sales(self, sales, operations, hidden, *, quotes=None, marker=None):
+    def save_local_sales(self, sales, operations, hidden, *, quotes=None, marker=None, sold_labels=None):
         """Commit a merge/delete, its upload journal and local deletion markers together."""
         with self.mutex, self._db() as db:
             db.execute("DELETE FROM cache WHERE kind='sales'")
@@ -253,6 +253,8 @@ class Vault:
             preferences = {"hidden_sales": sorted(set(hidden))}
             if quotes is not None:
                 preferences["confirmed_quotes"] = quotes
+            if sold_labels is not None:
+                preferences["sold_display_labels"] = sold_labels
             for name, value in preferences.items():
                 scope = "workspace:" + name
                 db.execute("INSERT OR REPLACE INTO config VALUES (?,?)", (scope, self._seal(value, scope)))

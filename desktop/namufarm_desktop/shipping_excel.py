@@ -11,7 +11,7 @@ import struct
 import xlrd
 import xlwt
 
-from .commerce import customer_note, shipping_problem, parse_tracking_records
+from .commerce import customer_note, shipping_problem, parse_tracking_records, sale_number
 from .domain import require
 from .errors import UserError
 
@@ -60,6 +60,7 @@ def export_orders(rows):
         number = order["orderNumber"]
         require(number not in seen, "같은 주문을 두 번 내보낼 수 없습니다.")
         seen.add(number)
+        require(sale_number(row).startswith("SOLD-"), "판매관리에서 서버로부터 가져오기로 SOLD 번호를 발급받아주세요.")
         require(order["status"] == "입금확인", "출고자료는 입금 확인된 주문만 내보낼 수 있습니다.")
         from .commerce import shipping_ready
         require(shipping_ready(order), f"{number}: 판매관리에서 배송준비완료를 먼저 눌러주세요.")
@@ -92,7 +93,7 @@ def export_tables(rows, parcels, sender):
             values[index] = value
         upload.append(values)
         # Blank waybill prevents accidental reimport of an old number on re-export.
-        matching.append([number, "", len(upload), order["receiverName"], phone, boxes])
+        matching.append([sale_number(row), "", len(upload), order["receiverName"], phone, boxes])
     return upload, matching
 
 

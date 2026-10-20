@@ -92,8 +92,7 @@ def validate_metadata(meta, clock=None):
         require(meta["paidAt"] >= meta["purchasedAt"])
         if status == "배송완료":
             require(meta["deliveredAt"] >= meta["paidAt"]
-                    and meta["completedAt"] >= meta["deliveredAt"]
-                    and meta["costConfirmed"])
+                    and meta["completedAt"] >= meta["deliveredAt"])
     else:
         legacy_rank = ("구매확정", "입금확인", "배송확인", "판매완료").index(status) if status != "주문취소" else -1
         if legacy_rank >= 1:
@@ -114,7 +113,10 @@ def metadata(order):
 
 def changed(private, fields, target=None, clock=None):
     order = copy.deepcopy(private["order"])
-    require(order["status"] not in TERMINAL_STATES, "종료된 판매 기록은 수정할 수 없습니다.")
+    restoring = target == "입금확인" and order["status"] in ("구매취소", "주문취소")
+    note_only = target is None and set(fields) == {"note"}
+    require(order["status"] not in TERMINAL_STATES or restoring or note_only,
+            "종료된 판매 기록은 메모 수정 또는 구매취소 복원만 할 수 있습니다.")
     require(set(fields) <= set(EDITABLE) | {"costTotal", "expenseTotal", "costConfirmed", "profitMode", "commissionBps"})
     for name, value in fields.items():
         if name in EDITABLE:
@@ -132,13 +134,16 @@ def changed(private, fields, target=None, clock=None):
     stamp = clock if clock is not None else now_ms()
     require(stamp >= order["updatedAt"], "PC 시간을 확인해주세요.")
     if target is not None:
-        if target == "구매취소":
+        if target == "입금확인":
+            require(restoring, "구매취소된 주문만 입금확인으로 복원할 수 있습니다.")
+            if not order["paidAt"]:
+                order["paidAt"] = stamp
+        elif target == "구매취소":
             require(order["status"] in ("입금확인", "구매확정"), "배송 완료 전 입금확인 건만 구매취소할 수 있습니다.")
             if not order["paidAt"]:
                 order["paidAt"] = stamp
         else:
             require(target == "배송완료" and NEXT.get(order["status"]) == target, "입금확인 다음에는 배송완료만 처리할 수 있습니다.")
-            require(order["costConfirmed"], "배송완료 전에 원가와 비용을 확인해주세요.")
             if not order["paidAt"]:
                 order["paidAt"] = stamp
             order["deliveredAt"] = stamp

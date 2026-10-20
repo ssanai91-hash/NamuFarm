@@ -24,7 +24,7 @@ from .ui_icons import set_button_icon, ui_icon
 from .app import MainWindow, Task, table, fill_table, money, timestamp
 from .commerce import (ISSUER, new_draft, new_manual_draft, draft_amounts, validate_draft, quote_html, quote_document_html, shipping_html,
                        shipping_problem, parse_tracking_csv, tracking_number, payment_account_text, payment_notice, quote_delivery_fingerprint,
-                       payment_confirmation_message, seller_note_draft, customer_note, tracking_fields, shipping_ready)
+                       payment_confirmation_message, seller_note_draft, customer_note, tracking_fields, shipping_ready, TRACKING_PREFIX, sale_number)
 from .domain import SEOUL, profit, require
 from .errors import UserError
 from .shipping_excel import shipping_xls, parse_tracking_xls, export_orders, UPLOAD_SHEET
@@ -2602,7 +2602,7 @@ def draft_quote_sort_key(draft):
 
 
 class CustomerOrderDialog(QDialog):
-    """판매 단계의 고객·배송·원가를 한 화면에서 확인하고 수정하는 팝업."""
+    """판매 품목은 조회하고 배송정보·메모를 로컬에서 관리하는 팝업."""
 
     def __init__(self, row, parent=None):
         super().__init__(parent)
@@ -2659,7 +2659,7 @@ class CustomerOrderDialog(QDialog):
         heading.addWidget(brand_rule)
         heading.addWidget(label("판매관리", "workbenchTitle"))
         heading.addStretch(1)
-        reference = label("판매번호  " + self.meta["orderNumber"], "workbenchReference", True)
+        reference = label("판매번호  " + sale_number(self.row), "workbenchReference", True)
         reference.setMinimumWidth(0)
         reference.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         reference.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
@@ -2715,22 +2715,6 @@ class CustomerOrderDialog(QDialog):
             identity.addWidget(label(value, "deliveryCaption", True), index, 1)
         customer.addLayout(identity)
 
-        documents = QFrame()
-        documents.setObjectName("workbenchDocumentTools")
-        document_layout = QVBoxLayout(documents)
-        document_layout.setContentsMargins(12, 12, 12, 12)
-        document_layout.setSpacing(10)
-        document_layout.addWidget(label("연결 견적서", "deliverySectionTitle"))
-        quote_number = self.order.get("sourceQuoteNumber") or "번호 없음"
-        quote_reference = label(quote_number, "deliveryCaption", True)
-        quote_reference.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        document_layout.addWidget(quote_reference)
-        self.quote_print = button("확정 견적서 출력", self.print_quote)
-        self.quote_print.setEnabled(bool(self.row["private"].get("quoteDocumentJson")))
-        if not self.row["private"].get("quoteDocumentJson"):
-            self.quote_print.setToolTip("이 주문에 보관된 확정 견적서가 없습니다.")
-        document_layout.addWidget(self.quote_print)
-        customer.addWidget(documents)
         customer.addWidget(label("배송 메모", "deliverySectionTitle"))
         self.note = QPlainTextEdit(customer_note(self.order))
         self.note.setAccessibleName("배송 메모")
@@ -2752,18 +2736,31 @@ class CustomerOrderDialog(QDialog):
         content.addWidget(section("판매 품목", "leaf"))
         self.items = table(["묘목명", "규격", "수량", "판매 단가", "판매 금액"])
         self.items.setObjectName("workbenchItems")
+        specifications = [parts[3].strip() if len(parts) in (9, 10) else ""
+                          for parts in (line.split("|") for line in self.order.get("itemSummary", "").splitlines() if line.strip())]
         fill_table(self.items, [
-            (item["species"], item.get("specification") or "—", f"{item['quantity']:,}주",
+            (item["species"], (specifications[index] if index < len(specifications) else "") or "—", f"{item['quantity']:,}주",
              money(item["unitPrice"]), money(item["quantity"] * item["unitPrice"]))
-            for item in self.meta.get("items", [])
+            for index, item in enumerate(self.meta.get("items", []))
         ])
         polish_table(self.items)
         center_table_columns(self.items, (1, 2, 3, 4))
         self.items.set_column_layout(((0, 3.5), (1, 1.5), (2, 1), (3, 1.7), (4, 2)))
         self.items.horizontalHeader().setFixedHeight(40 if large else 36)
         self.items.verticalHeader().setDefaultSectionSize(48 if large else 40)
-        size_table_to_rows(self.items, 5)
+        self.items.setRowCount(max(8, self.items.rowCount()))
+        size_table_to_rows(self.items, 8)
         content.addWidget(self.items)
+        item_summary = QFrame()
+        item_summary.setObjectName("workbenchSummary")
+        totals = QHBoxLayout(item_summary)
+        totals.setContentsMargins(12, 8, 12, 8)
+        shipping_text = (f"선불 {int(self.order.get('shippingFee', 0) or 0):,}원" if self.order.get("isPrepaid") else
+                         f"후불 · 선불 기준 {int(self.order.get('shippingFee', 0) or 0):,}원")
+        totals.addWidget(label("택배비  " + shipping_text, "deliveryCaption", True))
+        totals.addStretch(1)
+        totals.addWidget(label("총금액  " + money(self.meta["totalPrice"] + self.meta.get("taxAmount", 0)), "deliverySectionTitle"))
+        content.addWidget(item_summary)
 
         shipping = QFrame()
         shipping.setObjectName("workbenchShipping")
@@ -2774,61 +2771,30 @@ class CustomerOrderDialog(QDialog):
         form = QGridLayout()
         form.setHorizontalSpacing(10)
         form.setVerticalSpacing(10)
-        for name, caption, r, c, span in (("receiverName", "수령인", 0, 0, 1), ("zipNo", "우편번호", 0, 2, 1),
-                ("roadAddress", "도로명 주소", 1, 0, 3), ("detailAddress", "상세 주소", 2, 0, 3)):
-            form.addWidget(label(caption, "workbenchCaption"), r, c)
-            form.addWidget(field(name, caption), r, c + 1, 1, span)
+        for r, (name, caption) in enumerate((("receiverName", "수령인"), ("zipNo", "우편번호"),
+                ("roadAddress", "도로명 주소"), ("detailAddress", "상세주소"))):
+            form.addWidget(label(caption, "workbenchCaption"), r, 0)
+            edit = field(name, caption)
+            if name == "zipNo":
+                postal_row = QHBoxLayout()
+                postal_row.addWidget(edit, 1)
+                self.address_button = button("주소찾기", self.find_address)
+                postal_row.addWidget(self.address_button)
+                form.addLayout(postal_row, r, 1)
+            else:
+                form.addWidget(edit, r, 1)
         self.tracking_number_edit = QLineEdit(tracking_number(self.order))
         self.tracking_number_edit.setObjectName("workbenchCustomerInput")
         self.tracking_number_edit.setAccessibleName("로젠 송장번호")
         self.tracking_number_edit.setPlaceholderText("로젠에서 발급받은 송장번호 11자리")
         self.tracking_number_edit.setMaxLength(20)
-        form.addWidget(label("송장번호", "workbenchCaption"), 3, 0)
-        form.addWidget(self.tracking_number_edit, 3, 1, 1, 3)
+        form.addWidget(label("송장번호", "workbenchCaption"), 4, 0)
+        form.addWidget(self.tracking_number_edit, 4, 1)
         form.setColumnStretch(1, 1)
-        form.setColumnStretch(3, 1)
         shipping_layout.addLayout(form)
         shipping_layout.addWidget(label("주소와 송장번호를 확인한 뒤 배송준비완료를 누르세요.", "deliveryCaption", True))
         content.addWidget(shipping)
 
-        finance = QWidget()
-        finance_layout = QVBoxLayout(finance)
-        finance_layout.setContentsMargins(0, 6, 0, 0)
-        finance_form = QFormLayout()
-        self.cost_total = QLineEdit(str(int(self.order.get("costTotal", 0) or 0)))
-        self.expense_total = QLineEdit(str(int(self.order.get("expenseTotal", 0) or 0)))
-        for edit, caption in ((self.cost_total, "원가 합계 (원)"), (self.expense_total, "기타 비용 (원)")):
-            edit.setAlignment(Qt.AlignmentFlag.AlignRight)
-            edit.setValidator(QIntValidator(0, 999999999, edit))
-            finance_form.addRow(caption, edit)
-        self.profit_mode = QComboBox()
-        self.profit_mode.addItem("매입 후 판매", "resale")
-        self.profit_mode.addItem("중개 수수료", "commission")
-        self.profit_mode.setCurrentIndex(1 if self.order.get("profitMode") == "commission" else 0)
-        finance_form.addRow("수익 방식", self.profit_mode)
-        self.commission = QDoubleSpinBox()
-        self.commission.setRange(0, 100)
-        self.commission.setDecimals(2)
-        self.commission.setSuffix(" %")
-        self.commission.setValue(self.order.get("commissionBps", 3000) / 100)
-        finance_form.addRow("수수료율", self.commission)
-        finance_form.addRow("저장 기준 매출이익", label(money(profit(self.meta)), "customerMetricValue"))
-        finance_layout.addLayout(finance_form)
-        content.addWidget(collapsible("원가 · 비용 · 수익 확인", finance, not self.order.get("costConfirmed")))
-        self.cost_confirmed = QCheckBox("원가와 비용을 확인했습니다")
-        self.cost_confirmed.setChecked(bool(self.order.get("costConfirmed")))
-        content.addWidget(self.cost_confirmed)
-        summary = QFrame()
-        summary.setObjectName("workbenchSummary")
-        total_row = QHBoxLayout(summary)
-        total_row.setContentsMargins(16, 10, 16, 10)
-        total_row.addWidget(icon("calculator", 36))
-        total_row.addWidget(label("결제금액", "workbenchSumTitle"))
-        shipping_text = (f"선불 {int(self.order.get('shippingFee', 0) or 0):,}원" if self.order.get("isPrepaid") else
-                         f"후불 · 선불 기준 {int(self.order.get('shippingFee', 0) or 0):,}원")
-        total_row.addWidget(label("택배비 " + shipping_text, "workbenchAmountDetail", True), 1)
-        total_row.addWidget(label(money(self.meta["totalPrice"] + self.meta.get("taxAmount", 0)), "workbenchTotal"))
-        content.addWidget(summary)
         content.addStretch(1)
         work_scroll.setWidget(workspace)
         body.addWidget(work_scroll, 1)
@@ -2836,7 +2802,7 @@ class CustomerOrderDialog(QDialog):
 
         terminal = self.meta["status"] in ("배송완료", "구매취소", "판매완료", "주문취소")
         if terminal:
-            for widget in (*self.customer_fields.values(), self.note, shipping, finance, self.cost_confirmed):
+            for widget in (*self.customer_fields.values(), shipping):
                 widget.setEnabled(False)
         footer = QFrame()
         footer.setObjectName("workbenchFooter")
@@ -2851,10 +2817,14 @@ class CustomerOrderDialog(QDialog):
         self.cancel_order_button.setObjectName("danger")
         self.cancel_order_button.setEnabled(self.meta["status"] in ("입금확인", "구매확정"))
         actions.addWidget(self.cancel_order_button)
+        self.restore_button = button("입금확인으로 복원", lambda: self.finish("restore"))
+        self.restore_button.setEnabled(self.meta["status"] in ("구매취소", "주문취소"))
+        actions.addWidget(self.restore_button)
         actions.addStretch(1)
         actions.addWidget(button("닫기", self.reject))
         self.save_button = button("수정 저장", lambda: self.finish("save"))
-        self.save_button.setEnabled(not terminal)
+        self.save_button.setEnabled(True)
+        self.save_button.setText("메모 저장" if terminal else "수정 저장")
         actions.addWidget(self.save_button)
         self.delivery_button = button("배송 완료", lambda: self.finish("deliver"))
         self.delivery_button.setEnabled(self.meta["status"] in ("입금확인", "구매확정", "배송확인") and shipping_ready(self.order))
@@ -2867,32 +2837,47 @@ class CustomerOrderDialog(QDialog):
         actions.addWidget(self.preparation_button)
         footer_layout.addLayout(actions)
         root.addWidget(footer)
-        for edit in (*self.customer_fields.values(), self.tracking_number_edit, self.cost_total, self.expense_total):
+        for edit in (*self.customer_fields.values(), self.tracking_number_edit):
             edit.textChanged.connect(lambda _text: self.edit_state.setText("수정 중 · 저장 필요"))
         self.note.textChanged.connect(lambda: self.edit_state.setText("수정 중 · 저장 필요"))
-        self.commission.valueChanged.connect(lambda _value: self.edit_state.setText("수정 중 · 저장 필요"))
-        self.cost_confirmed.toggled.connect(lambda _value: self.edit_state.setText("수정 중 · 저장 필요"))
-        self.profit_mode.currentIndexChanged.connect(lambda _value: self.edit_state.setText("수정 중 · 저장 필요"))
         for widget, name, color in ((self.cancel_order_button, "trash", "#9c3c2e"), (self.save_button, "save", "#193c32"),
                 (self.delivery_button, "check", "#193c32"), (self.preparation_button, "shipping", "#ffffff"),
-                (self.quote_print, "document", "#193c32")):
+                (self.restore_button, "refresh", "#193c32")):
             set_button_icon(widget, name, color)
 
+    def find_address(self):
+        from .address_search import AddressSearchDialog
+        try:
+            dialog = AddressSearchDialog(self)
+        except OSError:
+            QMessageBox.warning(self, "주소찾기", "주소검색 창을 준비하지 못했습니다. 잠시 후 다시 시도해주세요.")
+            return
+        try:
+            if dialog.exec() == QDialog.DialogCode.Accepted and dialog.address:
+                data = dialog.address
+                changed_address = (self.customer_fields["zipNo"].text() != data["zipNo"] or
+                                   self.customer_fields["roadAddress"].text() != data["address"])
+                self.customer_fields["zipNo"].setText(data["zipNo"])
+                self.customer_fields["roadAddress"].setText(data["address"])
+                if changed_address:
+                    self.customer_fields["detailAddress"].clear()
+                self.customer_fields["detailAddress"].setFocus()
+        finally:
+            dialog.deleteLater()
+
     def collect_fields(self):
+        terminal = self.meta["status"] in ("배송완료", "구매취소", "판매완료", "주문취소")
+        note = self.note.toPlainText().strip()
+        if terminal:
+            number = tracking_number(self.order)
+            if number:
+                note = (note + "\n" if note else "") + TRACKING_PREFIX + number
+            return {"note": note}
         result = {name: edit.text().strip() for name, edit in self.customer_fields.items()}
-        result["note"] = self.note.toPlainText().strip()
+        result["note"] = note
         tracking = self.tracking_number_edit.text().strip()
         if tracking:
             result.update(tracking_fields({**self.order, **result}, tracking))
-        for edit, caption in ((self.cost_total, "원가 합계"), (self.expense_total, "기타 비용")):
-            require(edit.text().isascii() and edit.text().isdigit(), f"{caption}를 숫자로 입력해주세요.")
-        result.update(
-            costTotal=int(self.cost_total.text()),
-            expenseTotal=int(self.expense_total.text()),
-            costConfirmed=self.cost_confirmed.isChecked(),
-            profitMode=self.profit_mode.currentData(),
-            commissionBps=round(self.commission.value() * 100),
-        )
         return result
 
     def finish(self, mode):
@@ -2905,9 +2890,8 @@ class CustomerOrderDialog(QDialog):
                 require(bool(tracking_number(order)), "로젠 송장번호 11자리를 먼저 입력해주세요.")
             elif mode == "deliver":
                 require(shipping_ready({**self.order, **fields}), "배송정보를 변경했다면 배송준비완료를 다시 눌러주세요.")
-                require(fields["costConfirmed"], "배송완료 전에 원가와 비용을 확인해주세요.")
                 answer = QMessageBox.question(
-                    self, "배송완료", "실제 배송과 원가·비용 확인을 마쳤나요?",
+                    self, "배송완료", "실제 배송이 완료됐나요?",
                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                     QMessageBox.StandardButton.No,
                 )
@@ -2921,21 +2905,18 @@ class CustomerOrderDialog(QDialog):
                 )
                 if answer != QMessageBox.StandardButton.Yes:
                     return
+            elif mode == "restore":
+                answer = QMessageBox.question(
+                    self, "입금확인 복원", "구매취소를 되돌리고 입금확인 상태로 복원할까요?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.No)
+                if answer != QMessageBox.StandardButton.Yes:
+                    return
             self.collected_fields = fields
             self.mode = mode
             self.accept()
         except UserError as error:
             QMessageBox.warning(self, "입력 확인", str(error))
-
-    def print_quote(self):
-        raw = self.row["private"].get("quoteDocumentJson")
-        if not raw:
-            return
-        try:
-            doc = json.loads(raw)
-            print_document(self, quote_document_html(doc), "나무팜_" + doc["number"])
-        except (ValueError, KeyError, TypeError):
-            QMessageBox.warning(self, "견적서 확인", "저장된 확정 견적서를 읽지 못했습니다.")
 
 
 class ShippingExportDialog(QDialog):
@@ -2983,7 +2964,7 @@ class ShippingExportDialog(QDialog):
         layout.addLayout(common)
         layout.addWidget(label("운임은 주문별 계약 운임 합계입니다. 고객에게 받은 배송비와 구분해 입력하세요. 선착불 코드는 로젠 설정을 확인해 입력합니다.", "muted", True))
         self.parcel_table = table(["주문번호", "수령인", "묘목 수량", "고객 배송비", "박스 수", "계약 운임", "선착불 코드", "제주 코드"])
-        fill_table(self.parcel_table, [(r["metadata"]["orderNumber"], r["private"]["order"]["receiverName"],
+        fill_table(self.parcel_table, [(sale_number(r), r["private"]["order"]["receiverName"],
             f"{r['metadata']['totalQty']}주", "선불" if r["private"]["order"]["isPrepaid"] else "착불", "", "", "", "") for r in rows])
         polish_table(self.parcel_table)
         center_table_columns(self.parcel_table, range(8))
@@ -3840,7 +3821,7 @@ class SellerWindow(MainWindow):
                 for item in meta.get("items", [])
             )
             searchable = " ".join([
-                meta["orderNumber"], display_status,
+                meta["orderNumber"], sale_number(row), display_status,
                 order.get("customerName", ""), order.get("customerPhone", ""),
                 order.get("customerEmail", ""), order.get("receiverName", ""),
                 address, items_text, tracking_number(order),
@@ -3871,7 +3852,7 @@ class SellerWindow(MainWindow):
                 for item in meta.get("items", [])
             ) or "—"
             table_rows.append((
-                meta["orderNumber"],
+                sale_number(row),
                 customer_status_text(meta["status"]),
                 timestamp(meta["orderDate"]),
                 order.get("customerName", ""),
@@ -3926,7 +3907,7 @@ class SellerWindow(MainWindow):
         if self.selected_sale:
             order = self.selected_sale["private"]["order"]
             number = self.selected_sale["metadata"]["orderNumber"]
-            shown_number = order.get("sourceQuoteNumber", "") if number.startswith("PC_") else number
+            shown_number = sale_number(self.selected_sale)
             self.customer_list_status.setText(
                 (f"{shown_number} · " if shown_number else "") +
                 f"{order.get('customerName','')} · "
@@ -4010,12 +3991,13 @@ class SellerWindow(MainWindow):
 
         fields = dialog.collected_fields
         meta = row["metadata"]
-        target = {"deliver": "배송완료", "cancel": "구매취소"}.get(dialog.mode)
+        target = {"deliver": "배송완료", "cancel": "구매취소", "restore": "입금확인"}.get(dialog.mode)
         messages = {
             "save": "고객·배송 정보 저장 중…",
             "prepare": "배송준비완료로 저장 중…",
             "deliver": "배송완료 상태 저장 중…",
             "cancel": "구매취소 상태 저장 중…",
+            "restore": "입금확인 상태로 복원 중…",
         }
         self.run_job(
             messages[dialog.mode],
@@ -4052,7 +4034,7 @@ class SellerWindow(MainWindow):
         self.shipping_rows = rows
         self.shipping_table.blockSignals(True)
         self.shipping_table.set_empty_message("배송준비완료 주문이 없습니다.\n판매관리에서 주소·송장번호를 입력하고 배송준비완료를 눌러주세요.")
-        fill_table(self.shipping_table, [(r["metadata"]["orderNumber"], r["private"]["order"].get("receiverName", ""), r["private"]["order"]["customerPhone"],
+        fill_table(self.shipping_table, [(sale_number(r), r["private"]["order"].get("receiverName", ""), r["private"]["order"]["customerPhone"],
             r["private"]["order"].get("roadAddress", ""), r["metadata"]["totalQty"], shipping_problem(r["private"]["order"]) or r["metadata"]["status"], tracking_number(r["private"]["order"]) or "미등록") for r in rows])
         self.shipping_table.clearSelection()
         self.shipping_table.setCurrentCell(-1, -1)

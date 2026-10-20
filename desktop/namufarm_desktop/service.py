@@ -234,6 +234,7 @@ class Manager(SoldNumbers, SalesWorkspace):
         mode = info.get("quoteReadMode")
         self.quote_read_mode = mode if mode in ("annual-two-tabs", "legacy-storage") else None
         self.sold_reservation_supported = info.get("soldNumberReservation") == 1
+        self.sold_labels_supported = info.get("soldDisplayNumbers") == 1
         return info
 
     def pair(self, invite):
@@ -258,11 +259,15 @@ class Manager(SoldNumbers, SalesWorkspace):
         sales = self.vault.rows("sales")
         decoded_requests = [{**r, "personal": self.decode_request(r)} for r in requests]
         decoded_sales = []
+        sold_labels = self.vault.preference("sold_display_labels", {})
         sale_error = ""
         for row in sales:
             try:
-                private = self.decode_sale(row)
-                decoded_sales.append({**row, "private": private})
+                private = copy.deepcopy(self.decode_sale(row))
+                number = row["metadata"]["orderNumber"]
+                display = number if number.startswith("SOLD-") else sold_labels.get(number, "")
+                private["order"]["saleNumber"] = display
+                decoded_sales.append({**row, "private": private, "displayNumber": display})
             except UserError:
                 sale_error = "일부 로컬 판매자료를 읽지 못했습니다. 판매관리에서 가져오기 또는 이전 자료 복원을 확인해주세요."
         quote_error = ""
@@ -907,6 +912,8 @@ class Manager(SoldNumbers, SalesWorkspace):
             require(not problem, problem)
             require(bool(tracking), "로젠 송장번호 11자리를 먼저 입력해주세요.")
             order.update(shippingReadyAt=now_ms(), shippingReadyFingerprint=shipping_fingerprint(order))
+        elif target == "입금확인":
+            order.update(shippingReadyAt=0, shippingReadyFingerprint="")
         elif order.get("shippingReadyFingerprint") != shipping_fingerprint(order):
             order.update(shippingReadyAt=0, shippingReadyFingerprint="")
         if target == "배송완료":

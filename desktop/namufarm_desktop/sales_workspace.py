@@ -1,6 +1,7 @@
 """Local sales work with explicit upload/download and conservative union merges."""
 import copy
 import uuid
+import re
 from pathlib import Path
 
 from .crypto import canonical
@@ -40,7 +41,7 @@ class SalesWorkspace:
                                    self.vault.preference("hidden_sales", []), quotes=quotes)
         return self.view()
 
-    def _merge_sales(self, incoming, *, server=False, imported_operations=(), marker=None, quotes=None):
+    def _merge_sales(self, incoming, *, server=False, imported_operations=(), marker=None, quotes=None, sold_labels=None):
         """Union by order number. Conflicting copies are retained locally, never overwritten."""
         existing = {r["metadata"]["orderNumber"]: r for r in self.vault.rows("sales")}
         operations = self.vault.pending()
@@ -98,7 +99,7 @@ class SalesWorkspace:
             if self._operation_number(op) in accepted and op["id"] not in identifiers:
                 operations.append(copy.deepcopy(op))
                 identifiers.add(op["id"])
-        self.vault.save_local_sales(list(existing.values()), operations, hidden, marker=marker, quotes=quotes)
+        self.vault.save_local_sales(list(existing.values()), operations, hidden, marker=marker, quotes=quotes, sold_labels=sold_labels)
         self.transfer_notice = f"추가 {added}건 · 갱신 {updated}건 · 유지 {skipped}건"
         if conflicts:
             self.transfer_notice += " · 충돌로 기존 자료 유지: " + ", ".join(conflicts[:10])
@@ -212,6 +213,7 @@ class SalesWorkspace:
         from .sales_excel import read_sales
         require(isinstance(paths, (list, tuple)) and 1 <= len(paths) <= 2, "확정견적·판매관리 파일을 선택해주세요.")
         sales, quotes, operations = [], [], []
+        sold_labels = dict(self.vault.preference("sold_display_labels", {}))
         for path in paths:
             # Detect the payload, rather than trusting the editable filename.
             try:
@@ -220,6 +222,14 @@ class SalesWorkspace:
                 quotes.extend(read_confirmed_quotes(path))
                 continue
             require(data.get("serverUrl") == self.api.url, "다른 서버의 판매자료는 가져올 수 없습니다.")
+            labels = data.get("soldLabels", {})
+            require(isinstance(labels, dict), "엑셀의 판매번호를 확인해주세요.")
+            for number, display in labels.items():
+                require(isinstance(number, str) and number.startswith("PC_") and valid_id(number[3:])
+                        and isinstance(display, str) and re.fullmatch(r"SOLD-\d{8}-\d{4,}", display)
+                        and sold_labels.get(number, display) == display, "엑셀의 판매번호가 기존 자료와 다릅니다.")
+                sold_labels[number] = display
+            require(len(set(sold_labels.values())) == len(sold_labels), "엑셀의 판매번호가 중복되었습니다.")
             sales.extend(data["sales"])
             operations.extend(data["operations"])
         op_ids = set()
@@ -259,7 +269,7 @@ class SalesWorkspace:
             else:
                 local_quotes.append(quote)
         self.vault.backup()
-        self._merge_sales(sales, imported_operations=operations, quotes=local_quotes)
+        self._merge_sales(sales, imported_operations=operations, quotes=local_quotes, sold_labels=sold_labels)
         if conflicts:
             self.transfer_notice += " · 견적 충돌로 기존 자료 유지: " + ", ".join(conflicts[:10])
         return self.local_copy_view()
