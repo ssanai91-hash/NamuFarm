@@ -47,7 +47,7 @@ def payment_confirmation_message(draft):
     lines.extend([f"택배비 : 선불 {fee:,}원" if draft.get("isPrepaid") else "택배비 : 후불",
                   f"총 주문금액 : {amount:,}원", "-" * 53, "",
                   f"{amount:,}원 입금 확인했습니다.", "주문하신 묘목을 준비하겠습니다.", "",
-                  "문의 : 043-732-0980", "감사합니다."])
+                  "문의 : 010-4446-0304", "감사합니다."])
     return "\n".join(lines)
 
 
