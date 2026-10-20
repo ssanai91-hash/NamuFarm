@@ -41,7 +41,7 @@ class QuoteWorkbenchTest(QtTestCase):
     def test_selected_layout_has_no_seedling_icons_and_a_separate_total_rule(self):
         dialog = self.dialog()
         header = dialog.items.horizontalHeader()
-        self.assertEqual([4, 0, 1, 3, 2], [header.logicalIndex(i) for i in range(5)])
+        self.assertEqual([4, 0, 1, 3, 2, 5], [header.logicalIndex(i) for i in range(6)])
         self.assertEqual('54,000원', dialog.total.text())
         self.assertEqual(0, dialog.items.verticalScrollBar().maximum())
         self.assertEqual(0, dialog.items.horizontalScrollBar().maximum())
@@ -52,7 +52,7 @@ class QuoteWorkbenchTest(QtTestCase):
                         dialog.workbench_summary.mapTo(dialog, QPoint()).y())
         self.assertEqual(3, dialog.workbench_total_rule.height())
         self.assertEqual(3, dialog.items.rowCount())  # Reserve space, not fake business items.
-        self.assertGreaterEqual(dialog.items.height(), dialog.items.horizontalHeader().height() + 5 * 56)
+        self.assertGreaterEqual(dialog.items.height(), dialog.items.horizontalHeader().height() + 4 * 56)
         for row in range(3):
             self.assertEqual(str(row + 1), dialog.items.item(row, 4).text())
             self.assertFalse(dialog.items.item(row, 4).flags() & Qt.ItemFlag.ItemIsEditable)
@@ -74,7 +74,7 @@ class QuoteWorkbenchTest(QtTestCase):
         self.assertEqual(original, self.draft)
         for key in ('customerName', 'customerPhone', 'customerEmail', 'quoteRecipientName', 'quoteReplyChannel', 'note'):
             self.assertEqual(original[key], result[key])
-        self.assertTrue(dialog.note.isReadOnly())
+        self.assertFalse(dialog.note.isReadOnly())
         self.assertEqual('가상 수신인', dialog.customer_values['견적서 수신인'].text())
         self.assertEqual('문자 + 이메일', dialog.customer_values['수신 방법'].text())
         self.assertEqual(6000, result['shippingFee'])
@@ -152,7 +152,7 @@ class QuoteWorkbenchTest(QtTestCase):
         self.draft['sourceRequestId'] = None
         dialog = self.dialog()
         self.assertEqual('quoteEditor', dialog.objectName())
-        self.assertEqual(6, dialog.items.columnCount())
+        self.assertEqual(7, dialog.items.columnCount())
         self.assertEqual('합계 54,000원', dialog.total.text())
         dialog.items.item(0, 2).setText('11')
         self.assertEqual('합계 56,000원', dialog.total.text())

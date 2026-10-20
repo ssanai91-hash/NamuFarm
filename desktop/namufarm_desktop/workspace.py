@@ -84,8 +84,8 @@ class UnitPriceEditor(QWidget):
         super().__init__(parent)
         self.setObjectName("unitPriceEditor")
         row = QHBoxLayout(self)
-        row.setContentsMargins(4, 0, 4, 0)
-        row.setSpacing(5)
+        row.setContentsMargins(3, 0, 3, 0)
+        row.setSpacing(4)
 
         self.minus = QPushButton("-")
         self.minus.setToolTip("판매 단가 1,000원 내리기")
@@ -144,9 +144,70 @@ def _paint_text(painter, rect, text, pixel_size=13, bold=False,
     painter.drawText(QRectF(*rect), int(flags), str(text))
 
 
-def render_official_quote_image(draft):
+def _quote_wrapped_lines(text, width, size):
+    """Preserve every character while measuring the same font used for printing."""
+    metrics = QFontMetricsF(_quote_font(size))
+    result, current = [], ""
+    for character in str(text).replace("\t", " "):
+        if character == "\n":
+            result.append(current)
+            current = ""
+        elif current and metrics.horizontalAdvance(current + character) > width:
+            result.append(current)
+            current = character
+        else:
+            current += character
+    result.append(current)
+    return result
+
+
+def official_quote_page_plan(draft):
+    """Paginate item rows and long notes instead of dropping rows or clipping text."""
+    validate_draft(draft)
+    rows = [(item["species"], item.get("specification", ""), int(item["quantity"]),
+             int(item["unitPrice"]), int(item["quantity"]) * int(item["unitPrice"]), "", item.get("remarks", ""))
+            for item in draft["items"]]
+    if draft.get("isPrepaid") and int(draft.get("shippingFee", 0)) > 0:
+        fee = int(draft["shippingFee"])
+        rows.append(("운반비", "선불", 1, fee, fee, "", "택배비"))
+    pages, current, used = [], [], 0
+    for values in rows:
+        height = max(32, *[int(len(_quote_wrapped_lines(values[column], width, size)) *
+                                  QFontMetricsF(_quote_font(size)).height() + 8)
+                          for column, width, size in ((0, 192, 15), (1, 58, 12), (6, 189, 12))])
+        require(height <= 743, "한 품목의 이름·규격·비고가 너무 깁니다. 내용을 줄여주세요.")
+        if current and used + height > 743:
+            pages.append({"rows": current})
+            current, used = [], 0
+        current.append((values, height))
+        used += height
+    pages.append({"rows": current})
+    note_lines = _quote_wrapped_lines("요청사항 : " + (draft.get("note", "").strip() or "없음"), 664, 12)
+    footer_count = max(1, int(56 / QFontMetricsF(_quote_font(12)).height()))
+    first_note = "\n".join(note_lines[:footer_count])
+    for page in pages:
+        page.update(note=first_note, continuation="")
+    remaining = note_lines[footer_count:]
+    body_count = max(1, int(690 / QFontMetricsF(_quote_font(15)).height()))
+    for offset in range(0, len(remaining), body_count):
+        pages.append({"rows": [], "note": "요청사항은 위 본문을 확인해주세요.",
+                      "continuation": "\n".join(remaining[offset:offset + body_count])})
+    for index, page in enumerate(pages):
+        page.update(number=index + 1, count=len(pages), noteContinues=bool(remaining))
+    return pages
+
+
+def render_official_quote_images(draft):
+    return [render_official_quote_image(draft, _page=page) for page in official_quote_page_plan(draft)]
+
+
+def render_official_quote_image(draft, *, _page=None):
     """Render the official quote at the same 955x1342 geometry as the supplied paper form."""
     validate_draft(draft)
+    if _page is None:
+        pages = official_quote_page_plan(draft)
+        require(len(pages) == 1, "여러 페이지 견적은 공식견적서 생성 기능을 사용해주세요.")
+        _page = pages[0]
     width, height = 955, 1342
     image = QImage(width, height, QImage.Format.Format_ARGB32)
     image.fill(QColor("white"))
@@ -167,18 +228,19 @@ def render_official_quote_image(draft):
         painter.drawRect(int(x1), int(y1), int(x2 - x1), int(y2 - y1))
 
     def fitted_text(rect, text, size=16, bold=False,
-                    align=Qt.AlignmentFlag.AlignCenter, color=black, minimum=9):
+                    align=Qt.AlignmentFlag.AlignCenter, color=black, minimum=9, wrap=False):
         x, y, w, h = rect
         text = str(text)
         font = _quote_font(size, bold)
-        while font.pixelSize() > minimum:
+        while not wrap and font.pixelSize() > minimum:
             metrics = QFontMetricsF(font)
             if metrics.horizontalAdvance(text) <= max(2, w - 8) and metrics.height() <= max(2, h - 3):
                 break
             font.setPixelSize(font.pixelSize() - 1)
         painter.setPen(color)
         painter.setFont(font)
-        painter.drawText(QRectF(x + 4, y + 1, max(1, w - 8), max(1, h - 2)), int(align), text)
+        flags = int(align) | (int(Qt.TextFlag.TextWrapAnywhere) if wrap else 0)
+        painter.drawText(QRectF(x + 4, y + 1, max(1, w - 8), max(1, h - 2)), flags, text)
 
     def phone(value):
         digits = "".join(ch for ch in str(value) if ch.isdigit())
@@ -292,51 +354,36 @@ def render_official_quote_image(draft):
                 f"₩{amounts['total']:,}원", 19, True,
                 Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
 
-    # Exact original column boundaries.
     xs = [26, 226, 292, 343, 468, 588, 713, 910]
-    headers = ["품   명", "규격", "수량", "단   가", "공급가액", "세   액", "비   고"]
     box(left, header_top, right, notes_top, thick)
-    for x in xs[1:-1]:
-        line(x, header_top, x, notes_top)
-    line(left, header_top, right, header_top)
-    line(left, data_top, right, data_top)
-
-    for i, title in enumerate(headers):
-        fitted_text((xs[i], header_top, xs[i + 1] - xs[i], data_top - header_top),
-                    title, 16, False, Qt.AlignmentFlag.AlignCenter, minimum=12)
-
-    # Original has 23 data rows. The small 32/33px alternation is preserved.
-    row_lines = [312, 344, 377, 409, 441, 474, 506, 538, 571, 603, 635, 668,
-                 700, 732, 764, 797, 829, 862, 894, 926, 958, 991, 1023, 1055]
-    for yy in row_lines[1:]:
-        line(left, yy, right, yy)
-
-    items = []
-    for item in draft.get("items", []):
-        qty = int(item["quantity"])
-        unit = int(item["unitPrice"])
-        items.append((item["species"], item.get("specification", ""), qty, unit, qty * unit, "", ""))
-    if draft.get("isPrepaid") and int(draft.get("shippingFee", 0) or 0) > 0:
-        fee = int(draft["shippingFee"])
-        items.append(("운반비", "선불", 1, fee, fee, "", "택배비"))
-
-    for row_index in range(min(len(items), 23)):
-        y1, y2 = row_lines[row_index], row_lines[row_index + 1]
-        values = items[row_index]
-        for col_index, value in enumerate(values):
-            if isinstance(value, int):
-                value = f"{value:,}"
-            if col_index == 0:
-                align = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
-                size = 15
-            elif col_index in (3, 4, 5):
-                align = Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
-                size = 15
-            else:
-                align = Qt.AlignmentFlag.AlignCenter
-                size = 15
-            fitted_text((xs[col_index], y1, xs[col_index + 1] - xs[col_index], y2 - y1),
-                        value, size, False, align, minimum=10)
+    if _page["continuation"]:
+        fitted_text((left, header_top, right - left, data_top - header_top), "요청사항 (계속)", 16, True)
+        fitted_text((left + 12, data_top + 12, right - left - 24, sum_top - data_top - 24),
+                    _page["continuation"], 15, False,
+                    Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop, minimum=15, wrap=True)
+    else:
+        headers = ["품   명", "규격", "수량", "단   가", "공급가액", "세   액", "비   고"]
+        for x in xs[1:-1]:
+            line(x, header_top, x, notes_top)
+        line(left, data_top, right, data_top)
+        for index, title in enumerate(headers):
+            fitted_text((xs[index], header_top, xs[index + 1] - xs[index], data_top - header_top), title, 16, minimum=12)
+        y = data_top
+        for values, height in _page["rows"]:
+            for column, value in enumerate(values):
+                numeric = isinstance(value, int)
+                text = f"{value:,}" if numeric else value
+                align = Qt.AlignmentFlag.AlignVCenter | (Qt.AlignmentFlag.AlignRight if column in (3, 4, 5) else
+                         Qt.AlignmentFlag.AlignLeft if column in (0, 6) else Qt.AlignmentFlag.AlignHCenter)
+                fitted_text((xs[column], y, xs[column + 1] - xs[column], height), text,
+                            15 if column == 0 or numeric else 12, align=align,
+                            minimum=12 if column in (1, 6) else 10, wrap=column in (0, 1, 6))
+            y += height
+            line(left, y, right, y)
+        while y + 32 < sum_top:
+            y += 32
+            line(left, y, right, y)
+        line(left, sum_top, right, sum_top)
 
     # Sum row y=1055..1087.
     fitted_text((xs[0], sum_top, xs[1] - xs[0], notes_top - sum_top), "계", 16, False)
@@ -359,18 +406,22 @@ def render_official_quote_image(draft):
         if draft.get("isPrepaid")
         else f"택배비 후불 / 선불 시 {int(draft.get('shippingFee', 0) or 0):,}원"
     )
-    note = draft.get("note", "").strip()
-    note4 = shipping_note + (f" / 요청 : {note}" if note else "")
-
-    fitted_text((228, 1093, 672, 30), f"1. {payment}", 14, False,
-                Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
-    fitted_text((228, 1130, 672, 31), "2. 견적후 일정기간후 금액변동 있을수 있음.", 14, False,
-                Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
-    fitted_text((228, 1196, 672, 31),
-                "3. 계산서 또는 현금영수증발행은 정상가격 처리후 7일이내 발행가능함.", 13, False,
-                Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, minimum=10)
-    fitted_text((228, 1226, 672, 37), f"4. {note4}", 13, False,
-                Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, minimum=9)
+    fitted_text((228, 1091, 672, 25), f"1. {payment}", 14,
+                align=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+    fitted_text((228, 1119, 672, 25), "2. 견적후 일정기간후 금액변동 있을수 있음.", 14,
+                align=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+    fitted_text((228, 1146, 672, 28),
+                "3. 계산서 또는 현금영수증발행은 정상가격 처리후 7일이내 발행가능함.", 13,
+                align=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, minimum=10)
+    fitted_text((228, 1177, 672, 24), f"4. {shipping_note}", 13,
+                align=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, minimum=11)
+    fitted_text((228, 1205, 672, 60), _page["note"], 12,
+                align=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop, minimum=12, wrap=True)
+    if _page["count"] > 1:
+        caption = f"{_page['number']} / {_page['count']}쪽"
+        if _page["noteContinues"] and not _page["continuation"]:
+            caption += " · 긴 요청사항은 뒤쪽에 계속됩니다."
+        fitted_text((26, 1280, 884, 28), caption, 13)
 
     painter.end()
     return image
@@ -391,14 +442,16 @@ def write_temporary_quote_pdf(image, path):
     if not painter.isActive():
         raise UserError("공식견적서 PDF를 임시 생성하지 못했습니다.")
     page_rect = writer.pageLayout().paintRectPixels(writer.resolution())
-    printed = image.scaled(
-        page_rect.size(),
-        Qt.AspectRatioMode.KeepAspectRatio,
-        Qt.TransformationMode.SmoothTransformation,
-    )
-    x = page_rect.x() + (page_rect.width() - printed.width()) // 2
-    y = page_rect.y() + (page_rect.height() - printed.height()) // 2
-    painter.drawImage(x, y, printed)
+    images = [image] if isinstance(image, QImage) else list(image)
+    require(bool(images), "공식견적서에 출력할 페이지가 없습니다.")
+    for index, page_image in enumerate(images):
+        if index:
+            require(writer.newPage(), "공식견적서의 다음 페이지를 생성하지 못했습니다.")
+        printed = page_image.scaled(page_rect.size(), Qt.AspectRatioMode.KeepAspectRatio,
+                                    Qt.TransformationMode.SmoothTransformation)
+        x = page_rect.x() + (page_rect.width() - printed.width()) // 2
+        y = page_rect.y() + (page_rect.height() - printed.height()) // 2
+        painter.drawImage(x, y, printed)
     painter.end()
 
     require(path.is_file() and path.stat().st_size > 0, "공식견적서 PDF를 임시 생성하지 못했습니다.")
@@ -422,15 +475,20 @@ def preview_temporary_quote(parent, image):
     layout = QVBoxLayout(dialog)
     layout.setContentsMargins(12, 12, 12, 10)
 
-    page = QLabel()
-    page.setAlignment(Qt.AlignmentFlag.AlignCenter)
-    page.setStyleSheet("QLabel{background:#dfe3df;border:0;padding:12px;}")
-    pixmap = QPixmap.fromImage(image)
-    scaled = pixmap.scaled(max_preview_w, max_preview_h,
-                           Qt.AspectRatioMode.KeepAspectRatio,
-                           Qt.TransformationMode.SmoothTransformation)
-    page.setPixmap(scaled)
-    layout.addWidget(page, 1)
+    images = [image] if isinstance(image, QImage) else list(image)
+    scroll = QScrollArea()
+    scroll.setWidgetResizable(True)
+    pages_widget = QWidget()
+    pages_layout = QVBoxLayout(pages_widget)
+    for page_image in images:
+        page = QLabel()
+        page.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        page.setStyleSheet("QLabel{background:#dfe3df;border:0;padding:12px;}")
+        page.setPixmap(QPixmap.fromImage(page_image).scaled(max_preview_w, max_preview_h,
+                       Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+        pages_layout.addWidget(page)
+    scroll.setWidget(pages_widget)
+    layout.addWidget(scroll, 1)
 
     row = QHBoxLayout()
     row.addWidget(label("A4 비율 임시 생성 문서 · 별도 파일로 저장하지 않습니다.", "muted"))
@@ -443,12 +501,16 @@ def preview_temporary_quote(parent, image):
             return
         painter = QPainter(printer)
         page_rect = printer.pageLayout().paintRectPixels(printer.resolution())
-        printed = image.scaled(page_rect.size(),
-                               Qt.AspectRatioMode.KeepAspectRatio,
-                               Qt.TransformationMode.SmoothTransformation)
-        x = page_rect.x() + (page_rect.width() - printed.width()) // 2
-        y = page_rect.y() + (page_rect.height() - printed.height()) // 2
-        painter.drawImage(x, y, printed)
+        for index, page_image in enumerate(images):
+            if index and not printer.newPage():
+                painter.end()
+                QMessageBox.warning(dialog, "프린터 출력", "다음 페이지를 출력하지 못했습니다.")
+                return
+            printed = page_image.scaled(page_rect.size(), Qt.AspectRatioMode.KeepAspectRatio,
+                                       Qt.TransformationMode.SmoothTransformation)
+            x = page_rect.x() + (page_rect.width() - printed.width()) // 2
+            y = page_rect.y() + (page_rect.height() - printed.height()) // 2
+            painter.drawImage(x, y, printed)
         painter.end()
 
     row.addWidget(button("프린터 출력", print_only))
@@ -757,6 +819,7 @@ class QuoteDeliveryTools:
     def cleanup_generated_quote(self):
         path = self.generated_quote_path
         self.generated_quote_image = None
+        self.generated_quote_images = []
         self.generated_quote_path = None
         self.quote_file_label.setToolTip("")
         if path:
@@ -770,11 +833,12 @@ class QuoteDeliveryTools:
         if not self.persist_shipping():
             return
         try:
-            image = render_official_quote_image(self.draft)
+            images = render_official_quote_images(self.draft)
             filename = self.official_quote_filename()
             temp_dir = Path(tempfile.gettempdir()) / "NamuFarm" / "official_quotes"
-            path = write_temporary_quote_pdf(image, temp_dir / filename)
-            self.generated_quote_image = image
+            path = write_temporary_quote_pdf(images, temp_dir / filename)
+            self.generated_quote_images = images
+            self.generated_quote_image = images[0]
             self.generated_quote_path = path
             self.preview_quote_button.setEnabled(True)
             self.generate_quote_button.setText("공식견적서 재생성")
@@ -791,7 +855,7 @@ class QuoteDeliveryTools:
         if self.generated_quote_image is None or not self.generated_quote_path:
             QMessageBox.information(self, "공식견적서", "먼저 공식견적서를 생성해주세요.")
             return
-        preview_temporary_quote(self, self.generated_quote_image)
+        preview_temporary_quote(self, self.generated_quote_images or self.generated_quote_image)
 
 
 
@@ -801,9 +865,12 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         super().__init__(parent)
         self.draft, self.mode, self.request_status = (copy.deepcopy(draft), '', request_status)
         self.simple_request = bool(draft.get('sourceRequestId'))
+        if self.simple_request:
+            self.draft.setdefault('requestNote', self.draft.get('note', ''))
         self.manager = manager
         self.delivery_state = manager.quote_delivery_state(draft["id"]) if manager else {}
         self.generated_quote_image = None
+        self.generated_quote_images = []
         self.generated_quote_path = None
         self.setWindowTitle('견적 작업대')
         self.setObjectName('quoteEditor')
@@ -858,11 +925,11 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         content.setSpacing(8)
         content.addWidget(label('견적 품목', 'sectionTitle'))
         content.addWidget(label('수기 견적 품목으로 등록합니다. 휴대폰 재고 수량은 차감하지 않습니다.', 'muted', True))
-        self.items = table(['묘목명', '규격', '수량', '판매 단가', '매입 단가', '판매 금액'])
+        self.items = table(['묘목명', '규격', '수량', '판매 단가', '매입 단가', '판매 금액', '비고'])
         self.items.setEditTriggers(self.items.EditTrigger.DoubleClicked | self.items.EditTrigger.EditKeyPressed | self.items.EditTrigger.AnyKeyPressed)
         self.items.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         polish_table(self.items)
-        self.items.set_column_layout(((0, 3), (1, 1.6), (2, 1), (3, 1.5), (4, 1.5), (5, 1.8)))
+        self.items.set_column_layout(((0, 3), (1, 1.6), (2, 1), (3, 1.5), (4, 1.5), (5, 1.8), (6, 2)))
         self.items.itemChanged.connect(self.recalculate)
         content.addWidget(self.items)
         actions = QHBoxLayout()
@@ -911,6 +978,7 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
             self.setMinimumSize(960, 600)
         self.fields = {}
         self.cost = QCheckBox()
+        self.note = QPlainTextEdit(self.draft.get("note", ""))
 
         self.workbench_icons = []
 
@@ -1057,16 +1125,28 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         content.setSpacing(5 if large else 8)
         content.addWidget(section_heading("견적 품목", "leaf", 36))
         # Logical indices stay stable for collection; visual order puts price before amount.
-        self.items = table(["묘목명", "수량", "판매 금액", "판매 단가", "순번"])
+        content.addWidget(label("묘목명·수량·비고는 두 번 클릭해 수정할 수 있어요. 비고 예: 3년생 / 키 80cm / 포트묘", "muted", True))
+        self.items = table(["묘목명", "수량", "판매 금액", "판매 단가", "순번", "비고"])
+        self.items.setEditTriggers(self.items.EditTrigger.DoubleClicked | self.items.EditTrigger.EditKeyPressed | self.items.EditTrigger.AnyKeyPressed)
         self.items.setObjectName("workbenchItems")
         polish_table(self.items)
         self.items.horizontalHeader().setFixedHeight(52 if large else 48)
         self.items.verticalHeader().setMinimumSectionSize(64 if large else 56)
         self.items.verticalHeader().setDefaultSectionSize(64 if large else 56)
-        self.items.set_column_layout(((4, .5, 60), (0, 3, 90), (1, 1, 60), (3, 3, 220), (2, 2, 100)))
+        self.items.set_column_layout(((4, .5, 42), (0, 3, 84), (1, 1, 50), (3, 3, 228), (2, 2, 80), (5, 3, 90)))
+        self.items.horizontalHeader().setMinimumSectionSize(42)
+        self.items.fit_columns()
         self.items.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Ignored)
         self.items.itemChanged.connect(self.recalculate)
         content.addWidget(self.items, 1)
+
+        item_actions = QHBoxLayout()
+        self.add_item_button = button("+ 묘목 추가", self.add_item)
+        self.remove_item_button = button("선택 묘목 삭제", self.remove_item)
+        item_actions.addWidget(self.add_item_button)
+        item_actions.addWidget(self.remove_item_button)
+        item_actions.addStretch(1)
+        content.addLayout(item_actions)
 
         shipping = QFrame()
         shipping.setObjectName("workbenchShipping")
@@ -1125,13 +1205,13 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         notes = QHBoxLayout(self.workbench_note_area)
         notes.setContentsMargins(24, 8, 24, 8)
         notes.setSpacing(16)
-        notes.addWidget(section_heading("요청사항", "document", 32))
-        self.note = QPlainTextEdit(self.draft.get("note", ""))
-        self.note.setReadOnly(True)
+        notes.addWidget(section_heading("견적서 요청사항", "document", 32))
         self.note.setFixedHeight(70 if large else 62)
-        self.note.setPlaceholderText("요청사항 없음")
-        self.note.setAccessibleName("고객 요청사항")
+        self.note.setPlaceholderText("배송 일정·납품 조건 등 공식 견적서 하단에 표시할 내용을 입력하세요.")
+        self.note.setAccessibleName("판매자 견적서 요청사항")
+        self.note.textChanged.connect(self.recalculate)
         notes.addWidget(self.note, 1)
+        notes.addWidget(button("고객 원문 보기", self.show_request_note))
         root.addWidget(self.workbench_note_area)
 
         self.workbench_footer = QFrame()
@@ -1154,8 +1234,8 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
             self.add_item(item)
         row_height = self.items.verticalHeader().defaultSectionSize()
         table_header = self.items.horizontalHeader().height()
-        self.items.setMinimumHeight(table_header + 5 * row_height + 4)
-        self.items.setMaximumHeight(table_header + max(5, self.items.rowCount()) * row_height + 4)
+        self.items.setMinimumHeight(table_header + 4 * row_height + 4)
+        self.items.setMaximumHeight(table_header + max(4, self.items.rowCount()) * row_height + 4)
         self.shipping_cod.toggled.connect(self.recalculate)
         self.shipping_prepaid.toggled.connect(self.recalculate)
         self.shipping_fee.textChanged.connect(self.recalculate)
@@ -1212,11 +1292,15 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         for row in range(self.items.rowCount()):
             self.items.setRowHeight(row, row_height)
         header = self.items.horizontalHeader().height()
-        # Reserve five visible rows without creating empty business records.
-        self.items.setMinimumHeight(header + 5 * row_height + 4)
-        self.items.setMaximumHeight(header + max(5, self.items.rowCount()) * row_height + 4)
+        # Reserve four visible rows; adding/editing actions occupy the fifth-row space.
+        self.items.setMinimumHeight(header + 4 * row_height + 4)
+        self.items.setMaximumHeight(header + max(4, self.items.rowCount()) * row_height + 4)
 
     def add_item(self, item=None):
+        is_new = not isinstance(item, dict)
+        if is_new and self.items.rowCount() >= (50 if self.simple_request else 100):
+            QMessageBox.information(self, "묘목 추가", "견적 품목은 최대 50개까지 추가할 수 있습니다." if self.simple_request else "견적 품목은 최대 100개까지 추가할 수 있습니다.")
+            return
         item = item if isinstance(item, dict) else {"species": "", "specification": "", "quantity": 1, "unitPrice": 0, "unitCost": 0}
         self.items.blockSignals(True)
         index = self.items.rowCount()
@@ -1225,12 +1309,14 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
             number = QTableWidgetItem(str(index + 1))
             number.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             number.setFlags(number.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            number.setData(Qt.ItemDataRole.UserRole, copy.deepcopy(item))
             self.items.setItem(index, 4, number)
             values = (item["species"], item["quantity"], f"{item['quantity'] * item['unitPrice']:,}")
             for column, value in enumerate(values):
                 cell = QTableWidgetItem(str(value))
                 cell.setTextAlignment((Qt.AlignmentFlag.AlignLeft if column == 0 else Qt.AlignmentFlag.AlignRight) | Qt.AlignmentFlag.AlignVCenter)
-                cell.setFlags(cell.flags() & ~Qt.ItemFlag.ItemIsEditable)
+                if column == 2:
+                    cell.setFlags(cell.flags() & ~Qt.ItemFlag.ItemIsEditable)
                 if column == 0:
                     cell.setToolTip(str(value))
                     font = cell.font()
@@ -1243,6 +1329,7 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
             price_editor.input.setFixedHeight(44)
             price_editor.changed.connect(self.recalculate)
             self.items.setCellWidget(index, 3, price_editor)
+            self.items.setItem(index, 5, QTableWidgetItem(item.get("remarks", "")))
             self.items.setRowHeight(index, max(self.items.verticalHeader().defaultSectionSize(), 60))
         else:
             for column, key in enumerate(("species", "specification", "quantity", "unitPrice", "unitCost")):
@@ -1254,8 +1341,12 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
             amount.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
             amount.setFlags(amount.flags() & ~Qt.ItemFlag.ItemIsEditable)
             self.items.setItem(index, 5, amount)
+            self.items.setItem(index, 6, QTableWidgetItem(item.get("remarks", "")))
         self.items.blockSignals(False)
         self.recalculate()
+        if is_new:
+            self.items.setCurrentCell(index, 0)
+            self.items.editItem(self.items.item(index, 0))
 
     def unit_price_editor(self, row):
         editor = self.items.cellWidget(row, 3) if self.simple_request else None
@@ -1267,19 +1358,33 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         self.unit_price_editor(row).set_value(value)
 
     def remove_item(self):
-        if self.simple_request:
-            return
         index = self.items.currentRow()
         if index >= 0:
             self.items.removeRow(index)
+            if self.simple_request:
+                self.items.blockSignals(True)
+                for row in range(self.items.rowCount()):
+                    self.items.item(row, 4).setText(str(row + 1))
+                self.items.blockSignals(False)
             self.recalculate()
+
+    def show_request_note(self):
+        dialog = QDialog(self)
+        dialog.setWindowTitle("고객이 접수한 요청사항 원문")
+        dialog.resize(560, 300)
+        layout = QVBoxLayout(dialog)
+        text = QPlainTextEdit(self.draft.get("requestNote", ""))
+        text.setReadOnly(True)
+        layout.addWidget(text)
+        layout.addWidget(button("닫기", dialog.accept))
+        dialog.exec()
 
     def raw_state(self):
         if self.simple_request:
-            item_state = [[self.items.item(r, 0).text(), self.items.item(r, 1).text(), self.unit_price_editor(r).text()]
+            item_state = [[self.items.item(r, 0).text(), self.items.item(r, 1).text(), self.unit_price_editor(r).text(), self.items.item(r, 5).text()]
                           for r in range(self.items.rowCount())]
         else:
-            item_state = [[self.items.item(r, c).text() for c in range(5)] for r in range(self.items.rowCount())]
+            item_state = [[self.items.item(r, c).text() for c in (0, 1, 2, 3, 4, 6)] for r in range(self.items.rowCount())]
         fields = [field.text() for field in self.fields.values()]
         if self.simple_request:
             fields += [self.shipping_fee.text(), self.shipping_prepaid.isChecked()]
@@ -1299,14 +1404,17 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         if self.simple_request:
             fee = self.shipping_fee.text().strip()
             require(fee.isascii() and fee.isdigit(), "선불 택배비를 0 이상의 정수로 입력해주세요.")
-            draft.update(shippingFee=int(fee), isPrepaid=self.shipping_prepaid.isChecked(), taxAmount=0, costConfirmed=False, items=[])
+            draft.update(shippingFee=int(fee), isPrepaid=self.shipping_prepaid.isChecked(), taxAmount=0, costConfirmed=False, items=[], note=self.note.toPlainText().strip())
             for row in range(self.items.rowCount()):
                 species = self.items.item(row, 0).text().strip()
                 quantity = self.items.item(row, 1).text().strip()
                 price = self.unit_price_editor(row).text()
                 require(quantity.isascii() and quantity.isdigit() and price.isascii() and price.isdigit(),
                         f"{row+1}번째 품목 수량·판매 단가를 정수로 입력해주세요.")
-                draft["items"].append(dict(species=species, specification="", quantity=int(quantity), unitPrice=int(price), unitCost=0))
+                original = self.items.item(row, 4).data(Qt.ItemDataRole.UserRole) or {}
+                draft["items"].append(dict(species=species, specification=original.get("specification", ""),
+                                          quantity=int(quantity), unitPrice=int(price), unitCost=original.get("unitCost", 0),
+                                          remarks=self.items.item(row, 5).text().strip()))
             return validate_draft(draft) if validate else draft
 
         for key, field in self.fields.items():
@@ -1320,12 +1428,14 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         for row in range(self.items.rowCount()):
             values = [self.items.item(row, c).text().strip() for c in range(5)]
             require(all(v.isascii() and v.isdigit() for v in values[2:]), f"{row+1}번째 품목 수량·단가를 정수로 입력해주세요.")
-            draft["items"].append(dict(species=values[0], specification=values[1], quantity=int(values[2]), unitPrice=int(values[3]), unitCost=int(values[4])))
+            draft["items"].append(dict(species=values[0], specification=values[1], quantity=int(values[2]), unitPrice=int(values[3]), unitCost=int(values[4]), remarks=self.items.item(row, 6).text().strip()))
         return validate_draft(draft) if validate else draft
 
     def recalculate(self, *args):
         if not hasattr(self, "items") or not hasattr(self, "total"):
             return
+        if self.simple_request and hasattr(self, "add_item_button"):
+            self.add_item_button.setEnabled(self.items.rowCount() < 50)
         if self.simple_request and self.generated_quote_path:
             self.cleanup_generated_quote()
             self.preview_quote_button.setEnabled(False)
@@ -1341,6 +1451,8 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
             if self.simple_request:
                 for row, item in enumerate(draft["items"]):
                     self.items.item(row, 2).setText(f"{item['quantity'] * item['unitPrice']:,}")
+                    self.items.item(row, 0).setToolTip(item['species'])
+                    self.items.item(row, 5).setToolTip(item.get('remarks', ''))
             else:
                 for row, item in enumerate(draft["items"]):
                     self.items.item(row, 5).setText(f"{item['quantity'] * item['unitPrice']:,}")

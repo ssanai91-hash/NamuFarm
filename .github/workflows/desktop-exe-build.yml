@@ -1,6 +1,12 @@
 name: Desktop EXE Build
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - "desktop/**"
+      - "!desktop/**.md"
+      - ".github/workflows/desktop-exe-build.yml"
   workflow_dispatch:
 
 permissions:
@@ -9,6 +15,10 @@ permissions:
 jobs:
   windows:
     name: Build Windows EXE
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[build desktop exe]')
+    concurrency:
+      group: desktop-exe-${{ github.event_name == 'workflow_dispatch' && format('manual-{0}', github.run_id) || github.ref }}
+      cancel-in-progress: true
     runs-on: windows-latest
     timeout-minutes: 30
     permissions:

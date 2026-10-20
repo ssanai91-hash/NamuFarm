@@ -39,6 +39,9 @@ def quote_delivery_fingerprint(draft):
     value["items"] = [{key: item.get(key, "" if key in ("species", "specification") else 0)
                        for key in ("species", "specification", "quantity", "unitPrice")}
                       for item in draft.get("items", [])]
+    for original, item in zip(draft.get("items", []), value["items"]):
+        if original.get("remarks", ""):
+            item["remarks"] = original["remarks"]
     return hashlib.sha256(json.dumps(value, sort_keys=True, ensure_ascii=False,
                                      separators=(",", ":")).encode("utf-8")).hexdigest()
 
@@ -62,8 +65,10 @@ def new_draft(request=None):
             "quoteRecipientName": person.get("recipientName", ""),
             "quoteReplyChannel": person.get("replyChannel", "sms"),
             "zipNo": "", "roadAddress": "", "detailAddress": "", "requestRegion": person.get("region", ""), "note": person.get("message", ""),
+            "requestNote": person.get("message", ""),
             "items": [{"species": i["species"], "specification": i.get("specification", ""), "quantity": i["quantity"],
-                       "unitPrice": priced[n].get("unitPrice", 0) if pricing else 0, "unitCost": 0}
+                       "unitPrice": priced[n].get("unitPrice", 0) if pricing else 0, "unitCost": 0,
+                       "remarks": i.get("remarks", "")}
                       for n, i in enumerate(rows)],
             "shippingFee": pricing.get("shippingFee", 0) if pricing else 0,
             "isPrepaid": pricing.get("isPrepaid", False) if pricing else False,
@@ -90,6 +95,9 @@ def draft_amounts(draft):
         for name, limit in (("species", 200), ("specification", 120)):
             text = item.get(name, "")
             require(isinstance(text, str) and len(text) <= limit and not any(c in text for c in "|\n\r"), "품목명·규격을 확인해주세요.")
+        remarks = item.get("remarks", "")
+        require(isinstance(remarks, str) and len(remarks) <= 200 and not any(ord(c) < 32 for c in remarks),
+                "묘목별 비고는 줄바꿈 없이 200자 이내로 입력해주세요.")
         require(item["species"].strip(), "품목명을 입력해주세요.")
         qty = integer(item.get("quantity"), 1, 2147483647)
         quantity += qty
@@ -117,6 +125,9 @@ def validate_draft(draft):
     for name, limit in EDITABLE.items():
         value = draft.get(name, "")
         require(isinstance(value, str) and len(value) <= limit and not any(ord(c) < 32 and (name != "note" or c not in "\n\t") for c in value), "고객·배송 정보를 확인해주세요.")
+    original_note = draft.get("requestNote", "")
+    require(isinstance(original_note, str) and len(original_note) <= 1000 and
+            not any(ord(c) < 32 and c not in "\r\n\t" for c in original_note), "고객 요청 원문을 확인해주세요.")
     require(draft["customerName"].strip(), "고객명을 입력해주세요.")
     require(re.fullmatch(r"0[0-9]{8,10}", draft["customerPhone"]), "전화번호를 숫자 9~11자리로 입력해주세요.")
     email = draft.get("customerEmail", "")
@@ -151,7 +162,7 @@ def quote_document(draft):
     amounts = draft_amounts(draft)
     stamp = draft["createdAt"]
     date = datetime.fromtimestamp(stamp / 1000, SEOUL).strftime("%Y%m%d")
-    lines = [{"name": i["species"].strip(), "specification": i["specification"], "quantity": i["quantity"], "unitPrice": i["unitPrice"], "unit": "주"} for i in draft["items"]]
+    lines = [{"name": i["species"].strip(), "specification": i["specification"], "remarks": i.get("remarks", ""), "quantity": i["quantity"], "unitPrice": i["unitPrice"], "unit": "주"} for i in draft["items"]]
     if draft["isPrepaid"]:
         lines.append({"name": "운반비", "specification": "선불", "quantity": 1, "unitPrice": draft["shippingFee"], "unit": "건"})
     return {"schemaVersion": 1, "id": draft["id"], "number": f"NQ-{date}-{draft['id'][:8].upper()}",
@@ -165,7 +176,7 @@ def quote_document(draft):
             "totalAmount": amounts["total"],
             "shippingNote": (f"택배비 선불 {draft['shippingFee']:,}원 · 합계 포함" if draft["isPrepaid"]
                              else f"택배비 후불 · 선불 시 {draft['shippingFee']:,}원"),
-            "validUntil": draft["validUntil"], "notes": draft["note"].replace("\t", " ")[:500], "paymentAccount": draft.get("paymentAccount", "")}
+            "validUntil": draft["validUntil"], "notes": draft["note"].replace("\t", " "), "paymentAccount": draft.get("paymentAccount", "")}
 
 
 def order_from_draft(draft):
@@ -319,7 +330,7 @@ def official_quote_html(draft):
             "quantity": quantity,
             "unitPrice": unit_price,
             "amount": quantity * unit_price,
-            "note": "",
+            "note": item.get("remarks", ""),
         })
     if draft.get("isPrepaid") and int(draft.get("shippingFee", 0) or 0) > 0:
         fee = int(draft["shippingFee"])
@@ -488,9 +499,9 @@ def quote_document_html(doc, final=True):
     e = lambda value: escape(str(value))
     issuer = doc["issuer"]
     body = f'<p><b>{e(doc["recipient"]["customerName"])} 귀하</b> · {e(doc["customerPhone"])}</p><p>{e(issuer["businessName"])} / {e(issuer["representative"])} / {e(issuer["businessNumber"])}<br>{e(issuer["address"])} / {e(issuer["phone"])}</p>'
-    body += '<table><tr><th>품목 / 규격</th><th>수량</th><th>단가</th><th>금액</th></tr>'
+    body += '<table><tr><th>품목 / 규격</th><th>수량</th><th>단가</th><th>금액</th><th>비고</th></tr>'
     for line in doc["lines"]:
-        body += f'<tr><td>{e(line["name"])}<br>{e(line["specification"])}</td><td>{line["quantity"]:,} {e(line["unit"])}</td><td>{line["unitPrice"]:,}</td><td>{line["quantity"]*line["unitPrice"]:,}</td></tr>'
+        body += f'<tr><td>{e(line["name"])}<br>{e(line["specification"])}</td><td>{line["quantity"]:,} {e(line["unit"])}</td><td>{line["unitPrice"]:,}</td><td>{line["quantity"]*line["unitPrice"]:,}</td><td>{e(line.get("remarks", ""))}</td></tr>'
     body += f'</table><p>공급가 {doc["supplyAmount"]:,}원 + 세액 {doc["taxAmount"]:,}원</p><p class="amount">합계 {doc["totalAmount"]:,}원</p><p>{e(doc["shippingNote"])}<br>유효기간: {e(doc["validUntil"])}<br>{e(doc["paymentAccount"])}</p><p>{e(doc["notes"]).replace(chr(10), "<br>")}</p>'
     return document_html("견적서" if final else "견적안", doc["number"], body)
 

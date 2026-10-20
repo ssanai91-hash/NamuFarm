@@ -58,7 +58,7 @@ def write_confirmed_quotes(path, quotes):
     validate_quotes(quotes)
     path = Path(path)
     rows = [["견적접수번호", "상태", "작성시각(한국)", "고객명", "전화번호", "이메일", "묘목", "규격", "수량",
-             "판매단가", "품목금액", "배송비", "선불여부", "세액", "견적총액", "요청사항", "견적ID", "요청ID"]]
+             "판매단가", "품목금액", "배송비", "선불여부", "세액", "견적총액", "요청사항", "견적ID", "요청ID", "묘목별 비고"]]
     for d in quotes:
         created = datetime.fromtimestamp(d["createdAt"] / 1000, SEOUL).strftime("%Y-%m-%d %H:%M:%S")
         for item in d["items"]:
@@ -66,7 +66,7 @@ def write_confirmed_quotes(path, quotes):
                          d["customerName"], d["customerPhone"], d.get("customerEmail", ""), item["species"],
                          item.get("specification", ""), item["quantity"], item["unitPrice"],
                          item["quantity"] * item["unitPrice"], d["shippingFee"], "선불" if d["isPrepaid"] else "착불",
-                         d["taxAmount"], draft_amounts(d)["total"], d.get("note", ""), d["id"], d["sourceRequestId"]])
+                         d["taxAmount"], draft_amounts(d)["total"], d.get("note", ""), d["id"], d["sourceRequestId"], item.get("remarks", "")])
     # Excel cells are limited to 32,767 characters; never truncate a large quote.
     raw = json.dumps({"version": 1, "quotes": quotes}, ensure_ascii=True, separators=(",", ":"))
     payload = [["앱 보관자료 v1 · 직접 수정하지 마세요"]] + [[raw[i:i + 30000]] for i in range(0, len(raw), 30000)]
@@ -78,7 +78,7 @@ def write_confirmed_quotes(path, quotes):
             book.writestr('_rels/.rels', f'<Relationships xmlns="{REL}"><Relationship Id="rId1" Type="{OFFICE}/officeDocument" Target="xl/workbook.xml"/></Relationships>')
             book.writestr('xl/workbook.xml', f'<workbook xmlns="{NS}" xmlns:r="{OFFICE}"><sheets><sheet name="견적확정" sheetId="1" r:id="rId1"/><sheet name="앱보관자료" sheetId="2" state="hidden" r:id="rId2"/></sheets></workbook>')
             book.writestr('xl/_rels/workbook.xml.rels', f'<Relationships xmlns="{REL}"><Relationship Id="rId1" Type="{OFFICE}/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="{OFFICE}/worksheet" Target="worksheets/sheet2.xml"/></Relationships>')
-            book.writestr('xl/worksheets/sheet1.xml', _sheet(rows, 18))
+            book.writestr('xl/worksheets/sheet1.xml', _sheet(rows, 19))
             book.writestr('xl/worksheets/sheet2.xml', _sheet(payload, 1))
         os.replace(temporary, path)
     finally:

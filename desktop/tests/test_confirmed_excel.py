@@ -76,6 +76,22 @@ class ConfirmedExcelTest(unittest.TestCase):
         self.assertEqual([], view['requests'])
         self.assertEqual(draft['id'], view['confirmedQuotes'][0]['id'])
 
+    def test_seller_item_edits_additions_and_notes_survive_ack_restart_and_sync(self):
+        draft = self.request_draft()
+        source = copy.deepcopy(self.manager.view()['requests'][0]['personal'])
+        draft['items'][0].update(species='판매자 수정 묘목', quantity=17, remarks='3년생 / 키 80cm')
+        draft['items'].append(dict(species='추가 블루베리', specification='포트', quantity=2,
+                                   unitPrice=20000, unitCost=10000, remarks='5년생'))
+        draft['note'] = '판매자 안내: 다음 주 화요일 배송'
+        self.manager.confirm_quote(draft)
+        manager = self.restart()
+        manager.sync_requests()
+        restored = manager.view()['confirmedQuotes'][0]
+        self.assertEqual(draft['items'], restored['items'])
+        self.assertEqual(draft['note'], restored['note'])
+        self.assertEqual(source.get('message', ''), restored['requestNote'])
+        self.assertNotEqual(source['items'][0]['species'], restored['items'][0]['species'])
+
     def test_server_only_confirmation_is_not_imported(self):
         draft = self.request_draft()
         self.manager.api.call('save_quote_pricing', requestId=draft['sourceRequestId'], quotePricing={

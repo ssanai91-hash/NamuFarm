@@ -211,8 +211,21 @@ class WorkflowRoutingTest(unittest.TestCase):
         self.assertNotIn('concurrency', apk)  # skipped, unmarked pushes cannot cancel a requested APK
         self.assertIs(apk['jobs']['apk']['concurrency']['cancel-in-progress'], True)
         self.assertIn('manual-{0}', apk['jobs']['apk']['concurrency']['group'])
-        self.assertEqual(set(WORKFLOWS['desktop-exe-build.yml']['on']), {'workflow_dispatch'})
+        exe = WORKFLOWS['desktop-exe-build.yml']
+        self.assertEqual(set(exe['on']), {'push', 'workflow_dispatch'})
+        self.assertEqual(exe['jobs']['windows']['if'], "github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[build desktop exe]')")
+        self.assertNotIn('concurrency', exe)
+        self.assertIs(exe['jobs']['windows']['concurrency']['cancel-in-progress'], True)
+        self.assertIn('manual-{0}', exe['jobs']['windows']['concurrency']['group'])
         self.assertEqual(set(WORKFLOWS['build-downloads.yml']['on']), {'workflow_dispatch'})
+
+    def test_explicit_desktop_build_only_listens_for_desktop_main_changes(self):
+        name = 'desktop-exe-build.yml'
+        self.assertTrue(triggers(name, ['desktop/namufarm_desktop/workspace.py']))
+        self.assertFalse(triggers(name, ['desktop/README.md']))
+        self.assertFalse(triggers(name, ['website/components/quote-home.tsx']))
+        self.assertFalse(triggers(name, ['desktop/pyproject.toml'], branch='feature/test'))
+        self.assertFalse(triggers(name, ['desktop/pyproject.toml'], event='pull_request'))
 
     def test_packager_is_not_installed_on_automatic_windows_tests(self):
         packager = [step for step in steps(DESKTOP, 'windows') if 'pip install' in step.get('run', '') and 'pyinstaller' in step['run'].lower()]
