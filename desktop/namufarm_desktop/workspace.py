@@ -1773,7 +1773,7 @@ class QuoteSmsDialog(QDialog):
         layout.setContentsMargins(24, 20, 24, 20)
         layout.setSpacing(12)
         layout.addWidget(label("입금확인 문자 보내기" if payment else "견적 문자 보내기", "deliveryTitle"))
-        layout.addWidget(label("전송 성공을 확인한 뒤 입금확인 주문을 판매관리로 등록합니다." if payment else
+        layout.addWidget(label("문자 전송 성공 후 아래 입금확인 버튼을 눌러 판매관리에 등록하세요." if payment else
                                "고객 번호와 견적 내용을 확인한 뒤 문자를 전송합니다.", "deliverySubtitle", True))
 
         address_card = QFrame()
@@ -1821,6 +1821,10 @@ class QuoteSmsDialog(QDialog):
         actions.addWidget(self.check_button)
         actions.addWidget(self.cancel_button)
         actions.addWidget(self.send_button)
+        if payment:
+            self.payment_confirm_button = button("입금확인", self.confirm_payment, True)
+            self.payment_confirm_button.setEnabled(False)
+            actions.addWidget(self.payment_confirm_button)
         layout.addLayout(actions)
         scroll_dialog(self, layout)
 
@@ -1922,6 +1926,9 @@ class QuoteSmsDialog(QDialog):
             return
         self.status_timer.stop()
         self.poll_count = 0
+        self.success_confirmed = False
+        if self.payment_notice:
+            self.payment_confirm_button.setEnabled(False)
         self.message.setEnabled(False)
         self.send_button.setEnabled(False)
         self.check_button.setEnabled(False)
@@ -1998,8 +2005,8 @@ class QuoteSmsDialog(QDialog):
                     self.message.setEnabled(True)
                     self.send_button.setEnabled(True)
                     return
-                self.success_confirmed = True
-                self.accept()
+                self.payment_confirm_button.setEnabled(True)
+                self.status.setText("문자전송 성공 · 입금확인을 누르면 판매관리에 등록됩니다.")
             return
         if state == "failed":
             self.status_timer.stop()
@@ -2016,6 +2023,17 @@ class QuoteSmsDialog(QDialog):
             self.status_timer.start()
         else:
             self.status.setText("문자전송 결과 확인중…")
+
+    def confirm_payment(self):
+        # Delivery success never registers a sale without this explicit click.
+        if not self.payment_notice or self.profile_task or self.send_task or self.status_task:
+            return
+        if (self.delivery_state.get("smsState") != "success" or
+                self.delivery_state.get("smsQuoteFingerprint") != quote_delivery_fingerprint(self.draft)):
+            return
+        self.success_confirmed = True
+        self.status_timer.stop()
+        self.accept()
 
     def reject(self):
         if self.profile_task or self.send_task or self.status_task:
@@ -2533,7 +2551,10 @@ class QuoteDeliveryDialog(QuoteDialog):
             return
         sms = QuoteSmsDialog(self._payment_draft, self.manager, self, payment=True)
         if sms.exec() != QDialog.DialogCode.Accepted or not sms.success_confirmed:
-            self.payment_status.setText("입금확인 문자 전송이 완료되지 않아 판매 등록하지 않았습니다.")
+            sent = (sms.delivery_state.get("smsState") == "success" and
+                    sms.delivery_state.get("smsQuoteFingerprint") == quote_delivery_fingerprint(self._payment_draft))
+            self.payment_status.setText("문자 발송 완료 · 입금확인을 누르지 않아 판매 등록하지 않았습니다." if sent else
+                                        "입금확인 문자 전송이 완료되지 않아 판매 등록하지 않았습니다.")
             return
         self._run_action("입금확인 주문을 판매관리에 저장하고 있습니다…",
                          lambda: self.manager.confirm_received_payment(self._payment_draft, sms_required=True),
