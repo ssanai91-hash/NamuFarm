@@ -18,8 +18,12 @@
     "kind": "youtube",
     "title": "손바닥만한 \"항아리피자두\" 극강의 피자두 맛보기",
     "url": "https://www.youtube.com/watch?v=TYKxgDSnLMk",
-    "species": [],
-    "topics": [],
+    "species": [
+      "자두나무"
+    ],
+    "topics": [
+      "품종·열매"
+    ],
     "source": "나무중개사",
     "order": 2
   },
@@ -28,8 +32,12 @@
     "kind": "youtube",
     "title": "나무도 '부동액'을 만든다? 겨울철 나무 생존전력!",
     "url": "https://www.youtube.com/watch?v=FTdLhnyfyYs",
-    "species": [],
-    "topics": [],
+    "species": [
+      "공통"
+    ],
+    "topics": [
+      "월동"
+    ],
     "source": "나무중개사",
     "order": 3
   },
@@ -38,8 +46,12 @@
     "kind": "youtube",
     "title": "나무잎은 왜? 떨어질까?",
     "url": "https://www.youtube.com/watch?v=DHPHj4rr-Bs",
-    "species": [],
-    "topics": [],
+    "species": [
+      "공통"
+    ],
+    "topics": [
+      "나무 특성"
+    ],
     "source": "나무중개사",
     "order": 4
   },
@@ -48,8 +60,12 @@
     "kind": "youtube",
     "title": "좋은 둥시 감나무 고르는방법",
     "url": "https://www.youtube.com/watch?v=W1D1Yadq3XA",
-    "species": [],
-    "topics": [],
+    "species": [
+      "감나무"
+    ],
+    "topics": [
+      "묘목 선택"
+    ],
     "source": "나무중개사",
     "order": 5
   },
@@ -58,8 +74,13 @@
     "kind": "youtube",
     "title": "4계절 언제라도 식재할수 있는 묘목형태 '사계절분달이' 나무 #사계절분달이#나무심는방법#시작묘목마트#",
     "url": "https://www.youtube.com/watch?v=dNXp_W7Ht-Y",
-    "species": [],
-    "topics": [],
+    "species": [
+      "공통"
+    ],
+    "topics": [
+      "식재",
+      "분달이·포트재배"
+    ],
     "source": "나무중개사",
     "order": 6
   },
@@ -68,8 +89,12 @@
     "kind": "youtube",
     "title": "황금측백나무 신기한사실",
     "url": "https://www.youtube.com/watch?v=tbAO_G5rIuM",
-    "species": [],
-    "topics": [],
+    "species": [
+      "측백나무"
+    ],
+    "topics": [
+      "나무 특성"
+    ],
     "source": "나무중개사",
     "order": 7
   },
@@ -78,8 +103,14 @@
     "kind": "youtube",
     "title": "기념식수용 반송 소나무 가격과 식재",
     "url": "https://www.youtube.com/watch?v=4GwPBD79tFw",
-    "species": [],
-    "topics": [],
+    "species": [
+      "소나무"
+    ],
+    "topics": [
+      "식재",
+      "가격·구입",
+      "울타리·조경"
+    ],
     "source": "나무중개사",
     "order": 8
   },
@@ -88,8 +119,12 @@
     "kind": "youtube",
     "title": "자작나무 묘목 찾으시나요?",
     "url": "https://www.youtube.com/watch?v=wKUTg59sd2k",
-    "species": [],
-    "topics": [],
+    "species": [
+      "자작나무"
+    ],
+    "topics": [
+      "묘목 선택"
+    ],
     "source": "나무중개사",
     "order": 9
   },
@@ -98,8 +133,12 @@
     "kind": "youtube",
     "title": "소나무 모양 바꾸는 전지방법",
     "url": "https://www.youtube.com/watch?v=6xQbzSbMzfU",
-    "species": [],
-    "topics": [],
+    "species": [
+      "소나무"
+    ],
+    "topics": [
+      "전정"
+    ],
     "source": "나무중개사",
     "order": 10
   },
@@ -108,8 +147,13 @@
     "kind": "youtube",
     "title": "1000만원대 소나무 - 정원용 연못주변 기념식수 추천",
     "url": "https://www.youtube.com/watch?v=6SgJQl1OjPc",
-    "species": [],
-    "topics": [],
+    "species": [
+      "소나무"
+    ],
+    "topics": [
+      "가격·구입",
+      "울타리·조경"
+    ],
     "source": "나무중개사",
     "order": 11
   },
@@ -118,8 +162,13 @@
     "kind": "youtube",
     "title": "\"사계절분달이\" 식재 3개월후 뿌리상태 확인하기",
     "url": "https://www.youtube.com/watch?v=7FCilElNApk",
-    "species": [],
-    "topics": [],
+    "species": [
+      "공통"
+    ],
+    "topics": [
+      "식재",
+      "분달이·포트재배"
+    ],
     "source": "나무중개사",
     "order": 12
   },
@@ -128,8 +177,13 @@
     "kind": "youtube",
     "title": "초보자가 심어도 잘사는 나무 '사계절분달이' 묘목",
     "url": "https://www.youtube.com/watch?v=QcW2-rHUriE",
-    "species": [],
-    "topics": [],
+    "species": [
+      "공통"
+    ],
+    "topics": [
+      "식재",
+      "분달이·포트재배"
+    ],
     "source": "나무중개사",
     "order": 13
   },
@@ -138,8 +192,12 @@
     "kind": "youtube",
     "title": "나무 접붙이기 ,접목하는 방법, 대목자르기, 접순제조, 비닐감기등 전문가가 밝히는 방법",
     "url": "https://www.youtube.com/watch?v=vR927gWtLLc",
-    "species": [],
-    "topics": [],
+    "species": [
+      "공통"
+    ],
+    "topics": [
+      "접목"
+    ],
     "source": "나무중개사",
     "order": 14
   },
@@ -148,8 +206,12 @@
     "kind": "youtube",
     "title": "여러분은 화살나무를 아시나요?",
     "url": "https://www.youtube.com/watch?v=8AB11IS2zh0",
-    "species": [],
-    "topics": [],
+    "species": [
+      "화살나무"
+    ],
+    "topics": [
+      "나무 특성"
+    ],
     "source": "나무중개사",
     "order": 15
   },
@@ -158,8 +220,13 @@
     "kind": "youtube",
     "title": "배롱나무를 아시나요? 특징와 수형 구경하기",
     "url": "https://www.youtube.com/watch?v=1LWaX4TysMU",
-    "species": [],
-    "topics": [],
+    "species": [
+      "배롱나무"
+    ],
+    "topics": [
+      "나무 특성",
+      "울타리·조경"
+    ],
     "source": "나무중개사",
     "order": 16
   },
@@ -168,8 +235,13 @@
     "kind": "youtube",
     "title": "전원주택 인기 조경수 배롱나무에 모든것!",
     "url": "https://www.youtube.com/watch?v=dgK4jRulyZk",
-    "species": [],
-    "topics": [],
+    "species": [
+      "배롱나무"
+    ],
+    "topics": [
+      "나무 특성",
+      "울타리·조경"
+    ],
     "source": "나무중개사",
     "order": 17
   },
@@ -178,8 +250,14 @@
     "kind": "youtube",
     "title": "초보자 전원주택 소나무 고르는 법과 가격",
     "url": "https://www.youtube.com/watch?v=OHO0BSTTrqk",
-    "species": [],
-    "topics": [],
+    "species": [
+      "소나무"
+    ],
+    "topics": [
+      "묘목 선택",
+      "가격·구입",
+      "울타리·조경"
+    ],
     "source": "나무중개사",
     "order": 18
   },
@@ -188,8 +266,12 @@
     "kind": "youtube",
     "title": "정원수로 인기있는 '황금소나무' 수형은?",
     "url": "https://www.youtube.com/watch?v=neh1xPkTdBo",
-    "species": [],
-    "topics": [],
+    "species": [
+      "소나무"
+    ],
+    "topics": [
+      "울타리·조경"
+    ],
     "source": "나무중개사",
     "order": 19
   },
@@ -198,8 +280,12 @@
     "kind": "youtube",
     "title": "(부동산답사) 충북옥천 토지 매매 100평 - 1억2천만원",
     "url": "https://www.youtube.com/watch?v=n-HVPOdHFOs",
-    "species": [],
-    "topics": [],
+    "species": [
+      "기타"
+    ],
+    "topics": [
+      "부동산"
+    ],
     "source": "나무중개사",
     "order": 20
   },
@@ -208,8 +294,12 @@
     "kind": "youtube",
     "title": "새롭게 시작하는 농원 700평하우스 소개",
     "url": "https://www.youtube.com/watch?v=BHWcRNfNYqU",
-    "species": [],
-    "topics": [],
+    "species": [
+      "공통"
+    ],
+    "topics": [
+      "농원·정원관리"
+    ],
     "source": "나무중개사",
     "order": 21
   },
@@ -218,8 +308,13 @@
     "kind": "youtube",
     "title": "남천나무 화분 심는방법",
     "url": "https://www.youtube.com/watch?v=7srVLOj6Tbw",
-    "species": [],
-    "topics": [],
+    "species": [
+      "남천나무"
+    ],
+    "topics": [
+      "식재",
+      "분달이·포트재배"
+    ],
     "source": "나무중개사",
     "order": 22
   },
@@ -228,8 +323,14 @@
     "kind": "youtube",
     "title": "나무 나눔행사-셀릭스 남천나무 포트 묘목",
     "url": "https://www.youtube.com/watch?v=l1Q1uy9fU2k",
-    "species": [],
-    "topics": [],
+    "species": [
+      "셀릭스",
+      "남천나무"
+    ],
+    "topics": [
+      "나눔행사",
+      "분달이·포트재배"
+    ],
     "source": "나무중개사",
     "order": 23
   },
@@ -238,8 +339,12 @@
     "kind": "youtube",
     "title": "남천나무 울타리하면 안되는이유 3가지 와 방법",
     "url": "https://www.youtube.com/watch?v=zjDqj_FDWf0",
-    "species": [],
-    "topics": [],
+    "species": [
+      "남천나무"
+    ],
+    "topics": [
+      "울타리·조경"
+    ],
     "source": "나무중개사",
     "order": 24
   },
@@ -248,8 +353,13 @@
     "kind": "youtube",
     "title": "황금사철나무는 어떤 나무인가? 울타리나무로 추천..",
     "url": "https://www.youtube.com/watch?v=dQ07t_p7Puo",
-    "species": [],
-    "topics": [],
+    "species": [
+      "사철나무"
+    ],
+    "topics": [
+      "나무 특성",
+      "울타리·조경"
+    ],
     "source": "나무중개사",
     "order": 25
   },
@@ -258,8 +368,12 @@
     "kind": "youtube",
     "title": "놀고 있는 땅에 심기 좋은 가성비 좋은 개복숭아 나무",
     "url": "https://www.youtube.com/watch?v=o_uGhiiIcFs",
-    "species": [],
-    "topics": [],
+    "species": [
+      "개복숭아"
+    ],
+    "topics": [
+      "묘목 선택"
+    ],
     "source": "나무중개사",
     "order": 26
   },
@@ -268,8 +382,12 @@
     "kind": "youtube",
     "title": "천년동안 자라는 주목나무에 모든것!",
     "url": "https://www.youtube.com/watch?v=IFY5cSfqcDY",
-    "species": [],
-    "topics": [],
+    "species": [
+      "주목나무"
+    ],
+    "topics": [
+      "나무 특성"
+    ],
     "source": "나무중개사",
     "order": 27
   },
@@ -278,8 +396,13 @@
     "kind": "youtube",
     "title": "결실주 분달이 나무 심는 방법",
     "url": "https://www.youtube.com/watch?v=goxlolSFv5s",
-    "species": [],
-    "topics": [],
+    "species": [
+      "공통"
+    ],
+    "topics": [
+      "식재",
+      "분달이·포트재배"
+    ],
     "source": "나무중개사",
     "order": 28
   },
@@ -288,8 +411,12 @@
     "kind": "youtube",
     "title": "새해맞이 농원 정리 완료",
     "url": "https://www.youtube.com/watch?v=6p8z36b4NL4",
-    "species": [],
-    "topics": [],
+    "species": [
+      "공통"
+    ],
+    "topics": [
+      "농원·정원관리"
+    ],
     "source": "나무중개사",
     "order": 29
   },
@@ -298,8 +425,13 @@
     "kind": "youtube",
     "title": "사철나무 심는방법, 울타리로 키우는방법",
     "url": "https://www.youtube.com/watch?v=uz3M-tBHRfI",
-    "species": [],
-    "topics": [],
+    "species": [
+      "사철나무"
+    ],
+    "topics": [
+      "식재",
+      "울타리·조경"
+    ],
     "source": "나무중개사",
     "order": 30
   },
@@ -308,8 +440,12 @@
     "kind": "youtube",
     "title": "희귀한 소나무 백송을 아시나요?",
     "url": "https://www.youtube.com/watch?v=DoBRkmQ8P6I",
-    "species": [],
-    "topics": [],
+    "species": [
+      "소나무"
+    ],
+    "topics": [
+      "나무 특성"
+    ],
     "source": "나무중개사",
     "order": 31
   },
@@ -318,8 +454,12 @@
     "kind": "youtube",
     "title": "화화나무 모든것.영상하나로 정리끝~",
     "url": "https://www.youtube.com/watch?v=Cs_VIa77d6c",
-    "species": [],
-    "topics": [],
+    "species": [
+      "회화나무"
+    ],
+    "topics": [
+      "나무 특성"
+    ],
     "source": "나무중개사",
     "order": 32
   },
@@ -328,8 +468,13 @@
     "kind": "youtube",
     "title": "엄나무에 가시가 있고 or 없고?",
     "url": "https://www.youtube.com/watch?v=o7XlxP-QYF8",
-    "species": [],
-    "topics": [],
+    "species": [
+      "엄나무"
+    ],
+    "topics": [
+      "나무 특성",
+      "품종·열매"
+    ],
     "source": "나무중개사",
     "order": 33
   },
@@ -338,8 +483,12 @@
     "kind": "youtube",
     "title": "홍가시 레드로빈 추위에 견딜수 있을까?",
     "url": "https://www.youtube.com/watch?v=2N1OY0lwmHk",
-    "species": [],
-    "topics": [],
+    "species": [
+      "홍가시나무"
+    ],
+    "topics": [
+      "월동"
+    ],
     "source": "나무중개사",
     "order": 34
   },
@@ -348,8 +497,13 @@
     "kind": "youtube",
     "title": "살구나무는 어떤품종이 있을까?",
     "url": "https://www.youtube.com/watch?v=eoZzimeKkyc",
-    "species": [],
-    "topics": [],
+    "species": [
+      "살구나무"
+    ],
+    "topics": [
+      "품종·열매",
+      "묘목 선택"
+    ],
     "source": "나무중개사",
     "order": 35
   },
@@ -358,8 +512,12 @@
     "kind": "youtube",
     "title": "개복숭아 6년생 나무 장작만들기",
     "url": "https://www.youtube.com/watch?v=L72ZmbSUqm4",
-    "species": [],
-    "topics": [],
+    "species": [
+      "개복숭아"
+    ],
+    "topics": [
+      "목재 활용"
+    ],
     "source": "나무중개사",
     "order": 36
   },
@@ -368,8 +526,13 @@
     "kind": "youtube",
     "title": "밤나무 좋은 묘목 구입하기",
     "url": "https://www.youtube.com/watch?v=CyitzR4z2iY",
-    "species": [],
-    "topics": [],
+    "species": [
+      "밤나무"
+    ],
+    "topics": [
+      "묘목 선택",
+      "가격·구입"
+    ],
     "source": "나무중개사",
     "order": 37
   },
@@ -378,8 +541,12 @@
     "kind": "youtube",
     "title": "정원가꾸기의 기본.쓰레기만 치워도 화단정리 끝?",
     "url": "https://www.youtube.com/watch?v=uSb0gSBGth0",
-    "species": [],
-    "topics": [],
+    "species": [
+      "공통"
+    ],
+    "topics": [
+      "농원·정원관리"
+    ],
     "source": "나무중개사",
     "order": 38
   },
@@ -388,8 +555,14 @@
     "kind": "youtube",
     "title": "대추나무 나눔이벤트 포장과정(포트묘목 심는방법과 주의사항)",
     "url": "https://www.youtube.com/watch?v=l0lASB2qaUs",
-    "species": [],
-    "topics": [],
+    "species": [
+      "대추나무"
+    ],
+    "topics": [
+      "나눔행사",
+      "식재",
+      "분달이·포트재배"
+    ],
     "source": "나무중개사",
     "order": 39
   },
@@ -398,8 +571,13 @@
     "kind": "youtube",
     "title": "포트 묘목 만들때 좋은흙은?",
     "url": "https://www.youtube.com/watch?v=Luk4aMQqyb4",
-    "species": [],
-    "topics": [],
+    "species": [
+      "공통"
+    ],
+    "topics": [
+      "토양",
+      "분달이·포트재배"
+    ],
     "source": "나무중개사",
     "order": 40
   },
@@ -408,8 +586,12 @@
     "kind": "youtube",
     "title": "편백나무 이거 하나로 정리끝.",
     "url": "https://www.youtube.com/watch?v=M4fhZ2nYHpE",
-    "species": [],
-    "topics": [],
+    "species": [
+      "편백나무"
+    ],
+    "topics": [
+      "나무 특성"
+    ],
     "source": "나무중개사",
     "order": 41
   },
@@ -418,8 +600,13 @@
     "kind": "youtube",
     "title": "좋은 석류나무 고르는방법과 가격",
     "url": "https://www.youtube.com/watch?v=678MMc7e2Pg",
-    "species": [],
-    "topics": [],
+    "species": [
+      "석류나무"
+    ],
+    "topics": [
+      "묘목 선택",
+      "가격·구입"
+    ],
     "source": "나무중개사",
     "order": 42
   },
@@ -428,8 +615,12 @@
     "kind": "youtube",
     "title": "가장 많이 심는 황금측백나무 크기는?",
     "url": "https://www.youtube.com/watch?v=8vN5u8TORCc",
-    "species": [],
-    "topics": [],
+    "species": [
+      "측백나무"
+    ],
+    "topics": [
+      "묘목 선택"
+    ],
     "source": "나무중개사",
     "order": 43
   },
@@ -438,8 +629,12 @@
     "kind": "youtube",
     "title": "둥근모양 정원수나 경계목 '옥향나무'를 아세요?",
     "url": "https://www.youtube.com/watch?v=PvstNfIC654",
-    "species": [],
-    "topics": [],
+    "species": [
+      "옥향나무"
+    ],
+    "topics": [
+      "울타리·조경"
+    ],
     "source": "나무중개사",
     "order": 44
   },
@@ -448,8 +643,13 @@
     "kind": "youtube",
     "title": "사과대추 포트묘목 나눔행사",
     "url": "https://www.youtube.com/watch?v=8-agVA2OrNc",
-    "species": [],
-    "topics": [],
+    "species": [
+      "대추나무"
+    ],
+    "topics": [
+      "나눔행사",
+      "분달이·포트재배"
+    ],
     "source": "나무중개사",
     "order": 45
   },
@@ -458,8 +658,13 @@
     "kind": "youtube",
     "title": "소나무 적송 묘목 가격과 식재용도는?",
     "url": "https://www.youtube.com/watch?v=a3uGsFzRoFc",
-    "species": [],
-    "topics": [],
+    "species": [
+      "소나무"
+    ],
+    "topics": [
+      "식재",
+      "가격·구입"
+    ],
     "source": "나무중개사",
     "order": 46
   },
@@ -468,8 +673,14 @@
     "kind": "youtube",
     "title": "피톤치드를 가장 많이 배출하는 편백나무.",
     "url": "https://www.youtube.com/watch?v=rax_iq05wd8",
-    "species": [],
-    "topics": [],
+    "species": [
+      "편백나무",
+      "측백나무"
+    ],
+    "topics": [
+      "나무 특성",
+      "묘목 선택"
+    ],
     "source": "나무중개사",
     "order": 47
   },
@@ -478,8 +689,12 @@
     "kind": "youtube",
     "title": "남천나무 식재할때 주의사항은?",
     "url": "https://www.youtube.com/watch?v=KmpUFESEkIw",
-    "species": [],
-    "topics": [],
+    "species": [
+      "남천나무"
+    ],
+    "topics": [
+      "식재"
+    ],
     "source": "나무중개사",
     "order": 48
   },
@@ -488,8 +703,13 @@
     "kind": "youtube",
     "title": "왕모과나무 특묘는 어떻게 생겼을까?",
     "url": "https://www.youtube.com/watch?v=BCSPY_TAhmM",
-    "species": [],
-    "topics": [],
+    "species": [
+      "모과나무"
+    ],
+    "topics": [
+      "묘목 선택",
+      "품종·열매"
+    ],
     "source": "나무중개사",
     "order": 49
   },
@@ -498,8 +718,12 @@
     "kind": "youtube",
     "title": "나무 분달이 만드는 과정(분뜨기과정)",
     "url": "https://www.youtube.com/watch?v=ue0Un7-rGG0",
-    "species": [],
-    "topics": [],
+    "species": [
+      "공통"
+    ],
+    "topics": [
+      "분달이·포트재배"
+    ],
     "source": "나무중개사",
     "order": 50
   },
@@ -508,8 +732,13 @@
     "kind": "youtube",
     "title": "배나무 묘목 종류와 식재간격은?",
     "url": "https://www.youtube.com/watch?v=chVshUJ1EfI",
-    "species": [],
-    "topics": [],
+    "species": [
+      "배나무"
+    ],
+    "topics": [
+      "품종·열매",
+      "식재"
+    ],
     "source": "나무중개사",
     "order": 51
   },
@@ -518,8 +747,12 @@
     "kind": "youtube",
     "title": "피라칸타스는 왜 울타리나무로 좋을까?",
     "url": "https://www.youtube.com/watch?v=krn4Ysl4mp8",
-    "species": [],
-    "topics": [],
+    "species": [
+      "피라칸타스"
+    ],
+    "topics": [
+      "울타리·조경"
+    ],
     "source": "나무중개사",
     "order": 52
   },
@@ -528,8 +761,12 @@
     "kind": "youtube",
     "title": "좋은 앵두나무 묘목 찾기",
     "url": "https://www.youtube.com/watch?v=NUcpV5NnTyg",
-    "species": [],
-    "topics": [],
+    "species": [
+      "앵두나무"
+    ],
+    "topics": [
+      "묘목 선택"
+    ],
     "source": "나무중개사",
     "order": 53
   },
@@ -538,8 +775,12 @@
     "kind": "youtube",
     "title": "좋은 개복숭아 묘목을 찾으시나요?",
     "url": "https://www.youtube.com/watch?v=wTRtB_aJfX0",
-    "species": [],
-    "topics": [],
+    "species": [
+      "개복숭아"
+    ],
+    "topics": [
+      "묘목 선택"
+    ],
     "source": "나무중개사",
     "order": 54
   },
@@ -548,8 +789,13 @@
     "kind": "youtube",
     "title": "집에서 키우기 좋은 체리나무는?",
     "url": "https://www.youtube.com/watch?v=-KMY8K4MhaM",
-    "species": [],
-    "topics": [],
+    "species": [
+      "체리나무"
+    ],
+    "topics": [
+      "품종·열매",
+      "묘목 선택"
+    ],
     "source": "나무중개사",
     "order": 55
   },
@@ -558,8 +804,13 @@
     "kind": "youtube",
     "title": "밤나무 결실주는 어떻게 생겼을까?",
     "url": "https://www.youtube.com/watch?v=Sq3IVcMRIqc",
-    "species": [],
-    "topics": [],
+    "species": [
+      "밤나무"
+    ],
+    "topics": [
+      "품종·열매",
+      "묘목 선택"
+    ],
     "source": "나무중개사",
     "order": 56
   },
@@ -568,8 +819,13 @@
     "kind": "youtube",
     "title": "청매실나무 묘목 고르는방법과 가격",
     "url": "https://www.youtube.com/watch?v=zUSNeONcyFA",
-    "species": [],
-    "topics": [],
+    "species": [
+      "매실나무"
+    ],
+    "topics": [
+      "묘목 선택",
+      "가격·구입"
+    ],
     "source": "나무중개사",
     "order": 57
   },
@@ -578,8 +834,14 @@
     "kind": "youtube",
     "title": "좋은 감나무묘목 구경하고 구입하기",
     "url": "https://www.youtube.com/watch?v=rdtzg0X3xBg",
-    "species": [],
-    "topics": [],
+    "species": [
+      "감나무"
+    ],
+    "topics": [
+      "묘목 선택",
+      "품종·열매",
+      "가격·구입"
+    ],
     "source": "나무중개사",
     "order": 58
   },
@@ -588,8 +850,13 @@
     "kind": "youtube",
     "title": "아로니아 나무 포트묘목 무료나눔",
     "url": "https://www.youtube.com/watch?v=-v-Sz7Kjsj0",
-    "species": [],
-    "topics": [],
+    "species": [
+      "아로니아"
+    ],
+    "topics": [
+      "나눔행사",
+      "분달이·포트재배"
+    ],
     "source": "나무중개사",
     "order": 59
   },
@@ -598,8 +865,14 @@
     "kind": "youtube",
     "title": "화살나무 5년생 묘목 모양과 가격",
     "url": "https://www.youtube.com/watch?v=mAar9eCDfVE",
-    "species": [],
-    "topics": [],
+    "species": [
+      "화살나무"
+    ],
+    "topics": [
+      "묘목 선택",
+      "가격·구입",
+      "분달이·포트재배"
+    ],
     "source": "나무중개사",
     "order": 60
   },
@@ -608,8 +881,13 @@
     "kind": "youtube",
     "title": "꾸지뽕나무 좋은묘목 가격 싸게 구입하기",
     "url": "https://www.youtube.com/watch?v=X8EEoIQSqMo",
-    "species": [],
-    "topics": [],
+    "species": [
+      "꾸지뽕나무"
+    ],
+    "topics": [
+      "묘목 선택",
+      "가격·구입"
+    ],
     "source": "나무중개사",
     "order": 61
   },
@@ -618,8 +896,13 @@
     "kind": "youtube",
     "title": "사과대추나무 묘목 가격 싸게 구입하기",
     "url": "https://www.youtube.com/watch?v=qCtvAzL9PR4",
-    "species": [],
-    "topics": [],
+    "species": [
+      "대추나무"
+    ],
+    "topics": [
+      "묘목 선택",
+      "가격·구입"
+    ],
     "source": "나무중개사",
     "order": 62
   },
@@ -628,8 +911,13 @@
     "kind": "youtube",
     "title": "포포나무 포트모 구입 및 가격",
     "url": "https://www.youtube.com/watch?v=mN9cGlorBFQ",
-    "species": [],
-    "topics": [],
+    "species": [
+      "포포나무"
+    ],
+    "topics": [
+      "가격·구입",
+      "분달이·포트재배"
+    ],
     "source": "나무중개사",
     "order": 63
   },
@@ -638,8 +926,14 @@
     "kind": "youtube",
     "title": "홍가시나무 레드로빈묘목 1m크기",
     "url": "https://www.youtube.com/watch?v=eizcn4_WbFg",
-    "species": [],
-    "topics": [],
+    "species": [
+      "홍가시나무"
+    ],
+    "topics": [
+      "묘목 선택",
+      "가격·구입",
+      "분달이·포트재배"
+    ],
     "source": "나무중개사",
     "order": 64
   },
@@ -648,8 +942,14 @@
     "kind": "youtube",
     "title": "체리나무 묘목 결실주-러시아8호",
     "url": "https://www.youtube.com/watch?v=ZvmuaduGD4o",
-    "species": [],
-    "topics": [],
+    "species": [
+      "체리나무"
+    ],
+    "topics": [
+      "품종·열매",
+      "묘목 선택",
+      "가격·구입"
+    ],
     "source": "나무중개사",
     "order": 65
   },
@@ -658,8 +958,13 @@
     "kind": "youtube",
     "title": "사철나무 묘목 심는법 가격 옥천묘목가격",
     "url": "https://www.youtube.com/watch?v=U1OnplR88y8",
-    "species": [],
-    "topics": [],
+    "species": [
+      "사철나무"
+    ],
+    "topics": [
+      "식재",
+      "가격·구입"
+    ],
     "source": "나무중개사",
     "order": 66
   }

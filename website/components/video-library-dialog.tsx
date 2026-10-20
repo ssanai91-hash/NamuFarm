@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type RefObject } from "react";
 import { ArrowLeft, ExternalLink, LoaderCircle, Play, RotateCcw, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogClose, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { filterVideos, initialVideos, readVideoCatalog, youtubeEmbedUrl, type VideoResource } from "@/lib/content-library";
 
 export default function VideoLibraryDialog({ open, onOpenChange, opener }: {
@@ -61,8 +61,12 @@ export default function VideoLibraryDialog({ open, onOpenChange, opener }: {
       if (lastCardId.current) cards.current.get(lastCardId.current)?.focus({ preventScroll: true });
     });
   }
+  function handleOpenChange(nextOpen: boolean) {
+    if (!nextOpen && selectedId.current) { backToList(); return; }
+    onOpenChange(nextOpen);
+  }
 
-  return <Dialog open={open} onOpenChange={onOpenChange}>
+  return <Dialog open={open} onOpenChange={handleOpenChange}>
     <DialogContent className="video-library-dialog" showCloseButton={false}
       onOpenAutoFocus={event => { event.preventDefault(); titleRef.current?.focus(); }}
       onCloseAutoFocus={event => { event.preventDefault(); opener.current?.focus(); }}>
@@ -71,7 +75,7 @@ export default function VideoLibraryDialog({ open, onOpenChange, opener }: {
           <DialogTitle ref={titleRef} tabIndex={-1}>묘목 재배 영상</DialogTitle>
           <DialogDescription>심기부터 관리까지, 필요한 영상을 찾아보세요.</DialogDescription>
         </DialogHeader>
-        <DialogClose asChild><Button type="button" variant="outline" className="video-dismiss" aria-label="영상 자료실 닫기"><X aria-hidden="true" />닫기</Button></DialogClose>
+        <Button type="button" variant="outline" className="video-dismiss" onClick={() => handleOpenChange(false)} aria-label={selected ? "영상 닫고 목록으로 돌아가기" : "영상 자료실 닫기"}><X aria-hidden="true" />{selected ? "영상 닫기" : "닫기"}</Button>
       </div>
       <div className="video-library-body" ref={bodyRef}>
         {open && selected ? <div className="video-detail">

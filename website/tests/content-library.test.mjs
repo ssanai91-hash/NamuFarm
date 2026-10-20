@@ -43,10 +43,26 @@ test('only a catalog protocol response is accepted; empty catalogs stay empty', 
   assert.equal('customerPhone' in videos[0], false);
 });
 test('search combines title/channel with independent species and topic filters', () => {
-  const videos = [...initialVideos, { ...initialVideos[0], id: 'b', title: '블루베리 전정', species: ['블루베리'], topics: ['전정'] }];
+  const videos = [initialVideos[0], { ...initialVideos[0], id: 'b', title: '블루베리 전정', species: ['블루베리'], topics: ['전정'] }];
   assert.equal(filterVideos(videos, '나무심는', '전체', '식재').length, 1);
   assert.equal(filterVideos(videos, '나무중개사', '블루베리', '전정')[0].id, 'b');
   assert.equal(filterVideos(videos, '', '블루베리', '식재').length, 0);
+});
+
+test('reviewed species and topics support combined filters and description-based name corrections', () => {
+  const audit = JSON.parse(readFileSync(new URL('../docs/video-classification-20261020.json', import.meta.url), 'utf8'));
+  assert.equal(audit.items.length, initialVideos.length);
+  assert.ok(initialVideos.every(video => video.species.length > 0 && video.topics.length > 0));
+  assert.deepEqual(filterVideos(initialVideos, '', '소나무', '전정').map(video => video.videoId), ['6xQbzSbMzfU']);
+  assert.deepEqual(filterVideos(initialVideos, '', '남천나무', '식재').map(video => video.videoId), ['7srVLOj6Tbw', 'KmpUFESEkIw']);
+  assert.equal(filterVideos(initialVideos, '', '공통', '토양')[0].videoId, 'Luk4aMQqyb4');
+  assert.equal(filterVideos(initialVideos, '회화나무', '전체', '전체')[0].videoId, 'Cs_VIa77d6c');
+  assert.ok(filterVideos(initialVideos, '', '측백나무', '묘목 선택').some(video => video.videoId === 'rax_iq05wd8'));
+  for (const video of initialVideos) {
+    const entry = audit.items.find(item => item.videoId === video.videoId);
+    assert.deepEqual(video.species, entry.species);
+    assert.deepEqual(video.topics, entry.topics);
+  }
 });
 
 function gasCatalog(rows, headers = ['콘텐츠ID','종류','제목','주소','묘목','주제','게시','순서','출처']) {

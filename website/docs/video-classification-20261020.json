@@ -1,0 +1,835 @@
+{
+  "classifiedOn": "2026-10-20",
+  "method": "Reviewed public video titles and available author descriptions; not a full-video transcript review.",
+  "metadataVerified": 65,
+  "notes": {
+    "Cs_VIa77d6c": "Title says 화화나무; author description explicitly identifies 회화나무. Original title retained.",
+    "rax_iq05wd8": "Author description explicitly compares 편백나무 and 측백나무; both species included.",
+    "W1D1Yadq3XA": "Description could not be retrieved; title identifies 둥시 감나무 and seedling selection.",
+    "n-HVPOdHFOs": "Land-sale video retained as requested in the complete channel catalog; categorized as 기타 / 부동산."
+  },
+  "speciesCounts": {
+    "감나무": 2,
+    "개복숭아": 3,
+    "공통": 13,
+    "기타": 1,
+    "꾸지뽕나무": 1,
+    "남천나무": 4,
+    "대추나무": 3,
+    "매실나무": 1,
+    "모과나무": 1,
+    "밤나무": 2,
+    "배나무": 1,
+    "배롱나무": 2,
+    "사철나무": 3,
+    "살구나무": 1,
+    "석류나무": 1,
+    "셀릭스": 1,
+    "소나무": 7,
+    "아로니아": 1,
+    "앵두나무": 1,
+    "엄나무": 1,
+    "옥향나무": 1,
+    "자두나무": 1,
+    "자작나무": 1,
+    "주목나무": 1,
+    "체리나무": 2,
+    "측백나무": 3,
+    "편백나무": 2,
+    "포포나무": 1,
+    "피라칸타스": 1,
+    "홍가시나무": 2,
+    "화살나무": 2,
+    "회화나무": 1
+  },
+  "topicCounts": {
+    "가격·구입": 15,
+    "나눔행사": 4,
+    "나무 특성": 12,
+    "농원·정원관리": 3,
+    "목재 활용": 1,
+    "묘목 선택": 21,
+    "부동산": 1,
+    "분달이·포트재배": 14,
+    "식재": 13,
+    "울타리·조경": 11,
+    "월동": 2,
+    "전정": 1,
+    "접목": 1,
+    "토양": 1,
+    "품종·열매": 9
+  },
+  "items": [
+    {
+      "videoId": "HgNJrIhC3rk",
+      "basis": "title_and_description",
+      "species": [
+        "공통"
+      ],
+      "topics": [
+        "식재"
+      ],
+      "descriptionSha256": "c17a26b9ffbb9af863c20298fc5d6dfd1623dba42a17bda1d5db4d8e8f59eea3"
+    },
+    {
+      "videoId": "TYKxgDSnLMk",
+      "basis": "title_and_description",
+      "species": [
+        "자두나무"
+      ],
+      "topics": [
+        "품종·열매"
+      ],
+      "descriptionSha256": "202ae3d244377ce28e5ea3dabaefa919045a2e4df66970a46b635b0e9528e22b"
+    },
+    {
+      "videoId": "FTdLhnyfyYs",
+      "basis": "title_and_description",
+      "species": [
+        "공통"
+      ],
+      "topics": [
+        "월동"
+      ],
+      "descriptionSha256": "ffb615e228eac0e1b1448b5443fbcd953d3dd8bf84cfd67198e8ece4b9cd4522"
+    },
+    {
+      "videoId": "DHPHj4rr-Bs",
+      "basis": "title_and_description",
+      "species": [
+        "공통"
+      ],
+      "topics": [
+        "나무 특성"
+      ],
+      "descriptionSha256": "9261c2e74b49e5deeffefa546fe21fa2e824d165e10a1f473fe14a22daeaa91e"
+    },
+    {
+      "videoId": "W1D1Yadq3XA",
+      "basis": "title",
+      "species": [
+        "감나무"
+      ],
+      "topics": [
+        "묘목 선택"
+      ],
+      "descriptionSha256": null
+    },
+    {
+      "videoId": "dNXp_W7Ht-Y",
+      "basis": "title_and_description",
+      "species": [
+        "공통"
+      ],
+      "topics": [
+        "식재",
+        "분달이·포트재배"
+      ],
+      "descriptionSha256": "f7546e5614e3dca36b820df413806f1f66cd3f31dba1ad8d8ddb1acfd1acd10a"
+    },
+    {
+      "videoId": "tbAO_G5rIuM",
+      "basis": "title_and_description",
+      "species": [
+        "측백나무"
+      ],
+      "topics": [
+        "나무 특성"
+      ],
+      "descriptionSha256": "e24b860490365ffc5a5eee2fad1f1b3663edf8936c3214e91faa85ab33c508fd"
+    },
+    {
+      "videoId": "4GwPBD79tFw",
+      "basis": "title_and_description",
+      "species": [
+        "소나무"
+      ],
+      "topics": [
+        "식재",
+        "가격·구입",
+        "울타리·조경"
+      ],
+      "descriptionSha256": "ff5111294034076ad4c5466ab32e6df3f723f7f19c94377d5bc0da4159bbc4f3"
+    },
+    {
+      "videoId": "wKUTg59sd2k",
+      "basis": "title_and_description",
+      "species": [
+        "자작나무"
+      ],
+      "topics": [
+        "묘목 선택"
+      ],
+      "descriptionSha256": "07cf0889b2d6f1b533f541daa00a97e8cc14a3487f616968f90cc4207b2360e3"
+    },
+    {
+      "videoId": "6xQbzSbMzfU",
+      "basis": "title_and_description",
+      "species": [
+        "소나무"
+      ],
+      "topics": [
+        "전정"
+      ],
+      "descriptionSha256": "21d4143be9761d480e2670f2df9266591c21814299a09a2c2c9121cbd28665ca"
+    },
+    {
+      "videoId": "6SgJQl1OjPc",
+      "basis": "title_and_description",
+      "species": [
+        "소나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "울타리·조경"
+      ],
+      "descriptionSha256": "c195548d31f9b31c09ddde0bc1713595e0827f06946bddb0f0e9015314c5f541"
+    },
+    {
+      "videoId": "7FCilElNApk",
+      "basis": "title",
+      "species": [
+        "공통"
+      ],
+      "topics": [
+        "식재",
+        "분달이·포트재배"
+      ],
+      "descriptionSha256": null
+    },
+    {
+      "videoId": "QcW2-rHUriE",
+      "basis": "title_and_description",
+      "species": [
+        "공통"
+      ],
+      "topics": [
+        "식재",
+        "분달이·포트재배"
+      ],
+      "descriptionSha256": "411db32c2b33af131399e7b43190db6140cc97579a4eeaae56b7fa3c03150940"
+    },
+    {
+      "videoId": "vR927gWtLLc",
+      "basis": "title_and_description",
+      "species": [
+        "공통"
+      ],
+      "topics": [
+        "접목"
+      ],
+      "descriptionSha256": "4878a583c5c945ab4129edd6786d1d57971b114467b038dfd9ec22d18243fb75"
+    },
+    {
+      "videoId": "8AB11IS2zh0",
+      "basis": "title_and_description",
+      "species": [
+        "화살나무"
+      ],
+      "topics": [
+        "나무 특성"
+      ],
+      "descriptionSha256": "d0af9672e399eb8e910a8cf5860913ad2bcd6e3c0d4f97dc33ba67bad6e21808"
+    },
+    {
+      "videoId": "1LWaX4TysMU",
+      "basis": "title",
+      "species": [
+        "배롱나무"
+      ],
+      "topics": [
+        "나무 특성",
+        "울타리·조경"
+      ],
+      "descriptionSha256": null
+    },
+    {
+      "videoId": "dgK4jRulyZk",
+      "basis": "title_and_description",
+      "species": [
+        "배롱나무"
+      ],
+      "topics": [
+        "나무 특성",
+        "울타리·조경"
+      ],
+      "descriptionSha256": "f737c68e04e1274d49397d53ddd5cff477b3d4fbb00ffba8313397678235357f"
+    },
+    {
+      "videoId": "OHO0BSTTrqk",
+      "basis": "title_and_description",
+      "species": [
+        "소나무"
+      ],
+      "topics": [
+        "묘목 선택",
+        "가격·구입",
+        "울타리·조경"
+      ],
+      "descriptionSha256": "b877382ed5d9ff9cf723d1fb8a350cecbbd4d5e827b860d8ad74de1af67ef735"
+    },
+    {
+      "videoId": "neh1xPkTdBo",
+      "basis": "title_and_description",
+      "species": [
+        "소나무"
+      ],
+      "topics": [
+        "울타리·조경"
+      ],
+      "descriptionSha256": "23e4945c2fc129e077c8803f8c38431f154fe08658d4ff3a6c2cda2c3453f1b1"
+    },
+    {
+      "videoId": "n-HVPOdHFOs",
+      "basis": "title_and_description",
+      "species": [
+        "기타"
+      ],
+      "topics": [
+        "부동산"
+      ],
+      "descriptionSha256": "8db2553e1c983b2eb56c0cad19a19435a9d7bcdd841f585d7a7a289b36ac4ac4"
+    },
+    {
+      "videoId": "BHWcRNfNYqU",
+      "basis": "title_and_description",
+      "species": [
+        "공통"
+      ],
+      "topics": [
+        "농원·정원관리"
+      ],
+      "descriptionSha256": "e2d4c5d8da00d619e35bba30e7a71074a4942436bc8b941d8dc39afc5346b8af"
+    },
+    {
+      "videoId": "7srVLOj6Tbw",
+      "basis": "title_and_description",
+      "species": [
+        "남천나무"
+      ],
+      "topics": [
+        "식재",
+        "분달이·포트재배"
+      ],
+      "descriptionSha256": "ef2b5f02a74bd1c92e9cdb3ae2a493fbd63cfbae78645da65688a2ee66021c9f"
+    },
+    {
+      "videoId": "l1Q1uy9fU2k",
+      "basis": "title_and_description",
+      "species": [
+        "셀릭스",
+        "남천나무"
+      ],
+      "topics": [
+        "나눔행사",
+        "분달이·포트재배"
+      ],
+      "descriptionSha256": "37d17cc8dc03828aa76b01cd317b9015d84131240a2049dd2860676374fe1ad4"
+    },
+    {
+      "videoId": "zjDqj_FDWf0",
+      "basis": "title_and_description",
+      "species": [
+        "남천나무"
+      ],
+      "topics": [
+        "울타리·조경"
+      ],
+      "descriptionSha256": "5730cab3964f8297d4559a53ac60d3dd5c29a426d72065a8d9a4759928caac5a"
+    },
+    {
+      "videoId": "dQ07t_p7Puo",
+      "basis": "title_and_description",
+      "species": [
+        "사철나무"
+      ],
+      "topics": [
+        "나무 특성",
+        "울타리·조경"
+      ],
+      "descriptionSha256": "caf1a90c7ef6a246ec9c17f190331ee1c47f3a9e04207530d8c6968d3fb1b526"
+    },
+    {
+      "videoId": "o_uGhiiIcFs",
+      "basis": "title_and_description",
+      "species": [
+        "개복숭아"
+      ],
+      "topics": [
+        "묘목 선택"
+      ],
+      "descriptionSha256": "34aca92b59719c464a22ca4b33c4af7586b49eb0fcd487bc151b0248251f51e6"
+    },
+    {
+      "videoId": "IFY5cSfqcDY",
+      "basis": "title_and_description",
+      "species": [
+        "주목나무"
+      ],
+      "topics": [
+        "나무 특성"
+      ],
+      "descriptionSha256": "2de19bec0024c59b942c3b16465d19d872b19274ca2135fc291f79b70d33eac7"
+    },
+    {
+      "videoId": "goxlolSFv5s",
+      "basis": "title_and_description",
+      "species": [
+        "공통"
+      ],
+      "topics": [
+        "식재",
+        "분달이·포트재배"
+      ],
+      "descriptionSha256": "fd89c542d88bdead6ad435ff0aee64b76fabbc311a7f553daf2c8c59eae3f646"
+    },
+    {
+      "videoId": "6p8z36b4NL4",
+      "basis": "title_and_description",
+      "species": [
+        "공통"
+      ],
+      "topics": [
+        "농원·정원관리"
+      ],
+      "descriptionSha256": "556946a6848eed9b8bbd5071ad00a7c090ab2cd4311ab495c1e1a5e703edfb5f"
+    },
+    {
+      "videoId": "uz3M-tBHRfI",
+      "basis": "title_and_description",
+      "species": [
+        "사철나무"
+      ],
+      "topics": [
+        "식재",
+        "울타리·조경"
+      ],
+      "descriptionSha256": "b86f0aced2ade2bdb21fd203c884db76aa9761bf709081574ede002851715c56"
+    },
+    {
+      "videoId": "DoBRkmQ8P6I",
+      "basis": "title_and_description",
+      "species": [
+        "소나무"
+      ],
+      "topics": [
+        "나무 특성"
+      ],
+      "descriptionSha256": "da058050b5eb51ba40137fe440741b637849822a79ec5cf5b2564bf60499b352"
+    },
+    {
+      "videoId": "Cs_VIa77d6c",
+      "basis": "title_and_description",
+      "species": [
+        "회화나무"
+      ],
+      "topics": [
+        "나무 특성"
+      ],
+      "descriptionSha256": "54a8bc866a3404364c80bb5ce37b2ad517b53852de39dd9e9cd404d42d2e5921"
+    },
+    {
+      "videoId": "o7XlxP-QYF8",
+      "basis": "title_and_description",
+      "species": [
+        "엄나무"
+      ],
+      "topics": [
+        "나무 특성",
+        "품종·열매"
+      ],
+      "descriptionSha256": "5a639cdbd45357a9054127e4df383c63b8c6fbdaf68363385bcf238e13685572"
+    },
+    {
+      "videoId": "2N1OY0lwmHk",
+      "basis": "title_and_description",
+      "species": [
+        "홍가시나무"
+      ],
+      "topics": [
+        "월동"
+      ],
+      "descriptionSha256": "d24f66ac6481b66d0468e813437189c14095fe0cdac34503b917a92295a51e26"
+    },
+    {
+      "videoId": "eoZzimeKkyc",
+      "basis": "title_and_description",
+      "species": [
+        "살구나무"
+      ],
+      "topics": [
+        "품종·열매",
+        "묘목 선택"
+      ],
+      "descriptionSha256": "2e6cfd39992a6e73c3664562596c08da249fb84ea4336cc46daf4e8bd13248fd"
+    },
+    {
+      "videoId": "L72ZmbSUqm4",
+      "basis": "title_and_description",
+      "species": [
+        "개복숭아"
+      ],
+      "topics": [
+        "목재 활용"
+      ],
+      "descriptionSha256": "29850925c362f3fbe33515599633d771ce3b290f9cda0c584aa71e82a843a311"
+    },
+    {
+      "videoId": "CyitzR4z2iY",
+      "basis": "title_and_description",
+      "species": [
+        "밤나무"
+      ],
+      "topics": [
+        "묘목 선택",
+        "가격·구입"
+      ],
+      "descriptionSha256": "01b61ca7666a48d4812332b67968286c94adfd4ee679dec90b83016fd5fbabfc"
+    },
+    {
+      "videoId": "uSb0gSBGth0",
+      "basis": "title_and_description",
+      "species": [
+        "공통"
+      ],
+      "topics": [
+        "농원·정원관리"
+      ],
+      "descriptionSha256": "d76ff9bf728274da43cc8272aa898ffd29959c8122c4cd528ef86e32bd6aee98"
+    },
+    {
+      "videoId": "l0lASB2qaUs",
+      "basis": "title_and_description",
+      "species": [
+        "대추나무"
+      ],
+      "topics": [
+        "나눔행사",
+        "식재",
+        "분달이·포트재배"
+      ],
+      "descriptionSha256": "29494b5590189236015221d8719912463fa859781657581ce5a8d2cab52971f9"
+    },
+    {
+      "videoId": "Luk4aMQqyb4",
+      "basis": "title_and_description",
+      "species": [
+        "공통"
+      ],
+      "topics": [
+        "토양",
+        "분달이·포트재배"
+      ],
+      "descriptionSha256": "53a42f7ba6c25b3889e09cf106297d12f5b49952552ad441081f9a2b3b1b3754"
+    },
+    {
+      "videoId": "M4fhZ2nYHpE",
+      "basis": "title_and_description",
+      "species": [
+        "편백나무"
+      ],
+      "topics": [
+        "나무 특성"
+      ],
+      "descriptionSha256": "b5cb75c37cd171cd779435b482a6d5109ab261089196c17619f354ccfdac39d5"
+    },
+    {
+      "videoId": "678MMc7e2Pg",
+      "basis": "title_and_description",
+      "species": [
+        "석류나무"
+      ],
+      "topics": [
+        "묘목 선택",
+        "가격·구입"
+      ],
+      "descriptionSha256": "b32ed910a5ba5a63d499e31f010c05afd1e913298984a81de150aa842a1f3300"
+    },
+    {
+      "videoId": "8vN5u8TORCc",
+      "basis": "title_and_description",
+      "species": [
+        "측백나무"
+      ],
+      "topics": [
+        "묘목 선택"
+      ],
+      "descriptionSha256": "cc39bb4e9409bcbce09700139cdfdfe0e910ce53e65316a88871d5de8ed43cad"
+    },
+    {
+      "videoId": "PvstNfIC654",
+      "basis": "title_and_description",
+      "species": [
+        "옥향나무"
+      ],
+      "topics": [
+        "울타리·조경"
+      ],
+      "descriptionSha256": "a4d7d56bd831cffc3fe7c15f1c25d3f790ac59d0a62c521a45a957c9e3f5a1a7"
+    },
+    {
+      "videoId": "8-agVA2OrNc",
+      "basis": "title_and_description",
+      "species": [
+        "대추나무"
+      ],
+      "topics": [
+        "나눔행사",
+        "분달이·포트재배"
+      ],
+      "descriptionSha256": "2fc3580e86a16df2145bff7fbf73152050c573ab1c7e91ab5d198456e8402374"
+    },
+    {
+      "videoId": "a3uGsFzRoFc",
+      "basis": "title_and_description",
+      "species": [
+        "소나무"
+      ],
+      "topics": [
+        "식재",
+        "가격·구입"
+      ],
+      "descriptionSha256": "e40f54a8a7aeb0775140bcd9d92656003c11aa624b889ca313d66b8d32b00a82"
+    },
+    {
+      "videoId": "rax_iq05wd8",
+      "basis": "title_and_description",
+      "species": [
+        "편백나무",
+        "측백나무"
+      ],
+      "topics": [
+        "나무 특성",
+        "묘목 선택"
+      ],
+      "descriptionSha256": "3fd1c5d3cb0b1bf7f3ba52e73212b7d2b48d6431c243c941d310418fa1a8f9ea"
+    },
+    {
+      "videoId": "KmpUFESEkIw",
+      "basis": "title_and_description",
+      "species": [
+        "남천나무"
+      ],
+      "topics": [
+        "식재"
+      ],
+      "descriptionSha256": "5712c36491c79966d1753dc3be65cf2f745800bff832137be8989f6a27a08275"
+    },
+    {
+      "videoId": "BCSPY_TAhmM",
+      "basis": "title_and_description",
+      "species": [
+        "모과나무"
+      ],
+      "topics": [
+        "묘목 선택",
+        "품종·열매"
+      ],
+      "descriptionSha256": "cb0ad93654be5f68b60c3100779407f4b18b276498918f9b4f1d234395f3fc2e"
+    },
+    {
+      "videoId": "ue0Un7-rGG0",
+      "basis": "title_and_description",
+      "species": [
+        "공통"
+      ],
+      "topics": [
+        "분달이·포트재배"
+      ],
+      "descriptionSha256": "804f404dd98c0db027227395f5a84933361a0defc3201d9fe93843f38eb0aadf"
+    },
+    {
+      "videoId": "chVshUJ1EfI",
+      "basis": "title_and_description",
+      "species": [
+        "배나무"
+      ],
+      "topics": [
+        "품종·열매",
+        "식재"
+      ],
+      "descriptionSha256": "1592051e852ff2d8ec3cb689334950e185e50448541157c24280a658be13dec8"
+    },
+    {
+      "videoId": "krn4Ysl4mp8",
+      "basis": "title_and_description",
+      "species": [
+        "피라칸타스"
+      ],
+      "topics": [
+        "울타리·조경"
+      ],
+      "descriptionSha256": "f42096b989abfc027f6c668d02e2f3e0c4f4043ad18a71d55af954c13551a3c5"
+    },
+    {
+      "videoId": "NUcpV5NnTyg",
+      "basis": "title_and_description",
+      "species": [
+        "앵두나무"
+      ],
+      "topics": [
+        "묘목 선택"
+      ],
+      "descriptionSha256": "4e1a46f10df2bdac61617b729f9b13dcfea943025fba68329051017ebb0d0828"
+    },
+    {
+      "videoId": "wTRtB_aJfX0",
+      "basis": "title_and_description",
+      "species": [
+        "개복숭아"
+      ],
+      "topics": [
+        "묘목 선택"
+      ],
+      "descriptionSha256": "31b977dbcf1b5228a29a6cfcc7a6c299ef870260da1de2faaf704da3fbd51dbf"
+    },
+    {
+      "videoId": "-KMY8K4MhaM",
+      "basis": "title_and_description",
+      "species": [
+        "체리나무"
+      ],
+      "topics": [
+        "품종·열매",
+        "묘목 선택"
+      ],
+      "descriptionSha256": "3a8c6d3c197fd536b1c5895ecb81bdd18444aed1f09a0e6b1a2be1d2dd1d315a"
+    },
+    {
+      "videoId": "Sq3IVcMRIqc",
+      "basis": "title_and_description",
+      "species": [
+        "밤나무"
+      ],
+      "topics": [
+        "품종·열매",
+        "묘목 선택"
+      ],
+      "descriptionSha256": "7049c9fcce1974ce56e7897f71d678ce39ca4d9e99d7dfe548e6c96fd741dea6"
+    },
+    {
+      "videoId": "zUSNeONcyFA",
+      "basis": "title_and_description",
+      "species": [
+        "매실나무"
+      ],
+      "topics": [
+        "묘목 선택",
+        "가격·구입"
+      ],
+      "descriptionSha256": "82fe49e036a2535550902f7a6fa2cd9b111443a7ba0f89be51357e103bcb3aea"
+    },
+    {
+      "videoId": "rdtzg0X3xBg",
+      "basis": "title_and_description",
+      "species": [
+        "감나무"
+      ],
+      "topics": [
+        "묘목 선택",
+        "품종·열매",
+        "가격·구입"
+      ],
+      "descriptionSha256": "1d133b77f2f1048c76ed4793b0ab0a2f363f206ba1d683608fbb6980a7f504ad"
+    },
+    {
+      "videoId": "-v-Sz7Kjsj0",
+      "basis": "title_and_description",
+      "species": [
+        "아로니아"
+      ],
+      "topics": [
+        "나눔행사",
+        "분달이·포트재배"
+      ],
+      "descriptionSha256": "572a9a7412af1927142bb5688b81a48df5bd67980c35eec768a59adf212ef100"
+    },
+    {
+      "videoId": "mAar9eCDfVE",
+      "basis": "title_and_description",
+      "species": [
+        "화살나무"
+      ],
+      "topics": [
+        "묘목 선택",
+        "가격·구입",
+        "분달이·포트재배"
+      ],
+      "descriptionSha256": "457299519abfdfdd0440fd9e5d0c06ec95e4e13debf9ad54e82085491ba510ee"
+    },
+    {
+      "videoId": "X8EEoIQSqMo",
+      "basis": "title_and_description",
+      "species": [
+        "꾸지뽕나무"
+      ],
+      "topics": [
+        "묘목 선택",
+        "가격·구입"
+      ],
+      "descriptionSha256": "49555372940b425ef9ac622fbe3603757e8663e6e8dd003b12d2cb1670cb4565"
+    },
+    {
+      "videoId": "qCtvAzL9PR4",
+      "basis": "title_and_description",
+      "species": [
+        "대추나무"
+      ],
+      "topics": [
+        "묘목 선택",
+        "가격·구입"
+      ],
+      "descriptionSha256": "6ba81babb9208c19ff857e1898b58f7aabb5bcde4c4600edd769417ff821e54f"
+    },
+    {
+      "videoId": "mN9cGlorBFQ",
+      "basis": "title_and_description",
+      "species": [
+        "포포나무"
+      ],
+      "topics": [
+        "가격·구입",
+        "분달이·포트재배"
+      ],
+      "descriptionSha256": "93a896c906300c2e79d885a1b07b8d2ca3cc4d2dfe2125ba6a9ec8da831c395d"
+    },
+    {
+      "videoId": "eizcn4_WbFg",
+      "basis": "title_and_description",
+      "species": [
+        "홍가시나무"
+      ],
+      "topics": [
+        "묘목 선택",
+        "가격·구입",
+        "분달이·포트재배"
+      ],
+      "descriptionSha256": "54928aca8253bd6e1fafc7d410760c40adc4c582bd5e76fe3b66c094b2045542"
+    },
+    {
+      "videoId": "ZvmuaduGD4o",
+      "basis": "title_and_description",
+      "species": [
+        "체리나무"
+      ],
+      "topics": [
+        "품종·열매",
+        "묘목 선택",
+        "가격·구입"
+      ],
+      "descriptionSha256": "3d13f512f55d8796be6262966030541b5545660eda765cd70e336fb52fdab5db"
+    },
+    {
+      "videoId": "U1OnplR88y8",
+      "basis": "title_and_description",
+      "species": [
+        "사철나무"
+      ],
+      "topics": [
+        "식재",
+        "가격·구입"
+      ],
+      "descriptionSha256": "b3fc3e95ab59158af3b09040e51ad955149d6d7f788f53ed06162c834835469c"
+    }
+  ]
+}
