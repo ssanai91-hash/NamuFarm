@@ -59,7 +59,12 @@ function doPost(e) {
     return json_({ ok: false, code: code });
   }
 }
-function doGet() { return json_(secureServiceInfo_()); }
+function doGet(e) {
+  if (e && e.parameter && e.parameter.action === 'content_library') {
+    return json_(publicContentLibrary_());
+  }
+  return json_(secureServiceInfo_());
+}
 function json_(value) { return ContentService.createTextOutput(JSON.stringify(value)).setMimeType(ContentService.MimeType.JSON); }
 function fail_(code) { const error = new Error(code); error.code = code; throw error; }
 function assert_(value, code) { if (!value) fail_(code || 'INVALID'); }
