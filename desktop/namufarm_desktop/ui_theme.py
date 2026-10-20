@@ -20,7 +20,7 @@ QMainWindow,#workspace,QDialog{background:#f4f6f7;}
 #sidebar QFrame#sidebarClock{background:#234b3c;border:1px solid #4b7760;border-radius:12px;}
 #sidebar QLabel#sidebarTree{background:transparent;border:0;}
 #sidebar QLabel#sidebarClockTitle{font-size:14px;font-weight:600;color:#b8d8c4;background:transparent;}
-#sidebar QLabel#sidebarDate{font-size:18px;color:#d0e0d7;background:transparent;}
+#sidebar QLabel#sidebarDate{font-size:26px;font-weight:700;color:#e1eee6;background:transparent;}
 #sidebar QLabel#sidebarTime{font-family:Consolas,"Malgun Gothic";font-size:32px;letter-spacing:1px;font-weight:700;color:#f1fbf4;background:transparent;}
 #sidebar #navFoot{font-size:@small@px;color:#c6d9cf;}
 #sidebar QPushButton{background:transparent;color:#e0ebe3;border:2px solid transparent;border-radius:8px;text-align:left;padding:10px 14px;font-size:@nav@px;min-height:@navheight@px;max-height:@navheight@px;font-weight:600;}

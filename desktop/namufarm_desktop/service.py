@@ -137,9 +137,9 @@ class Manager:
                 "로컬 엑셀의 확정 견적을 선택해주세요.")
         return quote
 
-    def connect(self, include_sales=False):
+    def connect(self, include_sales=False, *, sales_only=False):
         """Enroll this PC with the configured server without asking for a key or file."""
-        pull = self.sync if include_sales else self.sync_requests
+        pull = (lambda: self.sync(sales_only=True)) if sales_only else self.sync if include_sales else self.sync_requests
         if self.credentials.get("paired") is True:
             try:
                 return pull()
@@ -566,7 +566,10 @@ class Manager:
         require(valid_id(identifier))
         from .confirmed_excel import write_confirmed_quotes
         require(not self.vault.preference("quote_write_pending"), "먼저 가져오기로 견적 저장을 완료해주세요.")
-        write_confirmed_quotes(self.confirmed_quotes_path, [d for d in self._local_quotes() if d["id"] != identifier])
+        # Local history only: never call close_request or alter the quote ledger.
+        quotes = self._local_quotes()
+        require(any(d["id"] == identifier for d in quotes), "삭제할 확정견적을 다시 선택해주세요.")
+        write_confirmed_quotes(self.confirmed_quotes_path, [d for d in quotes if d["id"] != identifier])
         self.vault.save_preference("drafts", [d for d in self.vault.preference("drafts", []) if d["id"] != identifier])
         return self.view()
 
@@ -916,8 +919,11 @@ class Manager:
         return self.local_copy_view()
 
     def delete_sale(self, number, expected_revision):
-        require(not self.vault.pending(), "기존 전송 대기를 먼저 동기화해주세요.")
-        require(self.credentials.get("paired") is True, "PC를 먼저 연결해주세요.")
+        # A local selection may precede this session's connection. Connect and
+        # settle existing events here instead of permanently disabling Delete.
+        self.connect(sales_only=True)
+        if number in self.vault.snapshot_marker().get("deletedSales", []):
+            return self.local_copy_view()
         row = next((r for r in self.vault.rows("sales") if r["metadata"]["orderNumber"] == number), None)
         require(row is not None and row["metadata"]["revision"] == expected_revision,
                 "선택한 판매 기록을 다시 조회해주세요.")

@@ -915,6 +915,14 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         super().__init__(parent)
         draft = seller_note_draft(draft)
         self.draft, self.mode, self.request_status = (copy.deepcopy(draft), '', request_status)
+        self._workbench_ready = False
+        self._workbench_closed = False
+        self._workbench_fit_timer = QTimer(self)
+        self._workbench_fit_timer.setSingleShot(True)
+        self._workbench_fit_timer.timeout.connect(self.fit_workbench_rows)
+        self._workbench_notes_timer = QTimer(self)
+        self._workbench_notes_timer.setSingleShot(True)
+        self._workbench_notes_timer.timeout.connect(self.align_workbench_notes)
         self.items_only = items_only
         self.simple_request = bool(draft.get('sourceRequestId'))
         self.manual_quote = not self.simple_request and draft.get('manualStatus') in ('견적확정', '견적발송완료')
@@ -1331,7 +1339,8 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         self.shipping_cod.toggled.connect(self.recalculate)
         self.shipping_prepaid.toggled.connect(self.recalculate)
         self.shipping_fee.textChanged.connect(self.recalculate)
-        self.finished.connect(self.cleanup_generated_quote)
+        self._workbench_ready = True
+        self.finished.connect(self.finish_workbench)
         self.recalculate()
         self.initial = self.raw_state()
 
@@ -1346,13 +1355,13 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        if not hasattr(self, "workbench_note_area"):
+        if not getattr(self, "_workbench_ready", False) or self._workbench_closed:
             return
         large = bool(QApplication.instance().property("namufarmLargeFont"))
         # Leave room for the table plus both scrollbars in short, narrow windows.
         self.customer_scroll.setMaximumWidth(min(480 if large else 440,
                                                   max(320 if large else 300, self.width() - 900)))
-        QTimer.singleShot(0, self.fit_workbench_rows)
+        self._workbench_fit_timer.start(0)
         compact = self.height() < 760
         if compact == getattr(self, "_workbench_compact", None):
             return
@@ -1364,6 +1373,8 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         self.workbench_identity.setVerticalSpacing(4)
 
     def fit_workbench_rows(self):
+        if not getattr(self, "_workbench_ready", False) or self._workbench_closed or not self.isVisible():
+            return
         large = bool(QApplication.instance().property("namufarmLargeFont"))
         # Bound long e-mail/receipt values to the rail and wrap without altering copied text.
         # A shared caption width keeps both groups on the same value-column axis.
@@ -1400,16 +1411,32 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         # Eight compact rows on a normal desktop; smaller windows scroll the table.
         self.items.setMinimumHeight(header + 4 * row_height + 4)
         self.items.setMaximumHeight(header + 8 * row_height + 4)
-        QTimer.singleShot(0, self.align_workbench_notes)
+        self._workbench_notes_timer.start(0)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if getattr(self, "_workbench_ready", False) and not self._workbench_closed:
+            self._workbench_fit_timer.start(0)
+
+    @Slot(int)
+    def finish_workbench(self, result):
+        self._workbench_closed = True
+        self._workbench_ready = False
+        self._workbench_fit_timer.stop()
+        self._workbench_notes_timer.stop()
+        self.note.removeEventFilter(self)
+        self.workbench_original_area.removeEventFilter(self)
+        self.cleanup_generated_quote()
 
     def eventFilter(self, watched, event):
-        if event.type() == QEvent.Type.Resize and watched in (
-                getattr(self, "note", None), getattr(self, "workbench_original_area", None)):
-            QTimer.singleShot(0, self.align_workbench_notes)
+        if (getattr(self, "_workbench_ready", False) and not self._workbench_closed and
+                event.type() == QEvent.Type.Resize and watched in (
+                getattr(self, "note", None), getattr(self, "workbench_original_area", None))):
+            self._workbench_notes_timer.start(0)
         return super().eventFilter(watched, event)
 
     def align_workbench_notes(self):
-        if not self.isVisible() or not hasattr(self, "workbench_original_area"):
+        if not getattr(self, "_workbench_ready", False) or self._workbench_closed or not self.isVisible():
             return
         note_bottom = self.note.mapTo(self, QPoint(0, self.note.height())).y()
         visible_bottom = self.workbench_scroll.viewport().mapTo(
@@ -2276,6 +2303,7 @@ class QuoteDeliveryDialog(QuoteDialog):
         self.original_quote = copy.deepcopy(snapshot)
         self.action_task = None
         self.payment_view = None
+        self.local_changed = False
         super().__init__(snapshot, parent, request_status=request_status, manager=manager)
         self.setWindowTitle("확정견적 확인")
         self.findChild(QLabel, "workbenchTitle").setText("확정견적 확인")
@@ -2454,6 +2482,7 @@ class QuoteDeliveryDialog(QuoteDialog):
             return
         self.original_quote = copy.deepcopy(self._pending_item_edit)
         self.draft = copy.deepcopy(self.original_quote)
+        self.local_changed = True
         self.note.blockSignals(True)
         self.note.setPlainText(self.draft.get("note", ""))
         self.note.blockSignals(False)
@@ -2981,17 +3010,6 @@ class SellerWindow(MainWindow):
         clock_layout = QVBoxLayout(self.sidebar_clock)
         clock_layout.setContentsMargins(14, 12, 14, 12)
         clock_layout.setSpacing(3)
-        self.sidebar_clock_heading = QWidget()
-        clock_heading = QHBoxLayout(self.sidebar_clock_heading)
-        clock_heading.setContentsMargins(0, 0, 0, 0)
-        clock_heading.setSpacing(6)
-        clock_heading.addStretch()
-        clock_icon = QLabel()
-        clock_icon.setPixmap(ui_icon("schedule", "#b8d8c4").pixmap(18, 18))
-        clock_heading.addWidget(clock_icon)
-        clock_heading.addWidget(label("현재 시각", "sidebarClockTitle"))
-        clock_heading.addStretch()
-        clock_layout.addWidget(self.sidebar_clock_heading)
         self.sidebar_date = label("", "sidebarDate")
         self.sidebar_time = DigitalClock()
         for clock_label in (self.sidebar_date, self.sidebar_time):
@@ -3141,10 +3159,9 @@ class SellerWindow(MainWindow):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        if not hasattr(self, "sidebar_clock_heading"):
+        if not hasattr(self, "sidebar_clock"):
             return
         compact = self.height() < 780
-        self.sidebar_clock_heading.setVisible(not compact)
         self.sidebar.layout().setSpacing(6 if compact else 8)
         self.sidebar.layout().setContentsMargins(12, 12 if compact else 16, 12, 12 if compact else 14)
         self.brand_panel.layout().setContentsMargins(12, 10 if compact else 18, 12, 10 if compact else 18)
@@ -3256,8 +3273,7 @@ class SellerWindow(MainWindow):
         layout.setSpacing(10)
         self.draft_filter = "전체"
         filters, self.draft_filters = self.filter_buttons(
-            (("전체", "전체"), ("견적확정", "견적확정"), ("발송 완료", "견적발송완료"),
-             ("입금확인", "입금확인")), self.set_draft_filter)
+            (("전체", "전체"), ("견적확정", "견적확정"), ("입금확인", "입금확인")), self.set_draft_filter)
         self.draft_filters["전체"].setChecked(True)
         layout.addLayout(filters)
         self.draft_table = table(["견적번호", "상태", "작성일", "고객명", "연락처", "메일", "공식견적서", "품목", "판매금액", "자료 위치"])
@@ -3285,6 +3301,11 @@ class SellerWindow(MainWindow):
         set_button_icon(self.draft_open, "open", "#ffffff")
         self.draft_selection_status = label("견적을 선택하세요.", "muted", True)
         bar.addWidget(self.draft_selection_status, 1)
+        self.draft_delete = button("삭제", self.delete_selected_draft)
+        self.draft_delete.setObjectName("danger")
+        set_button_icon(self.draft_delete, "trash", "#a33827")
+        self.draft_delete.setToolTip("이 PC의 확정견적만 삭제 · Google Sheets 견적확정 원본 유지")
+        bar.addWidget(self.draft_delete)
         bar.addWidget(self.draft_open)
         layout.addLayout(bar)
         return page
@@ -3558,6 +3579,7 @@ class SellerWindow(MainWindow):
         self.request_quote_button.setEnabled(ready and self.request_table.currentRow() >= 0)
         selected_draft = self.draft_table.currentRow()
         self.draft_open.setEnabled(ready and 0 <= selected_draft < len(self.draft_rows))
+        self.draft_delete.setEnabled(ready and 0 <= selected_draft < len(self.draft_rows))
         if 0 <= selected_draft < len(self.draft_rows):
             draft = self.draft_rows[selected_draft]
             self.draft_selection_status.setText(f"{draft['customerName']} · 저장된 견적 결과 확인")
@@ -3569,10 +3591,13 @@ class SellerWindow(MainWindow):
         self.tracking_save.setEnabled(paired)
         self.shipping_edit.setEnabled(ready)
         self.customer_open_button.setEnabled(ready and self.selected_sale is not None)
-        self.sale_delete_button.setEnabled(paired and self.selected_sale is not None)
+        self.sale_delete_button.setEnabled(ready and self.selected_sale is not None)
+        self.sale_delete_button.setToolTip(
+            "선택한 주문을 서버 주문 엑셀과 PC 판매자료에서 삭제" if self.selected_sale is not None
+            else "삭제할 판매 주문을 선택하세요.")
         if getattr(self, "demo_mode", False):
             for widget in (self.sync_button, self.manual_quote_button, self.request_quote_button,
-                           self.draft_open, self.customer_open_button, self.sale_delete_button,
+                           self.draft_open, self.draft_delete, self.customer_open_button, self.sale_delete_button,
                            self.export_button, self.import_button, self.print_button,
                            self.tracking_save, self.open_button, self.connect_button, self.report_button,
                            self.copy_button):
@@ -3593,14 +3618,14 @@ class SellerWindow(MainWindow):
 
     def refresh_workspace(self):
         # This category is backed only by the local confirmed-quotes workbook.
-        draft_pairs = [(draft, "입금확인" if draft.get("paymentRegistered") else draft["quoteStatus"])
+        draft_pairs = [(draft, "입금확인" if draft.get("paymentRegistered") else "견적확정")
                        for draft in self.data.get("confirmedQuotes", [])]
         draft_pairs.sort(
             key=lambda pair: draft_quote_sort_key(pair[0]),
             reverse=self.draft_sort_descending,
         )
         for value, widget in self.draft_filters.items():
-            title = {"전체": "전체", "견적확정": "견적확정", "견적발송완료": "발송 완료", "입금확인": "입금확인"}[value]
+            title = {"전체": "전체", "견적확정": "견적확정", "입금확인": "입금확인"}[value]
             count = len(draft_pairs) if value == "전체" else sum(status == value for _draft, status in draft_pairs)
             widget.setText(f"{title} {count:,}")
             widget.setChecked(value == self.draft_filter)
@@ -3939,6 +3964,28 @@ class SellerWindow(MainWindow):
         status = self.draft_statuses[index] if index < len(self.draft_statuses) else ""
         self.open_delivery_quote(draft, status)
 
+    def delete_selected_draft(self):
+        if getattr(self, "demo_mode", False) or not self.manager or self.task:
+            return
+        index = self.draft_table.currentRow()
+        if not 0 <= index < len(self.draft_rows):
+            return
+        draft = self.draft_rows[index]
+        if QMessageBox.question(
+                self, "PC 확정견적 삭제",
+                f"{draft_quote_number(draft)} · {draft['customerName']} 견적을 이 PC에서 삭제할까요?\n"
+                "PC 목록과 로컬 확정견적 엑셀에서만 삭제합니다.\n"
+                "Google Sheets의 견적확정 시트와 판매관리 자료는 그대로 유지합니다.",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
+            return
+        identifier = draft["id"]
+        self.run_job("PC 확정견적 삭제 중…", lambda: self.manager.delete_draft(identifier), self.local_quote_deleted)
+
+    def local_quote_deleted(self, value):
+        self.apply_view(value)
+        self.message.setText("이 PC의 확정견적을 삭제했습니다. Google Sheets 원본은 유지됩니다.")
+
     def open_delivery_quote(self, draft, status):
         if getattr(self, "demo_mode", False) or not self.manager or self.task:
             return
@@ -3958,8 +4005,12 @@ class SellerWindow(MainWindow):
                 self.timer.start()
         if result == QDialog.DialogCode.Accepted and dialog.payment_view is not None:
             self.quote_confirmed(dialog.payment_view)
-        else:
-            self.apply_view(self.manager.view())
+        elif dialog.local_changed:
+            try:
+                self.apply_view(self.manager.view())
+            except UserError as error:
+                self.message.setText(str(error))
+        dialog.deleteLater()
 
     def show_order(self, number):
         if not self.allow_discard():
