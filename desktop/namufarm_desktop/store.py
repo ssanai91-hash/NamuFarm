@@ -244,6 +244,12 @@ class Vault:
                 db.execute("INSERT OR REPLACE INTO config VALUES ('snapshot',?)", (self._seal(marker, "snapshot"),))
             # Cache deletion, resurrection protection and clearing the outbox
             # commit together, only after the server acknowledgement was checked.
+            if operation["action"] == "delete_sale":
+                number = operation["payload"]["orderNumber"]
+                marker = self._read_snapshot_marker(db)
+                marker["deletedSales"] = sorted(set(marker.get("deletedSales", [])) | {number})
+                db.execute("DELETE FROM cache WHERE kind='sales' AND id=?", (self._index("sales", number),))
+                db.execute("INSERT OR REPLACE INTO config VALUES ('snapshot',?)", (self._seal(marker, "snapshot"),))
             db.execute("DELETE FROM outbox WHERE id=?", (identifier,))
 
     def discard_conflict(self, identifier, requests, sales, marker):

@@ -40,6 +40,7 @@ function doPost(e) {
       else if (body.action === 'save_sale') value = saveSale_(body);
       else if (body.action === 'list_sales') value = listSales_(body);
       else if (body.action === 'hide_sale') value = hideSale_(body);
+      else if (body.action === 'delete_sale') value = deleteSale_(body);
       else if (body.action === 'sales_report') value = salesReport_(body);
       else if (body.action === 'list_farms') value = listFarmDirectory_();
       else if (body.action === 'save_farm') value = saveFarmDirectory_(body);

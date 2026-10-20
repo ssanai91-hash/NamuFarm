@@ -3359,6 +3359,10 @@ class SellerWindow(MainWindow):
         self.customer_list_status = label("주문을 선택하세요.", "muted", True)
         bottom.addWidget(self.customer_list_status, 1)
         self.customer_open_button = button("고객 관리 열기", self.open_customer_order, True)
+        self.sale_delete_button = button("삭제", self.delete_selected_sale)
+        self.sale_delete_button.setObjectName("danger")
+        set_button_icon(self.sale_delete_button, "trash", "#a33827")
+        bottom.addWidget(self.sale_delete_button)
         set_button_icon(self.customer_open_button, "orders", "#ffffff")
         bottom.addWidget(self.customer_open_button)
         layout.addLayout(bottom)
@@ -3576,9 +3580,10 @@ class SellerWindow(MainWindow):
         self.tracking_save.setEnabled(paired)
         self.shipping_edit.setEnabled(ready)
         self.customer_open_button.setEnabled(ready and self.selected_sale is not None)
+        self.sale_delete_button.setEnabled(paired and self.selected_sale is not None)
         if getattr(self, "demo_mode", False):
             for widget in (self.sync_button, self.manual_quote_button, self.request_quote_button,
-                           self.draft_open, self.customer_open_button,
+                           self.draft_open, self.customer_open_button, self.sale_delete_button,
                            self.export_button, self.import_button, self.print_button,
                            self.tracking_save, self.open_button, self.connect_button, self.report_button,
                            self.copy_button):
@@ -3725,6 +3730,12 @@ class SellerWindow(MainWindow):
         fill_table(self.sale_table, table_rows)
         center_table_columns(self.sale_table, (0, 1, 2, 3, 4, 6, 9))
         customer_reference(self.sale_table, 3, 0)
+        for index, row in enumerate(self.sale_rows):
+            if row["metadata"]["orderNumber"].startswith("PC_"):
+                # Keep the internal key for API calls, without drawing it under the name.
+                cell = self.sale_table.item(index, 3)
+                cell.setData(Qt.ItemDataRole.UserRole, None)
+                cell.setToolTip(row["private"]["order"].get("customerName", ""))
         self.sale_table.clearSelection()
         self.sale_table.setCurrentCell(-1, -1)
         self.sale_table.blockSignals(False)
@@ -3756,8 +3767,10 @@ class SellerWindow(MainWindow):
         self.selected_sale = self.sale_rows[index] if 0 <= index < len(self.sale_rows) else None
         if self.selected_sale:
             order = self.selected_sale["private"]["order"]
+            number = self.selected_sale["metadata"]["orderNumber"]
+            shown_number = order.get("sourceQuoteNumber", "") if number.startswith("PC_") else number
             self.customer_list_status.setText(
-                f"{self.selected_sale['metadata']['orderNumber']} · "
+                (f"{shown_number} · " if shown_number else "") +
                 f"{order.get('customerName','')} · "
                 f"{customer_status_text(self.selected_sale['metadata']['status'])} · "
                 + ("다음 작업: 배송정보 · 송장 준비" if customer_status_text(self.selected_sale['metadata']['status']) == "입금확인"
@@ -3766,6 +3779,20 @@ class SellerWindow(MainWindow):
         else:
             self.customer_list_status.setText("주문을 선택하세요.")
         self.update_controls()
+
+    def delete_selected_sale(self):
+        if getattr(self, "demo_mode", False) or not self.manager or self.task or not self.selected_sale:
+            return
+        row = self.selected_sale
+        order, meta = row["private"]["order"], row["metadata"]
+        if QMessageBox.question(
+                self, "판매 주문 삭제",
+                f"{order.get('customerName', '')} 고객의 주문을 삭제할까요?\n"
+                "구글 주문 엑셀의 해당 행을 삭제한 뒤 PC 판매자료에서도 삭제합니다.\n삭제한 주문은 복구할 수 없습니다.",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
+            return
+        self.run_job("주문 삭제 중…", lambda: self.manager.delete_sale(meta["orderNumber"], meta["revision"]))
 
     def open_customer_order(self, *args):
         if getattr(self, "demo_mode", False) or not self.manager or self.task:

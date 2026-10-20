@@ -123,7 +123,7 @@ function newSaleSheet_(meta) {
   return quoteEnsureHeaderSheet_(annualLedgerBook_('order',day.slice(0,4)),day.slice(5,7)+'월',SALE_HEADERS);
 }
 /** Identity is the order number, never a remembered row position. */
-function saleRecords_() {
+function saleStorageSheets_() {
   // In two-book mode the order workbook has month tabs only.
   // Internal event/binding sheets remain in the existing administration workbook.
   const sheets=twoBookActive_()?[]:[namedSheet_(SALE_SHEET,SALE_HEADERS,false)];
@@ -138,6 +138,10 @@ function saleRecords_() {
       sheets.push(sheet);
     }
   });
+  return sheets;
+}
+function saleRecords_() {
+  const sheets=saleStorageSheets_();
   const seen=new Map(),records=[];
   sheets.forEach(sheet=>namedRows_(sheet,20).forEach((row,index)=>{
     if(row.every(v=>v===''))return;

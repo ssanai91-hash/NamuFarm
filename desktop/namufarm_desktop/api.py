@@ -14,7 +14,7 @@ MAX_RESPONSE = 8 * 1024 * 1024
 # Allow the server's 15-second lock wait plus connection/startup overhead.
 # urllib applies this to blocking I/O, not the entire redirect/request chain.
 REQUEST_TIMEOUT = 75
-ACTION_LABELS = {"connect_app": "서버 재연결", "pair_device": "PC 연결", "close_request": "문의 삭제", "save_sale": "판매 저장",
+ACTION_LABELS = {"connect_app": "서버 재연결", "pair_device": "PC 연결", "close_request": "문의 삭제", "save_sale": "판매 저장", "delete_sale": "주문 삭제",
                  "update_request_status": "견적 발송 상태 저장", "email_profile": "메일 발신 계정 확인",
                  "send_quote_email": "견적 메일 전송", "sms_profile": "문자 발신 설정 확인",
                  "send_quote_sms": "견적 문자 전송", "quote_sms_status": "문자 전송 결과 확인",

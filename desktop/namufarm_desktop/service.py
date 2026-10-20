@@ -1,6 +1,7 @@
 import base64
 import copy
 import json
+import re
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -686,6 +687,12 @@ class Manager:
                     self.decode_request(row)
                 else:
                     if row.get("expired"):
+                        if row.get("deleted") is True:
+                            number = row.get("orderNumber", "")
+                            require(isinstance(number, str) and re.fullmatch(r"[A-Za-z0-9_-]{1,120}", number),
+                                    "주문 삭제 기록을 확인할 수 없습니다.")
+                            integer(row.get("revision"), 1)
+                            deleted.add(number)
                         continue
                     self.decode_sale(row)
                     reference = row["metadata"]["orderNumber"]
@@ -705,15 +712,17 @@ class Manager:
 
     def _fetch_verified_snapshot(self):
         requests, request_cursor, deleted = self._pages("list_requests", "requests")
-        sales, sale_cursor, _ = self._pages("list_sales", "sales")
+        sales, sale_cursor, deleted_sales = self._pages("list_sales", "sales")
         old = self.vault.snapshot_marker()
         # Request data is a fresh authoritative server view, independent of local history.
         require(sale_cursor >= old["sales"], "서버 판매 순번이 이전보다 작아 기존 기록을 유지합니다.")
         sale_ids = {r["metadata"]["orderNumber"] for r in sales}
-        require(all(r["metadata"]["orderNumber"] in sale_ids or sale_expired(r["metadata"], now_ms())
+        require(set(old.get("deletedSales", [])) <= deleted_sales and not sale_ids.intersection(deleted_sales),
+                "서버 주문 삭제 이력이 이전 상태여서 기존 자료를 유지합니다.")
+        require(all(r["metadata"]["orderNumber"] in sale_ids or r["metadata"]["orderNumber"] in deleted_sales or sale_expired(r["metadata"], now_ms())
                     for r in self.vault.rows("sales")), "서버 판매 목록 일부가 누락되어 기존 기록을 유지합니다.")
         marker = {"requests": request_cursor, "sales": sale_cursor,
-                  "deletedRequests": sorted(deleted), "quoteReadMode": self.quote_read_mode}
+                  "deletedRequests": sorted(deleted), "deletedSales": sorted(deleted_sales), "quoteReadMode": self.quote_read_mode}
         return requests, sales, marker
 
     def flush(self):
@@ -725,6 +734,10 @@ class Manager:
                         and response.get("revision") == payload["metadata"]["revision"]
                         and response.get("fingerprint") == payload["fingerprint"],
                         "판매 저장 응답이 일치하지 않습니다. 전송 대기를 유지합니다.")
+            elif operation["action"] == "delete_sale":
+                require(response.get("deleted") is True and response.get("orderNumber") == payload["orderNumber"]
+                        and response.get("revision") == payload["revision"],
+                        "주문 삭제 성공을 확인하지 못해 로컬 자료와 전송 대기를 유지합니다.")
             else:
                 require(response.get("closed") is True and response.get("requestId") == payload["requestId"],
                         "문의 삭제 응답을 확인하지 못했습니다. 전송 대기를 유지합니다.")
@@ -734,7 +747,7 @@ class Manager:
                 if quote and quote["quoteStatus"] != "입금확인":
                     self.vault.save_preference("quote_write_pending", {
                         "draft": quote, "status": "입금확인", "acknowledged": True})
-            else:
+            elif operation["action"] == "close_request":
                 self.inbox_requests = [r for r in self.inbox_requests if r["requestId"] != payload["requestId"]]
             self.vault.acknowledge(operation["id"])
 
@@ -811,6 +824,22 @@ class Manager:
         self.flush()
         # A verified deletion acknowledgement is sufficient. A later list pull
         # must not turn a completed deletion into an apparent save failure.
+        return self.local_copy_view()
+
+    def delete_sale(self, number, expected_revision):
+        require(not self.vault.pending(), "기존 전송 대기를 먼저 동기화해주세요.")
+        require(self.credentials.get("paired") is True, "PC를 먼저 연결해주세요.")
+        row = next((r for r in self.vault.rows("sales") if r["metadata"]["orderNumber"] == number), None)
+        require(row is not None and row["metadata"]["revision"] == expected_revision,
+                "선택한 판매 기록을 다시 조회해주세요.")
+        info = self.verify_server()
+        require(info.get("saleDeletionSync") is True,
+                "주문 삭제를 지원하도록 운영 Apps Script를 최신 코드로 재배포해주세요.")
+        event_id = str(uuid.uuid4())
+        self.vault.queue({"id": event_id, "action": "delete_sale", "payload": {
+            "eventId": event_id, "orderNumber": number, "revision": expected_revision}})
+        # No optimistic deletion. Cache/outbox change together only after a verified ACK.
+        self.flush()
         return self.local_copy_view()
 
     def conflict_preview(self):

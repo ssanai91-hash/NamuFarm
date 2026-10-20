@@ -4,6 +4,8 @@ const SALE_HEADERS = ['주문번호','변경순번','상태','구매시각(UTC)'
 const SALE_EVENT_SHEET = '판매변경이력';
 const SALE_HIDDEN_SHEET = '판매목록숨김';
 const SALE_HIDDEN_HEADERS = ['주문번호','숨김처리시각(UTC)'];
+const SALE_DELETE_SHEET = '판매삭제이력';
+const SALE_DELETE_HEADERS = ['주문번호','revision','삭제순번','삭제요청번호','삭제시각(UTC)','처리상태'];
 const SALE_EVENT_HEADERS = ['변경번호','주문번호','revision','내용해시','처리시각(UTC)'];
 const UUID_PATTERN = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 const QUOTE_RETENTION_MS = 30*86400000;
@@ -30,7 +32,7 @@ function secureServiceInfo_() {
     ledgerStorage:annualLedgersEnabled_()?'annual-v1':'legacy',
     quoteLedgerMonth:'receivedAt',orderLedgerMonth:'paidAt',
     processingBases:['quote_request'],requestFields:['customerEmail','formalQuoteRequested','recipientName','replyChannel'],
-    encryptionReady:false,customerDataStorage:'plain',sellerKey:key,retentionDays:30,requestDeletionSync:true,
+    encryptionReady:false,customerDataStorage:'plain',sellerKey:key,retentionDays:30,requestDeletionSync:true,saleDeletionSync:true,
     receiptFormat:'NAMU-YYYYMMDD-NNNN',receiptTimeZone:'Asia/Seoul',connectionFile:true,requestSnapshot:true,
     connectionAuth:'auto-v1',quoteReadMode:twoBookActive_()?'annual-two-tabs':'legacy-storage',legacyDeviceAuth:true,
     quoteEmail:true,quoteEmailSender:QUOTE_SENDER_EMAIL,
@@ -268,6 +270,7 @@ function saveSale_(body) {
   assert_(body.sourceRequestId==='' || UUID_PATTERN.test(body.sourceRequestId));
   return lock_(()=>{
     const events=namedSheet_(SALE_EVENT_SHEET,SALE_EVENT_HEADERS,false);
+    assert_(!saleDeletionRows_().some(row=>row[0]===meta.orderNumber),'CONFLICT');
     const records=saleRecords_(),rows=records.map(r=>r.row);
     const i=rows.findIndex(r=>r[0]===meta.orderNumber || r[0]===hash_(PropertiesService.getScriptProperties().getProperty('WEB_SECRET')+'expired-sale:'+meta.orderNumber));
     reserveSaleSource_(body,records,i<0?null:records[i]);
@@ -293,7 +296,8 @@ function saveSale_(body) {
         assert_(meta.updatedAt>=previous.updatedAt,'CONFLICT');
         ['paidAt','deliveredAt','completedAt'].forEach(k=>{if(previous[k]>0)assert_(previous[k]===meta[k],'CONFLICT');});
       }else assert_(meta.revision===1 && ['입금확인','구매확정','주문취소'].includes(meta.status),'CONFLICT');
-      const props=PropertiesService.getScriptProperties(); const seq=rows.reduce((m,r)=>Math.max(m,Number(r[1])||0),Number(props.getProperty('SALE_SEQUENCE'))||0)+1;
+      const props=PropertiesService.getScriptProperties(); const seq=rows.reduce((m,r)=>Math.max(m,Number(r[1])||0),
+        saleDeletionRows_().reduce((m,r)=>Math.max(m,Number(r[2])||0),Number(props.getProperty('SALE_SEQUENCE'))||0))+1;
       assert_(Number.isSafeInteger(seq),'NOT_READY'); props.setProperty('SALE_SEQUENCE',String(seq));
       const row=[meta.orderNumber,seq,meta.status,new Date(meta.purchasedAt).toISOString(),meta.completedAt?new Date(meta.completedAt).toISOString():'',meta.totalQty,meta.totalPrice,meta.taxAmount,meta.costTotal,meta.expenseTotal,meta.costConfirmed,meta.profitMode,meta.commissionBps,profit_(meta),retentionUntil_(meta),JSON.stringify(meta),JSON.stringify(stored),digest,body.eventId,meta.revision];
       reserveSaleSource_(body,records,i<0?null:records[i],true);
@@ -574,6 +578,65 @@ function quoteSmsStatus_(body) {
     statusCode:code,statusMessage:quoteSmsReason_(code),updatedAt:new Date().toISOString()};
 }
 
+/** Durable deletion receipts contain no customer data. PENDING retries finish
+ * physical row removal before any client is told the deletion succeeded. */
+function saleDeletionRows_() {
+  const props=PropertiesService.getScriptProperties();
+  const id=twoBookActive_() ? props.getProperty('LEGACY_SPREADSHEET_ID')||props.getProperty('SPREADSHEET_ID') : props.getProperty('SPREADSHEET_ID');
+  const sheet=SpreadsheetApp.openById(id).getSheetByName(SALE_DELETE_SHEET);
+  if(!sheet)return [];
+  assert_(canonical_(sheet.getRange(1,1,1,6).getValues()[0])===canonical_(SALE_DELETE_HEADERS),'NOT_READY');
+  const rows=namedRows_(sheet,6);
+  assert_(rows.every(r=>/^[A-Za-z0-9_-]{1,120}$/.test(r[0]) &&
+    Number.isSafeInteger(Number(r[1])) && Number(r[1])>0 &&
+    Number.isSafeInteger(Number(r[2])) && Number(r[2])>0 &&
+    UUID_PATTERN.test(r[3]) && ['PENDING','DONE'].includes(r[5])) &&
+    new Set(rows.map(r=>r[0])).size===rows.length,'NOT_READY');
+  return rows;
+}
+function deleteSale_(body) {
+  assert_(body && UUID_PATTERN.test(body.eventId) && /^[A-Za-z0-9_-]{1,120}$/.test(body.orderNumber) &&
+    Number.isSafeInteger(body.revision) && body.revision>0,'INVALID');
+  return lock_(()=>{
+    const receipts=saleDeletionRows_();
+    const receiptIndex=receipts.findIndex(r=>r[0]===body.orderNumber);
+    let receipt=receiptIndex<0?null:receipts[receiptIndex];
+    const records=saleRecords_();
+    const record=records.find(r=>r.row[0]===body.orderNumber);
+    if(receipt){
+      assert_(Number(receipt[1])===body.revision,'CONFLICT');
+      if(receipt[5]==='DONE')return {deleted:true,orderNumber:body.orderNumber,revision:body.revision,sequence:Number(receipt[2])};
+      assert_(receipt[3]===body.eventId,'CONFLICT');
+    }else{
+      assert_(record && !JSON.parse(record.row[15]).archived,'INVALID');
+      assert_(Number(record.row[19])===body.revision,'CONFLICT');
+    }
+    // Include compatibility copies, so an old month or legacy row cannot reappear.
+    const sheets=saleStorageSheets_();
+    if(twoBookActive_())sheets.push(namedSheet_(SALE_SHEET,SALE_HEADERS,false));
+    const targets=sheets.map(sheet=>({sheet:sheet,positions:namedRows_(sheet,20)
+      .map((row,i)=>row[0]===body.orderNumber?i+2:0).filter(Boolean)}));
+    const journal=namedSheet_(SALE_DELETE_SHEET,SALE_DELETE_HEADERS,true);
+    let receiptRow=receiptIndex+2;
+    if(!receipt){
+      const props=PropertiesService.getScriptProperties();
+      const sequence=records.reduce((m,r)=>Math.max(m,Number(r.row[1])||0),
+        receipts.reduce((m,r)=>Math.max(m,Number(r[2])||0),Number(props.getProperty('SALE_SEQUENCE'))||0))+1;
+      assert_(Number.isSafeInteger(sequence),'NOT_READY');
+      props.setProperty('SALE_SEQUENCE',String(sequence));
+      receipt=[body.orderNumber,body.revision,sequence,body.eventId,new Date().toISOString(),'PENDING'];
+      receiptRow=journal.getLastRow()+1;
+      quoteWriteVerified_(journal,receiptRow,receipt);
+    }
+    targets.forEach(target=>target.positions.sort((a,b)=>b-a).forEach(row=>target.sheet.deleteRow(row)));
+    SpreadsheetApp.flush();
+    assert_(targets.every(target=>!namedRows_(target.sheet,20).some(r=>r[0]===body.orderNumber)),'NOT_READY');
+    receipt[5]='DONE';
+    quoteWriteVerified_(journal,receiptRow,receipt);
+    return {deleted:true,orderNumber:body.orderNumber,revision:body.revision,sequence:Number(receipt[2])};
+  });
+}
+
 /** A sale can leave the seller's work list without erasing the financial ledger. */
 function hideSale_(body) {
   assert_(body && /^[A-Za-z0-9_-]{1,120}$/.test(body.orderNumber) &&
@@ -612,8 +675,14 @@ function hiddenSaleNumbers_() {
 function listSales_(body) {
   assert_(Number.isSafeInteger(body.afterSequence) && body.afterSequence>=0);
   const hidden=hiddenSaleNumbers_();
-  const rows=saleRecords_().map(r=>r.row).filter(r=>Number(r[1])>body.afterSequence).sort((a,b)=>Number(a[1])-Number(b[1]));
-  const page=rows.slice(0,100).map(r=>{
+  const deleted=saleDeletionRows_().filter(r=>r[5]==='DONE');
+  const deletedNumbers=new Set(deleted.map(r=>r[0]));
+  const entries=saleRecords_().map(r=>r.row).filter(r=>!deletedNumbers.has(r[0])).map(row=>({sequence:Number(row[1]),row:row}));
+  deleted.forEach(r=>entries.push({sequence:Number(r[2]),deleted:true,orderNumber:r[0],revision:Number(r[1])}));
+  const rows=entries.filter(r=>r.sequence>body.afterSequence).sort((a,b)=>a.sequence-b.sequence);
+  const page=rows.slice(0,100).map(entry=>{
+    if(entry.deleted)return {sequence:entry.sequence,expired:true,deleted:true,orderNumber:entry.orderNumber,revision:entry.revision};
+    const r=entry.row;
     const meta=JSON.parse(r[15]); if(meta.archived)return {sequence:Number(r[1]),expired:true};
     const stored=JSON.parse(r[16]),plain=stored.personalData!==undefined;
     const personal=plain?salePersonal_(stored.personalData,meta):envelope_(stored,sellerKey_());
