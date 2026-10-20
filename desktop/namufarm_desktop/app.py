@@ -134,7 +134,9 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("나무팜 PC 관리 · 견적 요청과 판매")
         self.resize(1360, 900)
-        self.vault_path = Path(vault_path) if vault_path else Path(QStandardPaths.writableLocation(QStandardPaths.StandardLocation.AppLocalDataLocation)) / "namufarm-vault.db"
+        from .data_path import portable_vault_path
+        self.vault_path = Path(vault_path) if vault_path else portable_vault_path(
+            QStandardPaths.writableLocation(QStandardPaths.StandardLocation.AppLocalDataLocation))
         self.manager = None
         self.task = None
         self.data = {"requests": [], "sales": [], "pending": [], "paired": False}
@@ -281,7 +283,7 @@ class MainWindow(QMainWindow):
             "가져오기로 서버 연결을 확인해주세요." if not paired else
             "삭제할 견적요청을 선택하세요." if self.request_table.currentRow() < 0 else
             "선택한 견적요청 삭제 · 서버 확인 후 목록에 반영")
-        editable = paired and not pending and self.selected_sale is not None and self.selected_sale["metadata"]["status"] not in ("배송완료", "구매취소", "판매완료", "주문취소")
+        editable = ready and self.selected_sale is not None and self.selected_sale["metadata"]["status"] not in ("배송완료", "구매취소", "판매완료", "주문취소")
         self.sale_editor.setEnabled(editable)
         self.save_button.setEnabled(editable and self.dirty)
         self.next_button.setEnabled(editable and self.selected_sale["metadata"]["status"] in NEXT)
@@ -289,7 +291,7 @@ class MainWindow(QMainWindow):
         self.report_button.setEnabled(paired)
         self.resolve_button.setEnabled(paired and pending and self.conflict)
         self.connection_status.setText("연결 정보 저장됨" if self.data["paired"] else "서버 연결 필요")
-        self.pending_status.setText(f"전송 대기 {len(self.data['pending']):,}건 · 해당 업무 화면에서 가져오기로 재시도하세요." if pending else "전송 대기 0건")
+        self.pending_status.setText(f"전송 대기 {len(self.data['pending']):,}건 · 판매관리의 ‘서버에 올리기’로 백업하세요." if pending else "전송 대기 0건")
 
     def allow_discard(self):
         if not self.dirty:
@@ -737,7 +739,7 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(dialog)
         layout.addWidget(QLabel("PC 수정은 아직 서버에 반영되지 않았습니다. 서버 내용을 확인하고 선택하세요."))
         comparison = table(["항목", "PC 전송 대기", "서버 최신"])
-        local_order = self.manager.seller.open(preview["operation"]["payload"]["encryptedPersonal"], "order", preview["operation"]["payload"]["eventId"])["order"]
+        local_order = self.manager.decode_sale(preview["operation"]["payload"])["order"]
         server_order = self.manager.decode_sale(preview["remote"])["order"]
         names = ["revision", "status", *EDITABLE, "costTotal", "expenseTotal", "costConfirmed", "profitMode", "commissionBps"]
         fill_table(comparison, [(name, local_order.get(name, ""), server_order.get(name, "")) for name in names if local_order.get(name) != server_order.get(name)])

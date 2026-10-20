@@ -4,13 +4,14 @@ import json
 import os
 import sqlite3
 import threading
+from datetime import datetime
 from contextlib import contextmanager, closing
 from pathlib import Path
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 from .crypto import canonical, password_key, SellerKey
-from .domain import now_ms, sale_expired, require
+from .domain import now_ms, require
 from .errors import UserError
 
 
@@ -222,13 +223,41 @@ class Vault:
 
     def queue(self, operation, optimistic=None):
         with self.mutex, self._db() as db:
-            if db.execute("SELECT COUNT(*) FROM outbox").fetchone()[0]:
+            if operation["action"] != "save_sale" and db.execute("SELECT COUNT(*) FROM outbox").fetchone()[0]:
                 raise UserError("먼저 기존 전송 대기를 동기화해주세요.")
             identifier = operation["id"]
             db.execute("INSERT INTO outbox(id,body) VALUES (?,?)", (identifier, self._seal(operation, "outbox:" + identifier)))
             if optimistic is not None:
                 index = self._index("sales", optimistic["metadata"]["orderNumber"])
                 db.execute("INSERT OR REPLACE INTO cache VALUES ('sales',?,?)", (index, self._seal(optimistic, "sales:" + index)))
+
+    def backup(self):
+        """SQLite's backup API also captures committed journal/WAL data."""
+        folder = self.path.parent / "백업"
+        folder.mkdir(parents=True, exist_ok=True)
+        target = folder / (datetime.now().strftime("namufarm-%Y%m%d-%H%M%S-%f") + ".db")
+        with self.mutex, closing(sqlite3.connect(self.path)) as source, closing(sqlite3.connect(target)) as destination:
+            source.backup(destination)
+        return target
+
+    def save_local_sales(self, sales, operations, hidden, *, quotes=None, marker=None):
+        """Commit a merge/delete, its upload journal and local deletion markers together."""
+        with self.mutex, self._db() as db:
+            db.execute("DELETE FROM cache WHERE kind='sales'")
+            for row in sales:
+                index = self._index("sales", row["metadata"]["orderNumber"])
+                db.execute("INSERT INTO cache VALUES ('sales',?,?)", (index, self._seal(row, "sales:" + index)))
+            db.execute("DELETE FROM outbox")
+            for op in operations:
+                db.execute("INSERT INTO outbox(id,body) VALUES (?,?)", (op["id"], self._seal(op, "outbox:" + op["id"])))
+            preferences = {"hidden_sales": sorted(set(hidden))}
+            if quotes is not None:
+                preferences["confirmed_quotes"] = quotes
+            for name, value in preferences.items():
+                scope = "workspace:" + name
+                db.execute("INSERT OR REPLACE INTO config VALUES (?,?)", (scope, self._seal(value, scope)))
+            if marker is not None:
+                db.execute("INSERT OR REPLACE INTO config VALUES ('snapshot',?)", (self._seal(marker, "snapshot"),))
 
     def acknowledge(self, identifier):
         with self.mutex, self._db() as db:
@@ -267,11 +296,9 @@ class Vault:
     def purge(self, clock=None):
         clock = now_ms() if clock is None else clock
         with self.mutex, self._db() as db:
-            pending = db.execute("SELECT COUNT(*) FROM outbox").fetchone()[0]
             for kind, index, blob in list(db.execute("SELECT kind,id,body FROM cache")):
                 row = self._open(blob, kind + ":" + index)
                 expired = kind == "requests" and row["expiresAt"] <= clock
-                if kind == "sales" and not pending:
-                    expired = sale_expired(row["metadata"], clock)
+                # Server retention must never silently delete this PC's sales history.
                 if expired:
                     db.execute("DELETE FROM cache WHERE kind=? AND id=?", (kind, index))

@@ -3091,7 +3091,7 @@ class SellerWindow(MainWindow):
         header.addWidget(self.page_summary)
         self.sync_button.setText("가져오기")
         set_button_icon(self.sync_button, "refresh")
-        self.sync_button.setToolTip("견적요청: 서버 신규 요청 · 확정 견적: 로컬 엑셀 · 판매 전송 대기는 판매관리에서 가져오기. F5")
+        self.sync_button.setToolTip("견적요청: 서버 신규 요청 · 판매관리: 로컬 DB · 서버 백업은 판매관리의 서버에 올리기. F5")
         self.sync_button.setObjectName("syncSecondary")
         self.sync_button.setMinimumWidth(138)
 
@@ -3373,11 +3373,22 @@ class SellerWindow(MainWindow):
         self.state_filter.addItems(["전체 상태", "입금확인", "배송완료", "구매취소"])
         self.state_filter.currentIndexChanged.connect(self.refresh_sales)
         bar.addWidget(self.sale_search, 1)
+        self.sales_upload_button = button("서버에 올리기", self.upload_sales)
+        self.sales_download_button = button("서버로부터 가져오기", self.download_sales)
+        self.sales_export_button = button("로컬 내보내기", self.export_local_sales)
+        self.sales_import_button = button("로컬 가져오기", self.import_local_sales)
+        self.sales_upload_button.setToolTip("로컬 변경 자료만 주문번호·변경 버전을 확인한 뒤 서버에 저장합니다.")
+        self.sales_download_button.setToolTip("서버 자료를 합칩니다. 로컬 미전송 수정과 삭제 기록은 유지합니다.")
+        self.sales_export_button.setToolTip("확정견적·판매관리 두 엑셀에 복원용 원본과 미전송 변경을 보관합니다.")
+        self.sales_import_button.setToolTip("나피에서 내보낸 파일의 보관자료를 합칩니다. 표의 셀을 직접 수정한 내용은 반영하지 않습니다.")
+        for widget in (self.sales_upload_button, self.sales_download_button,
+                       self.sales_export_button, self.sales_import_button):
+            bar.addWidget(widget)
         self.state_filter.hide()
         layout.addLayout(bar)
         filters, self.sales_filters = self.filter_buttons(
             (("전체", "전체 상태"), ("입금확인", "입금확인"), ("배송완료", "배송완료"), ("구매취소", "구매취소")), self.set_sales_filter)
-        bar.addLayout(filters)
+        layout.addLayout(filters)
 
         self.sale_table = table([
             "주문번호", "상태", "주문일", "고객명", "연락처", "이메일",
@@ -3607,7 +3618,7 @@ class SellerWindow(MainWindow):
         if not self.workspace_ready:
             return
         ready = self.manager is not None and self.task is None
-        paired = ready and self.data["paired"] and not self.data["pending"]
+        paired = ready
         self.stack.setEnabled(self.task is None)
         for page in (self.farms_page, self.species_page):
             page.update_controls()
@@ -3623,14 +3634,17 @@ class SellerWindow(MainWindow):
             self.draft_selection_status.setText("견적을 선택하면 저장된 결과를 확인할 수 있습니다.")
         self.export_button.setEnabled(paired)
         self.import_button.setEnabled(paired)
-        self.print_button.setEnabled(ready and not self.data["pending"])
+        self.print_button.setEnabled(ready)
         self.tracking_save.setEnabled(paired)
         self.shipping_edit.setEnabled(ready)
         self.customer_open_button.setEnabled(ready and self.selected_sale is not None)
         self.sale_delete_button.setEnabled(ready and self.selected_sale is not None)
         self.sale_delete_button.setToolTip(
-            "선택한 주문을 서버 주문 엑셀과 PC 판매자료에서 삭제" if self.selected_sale is not None
+            "이 PC의 DB에서만 삭제 · 서버 원본 유지" if self.selected_sale is not None
             else "삭제할 판매 주문을 선택하세요.")
+        for widget in (self.sales_upload_button, self.sales_download_button,
+                       self.sales_export_button, self.sales_import_button):
+            widget.setEnabled(ready and not getattr(self, "demo_mode", False))
         if getattr(self, "demo_mode", False):
             for widget in (self.sync_button, self.manual_quote_button, self.request_quote_button,
                            self.draft_open, self.draft_delete, self.customer_open_button, self.sale_delete_button,
@@ -3653,7 +3667,7 @@ class SellerWindow(MainWindow):
         self.set_page_count(self.PAGE_SPECIES, len(self.species_page.rows))
 
     def refresh_workspace(self):
-        # This category is backed only by the local confirmed-quotes workbook.
+        # Confirmed quotes, like sales, are loaded from this PC's database.
         draft_pairs = [(draft, "입금확인" if draft.get("paymentRegistered") else "견적확정")
                        for draft in self.data.get("confirmedQuotes", [])]
         draft_pairs.sort(
@@ -3690,11 +3704,11 @@ class SellerWindow(MainWindow):
             "요청" if d.get("formalQuoteRequested") else "—",
             ", ".join(f"{i['species']} {i['quantity']:,}주" for i in d["items"]),
             money(draft_amounts(d)["total"]),
-            "로컬 엑셀",
+            "로컬 DB",
         ) for d, status in draft_pairs])
         self.draft_table.set_empty_message(
             "검색 조건에 맞는 확정견적이 없습니다.\n검색어를 지워 전체 목록을 확인하세요." if query else
-            "표시할 확정견적이 없습니다.\n이 PC에서 확정한 견적이 로컬 엑셀에 표시됩니다.")
+            "표시할 확정견적이 없습니다.\n이 PC의 DB에 저장한 확정견적이 표시됩니다.")
         center_table_columns(self.draft_table, (0, 1, 2, 3, 4, 6, 8))
         customer_reference(self.draft_table, 3, 0)
         self.draft_table.clearSelection()
@@ -3704,7 +3718,7 @@ class SellerWindow(MainWindow):
             self.draft_table.selectRow(restored)
         self.draft_table.blockSignals(False)
         self.set_page_count(self.PAGE_QUOTES, total_quotes)
-        self.draft_table.horizontalHeaderItem(9).setToolTip("이 PC의 나무팜-확정견적.xlsx에서 불러온 견적")
+        self.draft_table.horizontalHeaderItem(9).setToolTip("이 PC의 로컬 DB에서 불러온 견적")
         self.refresh_sales()
         self.refresh_shipping()
 
@@ -3848,11 +3862,52 @@ class SellerWindow(MainWindow):
         if QMessageBox.question(
                 self, "판매 주문 삭제",
                 f"{order.get('customerName', '')} 고객의 주문을 삭제할까요?\n"
-                "구글 주문 엑셀의 해당 행을 삭제한 뒤 PC 판매자료에서도 삭제합니다.\n삭제한 주문은 복구할 수 없습니다.",
+                "이 PC의 DB에서만 삭제합니다. 서버 원본은 유지됩니다.\n"
+                "이 주문의 미전송 변경도 취소하며, 이후 가져오기에서도 다시 표시하지 않습니다.",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
             return
-        self.run_job("주문 삭제 중…", lambda: self.manager.delete_sale(meta["orderNumber"], meta["revision"]))
+        self.run_job("로컬 주문 삭제 중…", lambda: self.manager.delete_sale(meta["orderNumber"], meta["revision"]),
+                     self.local_sale_deleted)
+
+    def local_sale_deleted(self, value):
+        self.apply_view(value)
+        self.message.setText("이 PC의 판매자료를 삭제했습니다. 서버 원본은 유지됩니다.")
+
+    def sales_transfer_finished(self, value):
+        self.apply_view(value)
+        self.message.setText(value.get("transferNotice") or "판매자료 처리를 완료했습니다.")
+
+    def upload_sales(self):
+        if self.manager and not self.task and self.allow_discard():
+            self.run_job("판매자료를 서버에 올리는 중…", self.manager.upload_sales, self.sales_transfer_finished)
+
+    def download_sales(self):
+        if self.manager and not self.task and self.allow_discard():
+            self.run_job("서버 판매자료를 합치는 중…", self.manager.download_sales, self.sales_transfer_finished)
+
+    def export_local_sales(self):
+        if not self.manager or self.task:
+            return
+        folder = QFileDialog.getExistingDirectory(self, "확정견적·판매관리 엑셀을 저장할 폴더", str(self.manager.vault.path.parent))
+        if not folder:
+            return
+        targets = [Path(folder) / name for name in ("나무팜-확정견적.xlsx", "나무팜-판매관리.xlsx")]
+        if any(path.exists() for path in targets) and QMessageBox.question(
+                self, "엑셀 내보내기", "선택한 폴더의 기존 확정견적·판매관리 엑셀을 현재 DB 내용으로 갱신할까요?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
+            return
+        self.run_job("로컬 엑셀 내보내는 중…", lambda: self.manager.export_local(folder), self.sales_transfer_finished)
+
+    def import_local_sales(self):
+        if not self.manager or self.task or not self.allow_discard():
+            return
+        paths, _ = QFileDialog.getOpenFileNames(self, "나피에서 내보낸 확정견적·판매관리 엑셀 선택",
+                                               str(self.manager.vault.path.parent), "나피 엑셀 (*.xlsx)")
+        if paths:
+            self.run_job("로컬 자료를 주문번호 기준으로 합치는 중…", lambda: self.manager.import_local(paths),
+                         self.sales_transfer_finished)
 
     def open_customer_order(self, *args):
         if getattr(self, "demo_mode", False) or not self.manager or self.task:
@@ -3887,7 +3942,7 @@ class SellerWindow(MainWindow):
 
     def customer_order_saved(self, value):
         self.apply_view(value)
-        self.message.setText("판매 · 고객 관리 내용을 운영 시트에 저장했습니다.")
+        self.message.setText("판매 · 고객 관리 내용을 로컬 DB에 저장했습니다. ‘서버에 올리기’로 백업하세요.")
         self.navigate(self.PAGE_SALES)
 
     def refresh_shipping(self):
@@ -3949,10 +4004,10 @@ class SellerWindow(MainWindow):
             return
         draft, mode = dialog.draft, dialog.mode
         if mode == "save_manual":
-            self.run_job("직접 작성한 견적을 로컬 엑셀에 저장 중…", lambda: self.manager.save_draft(draft),
+            self.run_job("직접 작성한 견적을 로컬 DB에 저장 중…", lambda: self.manager.save_draft(draft),
                          lambda view: self.manual_quote_saved(view, draft["id"]))
         elif mode == "confirm":
-            self.run_job("입금확인 내역을 운영 시트에 저장 중…", lambda: self.manager.confirm_draft(draft), self.quote_confirmed)
+            self.run_job("입금확인 내역을 로컬 DB에 저장 중…", lambda: self.manager.confirm_draft(draft), self.quote_confirmed)
         elif mode == "finalize":
             self.run_job("견적확정 상태를 운영 시트에 저장 중…", lambda: self.manager.confirm_quote(draft), self.quote_finalized)
 
@@ -3963,7 +4018,7 @@ class SellerWindow(MainWindow):
 
     def quote_finalized(self, value):
         self.apply_view(value)
-        self.message.setText("견적을 확정하고 로컬 엑셀에 저장했습니다.")
+        self.message.setText("견적을 확정하고 로컬 DB에 저장했습니다.")
         self.navigate(self.PAGE_QUOTES)
 
     def new_manual_quote(self, *args):
@@ -3971,7 +4026,7 @@ class SellerWindow(MainWindow):
 
     def manual_quote_saved(self, value, identifier):
         self.apply_view(value)
-        self.message.setText("직접 작성한 견적을 로컬 엑셀에 저장했습니다.")
+        self.message.setText("직접 작성한 견적을 로컬 DB에 저장했습니다.")
         self.draft_search.clear()
         self.navigate(self.PAGE_QUOTES)
         for index, draft in enumerate(self.draft_rows):
@@ -4089,15 +4144,14 @@ class SellerWindow(MainWindow):
 
     def tracking_saved(self, value):
         self.apply_view(value)
-        self.message.setText("송장번호를 운영 시트에 저장했습니다. 송장 등록만으로 배송완료 처리되지 않습니다.")
+        self.message.setText("송장번호를 로컬 DB에 저장했습니다. ‘서버에 올리기’로 백업하세요.")
 
     def export_shipping(self):
         if not self.manager or self.task or getattr(self, "demo_mode", False) or not self.allow_discard():
             return
         try:
             numbers = [r["metadata"]["orderNumber"] for r in export_orders(self.selected_shipping())]
-            require(not self.data["pending"], "전송 대기를 먼저 동기화해주세요.")
-            self.run_job("출고 전 최신 입금·배송 상태 확인 중…", self.manager.sync,
+            self.run_job("로컬 출고자료 확인 중…", self.manager.view,
                          lambda view: self.prepare_shipping_export(view, numbers))
         except UserError as error:
             QMessageBox.warning(self, "출고자료 확인", str(error))
@@ -4170,13 +4224,12 @@ class SellerWindow(MainWindow):
 
     def print_shipping(self):
         try:
-            require(not self.data["pending"], "서버 저장을 확인한 후 출력해주세요.")
             print_document(self, shipping_html(self.selected_shipping()), "나무팜_송장번호_출고확인서")
         except UserError as error:
             QMessageBox.warning(self, "출력 확인", str(error))
 
     def print_saved_quote(self):
-        if self.selected_sale and self.selected_sale["private"].get("quoteDocumentJson") and not self.data["pending"]:
+        if self.selected_sale and self.selected_sale["private"].get("quoteDocumentJson"):
             doc = json.loads(self.selected_sale["private"]["quoteDocumentJson"])
             print_document(self, quote_document_html(doc), "나무팜_" + doc["number"])
 
@@ -4191,16 +4244,20 @@ class SellerWindow(MainWindow):
         if self.stack.currentIndex() in (self.PAGE_FARMS, self.PAGE_SPECIES):
             self.stack.currentWidget().sync()
             return
+        if self.stack.currentIndex() in (self.PAGE_SALES, self.PAGE_SHIPPING):
+            self.download_sales()
+            return
         include_sales = self.stack.currentIndex() in (self.PAGE_SALES, self.PAGE_SHIPPING, self.PAGE_REPORTS)
         self.run_job("SYNC  >  서버 동기화 중…",
                      lambda: self.manager.connect(include_sales=include_sales))
 
     def auto_sync(self):
-        if self.stack.currentIndex() in (self.PAGE_FARMS, self.PAGE_SPECIES):
+        if self.stack.currentIndex() in (self.PAGE_FARMS, self.PAGE_SPECIES, self.PAGE_SALES, self.PAGE_SHIPPING, self.PAGE_REPORTS):
             return
         if self.manager and self.data["paired"] and self.auto_check.isChecked() and not self.task and not self.dirty and not self.conflict:
             pull = self.manager.sync if self.stack.currentIndex() in (self.PAGE_SALES, self.PAGE_SHIPPING, self.PAGE_REPORTS) else self.manager.sync_requests
             self.run_job("AUTO SYNC  >  서버 동기화 중…", pull)
+
 
 
 
