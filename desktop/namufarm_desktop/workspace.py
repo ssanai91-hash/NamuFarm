@@ -2310,8 +2310,10 @@ class QuoteDeliveryDialog(QuoteDialog):
         self.delivery_state = dict(delivery_state or self.delivery_state)
         for field in self.fields.values():
             field.setReadOnly(True)
-        self.note.setReadOnly(True)
-        self.note.setAccessibleName("공식견적서 중요사항 · 저장된 판매자 안내")
+        self.note.setReadOnly(self.payment_registered)
+        self.note.setAccessibleName("공식견적서 중요사항 · 판매자 입력")
+        self.save_note_button = button("요청사항 저장", lambda: self.save_confirmed_note())
+        self.workbench_note_area.layout().addWidget(self.save_note_button)
         self.workbench_shipping.hide()
         self.sms_button.hide()
         self.email_button.hide()
@@ -2372,6 +2374,8 @@ class QuoteDeliveryDialog(QuoteDialog):
     def collect(self, validate=True):
         draft = copy.deepcopy(self.draft)
         draft.pop("paymentRegistered", None)
+        if hasattr(self, "note"):
+            draft["note"] = self.note.toPlainText().strip()
         return validate_draft(draft) if validate else draft
 
     def raw_state(self):
@@ -2405,6 +2409,8 @@ class QuoteDeliveryDialog(QuoteDialog):
         idle = self.action_task is None
         editable = idle and not self.payment_registered and self.manager is not None
         self.add_item_button.setEnabled(editable)
+        self.note.setReadOnly(not editable)
+        self.save_note_button.setEnabled(editable)
         self.confirm_button.setEnabled(editable)
         self.confirm_button.setText("입금확인 완료" if self.payment_registered else "입금확인")
         self.shipping_cod.setEnabled(False)
@@ -2438,10 +2444,34 @@ class QuoteDeliveryDialog(QuoteDialog):
             return False
         return True
 
+    def save_confirmed_note(self, then_payment=False):
+        if self.payment_registered or self.action_task or self.manager is None:
+            return
+        try:
+            self._pending_note_edit = self.collect()
+        except UserError as error:
+            QMessageBox.warning(self, "요청사항 저장", str(error))
+            return
+        self._notes_then_payment = then_payment
+        updated = copy.deepcopy(self._pending_note_edit)
+        self._run_action("판매자 요청사항을 확정견적 엑셀에 저장하고 있습니다…",
+                         lambda: self.manager.save_draft(updated), self._note_saved)
+
+    @Slot(object, str, bool)
+    def _note_saved(self, value, error, conflict):
+        if not self._finish_action(error):
+            return
+        self.original_quote = copy.deepcopy(self._pending_note_edit)
+        self.draft = copy.deepcopy(self.original_quote)
+        self.local_changed = True
+        self.payment_status.setText("판매자 요청사항을 저장했습니다.")
+        if self._notes_then_payment:
+            self.receive_payment()
+
     def edit_confirmed_items(self):
         if self.payment_registered or self.action_task or self.manager is None:
             return
-        editor = QuoteDialog(self.original_quote, self, request_status=self.request_status,
+        editor = QuoteDialog(self.collect(False), self, request_status=self.request_status,
                              manager=self.manager, items_only=True)
         editor.setWindowTitle("확정견적 묘목정보 수정")
         editor.findChild(QLabel, "workbenchTitle").setText("묘목정보 수정")
@@ -2493,6 +2523,9 @@ class QuoteDeliveryDialog(QuoteDialog):
     def receive_payment(self):
         if self.payment_registered or self.action_task or self.manager is None:
             return
+        if self.note.toPlainText().strip() != self.draft.get("note", "").strip():
+            self.save_confirmed_note(then_payment=True)
+            return
         try:
             self._payment_draft = self.collect()
         except UserError as error:
@@ -2516,6 +2549,12 @@ class QuoteDeliveryDialog(QuoteDialog):
     def reject(self):
         if self.action_task is not None:
             return
+        if self.note.toPlainText().strip() != self.draft.get("note", "").strip():
+            if QMessageBox.question(
+                    self, "요청사항 확인", "저장하지 않은 요청사항을 버리고 닫을까요?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
+                return
         QDialog.reject(self)
 
 
@@ -3258,10 +3297,6 @@ class SellerWindow(MainWindow):
         row.addStretch()
         return row, buttons
 
-    def set_draft_filter(self, value):
-        self.draft_filter = value
-        self.refresh_workspace()
-
     def set_sales_filter(self, value):
         self.state_filter.setCurrentText(value)
 
@@ -3271,11 +3306,6 @@ class SellerWindow(MainWindow):
         layout = QVBoxLayout(page)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(10)
-        self.draft_filter = "전체"
-        filters, self.draft_filters = self.filter_buttons(
-            (("전체", "전체"), ("견적확정", "견적확정"), ("입금확인", "입금확인")), self.set_draft_filter)
-        self.draft_filters["전체"].setChecked(True)
-        layout.addLayout(filters)
         self.draft_table = table(["견적번호", "상태", "작성일", "고객명", "연락처", "메일", "공식견적서", "품목", "판매금액", "자료 위치"])
         self.draft_sort_descending = False
         header = self.draft_table.horizontalHeader()
@@ -3624,16 +3654,9 @@ class SellerWindow(MainWindow):
             key=lambda pair: draft_quote_sort_key(pair[0]),
             reverse=self.draft_sort_descending,
         )
-        for value, widget in self.draft_filters.items():
-            title = {"전체": "전체", "견적확정": "견적확정", "입금확인": "입금확인"}[value]
-            count = len(draft_pairs) if value == "전체" else sum(status == value for _draft, status in draft_pairs)
-            widget.setText(f"{title} {count:,}")
-            widget.setChecked(value == self.draft_filter)
         previous_index = self.draft_table.currentRow()
         previous_rows = getattr(self, "draft_rows", [])
         previous_id = previous_rows[previous_index]["id"] if 0 <= previous_index < len(previous_rows) else None
-        draft_pairs = [(draft, status) for draft, status in draft_pairs
-                       if self.draft_filter == "전체" or status == self.draft_filter]
         self.draft_rows = [draft for draft, _status in draft_pairs]
         self.draft_statuses = [status for _draft, status in draft_pairs]
         self.draft_table.blockSignals(True)
@@ -3928,7 +3951,6 @@ class SellerWindow(MainWindow):
         self.apply_view(value)
         self.message.setText("직접 작성한 견적을 로컬 엑셀에 저장했습니다.")
         self.navigate(self.PAGE_QUOTES)
-        self.set_draft_filter("전체")
         for index, draft in enumerate(self.draft_rows):
             if draft["id"] == identifier:
                 self.draft_table.selectRow(index)
