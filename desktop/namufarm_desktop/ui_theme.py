@@ -169,6 +169,8 @@ QDialog#quoteWorkbench QLabel#deliverySectionTitle{font-size:18px;font-weight:70
 QDialog#quoteWorkbench QLabel#deliveryCaption,QDialog#quoteWorkbench QLabel#deliveryPdfName{font-size:16px;color:#52645c;}
 QDialog#quoteWorkbench QRadioButton{font-size:18px;}
 QDialog#quoteWorkbench QLineEdit{font-size:18px;min-height:24px;max-height:24px;padding:6px 8px;}
+QDialog#quoteWorkbench QLineEdit#workbenchCustomerInput{font-size:@body@px;min-height:30px;max-height:30px;padding:6px 8px;}
+QDialog#quoteWorkbench QLineEdit#workbenchCustomerInput:focus{padding:5px 7px;}
 QDialog#quoteWorkbench QPushButton#smsAction{background:#25634b;color:#ffffff;}
 QDialog#quoteWorkbench QPushButton#smsAction:hover{background:#194c37;}
 QDialog#quoteWorkbench QPushButton#smsAction:disabled{background:#e1e9e4;color:#6a7b71;border-color:#bdcec3;}
