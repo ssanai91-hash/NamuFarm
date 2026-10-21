@@ -1,6 +1,6 @@
 """Nursery pages read the PC cache; only an explicit sync uses the server."""
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox,
+from PySide6.QtWidgets import (QButtonGroup, QCheckBox, QComboBox, QDialog, QDialogButtonBox,
     QFormLayout, QGridLayout, QHBoxLayout, QLabel, QLCDNumber, QLineEdit, QMessageBox,
     QPushButton, QSpinBox, QTabWidget, QVBoxLayout, QWidget)
 
@@ -35,12 +35,13 @@ class NurseryPage(QWidget):
         self.rows = []
         self.stock_rows = []
         self.state = None
-        self.selected_initial = ''
+        self.selected_initial = INITIALS[0] if kind == 'species' else ''
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         self.status = QLabel('PC 자료를 열면 관리 목록이 표시됩니다.')
         self.status.setWordWrap(True)
         layout.addWidget(self.status)
+        self.status.hide()
         tools = QHBoxLayout()
         self.search = QLineEdit()
         self.search.setPlaceholderText('농원명 · 전화번호 검색' if kind == 'farms' else '묘목명 검색')
@@ -63,18 +64,21 @@ class NurseryPage(QWidget):
         self.sync_button.clicked.connect(self.sync)
         self.conflict_button.clicked.connect(self.resolve)
         if kind == 'species':
-            initials = QGridLayout()
-            self.initial_layout = initials
-            self.initial_columns = 0
+            initials = QHBoxLayout()
             initials.setSpacing(4)
             self.initial_buttons = {}
-            for i, title in enumerate(('전체', *INITIALS)):
+            self.initial_group = QButtonGroup(self)
+            self.initial_group.setExclusive(True)
+            for title in INITIALS:
                 btn = QPushButton(title)
                 btn.setCheckable(True)
+                btn.setChecked(title == self.selected_initial)
                 btn.setObjectName('filterTab')
+                btn.setStyleSheet('QPushButton{padding-left:4px;padding-right:4px;}')
                 btn.clicked.connect(lambda checked=False, v=title: self.choose_initial(v))
+                self.initial_group.addButton(btn)
                 self.initial_buttons[title] = btn
-                initials.addWidget(btn, i // 8, i % 8)
+                initials.addWidget(btn, 1)
             layout.addLayout(initials)
         self.table = table(['순번', '농원명', '주소', '전화번호', '메모', '상태'] if kind == 'farms' else
                            ['순번', '묘목명', '초성', '농원사용명', '분류', '사용', '메모', '상태'])
@@ -94,23 +98,12 @@ class NurseryPage(QWidget):
             raise UserError('PC 자료를 먼저 열어주세요.')
         return NurseryStore(self.owner.manager)
 
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        if not hasattr(self, 'initial_layout'):
-            return
-        columns = 15 if self.width() >= 1000 else 8
-        if columns != self.initial_columns:
-            self.initial_columns = columns
-            for i, btn in enumerate(self.initial_buttons.values()):
-                self.initial_layout.removeWidget(btn)
-                self.initial_layout.addWidget(btn, i // columns, i % columns)
-
     def selected(self):
         index = self.table.currentRow()
         return self.rows[index] if 0 <= index < len(self.rows) else None
 
     def choose_initial(self, value):
-        self.selected_initial = '' if value == '전체' else value
+        self.selected_initial = value
         self.table.clearSelection()
         self.table.setCurrentCell(-1, -1)
         self.refresh_local()
@@ -119,11 +112,11 @@ class NurseryPage(QWidget):
         previous = self.selected() if hasattr(self, 'table') else None
         try:
             self.state = self.store().read() if self.owner.manager else None
-            self.status.setText('PC 저장 · 전송 대기 %s건' % len(self.state['pending']) if self.state else
-                                'PC 자료를 열면 관리 목록이 표시됩니다.')
+            self.status.hide()
         except UserError as error:
             self.state = None
             self.status.setText(str(error))
+            self.status.show()
         if not hasattr(self, 'table'):
             return
         query = self.search.text().strip().casefold()
@@ -162,7 +155,7 @@ class NurseryPage(QWidget):
         self.table.blockSignals(False)
         if hasattr(self, 'initial_buttons'):
             for title, btn in self.initial_buttons.items():
-                btn.setChecked(title == (self.selected_initial or '전체'))
+                btn.setChecked(title == self.selected_initial)
             self.refresh_stock()
         self._rendered = rendered
         self.update_controls()
