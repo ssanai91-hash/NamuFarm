@@ -3022,7 +3022,12 @@ QDialog#quoteWorkbench QWidget#workbenchCustomerRail QLineEdit#workbenchCustomer
 QDialog#quoteWorkbench QWidget#workbenchCustomerRail QLineEdit#workbenchCustomerInput[customerName="true"]{font-size:24px;font-weight:600;}
 QDialog#quoteWorkbench QFrame#workbenchShipping{background:#f5f8f6;border:1px solid #d6e1da;border-radius:10px;}
 QDialog#quoteWorkbench QLabel#salesShippingFee{font-size:@freight@px;font-weight:600;color:#193c32;}
-""".replace("@input@", "28" if large else "26").replace("@identity@", "34" if large else "30").replace("@freight@", "22" if large else "20"))
+QDialog#quoteWorkbench[compactLayout="true"] QFrame#workbenchShipping QLineEdit#workbenchCustomerInput{font-size:@shipfont@px;min-height:22px;max-height:22px;padding:3px 6px;}
+QDialog#quoteWorkbench[compactLayout="true"] QFrame#workbenchShipping QLineEdit#workbenchCustomerInput:focus{padding:2px 5px;}
+QDialog#quoteWorkbench[compactLayout="true"] QFrame#workbenchShipping QPushButton{font-size:@shipfont@px;min-height:28px;max-height:28px;padding:0 8px;}
+QDialog#quoteWorkbench[compactLayout="true"] QFrame#workbenchShipping QLabel#workbenchCaption{font-size:@shipfont@px;padding:3px 6px;}
+QDialog#quoteWorkbench[compactLayout="true"] QFrame#workbenchShipping QLabel#workbenchSectionTitle{font-size:16px;}
+""".replace("@input@", "28" if large else "26").replace("@identity@", "34" if large else "30").replace("@freight@", "22" if large else "20").replace("@shipfont@", "16" if large else "14"))
         screen = parent.screen() if parent is not None and hasattr(parent, "screen") else QApplication.primaryScreen()
         if screen:
             available = screen.availableGeometry()
@@ -3165,6 +3170,7 @@ QDialog#quoteWorkbench QLabel#salesShippingFee{font-size:@freight@px;font-weight
         work_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         workspace = QWidget()
         workspace.setObjectName("workbenchBody")
+        self.customer_workspace = workspace
         content = QVBoxLayout(workspace)
         content.setContentsMargins(12, 8, 12, 8)
         content.setSpacing(10)
@@ -3228,8 +3234,8 @@ QDialog#quoteWorkbench QLabel#salesShippingFee{font-size:@freight@px;font-weight
         shipping = QFrame()
         shipping.setObjectName("workbenchShipping")
         shipping_layout = QVBoxLayout(shipping)
-        shipping_layout.setContentsMargins(12, 8, 12, 8)
-        shipping_layout.setSpacing(6)
+        shipping_layout.setContentsMargins(10, 6, 10, 6)
+        shipping_layout.setSpacing(4)
         shipping_layout.addWidget(section("배송 정보 · 송장", "shipping"))
         # Keep addresses readable without stretching the fields across the whole table.
         form_area = QWidget()
@@ -3238,7 +3244,7 @@ QDialog#quoteWorkbench QLabel#salesShippingFee{font-size:@freight@px;font-weight
         form = QGridLayout(form_area)
         form.setContentsMargins(0, 0, 0, 0)
         form.setHorizontalSpacing(12)
-        form.setVerticalSpacing(7)
+        form.setVerticalSpacing(4)
         for r, (name, caption) in enumerate((("receiverName", "수령인"), ("zipNo", "우편번호"),
                 ("roadAddress", "도로명 주소"), ("detailAddress", "상세주소"))):
             form.addWidget(label(caption, "workbenchCaption"), r, 0)
@@ -3284,12 +3290,15 @@ QDialog#quoteWorkbench QLabel#salesShippingFee{font-size:@freight@px;font-weight
         shipping_layout.addLayout(form_row)
         # Only delivery details scroll; the item table and totals retain their own space.
         delivery_details = QWidget()
+        self.customer_delivery_details = delivery_details
         details = QVBoxLayout(delivery_details)
         details.setContentsMargins(0, 0, 0, 0)
         details.setSpacing(10)
         details.addWidget(shipping)
         details.addWidget(self.customer_request_section)
         details.addStretch(1)
+        for section_widget in (self.customer_note_section, self.customer_request_section):
+            section_widget.findChild(QPushButton).toggled.connect(lambda: self.fit_customer_content())
         work_scroll.setWidget(delivery_details)
         work_scroll.setMinimumHeight(120)
         content.addWidget(work_scroll, 1)
@@ -3370,29 +3379,44 @@ QDialog#quoteWorkbench QLabel#salesShippingFee{font-size:@freight@px;font-weight
             self.fit_customer_content()
 
     def fit_customer_content(self):
-        row_height = self.items.verticalHeader().defaultSectionSize()
-        # Reserve blank row space too: one purchased item must not collapse the table.
-        rows = max(5, min(8, (self.height() - 440) // row_height))
+        compact = self.height() < 900
+        if compact != getattr(self, "_customer_compact", None):
+            self._customer_compact = compact
+            for section in (self.customer_note_section, self.customer_request_section):
+                section.findChild(QPushButton).setChecked(not compact)
+        large = bool(QApplication.instance().property("namufarmLargeFont"))
+        dense = bool(self.property("compactLayout"))
+        row_height = (32 if large else 28) if dense else (42 if large else 38)
+        self.items.verticalHeader().setMinimumSectionSize(row_height)
+        self.items.verticalHeader().setDefaultSectionSize(row_height)
+        self.items.horizontalHeader().setFixedHeight((34 if large else 30) if dense else (38 if large else 34))
+        for row in range(self.items.rowCount()):
+            self.items.setRowHeight(row, row_height)
+        layout = self.customer_workspace.layout()
+        layout.activate()
+        margins = layout.contentsMargins()
+        item_layout = self.customer_items_panel.layout()
+        item_overhead = (self.customer_items_heading.sizeHint().height() +
+                         self.customer_items_summary.sizeHint().height() + 2 * item_layout.spacing())
+        # Fit the full delivery form first, then reserve 5–8 rows in the remaining space.
+        delivery_height = self.customer_delivery_details.minimumSizeHint().height()
+        room = (self.customer_workspace.height() - margins.top() - margins.bottom() -
+                2 * layout.spacing() - 6 - delivery_height - item_overhead -
+                self.items.horizontalHeader().height() - 4)
+        rows = max(5, min(8, room // row_height))
         table_height = self.items.horizontalHeader().height() + rows * row_height + 4
         self.items.setFixedHeight(table_height)
         # Reserve the whole group, not just the table, before allocating delivery space.
-        item_layout = self.customer_items_panel.layout()
-        panel_height = (table_height + self.customer_items_heading.sizeHint().height() +
-                        self.customer_items_summary.sizeHint().height() + 2 * item_layout.spacing())
+        panel_height = table_height + item_overhead
         self.customer_items_panel.setFixedHeight(panel_height)
         item_layout.invalidate()
-        compact = self.height() < 900
-        if compact == getattr(self, "_customer_compact", None):
-            return
-        self._customer_compact = compact
-        for section in (self.customer_note_section, self.customer_request_section):
-            section.findChild(QPushButton).setChecked(not compact)
 
     def showEvent(self, event):
         super().showEvent(event)
         fit_quote_density(self)
         self.fit_customer_rail()
         self.fit_customer_content()
+        QTimer.singleShot(0, self.fit_customer_content)
 
     def fit_customer_rail(self):
         # Give the uniform customer fields a little more width than the quote rail.
