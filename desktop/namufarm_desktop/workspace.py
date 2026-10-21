@@ -1,6 +1,7 @@
 """FHD seller workspace, built on the existing verified sync controller."""
 import copy
 import json
+import sys
 import tempfile
 from datetime import datetime
 from importlib.resources import files as package_files
@@ -541,41 +542,106 @@ def write_temporary_quote_pdf(image, path):
     return path
 
 
-def preview_temporary_quote(parent, image):
-    """Preview/print an in-memory A4 quote image without creating a local file."""
+class QuotePagePreview(QLabel):
+    """Fit one complete page to the available viewport without scrollbars."""
+
+    def __init__(self):
+        super().__init__()
+        self.page_image = QImage()
+        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.setContentsMargins(8, 8, 8, 8)
+        self.setStyleSheet("background:#dfe3df;border:0;")
+        self.setMinimumSize(0, 0)
+        self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Ignored)
+
+    def set_page(self, image):
+        self.page_image = image
+        self.fit_page()
+
+    def fit_page(self):
+        size = self.contentsRect().size()
+        if not self.page_image.isNull() and size.width() > 0 and size.height() > 0:
+            self.setPixmap(QPixmap.fromImage(self.page_image).scaled(
+                size, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self.fit_page()
+
+
+def preview_temporary_quote(parent, image, *, pdf_path=None, filename="공식견적서.pdf"):
+    """Fit, print or explicitly save the generated A4 quotation."""
     dialog = QDialog(parent)
     dialog.setWindowTitle("공식 견적서 미리보기")
+    dialog.setSizeGripEnabled(True)
     screen = parent.screen() if parent is not None and hasattr(parent, "screen") else QApplication.primaryScreen()
     available = screen.availableGeometry() if screen else None
     if available:
         dialog.resize(min(1180, available.width() - 50), min(1000, available.height() - 50))
-        max_preview_w = max(520, dialog.width() - 90)
-        max_preview_h = max(680, dialog.height() - 125)
     else:
         dialog.resize(1120, 940)
-        max_preview_w, max_preview_h = 1000, 820
 
     layout = QVBoxLayout(dialog)
     layout.setContentsMargins(12, 12, 12, 10)
 
     images = [image] if isinstance(image, QImage) else list(image)
-    scroll = QScrollArea()
-    scroll.setWidgetResizable(True)
-    pages_widget = QWidget()
-    pages_layout = QVBoxLayout(pages_widget)
-    for page_image in images:
-        page = QLabel()
-        page.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        page.setStyleSheet("QLabel{background:#dfe3df;border:0;padding:12px;}")
-        page.setPixmap(QPixmap.fromImage(page_image).scaled(max_preview_w, max_preview_h,
-                       Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
-        pages_layout.addWidget(page)
-    scroll.setWidget(pages_widget)
-    layout.addWidget(scroll, 1)
+    require(bool(images), "공식견적서에 표시할 페이지가 없습니다.")
+    page = QuotePagePreview()
+    layout.addWidget(page, 1)
 
     row = QHBoxLayout()
-    row.addWidget(label("A4 비율 임시 생성 문서 · 별도 파일로 저장하지 않습니다.", "muted"))
-    row.addStretch()
+    current_page = 0
+    previous_button = button("이전")
+    next_button = button("다음")
+    page_number = label("")
+    for control in (previous_button, page_number, next_button):
+        control.setVisible(len(images) > 1)
+        row.addWidget(control)
+
+    def show_page(index):
+        nonlocal current_page
+        current_page = max(0, min(index, len(images) - 1))
+        page.set_page(images[current_page])
+        page_number.setText(f"{current_page + 1} / {len(images)}")
+        previous_button.setEnabled(current_page > 0)
+        next_button.setEnabled(current_page + 1 < len(images))
+
+    previous_button.clicked.connect(lambda: show_page(current_page - 1))
+    next_button.clicked.connect(lambda: show_page(current_page + 1))
+    show_page(0)
+    save_status = label("A4 전체 보기", "muted")
+    save_status.setMinimumWidth(0)
+    save_status.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+    row.addWidget(save_status, 1)
+
+    def save_pdf():
+        try:
+            base = (Path(sys.executable).resolve().parent if getattr(sys, "frozen", False)
+                    else Path(__file__).resolve().parents[1])
+            folder = base / "자료" / "공식견적서"
+            folder.mkdir(parents=True, exist_ok=True)
+            target = folder / Path(filename).name
+            original = target
+            count = 2
+            while target.exists():
+                target = original.with_name(f"{original.stem} ({count}){original.suffix}")
+                count += 1
+            with tempfile.TemporaryDirectory(prefix="namufarm-quote-save-") as temporary:
+                source = Path(pdf_path) if pdf_path else None
+                if source is None or not source.is_file():
+                    source = write_temporary_quote_pdf(images, Path(temporary) / "quote.pdf")
+                data = source.read_bytes()
+                require(bool(data), "저장할 공식견적서 PDF가 비어 있습니다.")
+                output = QSaveFile(str(target))
+                require(output.open(QIODevice.OpenModeFlag.WriteOnly), "공식견적서 저장 폴더를 확인해주세요.")
+                if output.write(data) != len(data):
+                    output.cancelWriting()
+                    raise UserError("공식견적서를 저장하지 못했습니다.")
+                require(output.commit(), "공식견적서를 저장하지 못했습니다.")
+            save_status.setText("저장완료 · " + target.name)
+            save_status.setToolTip(str(target))
+        except (OSError, UserError) as error:
+            QMessageBox.warning(dialog, "공식견적서 저장", str(error))
 
     def print_only():
         printer = QPrinter(QPrinter.PrinterMode.HighResolution)
@@ -596,8 +662,9 @@ def preview_temporary_quote(parent, image):
             painter.drawImage(x, y, printed)
         painter.end()
 
+    row.addWidget(button("저장하기", save_pdf, True))
     row.addWidget(button("프린터 출력", print_only))
-    row.addWidget(button("닫기", dialog.accept, True))
+    row.addWidget(button("닫기", dialog.accept))
     layout.addLayout(row)
     dialog.exec()
 
@@ -960,7 +1027,8 @@ class QuoteDeliveryTools:
         if self.generated_quote_image is None or not self.generated_quote_path:
             QMessageBox.information(self, "공식견적서", "먼저 공식견적서를 생성해주세요.")
             return
-        preview_temporary_quote(self, self.generated_quote_images or self.generated_quote_image)
+        preview_temporary_quote(self, self.generated_quote_images or self.generated_quote_image,
+                                pdf_path=self.generated_quote_path, filename=self.official_quote_filename())
 
 
 
