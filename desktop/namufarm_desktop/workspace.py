@@ -3171,12 +3171,12 @@ QDialog#quoteWorkbench[compactLayout="true"] QFrame#workbenchShipping QLabel#wor
         self.customer_workspace = workspace
         content = QVBoxLayout(workspace)
         content.setContentsMargins(12, 8, 12, 8)
-        content.setSpacing(10)
+        content.setSpacing(8)
         self.customer_items_panel = QFrame()
         self.customer_items_panel.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         item_content = QVBoxLayout(self.customer_items_panel)
         item_content.setContentsMargins(0, 0, 0, 0)
-        item_content.setSpacing(10)
+        item_content.setSpacing(8)
         self.customer_items_heading = section("판매 품목", "leaf")
         item_content.addWidget(self.customer_items_heading)
         content.addWidget(self.customer_items_panel)
@@ -3213,7 +3213,6 @@ QDialog#quoteWorkbench[compactLayout="true"] QFrame#workbenchShipping QLabel#wor
         totals.addStretch(1)
         totals.addWidget(label("총금액  " + money(self.meta["totalPrice"] + self.meta.get("taxAmount", 0)), "deliverySectionTitle"))
         item_content.addWidget(item_summary)
-        content.addSpacing(6)
         request_area = QFrame()
         request_area.setObjectName("workbenchOriginalRequest")
         request_layout = QVBoxLayout(request_area)
@@ -3225,7 +3224,9 @@ QDialog#quoteWorkbench[compactLayout="true"] QFrame#workbenchShipping QLabel#wor
         self.request_note_view.setReadOnly(True)
         self.request_note_view.setPlaceholderText("저장된 고객 요청사항이 없습니다.")
         self.request_note_view.document().setDocumentMargin(0)
-        self.request_note_view.setFixedHeight(88 if large else 76)
+        self.request_note_view.setFixedHeight(64 if large else 52)
+        self.request_note_view.setStyleSheet("QPlainTextEdit{padding:4px 6px;font-size:@size@px;}".replace(
+            "@size@", "16" if large else "14"))
         request_layout.addWidget(self.request_note_view)
         self.customer_request_section = collapsible("고객 요청정보", request_area, expanded=self.height() >= 900)
 
@@ -3243,43 +3244,41 @@ QDialog#quoteWorkbench[compactLayout="true"] QFrame#workbenchShipping QLabel#wor
         form.setContentsMargins(0, 0, 0, 0)
         form.setHorizontalSpacing(12)
         form.setVerticalSpacing(4)
-        for r, (name, caption) in enumerate((("receiverName", "수령인"), ("zipNo", "우편번호"),
-                ("roadAddress", "도로명 주소"), ("detailAddress", "상세주소"))):
+        form.addWidget(label("수령인", "workbenchCaption"), 0, 0)
+        recipient_row = QHBoxLayout()
+        recipient_row.setContentsMargins(0, 0, 0, 0)
+        recipient_row.setSpacing(8)
+        receiver = field("receiverName", "수령인")
+        receiver.setMinimumWidth(100)
+        receiver.setMaximumWidth(240 if large else 220)
+        recipient_row.addWidget(receiver, 1)
+        recipient_row.addWidget(label("우편번호", "workbenchCaption"))
+        postal = field("zipNo", "우편번호")
+        postal.setFixedWidth(110 if large else 100)
+        postal.setPlaceholderText("우편번호")
+        recipient_row.addWidget(postal)
+        self.address_button = button("주소찾기", self.find_address)
+        recipient_row.addWidget(self.address_button)
+        recipient_row.addStretch(1)
+        form.addLayout(recipient_row, 0, 1)
+        for r, (name, caption) in enumerate((("roadAddress", "도로명 주소"),
+                                            ("detailAddress", "상세주소")), 1):
             form.addWidget(label(caption, "workbenchCaption"), r, 0)
-            edit = field(name, caption)
-            if name == "zipNo":
-                edit.setFixedWidth(186 if large else 168)
-                edit.setPlaceholderText("우편번호")
-                postal_row = QHBoxLayout()
-                postal_row.setSpacing(8)
-                postal_row.addWidget(edit)
-                self.address_button = button("주소찾기", self.find_address)
-                postal_row.addWidget(self.address_button)
-                postal_row.addStretch(1)
-                form.addLayout(postal_row, r, 1)
-            elif name == "receiverName":
-                edit.setMaximumWidth(360 if large else 320)
-                recipient_row = QHBoxLayout()
-                recipient_row.setContentsMargins(0, 0, 0, 0)
-                recipient_row.addWidget(edit, 1)
-                recipient_row.addStretch(1)
-                form.addLayout(recipient_row, r, 1)
-            else:
-                form.addWidget(edit, r, 1)
+            form.addWidget(field(name, caption), r, 1)
         self.tracking_number_edit = QLineEdit(tracking_number(self.order))
         self.tracking_number_edit.setObjectName("workbenchCustomerInput")
         self.tracking_number_edit.setAccessibleName("로젠 송장번호")
         self.tracking_number_edit.setPlaceholderText("로젠 송장번호 11자리")
         self.tracking_number_edit.setMaximumWidth(280 if large else 260)
         self.tracking_number_edit.setMaxLength(20)
-        form.addWidget(label("송장번호", "workbenchCaption"), 4, 0)
+        form.addWidget(label("송장번호", "workbenchCaption"), 3, 0)
         tracking_row = QHBoxLayout()
         tracking_row.setSpacing(8)
         tracking_row.addWidget(self.tracking_number_edit, 1)
         self.tracking_entry_button = button("송장번호 입력", self.enter_tracking)
         tracking_row.addWidget(self.tracking_entry_button)
         tracking_row.addStretch(1)
-        form.addLayout(tracking_row, 4, 1)
+        form.addLayout(tracking_row, 3, 1)
         form.setColumnStretch(1, 1)
         form_row = QHBoxLayout()
         form_row.setContentsMargins(0, 0, 0, 0)
@@ -3293,13 +3292,14 @@ QDialog#quoteWorkbench[compactLayout="true"] QFrame#workbenchShipping QLabel#wor
         details.setContentsMargins(0, 0, 0, 0)
         details.setSpacing(10)
         details.addWidget(shipping)
-        details.addWidget(self.customer_request_section)
         details.addStretch(1)
         for section_widget in (self.customer_note_section, self.customer_request_section):
             section_widget.findChild(QPushButton).toggled.connect(lambda: self.fit_customer_content())
         work_scroll.setWidget(delivery_details)
         work_scroll.setMinimumHeight(120)
         content.addWidget(work_scroll, 1)
+        # Keep customer requests visible independently of the delivery form's viewport.
+        content.addWidget(self.customer_request_section)
         body.addWidget(workspace, 1)
         root.addLayout(body, 1)
 
@@ -3397,9 +3397,10 @@ QDialog#quoteWorkbench[compactLayout="true"] QFrame#workbenchShipping QLabel#wor
         item_overhead = (self.customer_items_heading.sizeHint().height() +
                          self.customer_items_summary.sizeHint().height() + 2 * item_layout.spacing())
         # Fit the full delivery form first, then reserve 5–8 rows in the remaining space.
-        delivery_height = self.customer_delivery_details.minimumSizeHint().height()
+        delivery_height = (self.customer_delivery_details.minimumSizeHint().height() +
+                           self.customer_request_section.minimumSizeHint().height())
         room = (self.customer_workspace.height() - margins.top() - margins.bottom() -
-                2 * layout.spacing() - 6 - delivery_height - item_overhead -
+                (layout.count() - 1) * layout.spacing() - delivery_height - item_overhead -
                 self.items.horizontalHeader().height() - 4)
         rows = max(5, min(8, room // row_height))
         table_height = self.items.horizontalHeader().height() + rows * row_height + 4
