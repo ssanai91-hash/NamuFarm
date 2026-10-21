@@ -75,7 +75,7 @@ def quote_amount_detail(draft):
 
 
 def fit_delivery_message(dialog):
-    if not hasattr(dialog, "status"):
+    if not hasattr(dialog, "status") or getattr(dialog, "_delivery_fitting", False):
         return
     large = bool(QApplication.instance().property("namufarmLargeFont"))
     dialog.message.setMinimumHeight(100)
@@ -83,6 +83,34 @@ def fit_delivery_message(dialog):
     layout = dialog.layout()
     layout.setSpacing(4)
     layout.setContentsMargins(12, 8, 12, 8)
+    if not dialog.isVisible():
+        return
+    dialog._delivery_fitting = True
+    try:
+        layout.activate()
+        body = dialog.message
+        width = max(1, body.viewport().width() - 12)
+        height = max(1, body.viewport().height() - 12)
+        # Fit ordinary quotes while keeping long messages fully editable and accessible.
+        minimum, preferred = (14, 16) if large else (12, 14)
+        size = preferred
+        document = QTextDocument()
+        document.setDocumentMargin(0)
+        document.setPlainText(body.toPlainText())
+        option = document.defaultTextOption()
+        option.setWrapMode(QTextOption.WrapMode.WrapAtWordBoundaryOrAnywhere)
+        document.setDefaultTextOption(option)
+        while True:
+            document.setDefaultFont(_quote_font(size))
+            document.setTextWidth(width)
+            if document.size().height() <= height or size <= minimum:
+                break
+            size -= 1
+        if body.property("deliveryFontSize") != size:
+            body.setProperty("deliveryFontSize", size)
+            body.setStyleSheet(f"QPlainTextEdit{{padding:6px;font-size:{size}px;}}")
+    finally:
+        dialog._delivery_fitting = False
 
 
 def setup_delivery_reading(dialog, layout):
@@ -90,9 +118,11 @@ def setup_delivery_reading(dialog, layout):
     dialog.setMinimumSize(620, 560)
     dialog.message.setLineWrapMode(QPlainTextEdit.LineWrapMode.WidgetWidth)
     dialog.message.setStyleSheet("QPlainTextEdit{padding:6px;font-size:@size@px;}".replace(
-        "@size@", "18" if QApplication.instance().property("namufarmLargeFont") else "16"))
+        "@size@", "16" if QApplication.instance().property("namufarmLargeFont") else "14"))
     dialog.message.document().setDocumentMargin(0)
+    dialog.message.textChanged.connect(lambda: fit_delivery_message(dialog))
     fit_delivery_message(dialog)
+    QTimer.singleShot(0, lambda: fit_delivery_message(dialog))
 
 
 
@@ -2054,13 +2084,14 @@ class QuoteSmsDialog(QDialog):
         screen = parent.screen() if parent is not None and hasattr(parent, "screen") else QApplication.primaryScreen()
         available = screen.availableGeometry() if screen else None
         if available:
-            width = min(1280, max(760, int(available.width() * 0.96)))
+            large = bool(QApplication.instance().property("namufarmLargeFont"))
+            width = min(820 if large else 760, available.width() - 40)
             height = min(1160, max(720, int(available.height() * 0.96)))
             width = min(width, max(620, available.width() - 40))
             height = min(height, max(620, available.height() - 50))
             self.resize(width, height)
         else:
-            self.resize(1040, 960)
+            self.resize(760, 960)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 20, 24, 20)
@@ -2079,6 +2110,9 @@ class QuoteSmsDialog(QDialog):
         self.recipient_name = label(self.draft.get("customerName") or "고객", wrap=True)
         self.recipient_name.setMaximumWidth(160)
         self.recipient_phone = QLineEdit(self.draft.get("customerPhone", ""))
+        phone_width = 190 if QApplication.instance().property("namufarmLargeFont") else 170
+        self.recipient_name.setMaximumWidth(120)
+        self.recipient_phone.setFixedWidth(phone_width)
         self.recipient_phone.setMaxLength(20)
         self.recipient_phone.setAccessibleName("문자 수신 전화번호 · 수정 가능")
         self.recipient_phone.setPlaceholderText("수신 전화번호")
@@ -2086,14 +2120,14 @@ class QuoteSmsDialog(QDialog):
         self.recipient_phone.textChanged.connect(self.recipient_changed)
         self.sender_phone = QLineEdit("발신 설정 확인 중…")
         self.sender_phone.setReadOnly(True)
+        self.sender_phone.setFixedWidth(phone_width)
 
         address.addWidget(self.recipient_name, 0, 0)
         address.addWidget(label("수신번호"), 0, 1)
         address.addWidget(self.recipient_phone, 0, 2)
         address.addWidget(label("발신"), 0, 3)
         address.addWidget(self.sender_phone, 0, 4)
-        address.setColumnStretch(2, 3)
-        address.setColumnStretch(4, 2)
+        address.setColumnStretch(5, 1)
         layout.addWidget(address_card)
 
         layout.addWidget(label("문자 내용", "emailSectionTitle"))
@@ -2390,13 +2424,14 @@ class QuoteEmailDialog(QDialog):
         screen = parent.screen() if parent is not None and hasattr(parent, "screen") else QApplication.primaryScreen()
         available = screen.availableGeometry() if screen else None
         if available:
-            width = min(1280, max(760, int(available.width() * 0.96)))
+            large = bool(QApplication.instance().property("namufarmLargeFont"))
+            width = min(920 if large else 860, available.width() - 40)
             height = min(1160, max(720, int(available.height() * 0.96)))
             width = min(width, max(620, available.width() - 40))
             height = min(height, max(560, available.height() - 50))
             self.resize(width, height)
         else:
-            self.resize(1100, 960)
+            self.resize(860, 960)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 20, 24, 20)
@@ -2416,16 +2451,20 @@ class QuoteEmailDialog(QDialog):
         self.recipient_name.setMaximumWidth(160)
         self.recipient_email = QLineEdit(self.draft.get("customerEmail", ""))
         self.recipient_email.setReadOnly(True)
+        self.recipient_email.setMinimumWidth(0)
+        self.recipient_email.setMaximumWidth(300)
         self.sender_email = QLineEdit(self.SENDER_EMAIL)
         self.sender_email.setReadOnly(True)
+        self.sender_email.setMinimumWidth(0)
+        self.sender_email.setMaximumWidth(300)
 
         address.addWidget(self.recipient_name, 0, 0)
         address.addWidget(label("수신 메일"), 0, 1)
         address.addWidget(self.recipient_email, 0, 2)
         address.addWidget(label("발신"), 0, 3)
         address.addWidget(self.sender_email, 0, 4)
-        address.setColumnStretch(2, 3)
-        address.setColumnStretch(4, 2)
+        address.setColumnStretch(2, 1)
+        address.setColumnStretch(4, 1)
         layout.addWidget(address_card)
 
         subject_row = QHBoxLayout()
