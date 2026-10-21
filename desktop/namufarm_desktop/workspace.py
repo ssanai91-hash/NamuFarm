@@ -149,25 +149,6 @@ def fit_quote_density(dialog):
     dialog.setStyleSheet(dialog.styleSheet())
 
 
-class SquareNoteEdit(QPlainTextEdit):
-    """Keep the quotation note square as the customer rail changes width."""
-
-    def __init__(self, text="", parent=None):
-        super().__init__(text, parent)
-        policy = QSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
-        policy.setHeightForWidth(True)
-        self.setSizePolicy(policy)
-
-    def sizeHint(self):
-        return QSize(240, 240)
-
-    def minimumSizeHint(self):
-        return QSize(0, 0)
-
-    def heightForWidth(self, width):
-        return width
-
-
 class UnitPriceEditor(QWidget):
     """Manual unit-price input with 500-won step buttons.
 
@@ -1196,7 +1177,12 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
             self.setMinimumSize(960, 600)
         self.fields = {}
         self.cost = QCheckBox()
-        self.note = SquareNoteEdit(self.draft.get("note", ""))
+        self.note = QPlainTextEdit(self.draft.get("note", ""))
+        self.note.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.note.setFixedHeight(76 if large else 64)
+        self.note.setStyleSheet("QPlainTextEdit{padding:4px 6px;font-size:@size@px;}".replace(
+            "@size@", "16" if large else "14"))
+        self.note.document().setDocumentMargin(0)
 
         self.workbench_icons = []
 
@@ -1344,7 +1330,8 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         self.workbench_document_area = QFrame()
         self.workbench_document_area.setObjectName("workbenchDocumentTools")
         document_content = QVBoxLayout(self.workbench_document_area)
-        document_content.setContentsMargins(12, 12, 12, 12)
+        document_content.setContentsMargins(10, 8, 10, 8)
+        document_content.setSpacing(6)
         customer.addWidget(self.workbench_document_area)
         customer.addStretch(1)
         self.customer_scroll.setWidget(rail)
@@ -1489,12 +1476,13 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
 
         self.workbench_note_area = QWidget()
         notes = QVBoxLayout(self.workbench_note_area)
-        notes.setContentsMargins(0, 6, 0, 0)
-        notes.setSpacing(8)
+        notes.setContentsMargins(0, 4, 0, 0)
+        notes.setSpacing(4)
         notes.addWidget(label("요청사항", "deliverySectionTitle"))
         self.note.setPlaceholderText("공식견적서 중요사항에 넣을 안내를 입력하세요")
         self.note.setAccessibleName("공식견적서 중요사항 · 판매자 입력")
         self.note.textChanged.connect(self.recalculate)
+        self.note.textChanged.connect(lambda: self._workbench_notes_timer.start(0))
         notes.addWidget(self.note)
         document_content.addWidget(self.workbench_note_area)
         self.note.installEventFilter(self)
@@ -1696,7 +1684,17 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
     def align_workbench_notes(self):
         if not getattr(self, "_workbench_ready", False) or self._workbench_closed or not self.isVisible():
             return
-        height = 64 if QApplication.instance().property("namufarmLargeFont") else 52
+        large = bool(QApplication.instance().property("namufarmLargeFont"))
+        measure = QTextDocument()
+        measure.setDefaultFont(_quote_font(16 if large else 14))
+        measure.setDocumentMargin(0)
+        measure.setPlainText(self.note.toPlainText())
+        measure.setTextWidth(max(1, self.note.viewport().width() - 12))
+        note_height = max(76 if large else 64,
+                          min(132 if large else 112, int(measure.size().height()) + 12))
+        if self.note.height() != note_height:
+            self.note.setFixedHeight(note_height)
+        height = 64 if large else 52
         if self.request_note_view.height() != height:
             self.request_note_view.setFixedHeight(height)
 
