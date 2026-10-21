@@ -283,10 +283,16 @@ def shipping_fingerprint(order):
     return hashlib.sha256(json.dumps(values, ensure_ascii=False, separators=(",", ":")).encode()).hexdigest()
 
 
-def shipping_ready(order):
+def shipping_prepared(order):
+    """The seller confirmed this exact address, before or after waybill issue."""
     stamp = order.get("shippingReadyAt", 0)
     return (type(stamp) is int and stamp > 0 and not shipping_problem(order) and
-            bool(tracking_number(order)) and order.get("shippingReadyFingerprint") == shipping_fingerprint(order))
+            order.get("shippingReadyFingerprint") == shipping_fingerprint(order))
+
+
+def shipping_ready(order):
+    """Completion still requires a valid waybill and confirmed shipping inputs."""
+    return shipping_prepared(order) and bool(tracking_number(order))
 
 
 def csv_text(value):

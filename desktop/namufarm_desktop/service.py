@@ -12,7 +12,7 @@ from .domain import (changed, integer, metadata, now_ms, require, valid_id, vali
 from .errors import AuthenticationError, UserError, ConflictError
 from .commerce import (validate_draft, order_from_draft, quote_document, tracking_fields,
                        tracking_number, normalize_tracking, quote_delivery_fingerprint, seller_note_draft,
-                       shipping_problem, shipping_fingerprint, shipping_ready)
+                       shipping_problem, shipping_fingerprint, shipping_prepared, shipping_ready)
 from .sales_workspace import SalesWorkspace
 from .sold_numbers import SoldNumbers
 
@@ -666,7 +666,10 @@ class Manager(SoldNumbers, SalesWorkspace):
         row = next((r for r in view["sales"] if r["metadata"]["orderNumber"] == number), None)
         require(row is not None and row["metadata"]["revision"] == expected_revision, "판매 기록을 다시 조회해주세요.")
         require(all(r["metadata"]["orderNumber"] == number or tracking_number(r["private"]["order"]) != value for r in view["sales"]), "다른 주문에 등록된 송장번호입니다.")
-        return self.save_sale(number, expected_revision, tracking_fields(row["private"]["order"], value))
+        order = row["private"]["order"]
+        # Issuing a waybill after XLS export must not undo an unchanged address check.
+        return self.save_sale(number, expected_revision, tracking_fields(order, value),
+                              prepare_shipping=shipping_prepared(order))
 
     def import_tracking(self, assignments):
         view = self.view()
@@ -910,7 +913,6 @@ class Manager(SoldNumbers, SalesWorkspace):
             require(order["status"] == "입금확인", "입금확인 주문만 배송준비완료로 처리할 수 있습니다.")
             problem = shipping_problem(order)
             require(not problem, problem)
-            require(bool(tracking), "로젠 송장번호 11자리를 먼저 입력해주세요.")
             order.update(shippingReadyAt=now_ms(), shippingReadyFingerprint=shipping_fingerprint(order))
         elif target == "입금확인":
             order.update(shippingReadyAt=0, shippingReadyFingerprint="")
