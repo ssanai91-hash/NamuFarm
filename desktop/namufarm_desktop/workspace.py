@@ -92,9 +92,6 @@ def setup_delivery_reading(dialog, layout):
     dialog.message.setStyleSheet("QPlainTextEdit{padding:6px;font-size:@size@px;}".replace(
         "@size@", "18" if QApplication.instance().property("namufarmLargeFont") else "16"))
     dialog.message.document().setDocumentMargin(0)
-    # Compact only the initial template; later user edits keep their own line breaks.
-    dialog.message.setPlainText("\n".join(
-        line for line in dialog.message.toPlainText().splitlines() if line.strip()))
     fit_delivery_message(dialog)
 
 
@@ -2144,10 +2141,8 @@ class QuoteSmsDialog(QDialog):
             f"{customer}님, 안녕하세요.",
             "",
             "나무팜농원입니다.",
-            "",
             "요청하신 묘목 견적을 안내드립니다.",
             "",
-            "-" * 53,
             f"견적번호 : {self.quote_number()}",
             "",
         ]
@@ -2157,10 +2152,10 @@ class QuoteSmsDialog(QDialog):
             lines.extend([
                 f"품목{index} : {item['species']} {quantity:,}주",
                 f"판매금액 : {amount:,}원",
-                "",
             ])
             if item_specification(item):
-                lines.extend(["규격 : " + item_specification(item), ""])
+                lines.append("규격 : " + item_specification(item))
+            lines.append("")
         if self.draft.get("note", "").strip():
             lines.extend(["요청사항 : " + self.draft["note"].strip(), ""])
         total = draft_amounts(self.draft)["total"]
@@ -2174,7 +2169,6 @@ class QuoteSmsDialog(QDialog):
         lines.extend([
             shipping_line,
             total_line,
-            "-" * 53,
             "",
             payment_notice(self.draft),
             "",
@@ -2490,17 +2484,17 @@ class QuoteEmailDialog(QDialog):
             item_lines.extend([
                 f"품목{index} : {item['species']} {quantity:,}주",
                 f"판매금액 : {amount:,}원",
-                "",
             ])
             if item_specification(item):
-                item_lines.extend(["규격 : " + item_specification(item), ""])
+                item_lines.append("규격 : " + item_specification(item))
+            item_lines.append("")
         if self.draft.get("note", "").strip():
             item_lines.extend(["요청사항 : " + self.draft["note"].strip(), ""])
         total = draft_amounts(self.draft)["total"]
         shipping_fee = int(self.draft.get("shippingFee", 0) or 0)
         if self.draft.get("isPrepaid"):
             shipping_line = f"택배비 : 선불 {shipping_fee:,}원"
-            total_line = f"총금액 : {total:,}원  (총금액 포함)"
+            total_line = f"총금액 : {total:,}원 (택배비 포함)"
         else:
             shipping_line = f"택배비 : 후불 / 선불 시 {shipping_fee:,}원"
             total_line = f"총금액 : {total:,}원"
@@ -2511,8 +2505,6 @@ class QuoteEmailDialog(QDialog):
             "나무팜농원입니다.",
             "요청하신 묘목 견적을 안내드립니다.",
             "",
-            "-" * 53,
-            "",
             f"견적번호 : {self.quote_number()}",
             "",
             *item_lines,
@@ -2520,8 +2512,6 @@ class QuoteEmailDialog(QDialog):
             total_line,
             "",
             payment_notice(self.draft),
-            "",
-            "-" * 53,
             "",
             "견적 내용을 확인하시고 궁금하신 사항은 편하게 연락 부탁드립니다.",
             "감사합니다.",
