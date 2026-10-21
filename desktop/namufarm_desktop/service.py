@@ -12,7 +12,7 @@ from .domain import (changed, integer, metadata, now_ms, require, valid_id, vali
 from .errors import AuthenticationError, UserError, ConflictError
 from .commerce import (validate_draft, order_from_draft, quote_document, tracking_fields,
                        tracking_number, normalize_tracking, quote_delivery_fingerprint, seller_note_draft,
-                       shipping_problem, shipping_fingerprint, shipping_prepared, shipping_ready, normalize_sms_recipient)
+                       shipping_problem, shipping_fingerprint, shipping_prepared, shipping_ready, normalize_sms_recipient, validate_working_draft)
 from .sales_workspace import SalesWorkspace
 from .sold_numbers import SoldNumbers
 
@@ -87,9 +87,13 @@ class Manager(SoldNumbers, SalesWorkspace):
     def _store_local_quote(self, draft, status):
         quotes = self._local_quotes()
         updated = {**copy.deepcopy(draft), "quoteStatus": status}
+        updated.pop("workingCopy", None)
         quotes = [d for d in quotes if d["id"] != draft["id"] and
                   not (draft.get("sourceRequestId") and d.get("sourceRequestId") == draft["sourceRequestId"])]
         self.vault.save_preference("confirmed_quotes", [updated, *quotes])
+        self.vault.save_preference("drafts", [d for d in self.vault.preference("drafts", [])
+            if d["id"] != draft["id"] and not (draft.get("sourceRequestId") and
+                                                d.get("sourceRequestId") == draft["sourceRequestId"])])
 
     def _finish_quote_write(self):
         """An acknowledged server write survives a locked Excel file or a restart."""
@@ -334,6 +338,23 @@ class Manager(SoldNumbers, SalesWorkspace):
         drafts = [d for d in drafts if d["id"] != draft["id"]]
         require(len(drafts) < 500, "보관 중인 초안을 정리해주세요.")
         self.vault.save_preference("drafts", [copy.deepcopy(draft), *drafts])
+        return self.view()
+
+    def save_working_draft(self, draft):
+        validate_working_draft(draft)
+        require(not self.vault.preference("quote_write_pending"), "먼저 견적 저장 확인을 완료해주세요.")
+        require(self._sale_for_draft(draft) is None, "판매 등록한 견적은 작성중으로 저장할 수 없습니다.")
+        require(not any(q["id"] == draft["id"] for q in self._local_quotes()),
+                "확정견적은 묘목정보 수정에서 저장해주세요.")
+        require(draft["createdAt"] > now_ms() - 30 * 86400000, "30일이 지난 견적은 새로 작성해주세요.")
+        saved = copy.deepcopy(draft)
+        saved["workingCopy"] = True
+        if not saved.get("sourceRequestId"):
+            saved["manualStatus"] = "작성중"
+        drafts = [d for d in self.vault.preference("drafts", []) if d["id"] != saved["id"] and
+                  not (saved.get("sourceRequestId") and d.get("sourceRequestId") == saved["sourceRequestId"])]
+        require(len(drafts) < 500, "보관 중인 초안을 정리해주세요.")
+        self.vault.save_preference("drafts", [saved, *drafts])
         return self.view()
 
     def confirm_quote(self, draft):
@@ -596,7 +617,10 @@ class Manager(SoldNumbers, SalesWorkspace):
         require(not self.vault.preference("quote_write_pending"), "먼저 가져오기로 견적 저장을 완료해주세요.")
         # Local history only: never call close_request or alter the quote ledger.
         quotes = self._local_quotes()
-        require(any(d["id"] == identifier for d in quotes), "삭제할 확정견적을 다시 선택해주세요.")
+        working = self.vault.preference("drafts", [])
+        require(any(d["id"] == identifier for d in quotes) or
+                any(d["id"] == identifier and d.get("workingCopy") for d in working),
+                "삭제할 견적을 다시 선택해주세요.")
         self.vault.save_preference("confirmed_quotes", [d for d in quotes if d["id"] != identifier])
         self.vault.save_preference("drafts", [d for d in self.vault.preference("drafts", []) if d["id"] != identifier])
         return self.view()

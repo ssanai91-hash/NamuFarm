@@ -40,8 +40,8 @@ def payment_confirmation_message(draft):
     for i, item in enumerate(draft["items"], 1):
         lines.extend([f"품목{i} : {item['species']} {item['quantity']:,}주",
                       f"판매금액 : {item['quantity'] * item['unitPrice']:,}원"])
-        if item.get("remarks", "").strip():
-            lines.append("비고 : " + item["remarks"].strip())
+        if item_specification(item):
+            lines.append("규격 : " + item_specification(item))
         lines.append("")
     fee = int(draft.get("shippingFee", 0) or 0)
     lines.extend([f"택배비 : 선불 {fee:,}원" if draft.get("isPrepaid") else "택배비 : 후불",
@@ -165,7 +165,7 @@ def validate_draft(draft):
     require(isinstance(receipt, str) and len(receipt) <= 120 and not any(ord(c) < 32 for c in receipt),
             "견적번호를 확인해주세요.")
     if draft.get("manualStatus") is not None:
-        require(draft.get("sourceRequestId") == "" and draft.get("manualStatus") in ("견적확정", "견적발송완료"),
+        require(draft.get("sourceRequestId") == "" and draft.get("manualStatus") in ("작성중", "견적확정", "견적발송완료"),
                 "수기 견적 상태를 확인해주세요.")
     for name, limit in EDITABLE.items():
         value = draft.get(name, "")
@@ -199,6 +199,36 @@ def validate_draft(draft):
     require(not any(ord(c) < 32 for c in draft["validUntil"]), "견적 유효기간을 확인해주세요.")
     require(not any(ord(c) < 32 and c != "\n" for c in draft.get("paymentAccount", "")), "계좌 안내를 확인해주세요.")
     draft_amounts(draft)
+    return draft
+
+
+def item_specification(item):
+    """Old per-item notes were used as size/age before the specification editor."""
+    return item.get("specification", "").strip() or item.get("remarks", "").strip()
+
+
+def validate_working_draft(draft):
+    """Validate storage bounds while allowing unfinished customer/item inputs."""
+    require(isinstance(draft, dict), "작성중 견적 형식을 확인해주세요.")
+    checked = copy.deepcopy(draft)
+    for key in ("customerName", "customerPhone", "customerEmail"):
+        value = draft.get(key, "")
+        require(isinstance(value, str) and len(value) <= EDITABLE[key] and
+                not any(ord(c) < 32 for c in value), "고객 정보를 확인해주세요.")
+    # These substitutions validate the shape only; original inputs are saved verbatim.
+    checked.update(customerName="작성중", customerPhone="01000000000", customerEmail="draft@example.com")
+    items = draft.get("items")
+    require(isinstance(items, list) and len(items) <= 100, "견적 품목 수를 확인해주세요.")
+    checked["items"] = []
+    for item in items:
+        require(isinstance(item, dict), "견적 품목 형식을 확인해주세요.")
+        name = item.get("species", "")
+        require(isinstance(name, str), "묘목명을 확인해주세요.")
+        quantity = integer(item.get("quantity"), 0, 2147483647)
+        checked["items"].append({**item, "species": name or "작성중", "quantity": quantity or 1})
+    if not items:
+        checked["items"] = [dict(species="작성중", specification="", quantity=1, unitPrice=0, unitCost=0)]
+    validate_draft(checked)
     return draft
 
 

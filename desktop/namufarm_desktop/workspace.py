@@ -25,7 +25,7 @@ from .app import MainWindow, Task, table, fill_table, money, timestamp
 from .commerce import (ISSUER, new_draft, new_manual_draft, draft_amounts, validate_draft, quote_html, quote_document_html, shipping_html,
                        shipping_problem, parse_tracking_csv, tracking_number, payment_account_text, payment_notice, quote_delivery_fingerprint,
                        payment_confirmation_message, seller_note_draft, customer_note, tracking_fields, shipping_prepared,
-                       shipping_ready, TRACKING_PREFIX, sale_number, normalize_sms_recipient)
+                       shipping_ready, TRACKING_PREFIX, sale_number, normalize_sms_recipient, item_specification, validate_working_draft)
 from .domain import SEOUL, profit, require
 from .errors import UserError
 from .shipping_excel import shipping_xls, parse_tracking_xls, export_orders, UPLOAD_SHEET
@@ -971,6 +971,7 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         draft = seller_note_draft(draft)
         self.draft, self.mode, self.request_status = (copy.deepcopy(draft), '', request_status)
         self._workbench_ready = False
+        self.working_save_task = None
         self._workbench_closed = False
         self._workbench_fit_timer = QTimer(self)
         self._workbench_fit_timer.setSingleShot(True)
@@ -980,7 +981,7 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         self._workbench_notes_timer.timeout.connect(self.align_workbench_notes)
         self.items_only = items_only
         self.simple_request = bool(draft.get('sourceRequestId'))
-        self.manual_quote = not self.simple_request and draft.get('manualStatus') in ('견적확정', '견적발송완료')
+        self.manual_quote = not self.simple_request and draft.get('manualStatus') in ('작성중', '견적확정', '견적발송완료')
         self.workbench = self.simple_request or self.manual_quote or items_only or getattr(self, "confirmed_result", False)
         if self.simple_request:
             self.draft.setdefault('requestNote', self.draft.get('note', ''))
@@ -1260,7 +1261,7 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         content.setSpacing(6)
         item_tools = QHBoxLayout()
         item_tools.addWidget(section_heading("견적 품목", "leaf", 28), 1)
-        self.workbench_items_hint = label("묘목명은 직접 입력하거나 초성검색 · 수량·비고는 두 번 클릭해 수정", "deliveryCaption", True)
+        self.workbench_items_hint = label("묘목명은 직접 입력하거나 초성검색 · 규격·수량은 두 번 클릭해 수정", "deliveryCaption", True)
         self.add_item_button = button("+ 묘목 추가", self.add_item)
         self.remove_item_button = button("선택 묘목 삭제", self.remove_item)
         item_tools.addWidget(self.add_item_button)
@@ -1268,7 +1269,7 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         content.addLayout(item_tools)
         content.addWidget(self.workbench_items_hint)
         # Logical indices stay stable for collection; visual order puts price before amount.
-        self.items = table(["묘목명", "수량", "판매 금액", "판매 단가", "순번", "비고"])
+        self.items = table(["묘목명", "수량", "판매 금액", "판매 단가", "순번", "규격"])
         self.items.setEditTriggers(self.items.EditTrigger.DoubleClicked | self.items.EditTrigger.EditKeyPressed | self.items.EditTrigger.AnyKeyPressed)
         self.items.setObjectName("workbenchItems")
         self.items.setToolTip(self.workbench_items_hint.text())
@@ -1276,10 +1277,10 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         self.items.horizontalHeader().setFixedHeight(40 if large else 36)
         self.items.verticalHeader().setMinimumSectionSize(48 if large else 40)
         self.items.verticalHeader().setDefaultSectionSize(48 if large else 40)
-        # Reserve real gaps around the step buttons; names and remarks share spare width.
-        self.items.set_column_layout(((4, 0, 48 if large else 44), (0, 2.5, 172),
+        # Specification is between seedling name and quantity, including on reopening.
+        self.items.set_column_layout(((4, 0, 48 if large else 44), (0, 3, 172), (5, 2.5, 120),
                                       (1, 0, 108 if large else 96),
-                                      (3, 0, 232 if large else 212), (2, .5, 96), (5, 5, 96)))
+                                      (3, 0, 232 if large else 212), (2, .5, 96)))
         self.items.horizontalHeader().setMinimumSectionSize(32)
         self.items.setItemDelegateForColumn(5, QuoteRemarksDelegate(self.items))
         self.items.fit_columns()
@@ -1380,11 +1381,18 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         self.note.installEventFilter(self)
         self.workbench_original_area.installEventFilter(self)
 
-        footer.addStretch(1)
+        self.working_save_status = label("", "deliveryCaption", True)
+        footer.addWidget(self.working_save_status, 1)
+        self.save_working_button = button("작성중 저장", self.save_working_draft)
+        self.save_working_button.setToolTip("문자·메일 발송 전에 이 PC에 저장하고 나중에 이어서 수정합니다.")
+        self.save_working_button.setVisible(not self.items_only and not getattr(self, "confirmed_result", False))
+        self.save_working_button.setEnabled(self.manager is not None)
+        set_button_icon(self.save_working_button, "save", "#193c32")
+        footer.addWidget(self.save_working_button)
         self.close_button = button("닫기", self.reject)
         self.close_button.setMinimumWidth(120)
         footer.addWidget(self.close_button)
-        self.confirm_button = button("견적 저장" if self.manual_quote else "견적완료",
+        self.confirm_button = button("견적완료",
                                      lambda: self.finish("save_manual" if self.manual_quote else "finalize"), True)
         self.confirm_button.setFixedWidth(198)
         self.confirm_button.setProperty("deliveryCompletion", True)
@@ -1407,6 +1415,37 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         self.finished.connect(self.finish_workbench)
         self.recalculate()
         self.initial = self.raw_state()
+
+    def save_working_draft(self):
+        if not self.manager or self.working_save_task is not None:
+            return
+        try:
+            self._working_snapshot = validate_working_draft(self.collect(False, working=True))
+        except UserError as error:
+            QMessageBox.warning(self, "작성중 저장", str(error))
+            return
+        self.setEnabled(False)
+        self.working_save_status.setText("작성중 견적을 이 PC에 저장 중…")
+        task = Task(lambda: self.manager.save_working_draft(self._working_snapshot), None, self)
+        self.working_save_task = task
+        task.completed.connect(self.working_draft_saved)
+        task.start()
+
+    @Slot(object, str, bool)
+    def working_draft_saved(self, value, error, conflict):
+        task = self.working_save_task
+        if task is not None:
+            task.wait()
+            self.working_save_task = None
+            task.deleteLater()
+        self.setEnabled(True)
+        if error:
+            self.working_save_status.setText("저장 실패 · " + error)
+            return
+        self.draft = copy.deepcopy(self._working_snapshot)
+        self.draft["workingCopy"] = True
+        self.initial = self.raw_state()
+        self.working_save_status.setText("작성중 저장완료 · 나중에 이어서 수정할 수 있습니다.")
 
     def persist_shipping(self):
         """Prepare current inputs for PDF/messages without confirming the request."""
@@ -1579,7 +1618,7 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
             price_editor = UnitPriceEditor(item["unitPrice"], self.items, compact=True)
             price_editor.changed.connect(self.recalculate)
             self.items.setCellWidget(index, 3, price_editor)
-            self.items.setItem(index, 5, QTableWidgetItem(item.get("remarks", "")))
+            self.items.setItem(index, 5, QTableWidgetItem(item_specification(item)))
             self.items.setRowHeight(index, self.items.verticalHeader().defaultSectionSize())
         else:
             for column, key in enumerate(("species", "specification", "quantity", "unitPrice", "unitCost")):
@@ -1660,6 +1699,8 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
                 copy.deepcopy(self.draft["issuer"]))
 
     def reject(self):
+        if self.working_save_task is not None:
+            return
         if hasattr(self, "initial") and self.raw_state() != self.initial:
             message = ("견적을 저장하지 않고 작업대를 닫을까요?\n이미 발송한 문자·메일은 취소되지 않습니다."
                        if self.workbench else "저장하지 않은 입력을 버리고 닫을까요?")
@@ -1667,7 +1708,7 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
                 return
         super().reject()
 
-    def collect(self, validate=True):
+    def collect(self, validate=True, *, working=False):
         draft = copy.deepcopy(self.draft)
         if self.workbench:
             if self.manual_quote:
@@ -1675,7 +1716,7 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
                     draft[key] = field.text().strip()
                 draft["customerPhone"] = draft["customerPhone"].replace("-", "").replace(" ", "")
                 draft["receiverName"] = draft["customerName"]
-            fee = self.shipping_fee.text().strip()
+            fee = self.shipping_fee.text().strip() or ("0" if working else "")
             prepaid = self.shipping_prepaid.isChecked()
             require(not prepaid or (fee.isascii() and fee.isdigit()), "선불 택배비를 0 이상의 정수로 입력해주세요.")
             draft.update(shippingFee=int(fee) if prepaid else 0, isPrepaid=prepaid,
@@ -1684,14 +1725,17 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
                          items=[], note=self.note.toPlainText().strip())
             for row in range(self.items.rowCount()):
                 species = self.items.item(row, 0).text().strip()
-                quantity = self.items.item(row, 1).text().strip()
-                price = self.unit_price_editor(row).text()
+                quantity = self.items.item(row, 1).text().strip() or ("0" if working else "")
+                price = self.unit_price_editor(row).text() or ("0" if working else "")
                 require(quantity.isascii() and quantity.isdigit() and price.isascii() and price.isdigit(),
                         f"{row+1}번째 품목 수량·판매 단가를 정수로 입력해주세요.")
                 original = self.items.item(row, 4).data(Qt.ItemDataRole.UserRole) or {}
-                draft["items"].append(dict(species=species, specification=original.get("specification", ""),
-                                          quantity=int(quantity), unitPrice=int(price), unitCost=original.get("unitCost", 0),
-                                          remarks=self.items.item(row, 5).text().strip()))
+                current = {**original, "species": species, "specification": self.items.item(row, 5).text().strip(),
+                           "quantity": int(quantity), "unitPrice": int(price), "unitCost": original.get("unitCost", 0),
+                           "remarks": ""}
+                if original.get("remarks"):
+                    current["legacyRemarks"] = original["remarks"]
+                draft["items"].append(current)
             return validate_draft(draft) if validate else draft
 
         for key, field in self.fields.items():
@@ -1711,6 +1755,9 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
     def recalculate(self, *args):
         if not hasattr(self, "items") or not hasattr(self, "total"):
             return
+        if (self.workbench and hasattr(self, "working_save_status") and hasattr(self, "initial") and
+                self.working_save_task is None and self.raw_state() != self.initial):
+            self.working_save_status.setText("수정 중 · 작성중 저장을 눌러 보관하세요.")
         if self.workbench and hasattr(self, "add_item_button"):
             self.add_item_button.setEnabled(self.items.rowCount() < 50)
         if self.workbench and self.generated_quote_path:
@@ -1736,7 +1783,7 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
                         species_editor.input.blockSignals(False)
                     self.items.item(row, 2).setText(f"{item['quantity'] * item['unitPrice']:,}")
                     self.items.item(row, 0).setToolTip(item['species'])
-                    self.items.item(row, 5).setToolTip(item.get('remarks', ''))
+                    self.items.item(row, 5).setToolTip(item.get('specification', ''))
             else:
                 for row, item in enumerate(draft["items"]):
                     self.items.item(row, 5).setText(f"{item['quantity'] * item['unitPrice']:,}")
@@ -1807,7 +1854,7 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
                 delivered = ((state.get("smsState") == "success" and state.get("smsQuoteFingerprint") == fingerprint)
                              or (bool(state.get("emailSentAt")) and state.get("emailQuoteFingerprint") == fingerprint))
                 draft["manualStatus"] = "견적발송완료" if delivered else "견적확정"
-            if self.workbench and mode == "finalize":
+            if self.workbench and mode in ("finalize", "save_manual"):
                 fingerprint = quote_delivery_fingerprint(draft)
                 state = self.delivery_state
                 delivered = ((state.get("smsState") == "success" and state.get("smsQuoteFingerprint") == fingerprint)
@@ -2006,8 +2053,8 @@ class QuoteSmsDialog(QDialog):
                 f"판매금액 : {amount:,}원",
                 "",
             ])
-            if item.get("remarks", "").strip():
-                lines.extend(["비고 : " + item["remarks"].strip(), ""])
+            if item_specification(item):
+                lines.extend(["규격 : " + item_specification(item), ""])
         if self.draft.get("note", "").strip():
             lines.extend(["요청사항 : " + self.draft["note"].strip(), ""])
         total = draft_amounts(self.draft)["total"]
@@ -2341,8 +2388,8 @@ class QuoteEmailDialog(QDialog):
                 f"판매금액 : {amount:,}원",
                 "",
             ])
-            if item.get("remarks", "").strip():
-                item_lines.extend(["비고 : " + item["remarks"].strip(), ""])
+            if item_specification(item):
+                item_lines.extend(["규격 : " + item_specification(item), ""])
         if self.draft.get("note", "").strip():
             item_lines.extend(["요청사항 : " + self.draft["note"].strip(), ""])
         total = draft_amounts(self.draft)["total"]
@@ -2559,7 +2606,7 @@ class QuoteDeliveryDialog(QuoteDialog):
             self.items.insertRow(index)
             values = (item["species"], f"{item['quantity']:,}",
                       f"{item['quantity'] * item['unitPrice']:,}", f"{item['unitPrice']:,}",
-                      str(index + 1), item.get("remarks", ""))
+                      str(index + 1), item_specification(item))
             for column, value in enumerate(values):
                 cell = QTableWidgetItem(value)
                 cell.setFlags(cell.flags() & ~Qt.ItemFlag.ItemIsEditable)
@@ -2584,8 +2631,8 @@ class QuoteDeliveryDialog(QuoteDialog):
         self.items.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         # No embedded text fields or +/- buttons in the review table.
         self.items.setItemDelegateForColumn(5, self.items.itemDelegate())
-        self.items.set_column_layout(((4, 0, 44), (0, 3, 190), (1, 0, 96),
-                                      (3, 0, 116), (2, 0, 126), (5, 4, 160)))
+        self.items.set_column_layout(((4, 0, 44), (0, 3, 190), (5, 3, 140), (1, 0, 96),
+                                      (3, 0, 116), (2, 0, 126)))
         self.items.blockSignals(False)
         self.fit_workbench_rows()
 
@@ -3372,7 +3419,7 @@ class ShippingExportDialog(QDialog):
 
 class SellerWindow(MainWindow):
     PAGE_REQUESTS, PAGE_QUOTES, PAGE_SALES, PAGE_SHIPPING, PAGE_REPORTS, PAGE_FARMS, PAGE_SPECIES, PAGE_SETTINGS = range(8)
-    PAGES = (("견적요청", "INBOX"), ("확정 견적", "QUOTATIONS"),
+    PAGES = (("견적요청", "INBOX"), ("견적 작업대", "QUOTATIONS"),
              ("판매관리", "ORDERS"), ("배송 · 송장", "FULFILLMENT"), ("매출 · 이익", "REPORTS"),
              ("농원관리", "FARMS"), ("묘목관리", "SPECIES"), ("연결 · 설정", "SETTINGS"))
 
@@ -3718,7 +3765,7 @@ class SellerWindow(MainWindow):
         layout.setSpacing(10)
         self.draft_search = QLineEdit()
         self.draft_search.setPlaceholderText("고객명 · 견적번호 · 연락처 · 묘목 검색")
-        self.draft_search.setToolTip("견적번호·고객명·연락처·메일주소·묘목·비고·판매자 요청사항을 검색합니다.")
+        self.draft_search.setToolTip("견적번호·고객명·연락처·메일주소·묘목·규격·판매자 요청사항을 검색합니다.")
         self.draft_search.setClearButtonEnabled(True)
         self.draft_search.textChanged.connect(self.refresh_workspace)
         layout.addWidget(self.draft_search)
@@ -4081,7 +4128,9 @@ class SellerWindow(MainWindow):
         self.draft_delete.setEnabled(ready and 0 <= selected_draft < len(self.draft_rows))
         if 0 <= selected_draft < len(self.draft_rows):
             draft = self.draft_rows[selected_draft]
-            self.draft_selection_status.setText(f"{draft['customerName']} · 저장된 견적 결과 확인")
+            working = self.draft_statuses[selected_draft] == "작성중"
+            self.draft_open.setText("이어서 작성" if working else "견적 결과 확인")
+            self.draft_selection_status.setText(f"{draft['customerName']} · " + ("발송 전 작성중 견적" if working else "저장된 견적 결과 확인"))
         else:
             self.draft_selection_status.setText("견적을 선택하면 저장된 결과를 확인할 수 있습니다.")
         selected_shipping = self.selected_shipping()
@@ -4137,6 +4186,9 @@ class SellerWindow(MainWindow):
         # Confirmed quotes, like sales, are loaded from this PC's database.
         draft_pairs = [(draft, "입금확인" if draft.get("paymentRegistered") else "견적확정")
                        for draft in self.data.get("confirmedQuotes", [])]
+        confirmed_ids = {d["id"] for d, _ in draft_pairs}
+        draft_pairs += [(draft, "작성중") for draft in self.data.get("drafts", [])
+                        if draft.get("workingCopy") and draft["id"] not in confirmed_ids]
         draft_pairs.sort(
             key=lambda pair: draft_quote_sort_key(pair[0]),
             reverse=self.draft_sort_descending,
@@ -4170,12 +4222,12 @@ class SellerWindow(MainWindow):
             d.get("customerEmail") or "—",
             "요청" if d.get("formalQuoteRequested") else "—",
             ", ".join(f"{i['species']} {i['quantity']:,}주" for i in d["items"]),
-            money(draft_amounts(d)["total"]),
+            "작성 중" if status == "작성중" else money(draft_amounts(d)["total"]),
             "로컬 DB",
         ) for d, status in draft_pairs])
         self.draft_table.set_empty_message(
-            "검색 조건에 맞는 확정견적이 없습니다.\n검색어를 지워 전체 목록을 확인하세요." if query else
-            "표시할 확정견적이 없습니다.\n이 PC의 DB에 저장한 확정견적이 표시됩니다.")
+            "검색 조건에 맞는 견적이 없습니다.\n검색어를 지워 전체 목록을 확인하세요." if query else
+            "표시할 견적이 없습니다.\n작성중 저장한 견적과 확정견적이 표시됩니다.")
         center_table_columns(self.draft_table, (0, 1, 2, 3, 4, 6, 8))
         customer_reference(self.draft_table, 3, 0)
         self.draft_table.clearSelection()
@@ -4539,7 +4591,10 @@ class SellerWindow(MainWindow):
         # Preserve the local confirmed snapshot, including its original recipient.
         draft = copy.deepcopy(self.draft_rows[index])
         status = self.draft_statuses[index] if index < len(self.draft_statuses) else ""
-        self.open_delivery_quote(draft, status)
+        if status == "작성중":
+            self.edit_quote(draft=draft, request_status="신규")
+        else:
+            self.open_delivery_quote(draft, status)
 
     def delete_selected_draft(self):
         if getattr(self, "demo_mode", False) or not self.manager or self.task:
@@ -4549,9 +4604,9 @@ class SellerWindow(MainWindow):
             return
         draft = self.draft_rows[index]
         if QMessageBox.question(
-                self, "PC 확정견적 삭제",
+                self, "PC 견적 삭제",
                 f"{draft_quote_number(draft)} · {draft['customerName']} 견적을 이 PC에서 삭제할까요?\n"
-                "PC 목록과 로컬 확정견적 엑셀에서만 삭제합니다.\n"
+                "작성중 초안 또는 이 PC의 확정견적에서만 삭제합니다.\n"
                 "Google Sheets의 견적확정 시트와 판매관리 자료는 그대로 유지합니다.",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
