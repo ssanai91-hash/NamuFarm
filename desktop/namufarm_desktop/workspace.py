@@ -1361,6 +1361,7 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         self.items.fit_columns()
         self.items.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Ignored)
         self.items.itemChanged.connect(self.recalculate)
+        self.items.cellClicked.connect(self.edit_specification_cell)
         item_content.addWidget(self.items, 1)
 
         shipping = QFrame()
@@ -1419,27 +1420,24 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
 
         self.workbench_original_area = QFrame()
         self.workbench_original_area.setObjectName("workbenchOriginalRequest")
+        self.workbench_original_area.setStyleSheet(
+            "QFrame#workbenchOriginalRequest{background:#f7faf8;border:1px solid #b8c9bf;border-radius:6px;}")
         original = QVBoxLayout(self.workbench_original_area)
-        original.setContentsMargins(0, 0, 0, 0)
-        original.setSpacing(8)
-        self.original_request_toggle = button("고객 원문보기")
-        self.original_request_toggle.setObjectName("disclosure")
-        self.original_request_toggle.setCheckable(True)
-        self.original_request_toggle.setChecked(True)
-        self.original_request_toggle.setAccessibleName("고객 원문보기 펼치기 또는 접기")
-        set_button_icon(self.original_request_toggle, "chevron")
-        original.addWidget(self.original_request_toggle)
+        original.setContentsMargins(10, 6, 10, 6)
+        original.setSpacing(4)
+        original.addWidget(label("홈페이지 고객 요청사항", "deliverySectionTitle"))
         self.request_note_view = QPlainTextEdit(self.draft.get("requestNote", ""))
         self.request_note_view.setObjectName("workbenchOriginalText")
         self.request_note_view.setReadOnly(True)
         self.request_note_view.document().setDocumentMargin(0)
-        self.request_note_view.setAccessibleName("고객 원문보기")
-        self.request_note_view.setPlaceholderText("고객 요청 원문이 없습니다.")
-        self.request_note_view.setFixedHeight(88 if large else 76)
+        self.request_note_view.setAccessibleName("홈페이지 고객 요청사항 원문")
+        self.request_note_view.setPlaceholderText("고객이 남긴 요청사항이 없습니다.")
+        self.request_note_view.setStyleSheet("border:0;background:transparent;padding:2px;")
+        self.request_note_view.setFixedHeight(64 if large else 52)
         original.addWidget(self.request_note_view, 1)
-        self.original_request_toggle.toggled.connect(self.set_original_request_visible)
-        # Keep customer reference text in the left rail, independent of the item table.
-        customer.insertWidget(customer.count() - 1, self.workbench_original_area)
+        # Keep the original customer request visible between totals and delivery actions.
+        content.insertWidget(content.indexOf(self.workbench_delivery_rule), self.workbench_original_area)
+        self.workbench_original_area.setVisible(self.simple_request)
         self.workbench_scroll.setWidget(right)
         body.addWidget(self.workbench_scroll, 1)
         root.addLayout(body, 1)
@@ -1459,8 +1457,8 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
 
         self.working_save_status = label("", "deliveryCaption", True)
         footer.addWidget(self.working_save_status, 1)
-        self.save_working_button = button("작성중 저장", self.save_working_draft)
-        self.save_working_button.setToolTip("문자·메일 발송 전에 이 PC에 저장하고 나중에 이어서 수정합니다.")
+        self.save_working_button = button("임시저장", self.save_working_draft)
+        self.save_working_button.setToolTip("이 PC에 임시저장하고 계속 수정합니다. 문자·메일 발송 후 견적완료까지 진행할 수 있습니다.")
         self.save_working_button.setVisible(not self.items_only and not getattr(self, "confirmed_result", False))
         self.save_working_button.setEnabled(self.manager is not None)
         set_button_icon(self.save_working_button, "save", "#193c32")
@@ -1497,10 +1495,10 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         try:
             self._working_snapshot = validate_working_draft(self.collect(False, working=True))
         except UserError as error:
-            QMessageBox.warning(self, "작성중 저장", str(error))
+            QMessageBox.warning(self, "임시저장", str(error))
             return
         self.setEnabled(False)
-        self.working_save_status.setText("작성중 견적을 이 PC에 저장 중…")
+        self.working_save_status.setText("이 PC에 임시저장 중…")
         task = Task(lambda: self.manager.save_working_draft(self._working_snapshot), None, self)
         self.working_save_task = task
         task.completed.connect(self.working_draft_saved)
@@ -1520,7 +1518,7 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         self.draft = copy.deepcopy(self._working_snapshot)
         self.draft["workingCopy"] = True
         self.initial = self.raw_state()
-        self.working_save_status.setText("작성중 저장완료 · 나중에 이어서 수정할 수 있습니다.")
+        self.working_save_status.setText("임시저장 완료 · 수정·발송 후 견적완료까지 진행할 수 있습니다.")
 
     def persist_shipping(self):
         """Prepare current inputs for PDF/messages without confirming the request."""
@@ -1546,7 +1544,6 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
             return
         self._workbench_compact = compact
         self.workbench_items_hint.setVisible(not compact)
-        self.original_request_toggle.setChecked(not compact)
         self.workbench_footer.layout().setContentsMargins(16, 8, 16, 8)
         customer = self.customer_scroll.widget().layout()
         customer.setContentsMargins(16, 8 if compact else 12, 16, 8 if compact else 10)
@@ -1625,11 +1622,6 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         self.items.setMaximumHeight(16777215)
         self._workbench_notes_timer.start(0)
 
-    def set_original_request_visible(self, expanded):
-        self.request_note_view.setVisible(expanded)
-        self.original_request_toggle.setText("고객 원문보기 접기" if expanded else "고객 원문보기")
-        self._workbench_fit_timer.start(0)
-
     def showEvent(self, event):
         super().showEvent(event)
         if getattr(self, "_workbench_ready", False) and not self._workbench_closed:
@@ -1637,7 +1629,6 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
             if not hasattr(self, "_workbench_compact"):
                 self._workbench_compact = self.height() < 900
                 self.workbench_items_hint.setVisible(not self._workbench_compact)
-                self.original_request_toggle.setChecked(not self._workbench_compact)
             self._workbench_fit_timer.start(0)
 
     @Slot(int)
@@ -1660,12 +1651,15 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
     def align_workbench_notes(self):
         if not getattr(self, "_workbench_ready", False) or self._workbench_closed or not self.isVisible():
             return
-        if not self.original_request_toggle.isChecked():
-            return
-        # Both notes now belong to the customer rail; no cross-column alignment is needed.
-        height = 88 if QApplication.instance().property("namufarmLargeFont") else 76
+        height = 64 if QApplication.instance().property("namufarmLargeFont") else 52
         if self.request_note_view.height() != height:
             self.request_note_view.setFixedHeight(height)
+
+    def edit_specification_cell(self, row, column):
+        if column == 5:
+            cell = self.items.item(row, column)
+            if cell is not None and cell.flags() & Qt.ItemFlag.ItemIsEditable:
+                self.items.editItem(cell)
 
     def add_item(self, item=None):
         is_new = not isinstance(item, dict)
@@ -1707,7 +1701,9 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
             price_editor = UnitPriceEditor(item["unitPrice"], self.items, compact=True)
             price_editor.changed.connect(self.recalculate)
             self.items.setCellWidget(index, 3, price_editor)
-            self.items.setItem(index, 5, QTableWidgetItem(item_specification(item)))
+            specification = QTableWidgetItem(item_specification(item))
+            specification.setToolTip("홈페이지 희망 규격입니다. 클릭해서 입력하거나 수정할 수 있습니다.")
+            self.items.setItem(index, 5, specification)
             self.items.setRowHeight(index, self.items.verticalHeader().defaultSectionSize())
         else:
             for column, key in enumerate(("species", "specification", "quantity", "unitPrice", "unitCost")):
@@ -1846,7 +1842,7 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
             return
         if (self.workbench and hasattr(self, "working_save_status") and hasattr(self, "initial") and
                 self.working_save_task is None and self.raw_state() != self.initial):
-            self.working_save_status.setText("수정 중 · 작성중 저장을 눌러 보관하세요.")
+            self.working_save_status.setText("수정 중 · 임시저장을 눌러 보관하세요.")
         if self.workbench and hasattr(self, "add_item_button"):
             self.add_item_button.setEnabled(self.items.rowCount() < 50)
         if self.workbench and self.generated_quote_path:
@@ -1872,7 +1868,9 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
                         species_editor.input.blockSignals(False)
                     self.items.item(row, 2).setText(f"{item['quantity'] * item['unitPrice']:,}")
                     self.items.item(row, 0).setToolTip(item['species'])
-                    self.items.item(row, 5).setToolTip(item.get('specification', ''))
+                    self.items.item(row, 5).setToolTip(
+                        (item.get('specification', '') + "\n" if item.get('specification') else "") +
+                        "클릭해서 규격을 입력하거나 수정할 수 있습니다.")
             else:
                 for row, item in enumerate(draft["items"]):
                     self.items.item(row, 5).setText(f"{item['quantity'] * item['unitPrice']:,}")
@@ -4706,6 +4704,7 @@ class SellerWindow(MainWindow):
         existing = recovery["draft"] if recovery and recovery["draft"]["sourceRequestId"] == request["requestId"] else next(
             (d for d in self.data.get("drafts", []) if d["sourceRequestId"] == request["requestId"]), None)
         draft = copy.deepcopy(existing) if existing else new_draft(request)
+        draft["requestNote"] = request["personal"].get("message", draft.get("requestNote", ""))
         draft["requestReceiptNumber"] = request.get("receiptNumber") or request["requestId"]
         draft["customerEmail"] = request["personal"].get("customerEmail", "")
         self.edit_quote(draft=draft, request_status=status)
