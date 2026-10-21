@@ -237,9 +237,8 @@ def _quote_wrapped_lines(text, width, size):
     return result
 
 
-# Name 2/3, specification x3, unit price 1/2, tax 1/3, remarks 1/2;
-# normalize those relative widths to the existing 884-pixel A4 table.
-OFFICIAL_QUOTE_COLUMN_WIDTHS = (167, 248, 64, 78, 151, 52, 124)
+# Equal name/specification columns; keep the remaining widths and 884-pixel total.
+OFFICIAL_QUOTE_COLUMN_WIDTHS = (207.5, 207.5, 64, 78, 151, 52, 124)
 
 
 def official_quote_page_plan(draft):
