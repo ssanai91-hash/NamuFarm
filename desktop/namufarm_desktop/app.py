@@ -578,6 +578,16 @@ class MainWindow(QMainWindow):
         for field in (self.start_date, self.end_date):
             field.setCalendarPopup(True)
             field.setDisplayFormat("yyyy-MM-dd")
+        filter_style = """
+QComboBox,QDateEdit{padding-right:26px;}
+QComboBox:focus,QDateEdit:focus{padding-right:25px;}
+QComboBox::drop-down,QDateEdit::drop-down{
+    subcontrol-origin:border;subcontrol-position:top right;
+    width:22px;border:0;margin:1px 2px 1px 0;
+}
+"""
+        for field in (self.unit, self.start_date, self.end_date):
+            field.setStyleSheet(filter_style)
         self.report_button = QPushButton("통계 조회")
         self.report_button.clicked.connect(self.fetch_report)
         for field in (self.unit, self.start_date, QLabel("~"), self.end_date, self.report_button):
