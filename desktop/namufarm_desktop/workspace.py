@@ -25,7 +25,7 @@ from .app import MainWindow, Task, table, fill_table, money, timestamp
 from .commerce import (ISSUER, new_draft, new_manual_draft, draft_amounts, validate_draft, quote_html, quote_document_html, shipping_html,
                        shipping_problem, parse_tracking_csv, tracking_number, payment_account_text, payment_notice, quote_delivery_fingerprint,
                        payment_confirmation_message, seller_note_draft, customer_note, tracking_fields, shipping_prepared,
-                       shipping_ready, TRACKING_PREFIX, sale_number)
+                       shipping_ready, TRACKING_PREFIX, sale_number, normalize_sms_recipient)
 from .domain import SEOUL, profit, require
 from .errors import UserError
 from .shipping_excel import shipping_xls, parse_tracking_xls, export_orders, UPLOAD_SHEET
@@ -73,28 +73,48 @@ def quote_amount_detail(draft):
     return " · ".join(parts)
 
 
-def delivery_amount_summary(draft, recipient, *, payment=False):
+def delivery_amount_summary(draft, recipient=None, *, payment=False):
     amount = draft_amounts(draft)
     title = "입금확인 금액" if payment else "견적 금액"
-    summary = label(f"{draft.get('customerName', '')} · {recipient}\n"
-                    f"{title} {amount['total']:,}원 · {quote_amount_detail(draft)}",
+    summary = label(f"{title} {amount['total']:,}원 · {quote_amount_detail(draft)}",
                     "deliveryAmountSummary", True)
-    summary.setAccessibleName("발송 전 수신인 및 견적 금액 확인")
+    summary.setAccessibleName("발송 전 견적 금액 확인")
     summary.setToolTip("저장된 견적 기준 요약입니다. 직접 수정한 발송 본문과 금액이 같은지 확인해주세요.")
     summary.setStyleSheet("background:#eaf3ed;color:#193c32;border:1px solid #b8cebf;"
-                         "border-radius:8px;padding:8px 12px;font-weight:600;")
+                         "border-radius:8px;padding:6px 10px;font-weight:600;")
     return summary
 
 
 def fit_delivery_message(dialog):
     if not hasattr(dialog, "status"):
         return
-    compact = dialog.height() < 800
     large = bool(QApplication.instance().property("namufarmLargeFont"))
-    dialog.message.setMinimumHeight(140 if compact else 220)
-    dialog.status.setFixedHeight((104 if large else 88) if compact else (144 if large else 128))
-    dialog.layout().setContentsMargins(18 if compact else 24, 12 if compact else 20,
-                                      18 if compact else 24, 12 if compact else 20)
+    dialog.message.setMinimumHeight(100)
+    expanded = hasattr(dialog, "status_toggle") and dialog.status_toggle.isChecked()
+    dialog.status.setFixedHeight((144 if large else 128) if expanded else (68 if large else 58))
+    layout = dialog.layout()
+    layout.setSpacing(6)
+    layout.setContentsMargins(14, 10, 14, 10)
+
+
+def setup_delivery_reading(dialog, layout):
+    """One expanding message editor, fixed actions, optional full transmission log."""
+    dialog.setMinimumSize(620, 560)
+    dialog.message.setLineWrapMode(QPlainTextEdit.LineWrapMode.WidgetWidth)
+    dialog.message.setStyleSheet("QPlainTextEdit{padding:6px;font-size:@size@px;}".replace(
+        "@size@", "18" if QApplication.instance().property("namufarmLargeFont") else "16"))
+    dialog.status_toggle = button("전송 기록 펼치기")
+    dialog.status_toggle.setCheckable(True)
+    dialog.status_toggle.setStyleSheet("QPushButton{min-height:16px;max-height:16px;padding:2px 8px;font-size:13px;}")
+    dialog.status_toggle.setAccessibleName("전송 상태 기록 펼치기 또는 접기")
+    def toggle(expanded):
+        dialog.status_toggle.setText("전송 기록 접기" if expanded else "전송 기록 펼치기")
+        fit_delivery_message(dialog)
+        dialog.status.ensureCursorVisible()
+    dialog.status_toggle.toggled.connect(toggle)
+    layout.insertWidget(layout.indexOf(dialog.status), dialog.status_toggle, 0, Qt.AlignmentFlag.AlignRight)
+    fit_delivery_message(dialog)
+
 
 
 def polish_table(widget):
@@ -1859,6 +1879,7 @@ class QuoteSmsDialog(QDialog):
         self.manager = manager
         self.payment_notice = payment
         self.success_confirmed = False
+        self._sender_ready = False
         try:
             self.delivery_state = (manager.payment_delivery_state(self.draft["id"]) if payment else
                                    manager.quote_delivery_state(self.draft["id"])) if manager else {}
@@ -1881,43 +1902,46 @@ class QuoteSmsDialog(QDialog):
         screen = parent.screen() if parent is not None and hasattr(parent, "screen") else QApplication.primaryScreen()
         available = screen.availableGeometry() if screen else None
         if available:
-            width = min(860, max(700, int(available.width() * 0.66)))
-            height = min(900, max(720, int(available.height() * 0.88)))
+            width = min(1080, max(760, int(available.width() * 0.82)))
+            height = min(1160, max(720, int(available.height() * 0.96)))
             width = min(width, max(620, available.width() - 40))
             height = min(height, max(620, available.height() - 50))
             self.resize(width, height)
         else:
-            self.resize(840, 820)
+            self.resize(1040, 960)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 20, 24, 20)
         layout.setSpacing(12)
         layout.addWidget(label("입금확인 문자 보내기" if payment else "견적 문자 보내기", "deliveryTitle"))
-        layout.addWidget(label("문자 전송 성공 후 아래 입금확인 버튼을 눌러 판매관리에 등록하세요." if payment else
-                               "고객 번호와 견적 내용을 확인한 뒤 문자를 전송합니다.", "deliverySubtitle", True))
+        if payment:
+            layout.addWidget(label("문자 전송 성공 후 입금확인을 누르면 판매관리에 등록됩니다.", "deliverySubtitle", True))
 
         address_card = QFrame()
         address_card.setObjectName("emailAddressCard")
         address = QGridLayout(address_card)
-        address.setContentsMargins(16, 12, 16, 12)
+        address.setContentsMargins(10, 6, 10, 6)
         address.setHorizontalSpacing(12)
         address.setVerticalSpacing(8)
 
-        self.recipient_name = QLineEdit(self.draft.get("customerName", ""))
-        self.recipient_name.setReadOnly(True)
+        self.recipient_name = label(self.draft.get("customerName") or "고객", wrap=True)
+        self.recipient_name.setMaximumWidth(160)
         self.recipient_phone = QLineEdit(self.draft.get("customerPhone", ""))
-        self.recipient_phone.setReadOnly(True)
+        self.recipient_phone.setMaxLength(20)
+        self.recipient_phone.setAccessibleName("문자 수신 전화번호 · 수정 가능")
+        self.recipient_phone.setPlaceholderText("수신 전화번호")
+        self.recipient_phone.setToolTip("이번 문자 수신번호입니다. 원래 고객 연락처는 바뀌지 않습니다.")
+        self.recipient_phone.textChanged.connect(self.recipient_changed)
         self.sender_phone = QLineEdit("발신 설정 확인 중…")
         self.sender_phone.setReadOnly(True)
 
-        address.addWidget(label("받는 사람"), 0, 0)
-        address.addWidget(self.recipient_name, 0, 1)
-        address.addWidget(label("수신번호"), 0, 2)
-        address.addWidget(self.recipient_phone, 0, 3)
-        address.addWidget(label("발신번호"), 1, 0)
-        address.addWidget(self.sender_phone, 1, 1, 1, 3)
-        address.setColumnStretch(1, 1)
-        address.setColumnStretch(3, 2)
+        address.addWidget(self.recipient_name, 0, 0)
+        address.addWidget(label("수신번호"), 0, 1)
+        address.addWidget(self.recipient_phone, 0, 2)
+        address.addWidget(label("발신"), 0, 3)
+        address.addWidget(self.sender_phone, 0, 4)
+        address.setColumnStretch(2, 3)
+        address.setColumnStretch(4, 2)
         layout.addWidget(address_card)
 
         layout.addWidget(label("문자 내용", "emailSectionTitle"))
@@ -1946,11 +1970,9 @@ class QuoteSmsDialog(QDialog):
             self.payment_confirm_button.setEnabled(False)
             actions.addWidget(self.payment_confirm_button)
         layout.addLayout(actions)
-        scroll_dialog(self, layout)
-
-        self.amount_summary = delivery_amount_summary(self.draft, self.draft.get("customerPhone", ""), payment=payment)
-        layout.insertWidget(1, self.amount_summary)
-        fit_delivery_message(self)
+        self.amount_summary = delivery_amount_summary(self.draft, payment=payment)
+        layout.insertWidget(layout.indexOf(address_card) + 1, self.amount_summary)
+        setup_delivery_reading(self, layout)
 
         QTimer.singleShot(0, self.load_profile)
 
@@ -2007,6 +2029,17 @@ class QuoteSmsDialog(QDialog):
         ])
         return "\n".join(lines).strip()
 
+    def recipient_changed(self, _text=""):
+        if not hasattr(self, "send_button"):
+            return
+        try:
+            normalize_sms_recipient(self.recipient_phone.text())
+            valid = True
+        except UserError:
+            valid = False
+        idle = not (self.profile_task or self.send_task or self.status_task)
+        self.send_button.setEnabled(bool(self.manager and self._sender_ready and valid and idle))
+
     def load_profile(self):
         self.status.setText("문자 전송 준비 중")
         if not self.manager:
@@ -2041,8 +2074,9 @@ class QuoteSmsDialog(QDialog):
 
         sender = str(value.get("senderPhone") or "")
         self.sender_phone.setText(sender)
-        ready = bool(self.recipient_phone.text().strip()) and bool(sender)
-        self.send_button.setEnabled(ready)
+        self._sender_ready = bool(sender)
+        self.recipient_changed()
+        ready = self.send_button.isEnabled()
         # A previous send is not replayed as a success when this window opens.
         self.status.setText("문자 전송 가능" if ready else
                             "문자 전송 준비 실패 · 수신번호와 발신번호를 확인해주세요.")
@@ -2055,17 +2089,25 @@ class QuoteSmsDialog(QDialog):
             return
         if not self.manager or self.profile_task or self.send_task or self.status_task:
             return
+        try:
+            recipient = normalize_sms_recipient(self.recipient_phone.text())
+        except UserError as error:
+            self.status.setText("문자 전송 준비 실패 · " + str(error))
+            self.recipient_phone.setFocus()
+            return
         self.status_timer.stop()
         self.poll_count = 0
         self.success_confirmed = False
         if self.payment_notice:
             self.payment_confirm_button.setEnabled(False)
         self.message.setEnabled(False)
+        self.recipient_phone.setReadOnly(True)
         self.send_button.setEnabled(False)
         self.check_button.setEnabled(False)
         self.status.setText("문자 전송 중")
         send = self.manager.send_payment_sms if self.payment_notice else self.manager.send_quote_sms
-        task = Task(lambda: send(self.draft, message), None, self)
+        # The override changes only this dispatch, not the saved customer/quote fingerprint.
+        task = Task(lambda: send(self.draft, message, recipient_phone=recipient), None, self)
         self.send_task = task
         task.completed.connect(self.sms_sent)
         task.start()
@@ -2079,13 +2121,15 @@ class QuoteSmsDialog(QDialog):
             task.deleteLater()
         if error:
             self.message.setEnabled(True)
-            self.send_button.setEnabled(True)
+            self.recipient_phone.setReadOnly(False)
+            self.recipient_changed()
             self.check_button.setEnabled(bool(self.delivery_state.get("smsMessageId")))
             self.status.setText("문자 전송 실패 · " + error)
             return
         if not isinstance(value, dict):
             self.message.setEnabled(True)
-            self.send_button.setEnabled(True)
+            self.recipient_phone.setReadOnly(False)
+            self.recipient_changed()
             self.check_button.setEnabled(bool(self.delivery_state.get("smsMessageId")))
             self.status.setText("문자 전송 결과 확인 필요 · 서버 응답을 확인하지 못했습니다. 결과 확인 후 재전송해주세요.")
             return
@@ -2146,7 +2190,8 @@ class QuoteSmsDialog(QDialog):
             self.status_timer.stop()
             self.status.setText("문자 전송 실패" + (" · " + self.delivery_state["smsStatusMessage"] if self.delivery_state.get("smsStatusMessage") else ""))
             self.message.setEnabled(True)
-            self.send_button.setEnabled(True)
+            self.recipient_phone.setReadOnly(False)
+            self.recipient_changed()
             self.check_button.setEnabled(True)
             return
 
@@ -2198,57 +2243,51 @@ class QuoteEmailDialog(QDialog):
         screen = parent.screen() if parent is not None and hasattr(parent, "screen") else QApplication.primaryScreen()
         available = screen.availableGeometry() if screen else None
         if available:
-            width = min(1000, max(760, int(available.width() * 0.78)))
-            height = min(900, max(700, int(available.height() * 0.90)))
+            width = min(1120, max(760, int(available.width() * 0.84)))
+            height = min(1160, max(720, int(available.height() * 0.96)))
             width = min(width, max(620, available.width() - 40))
             height = min(height, max(560, available.height() - 50))
             self.resize(width, height)
         else:
-            self.resize(980, 860)
+            self.resize(1100, 960)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 20, 24, 20)
         layout.setSpacing(12)
 
         layout.addWidget(label("견적 메일 보내기", "deliveryTitle"))
-        layout.addWidget(label("받는 사람과 메일 내용을 확인하고 필요한 부분을 수정한 뒤 실제 메일을 전송합니다.", "deliverySubtitle", True))
 
         address_card = QFrame()
         address_card.setObjectName("emailAddressCard")
         address = QGridLayout(address_card)
-        address.setContentsMargins(16, 12, 16, 12)
+        address.setContentsMargins(10, 6, 10, 6)
         address.setHorizontalSpacing(12)
         address.setVerticalSpacing(8)
 
         # 메일 수신인은 고객명을 기본으로 사용합니다.
-        self.recipient_name = QLineEdit(self.draft.get("customerName", ""))
-        self.recipient_name.setReadOnly(True)
+        self.recipient_name = label(self.draft.get("customerName") or "고객", wrap=True)
+        self.recipient_name.setMaximumWidth(160)
         self.recipient_email = QLineEdit(self.draft.get("customerEmail", ""))
         self.recipient_email.setReadOnly(True)
-        self.sender_name = QLineEdit(self.draft.get("issuer", {}).get("businessName") or "나무팜농원")
-        self.sender_name.setReadOnly(True)
         self.sender_email = QLineEdit(self.SENDER_EMAIL)
         self.sender_email.setReadOnly(True)
 
-        address.addWidget(label("받는 사람"), 0, 0)
-        address.addWidget(self.recipient_name, 0, 1)
-        address.addWidget(label("수신 이메일"), 0, 2)
-        address.addWidget(self.recipient_email, 0, 3)
-        address.addWidget(label("보내는 사람"), 1, 0)
-        address.addWidget(self.sender_name, 1, 1)
-        address.addWidget(label("발신 이메일"), 1, 2)
-        address.addWidget(self.sender_email, 1, 3)
-        address.setColumnStretch(1, 1)
-        address.setColumnStretch(3, 2)
+        address.addWidget(self.recipient_name, 0, 0)
+        address.addWidget(label("수신 메일"), 0, 1)
+        address.addWidget(self.recipient_email, 0, 2)
+        address.addWidget(label("발신"), 0, 3)
+        address.addWidget(self.sender_email, 0, 4)
+        address.setColumnStretch(2, 3)
+        address.setColumnStretch(4, 2)
         layout.addWidget(address_card)
 
         subject_row = QHBoxLayout()
-        subject_row.setSpacing(12)
-        subject_row.addWidget(label("메일 제목", "emailSectionTitle"))
+        subject_row.setSpacing(8)
+        subject_row.addWidget(label("제목"))
         self.subject = QLineEdit("묘목 견적 안내")
         self.subject.setMaxLength(160)
         subject_row.addWidget(self.subject, 1)
-        layout.addLayout(subject_row)
+        address.addLayout(subject_row, 1, 0, 1, 5)
 
         if self.attachment_path is not None:
             attachment_row = QHBoxLayout()
@@ -2278,11 +2317,9 @@ class QuoteEmailDialog(QDialog):
         actions.addWidget(self.cancel_button)
         actions.addWidget(self.send_button)
         layout.addLayout(actions)
-        scroll_dialog(self, layout)
-
-        self.amount_summary = delivery_amount_summary(self.draft, self.draft.get("customerEmail", ""))
-        layout.insertWidget(1, self.amount_summary)
-        fit_delivery_message(self)
+        self.amount_summary = delivery_amount_summary(self.draft)
+        layout.insertWidget(layout.indexOf(address_card) + 1, self.amount_summary)
+        setup_delivery_reading(self, layout)
 
         QTimer.singleShot(0, self.load_profile)
 
@@ -2375,7 +2412,7 @@ class QuoteEmailDialog(QDialog):
             self.status.setText(f"메일 전송 준비 실패 · 발신 계정을 확인해주세요. 현재 계정: {sender or '확인 불가'}")
             self.send_button.setEnabled(False)
             return
-        self.sender_name.setText(str(value.get("senderName") or self.sender_name.text()))
+        self.sender_email.setToolTip(str(value.get("senderName") or "나무팜농원"))
         self.sender_email.setText(self.SENDER_EMAIL)
         try:
             quota = int(value.get("remainingDailyQuota", 0) or 0)
@@ -3107,6 +3144,25 @@ QDialog#quoteWorkbench QLabel#salesShippingFee{font-size:@freight@px;font-weight
             set_button_icon(widget, name, color)
         self.fit_customer_rail()
         self.fit_customer_content()
+        self._initial_input = self.raw_input_state()
+
+    def raw_input_state(self):
+        return (tuple((name, edit.text()) for name, edit in self.customer_fields.items()),
+                self.tracking_number_edit.text(), self.note.toPlainText())
+
+    def reject(self):
+        if self.raw_input_state() != self._initial_input:
+            prompt = QMessageBox(self)
+            prompt.setWindowTitle("수정 내용 확인")
+            prompt.setText("저장하지 않은 수정 내용이 있습니다. 저장하지 않고 닫을까요?")
+            keep = prompt.addButton("계속 작성", QMessageBox.ButtonRole.RejectRole)
+            discard = prompt.addButton("저장하지 않고 닫기", QMessageBox.ButtonRole.DestructiveRole)
+            prompt.setDefaultButton(keep)
+            prompt.setEscapeButton(keep)
+            prompt.exec()
+            if prompt.clickedButton() is not discard:
+                return
+        super().reject()
 
     def resizeEvent(self, event):
         super().resizeEvent(event)

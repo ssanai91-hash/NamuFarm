@@ -12,7 +12,7 @@ from .domain import (changed, integer, metadata, now_ms, require, valid_id, vali
 from .errors import AuthenticationError, UserError, ConflictError
 from .commerce import (validate_draft, order_from_draft, quote_document, tracking_fields,
                        tracking_number, normalize_tracking, quote_delivery_fingerprint, seller_note_draft,
-                       shipping_problem, shipping_fingerprint, shipping_prepared, shipping_ready)
+                       shipping_problem, shipping_fingerprint, shipping_prepared, shipping_ready, normalize_sms_recipient)
 from .sales_workspace import SalesWorkspace
 from .sold_numbers import SoldNumbers
 
@@ -450,21 +450,22 @@ class Manager(SoldNumbers, SalesWorkspace):
         self.vault.save_preference("payment_delivery", dict(list(states.items())[-1000:]))
         return self.payment_delivery_state(identifier)
 
-    def send_payment_sms(self, draft, text):
+    def send_payment_sms(self, draft, text, *, recipient_phone=None):
+        normalize_sms_recipient(draft.get("customerPhone", "") if recipient_phone is None else recipient_phone)
         # Reserve before sending the notice; unsupported servers must not fail only
         # after the customer was already told their payment was received.
         self._sold_number_for_draft(draft)
-        return self.send_quote_sms(draft, text, payment=True)
+        return self.send_quote_sms(draft, text, payment=True, recipient_phone=recipient_phone)
 
     def refresh_payment_sms_status(self, identifier):
         return self.refresh_quote_sms_status(identifier, payment=True)
 
-    def send_quote_sms(self, draft, text, *, payment=False):
+    def send_quote_sms(self, draft, text, *, payment=False, recipient_phone=None):
         validate_draft(draft)
         require(isinstance(text, str) and 1 <= len(text.strip()) <= 1000, "문자 내용을 1~1,000자로 입력해주세요.")
-        recipient = draft.get("customerPhone", "").strip()
-        require(recipient, "고객 연락처가 입력되지 않았습니다.")
-        recipient_digits = "".join(ch for ch in recipient if ch.isdigit())
+        recipient_digits = normalize_sms_recipient(
+            draft.get("customerPhone", "") if recipient_phone is None else recipient_phone)
+        recipient = recipient_digits
         source = draft.get("sourceRequestId", "")
         if payment:
             self._confirmed_source(draft)

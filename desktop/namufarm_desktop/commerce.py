@@ -81,6 +81,16 @@ def quote_delivery_fingerprint(draft):
                                      separators=(",", ":")).encode("utf-8")).hexdigest()
 
 
+def normalize_sms_recipient(value):
+    """Accept a formatted domestic number without silently removing other text."""
+    require(isinstance(value, str) and re.fullmatch(r"[0-9 -]+", value) is not None,
+            "수신번호를 숫자와 하이픈으로 입력해주세요.")
+    number = value.replace("-", "").replace(" ", "")
+    require(re.fullmatch(r"0[0-9]{8,10}", number) is not None,
+            "수신번호를 0으로 시작하는 숫자 9~11자리로 입력해주세요.")
+    return number
+
+
 def new_draft(request=None):
     person = request["personal"] if request else {}
     identifier = str(uuid.uuid4())

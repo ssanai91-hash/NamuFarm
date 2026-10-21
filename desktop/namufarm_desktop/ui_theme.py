@@ -390,7 +390,7 @@ class DataTable(QTableWidget):
         order = [column for column, _weight, _minimum in self._weights]
         header = self.horizontalHeader()
         header.setStretchLastSection(False)
-        header.setMinimumSectionSize(60)
+        header.setMinimumSectionSize(min([60] + [minimum for _column, _weight, minimum in self._weights]))
         for column in range(self.columnCount()):
             self.setColumnHidden(column, column not in order)
             header.setSectionResizeMode(column, QHeaderView.ResizeMode.Interactive)
