@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (QApplication, QHeaderView, QLabel, QLineEdit, QSc
                                QStyledItemDelegate, QStyleOptionViewItem, QStyle, QPushButton)
 
 
-def workspace_style(large=False):
+def workspace_style(large=False, compact=False):
     body, small = (18, 16) if large else (16, 14)
     css = """
 QWidget{font-family:'Malgun Gothic','NanumGothic',sans-serif;font-size:@body@px;color:#24313a;}
@@ -115,6 +115,27 @@ QLabel#emptyState{color:#5c6b73;background:transparent;padding:24px;font-size:@b
 QPushButton#disclosure{text-align:left;background:#f4f6f7;border-color:#ccd5d9;}
 QDialog#quoteEditor QLineEdit[readOnly="true"]{min-height:@readonly@px;max-height:@readonly@px;}
 """
+    if compact:
+        body, small = (16, 14) if large else (14, 12)
+        css += """
+#sidebar #brand{font-size:24px;}
+#sidebar QPushButton{font-size:@compactnav@px;min-height:20px;max-height:20px;padding:8px 10px;}
+#sidebar QLabel#sidebarDate{font-size:20px;}
+QLabel#summaryTitle{font-size:18px;}
+QLabel#summaryCount{font-size:32px;}
+QLabel#summaryCount[longCount="true"]{font-size:26px;}
+QLabel#summaryCountUnit{font-size:16px;padding-bottom:3px;}
+QLabel#pageTitle,QLabel#deliveryTitle,QLabel#heroTitle{font-size:20px;}
+QLabel#sectionTitle,QLabel#quoteItemsTitle,QLabel#emailSectionTitle{font-size:16px;}
+QLabel#metricValue,QLabel#quoteTotalValue,QLabel#customerAmountValue{font-size:24px;}
+QPushButton{min-height:22px;max-height:22px;padding:6px 10px;}
+QPushButton:focus{padding:5px 9px;}
+QLineEdit,QComboBox,QDateEdit,QDoubleSpinBox,QSpinBox{min-height:22px;padding:6px 8px;}
+QLineEdit:focus,QComboBox:focus,QDateEdit:focus,QDoubleSpinBox:focus,QSpinBox:focus{padding:5px 7px;}
+QTableWidget::item{padding:5px 6px;}
+QHeaderView::section{padding:6px;}
+QTextBrowser{padding:10px;}
+""".replace('@compactnav@', '18' if large else '16')
     return (css.replace('@body@', str(body)).replace('@small@', str(small))
             .replace('@nav@', '22' if large else '20').replace('@navheight@', '36' if large else '32')
             .replace('@readonly@', '24' if large else '20'))
@@ -196,7 +217,24 @@ QDialog#quoteWorkbench QLabel#channelStatusBadge[state="success"]{background:#e2
 QDialog#quoteWorkbench QLabel#channelStatusBadge[state="failed"]{background:#fbe5e2;color:#a13d32;}
 QDialog#quoteWorkbench QLabel#channelStatusBadge[state="pending"]{background:#fff3d8;color:#78520d;}
 QDialog#quoteWorkbench QFrame#deliveryVerticalRule{background:#c5d9ce;border:0;}
-""".replace('@body@', '18' if large else '16').replace('@caption@', '16' if large else '14').replace('@field@', '16' if large else '14').replace('@title@', '30' if large else '28').replace('@section@', '22' if large else '20').replace('@total@', '36' if large else '32').replace('@action@', '22' if large else '20').replace('@actionheight@', '60' if large else '56').replace('@priceheight@', '36' if large else '30')
+QDialog#quoteWorkbench[compactLayout="true"] QLabel{font-size:@compactbody@px;}
+QDialog#quoteWorkbench[compactLayout="true"] QLabel#workbenchTitle{font-size:24px;}
+QDialog#quoteWorkbench[compactLayout="true"] QLabel#workbenchBrand{font-size:18px;}
+QDialog#quoteWorkbench[compactLayout="true"] QLabel#workbenchSectionTitle,QDialog#quoteWorkbench[compactLayout="true"] QLabel#workbenchCustomerTitle{font-size:18px;}
+QDialog#quoteWorkbench[compactLayout="true"] QLabel#workbenchCaption{font-size:@compactcaption@px;padding:3px 6px;}
+QDialog#quoteWorkbench[compactLayout="true"] QTextBrowser#workbenchCustomerName{font-size:20px;}
+QDialog#quoteWorkbench[compactLayout="true"] QTextBrowser#workbenchInfo,QDialog#quoteWorkbench[compactLayout="true"] QTextBrowser#workbenchReceipt{font-size:@compactbody@px;}
+QDialog#quoteWorkbench[compactLayout="true"] QLabel#workbenchSumTitle{font-size:20px;}
+QDialog#quoteWorkbench[compactLayout="true"] QLabel#workbenchTotal{font-size:28px;}
+QDialog#quoteWorkbench[compactLayout="true"] QTableWidget#workbenchItems,QDialog#quoteWorkbench[compactLayout="true"] QTableWidget#workbenchItems QHeaderView::section{font-size:@compactbody@px;}
+QDialog#quoteWorkbench[compactLayout="true"] QLineEdit,QDialog#quoteWorkbench[compactLayout="true"] QPlainTextEdit,QDialog#quoteWorkbench[compactLayout="true"] QRadioButton{font-size:@compactbody@px;}
+QDialog#quoteWorkbench[compactLayout="true"] QWidget#quoteSpeciesEditor QLineEdit,QDialog#quoteWorkbench[compactLayout="true"] QWidget#unitPriceEditor QLineEdit{font-size:@compactbody@px;}
+QDialog#quoteWorkbench[compactLayout="true"] QPushButton{font-size:@compactbody@px;min-height:34px;max-height:34px;padding:0 10px;}
+QDialog#quoteWorkbench[compactLayout="true"] QPushButton#smsAction,QDialog#quoteWorkbench[compactLayout="true"] QPushButton#mailAction,QDialog#quoteWorkbench[compactLayout="true"] QPushButton[deliveryCompletion="true"]{font-size:18px;min-height:46px;max-height:46px;}
+QDialog#quoteWorkbench[compactLayout="true"] QWidget#quoteSpeciesEditor QPushButton{min-height:0;max-height:28px;padding:0 4px;font-size:12px;}
+QDialog#quoteWorkbench[compactLayout="true"] QWidget#unitPriceEditor QPushButton{min-height:0;padding:0;}
+QDialog#quoteWorkbench[compactLayout="true"] QWidget#workbenchCustomerRail QLineEdit#workbenchCustomerInput[customerName="true"]{font-size:20px;}
+""".replace('@body@', '18' if large else '16').replace('@caption@', '16' if large else '14').replace('@field@', '16' if large else '14').replace('@title@', '30' if large else '28').replace('@section@', '22' if large else '20').replace('@total@', '36' if large else '32').replace('@action@', '22' if large else '20').replace('@actionheight@', '60' if large else '56').replace('@priceheight@', '36' if large else '30').replace('@compactbody@', '16' if large else '14').replace('@compactcaption@', '14' if large else '12')
 
 
 def quote_delivery_style(large=False, compact=False):
@@ -319,7 +357,9 @@ class CustomerDelegate(RowSelectionDelegate):
         painter.drawText(top, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
                          painter.fontMetrics().elidedText(primary, Qt.TextElideMode.ElideRight, rect.width()))
         font.setBold(False)
-        font.setPixelSize(16 if QApplication.instance().property('namufarmLargeFont') else 14)
+        font.setPixelSize((14 if QApplication.instance().property('namufarmLargeFont') else 12)
+                          if QApplication.instance().property('namufarmCompactLayout')
+                          else (16 if QApplication.instance().property('namufarmLargeFont') else 14))
         painter.setFont(font)
         painter.setPen(QColor('#5c6b73'))
         bottom = top.translated(0, rect.height() / 2)

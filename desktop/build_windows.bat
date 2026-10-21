@@ -8,7 +8,7 @@ if not exist ".venv\Scripts\python.exe" (
 )
 ".venv\Scripts\python.exe" -m pip install -e . "pyinstaller>=6.11,<7"
 if errorlevel 1 goto failed
-".venv\Scripts\python.exe" -m PyInstaller --noconfirm --clean --onefile --windowed --name NamuFarm-PC --collect-data namufarm_desktop run_desktop.py
+".venv\Scripts\python.exe" -m PyInstaller --noconfirm --clean --onefile --windowed --name NamuFarm-PC --manifest windows.manifest --collect-data namufarm_desktop run_desktop.py
 if errorlevel 1 goto failed
 echo Built: %cd%\dist\NamuFarm-PC.exe
 pause

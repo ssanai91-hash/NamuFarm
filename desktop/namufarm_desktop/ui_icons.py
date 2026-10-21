@@ -1,7 +1,7 @@
 """Local line icons and vendored Material Symbols; no network/font dependency."""
 from functools import lru_cache
 
-from PySide6.QtCore import QByteArray, QSize, Qt
+from PySide6.QtCore import QByteArray, QRectF, QSize, Qt
 from PySide6.QtGui import QIcon, QPainter, QPixmap
 from PySide6.QtSvg import QSvgRenderer
 
@@ -54,12 +54,14 @@ def ui_icon(name, color="#24313A"):
     icon = QIcon()
     sizes = (18, 20, 24, 36, 40, 48, 96, 144, 192) if name in ("park", "namufarm_tree") else (18, 20, 24, 36, 40, 48)
     for size in sizes:
-        pixmap = QPixmap(size, size)
-        pixmap.fill(Qt.GlobalColor.transparent)
-        painter = QPainter(pixmap)
-        renderer.render(painter)
-        painter.end()
-        icon.addPixmap(pixmap)
+        for ratio in (1.0, 1.5, 2.0, 3.0):
+            pixmap = QPixmap(round(size * ratio), round(size * ratio))
+            pixmap.setDevicePixelRatio(ratio)
+            pixmap.fill(Qt.GlobalColor.transparent)
+            painter = QPainter(pixmap)
+            renderer.render(painter, QRectF(0, 0, size, size))
+            painter.end()
+            icon.addPixmap(pixmap)
     return icon
 
 

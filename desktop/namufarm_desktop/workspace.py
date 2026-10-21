@@ -119,13 +119,25 @@ def setup_delivery_reading(dialog, layout):
 
 def polish_table(widget):
     large = bool(QApplication.instance().property("namufarmLargeFont"))
-    widget.verticalHeader().setMinimumSectionSize(64 if large else 56)
-    widget.verticalHeader().setDefaultSectionSize(64 if large else 56)
+    compact = bool(QApplication.instance().property("namufarmCompactLayout"))
+    row_height = (56 if large else 48) if compact else (64 if large else 56)
+    widget.verticalHeader().setMinimumSectionSize(row_height)
+    widget.verticalHeader().setDefaultSectionSize(row_height)
     widget.setShowGrid(False)
     widget.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
     widget.horizontalHeader().setDefaultAlignment(Qt.AlignmentFlag.AlignCenter)
     if widget.property("visibleItemRows"):
         size_table_to_rows(widget, int(widget.property("visibleItemRows")))
+
+
+def fit_quote_density(dialog):
+    """Apply typography to logical window size, without scaling a rendered bitmap."""
+    compact = dialog.width() < 1440 or dialog.height() < 850
+    if dialog.property("compactLayout") == compact:
+        return
+    dialog.setProperty("compactLayout", compact)
+    # Re-evaluate ancestor property selectors, including the sales dialog overrides.
+    dialog.setStyleSheet(dialog.styleSheet())
 
 
 class SquareNoteEdit(QPlainTextEdit):
@@ -655,7 +667,7 @@ class SidebarTree(QLabel):
         if extent < 24:
             self.clear()
         else:
-            self.setPixmap(ui_icon("namufarm_tree", "#9dc7ac").pixmap(extent, extent))
+            self.setPixmap(ui_icon("namufarm_tree", "#9dc7ac").pixmap(QSize(extent, extent), self.devicePixelRatioF()))
 
 
 class CustomerInfoValue(QTextBrowser):
@@ -1105,7 +1117,7 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
             icon.setObjectName("workbenchIcon")
             icon.setProperty("iconName", name)
             icon.setFixedSize(size, size)
-            icon.setPixmap(ui_icon(name, color).pixmap(size, size))
+            icon.setPixmap(ui_icon(name, color).pixmap(QSize(size, size), self.devicePixelRatioF()))
             self.workbench_icons.append(icon)
             return icon
 
@@ -1460,6 +1472,7 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         super().resizeEvent(event)
         if not getattr(self, "_workbench_ready", False) or self._workbench_closed:
             return
+        fit_quote_density(self)
         large = bool(QApplication.instance().property("namufarmLargeFont"))
         # Leave room for the table plus both scrollbars in short, narrow windows.
         self.customer_scroll.setMaximumWidth(min(480 if large else 440,
@@ -1509,7 +1522,11 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
             channel_width = max(120, (available - 198 - 24) // 2)
         for action in (self.sms_button, self.email_button):
             action.setFixedWidth(channel_width)
-        row_height = 48 if large else 40
+        dense = bool(self.property("compactLayout"))
+        row_height = (42 if large else 36) if dense else (48 if large else 40)
+        self.items.verticalHeader().setMinimumSectionSize(row_height)
+        self.items.verticalHeader().setDefaultSectionSize(row_height)
+        self.items.horizontalHeader().setFixedHeight((36 if large else 32) if dense else (40 if large else 36))
         for row in range(self.items.rowCount()):
             self.items.setRowHeight(row, row_height)
         header = self.items.horizontalHeader().height()
@@ -1542,6 +1559,7 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
     def showEvent(self, event):
         super().showEvent(event)
         if getattr(self, "_workbench_ready", False) and not self._workbench_closed:
+            fit_quote_density(self)
             if not hasattr(self, "_workbench_compact"):
                 self._workbench_compact = self.height() < 900
                 self.workbench_items_hint.setVisible(not self._workbench_compact)
@@ -2903,7 +2921,7 @@ QDialog#quoteWorkbench QLabel#salesShippingFee{font-size:@freight@px;font-weight
         def icon(name, size=26, color="#193c32"):
             widget = QLabel()
             widget.setFixedSize(size, size)
-            widget.setPixmap(ui_icon(name, color).pixmap(size, size))
+            widget.setPixmap(ui_icon(name, color).pixmap(QSize(size, size), self.devicePixelRatioF()))
             return widget
 
         def section(title, name):
@@ -3214,6 +3232,7 @@ QDialog#quoteWorkbench QLabel#salesShippingFee{font-size:@freight@px;font-weight
     def resizeEvent(self, event):
         super().resizeEvent(event)
         if hasattr(self, "customer_scroll"):
+            fit_quote_density(self)
             self.fit_customer_rail()
         if hasattr(self, "customer_request_section"):
             self.fit_customer_content()
@@ -3516,11 +3535,13 @@ class SellerWindow(MainWindow):
         outer.addWidget(sidebar)
         content = QWidget()
         content_layout = QVBoxLayout(content)
+        self.page_content_layout = content_layout
         content_layout.setContentsMargins(24, 16, 24, 16)
         content_layout.setSpacing(12)
         self.other_page_title = label("", "pageTitle")
         content_layout.addWidget(self.other_page_title)
         header = QHBoxLayout()
+        self.page_header_layout = header
         header.setSpacing(20)
         self.page_summary = QFrame()
         self.page_summary.setObjectName("pageSummary")
@@ -3653,29 +3674,61 @@ class SellerWindow(MainWindow):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        if not hasattr(self, "sidebar_clock"):
+        if not hasattr(self, "ui_settings"):
             return
-        compact = self.height() < 780
-        self.sidebar.layout().setSpacing(6 if compact else 8)
-        self.sidebar.layout().setContentsMargins(12, 12 if compact else 16, 12, 12 if compact else 14)
-        self.brand_panel.layout().setContentsMargins(12, 10 if compact else 18, 12, 10 if compact else 18)
-        for widget in self.nav:
-            widget.setStyleSheet('padding:6px 12px;min-height:20px;' if compact else '')
+        self.update_responsive_layout()
 
     def apply_design_scale(self, large):
         app = QApplication.instance()
         app.setProperty("namufarmLargeFont", bool(large))
-        style = workspace_style(bool(large))
+        self.ui_settings.setValue("ui/largeFont", bool(large))
+        self._responsive_state = None
+        self.update_responsive_layout()
+        if self.workspace_ready:
+            self.refresh_storage_status()
+
+    def update_responsive_layout(self):
+        # Qt geometry is in logical pixels: 1920x1200 at 150% is about 1280x800.
+        compact = self.width() < 1440 or self.height() < 850
+        app = QApplication.instance()
+        large = bool(app.property("namufarmLargeFont"))
+        stacked_tools = self.width() < 1240
+        state = (compact, large, stacked_tools)
+        if state == getattr(self, "_responsive_state", None):
+            return
+        self._responsive_state = state
+        app.setProperty("namufarmCompactLayout", compact)
+        style = workspace_style(large, compact)
         app.setStyleSheet(style)
         self.setStyleSheet(style)
-        self.ui_settings.setValue("ui/largeFont", bool(large))
-        for widget in self.findChildren(QTableWidget):
+        self.sidebar.setFixedWidth((236 if large else 214) if compact else 286)
+        self.sidebar.layout().setSpacing(6 if compact else 8)
+        self.sidebar.layout().setContentsMargins(10 if compact else 12, 12 if compact else 16,
+                                                 10 if compact else 12, 12 if compact else 14)
+        self.brand_panel.layout().setContentsMargins(10 if compact else 12, 10 if compact else 18,
+                                                     10 if compact else 12, 10 if compact else 18)
+        self.page_content_layout.setContentsMargins(16 if compact else 24, 12 if compact else 16,
+                                                   16 if compact else 24, 12 if compact else 16)
+        self.page_content_layout.setSpacing(8 if compact else 12)
+        self.page_header_layout.setSpacing(12 if compact else 20)
+        self.page_summary.setFixedSize(164 if compact else 226, 88 if compact else 144)
+        self.page_summary.layout().setContentsMargins(12 if compact else 16, 8 if compact else 14,
+                                                      12 if compact else 16, 8 if compact else 14)
+        self.page_summary.layout().setSpacing(2 if compact else 8)
+        self.sales_toolbar.setDirection(QBoxLayout.Direction.TopToBottom if stacked_tools
+                                        else QBoxLayout.Direction.LeftToRight)
+        # Do not restyle a modal editor's deliberately short item rows.
+        for widget in self.stack.findChildren(QTableWidget):
             polish_table(widget)
             if hasattr(widget, "fit_columns"):
                 widget.fit_columns()
         self.configure_request_columns()
-        if self.workspace_ready:
-            self.refresh_storage_status()
+        self.draft_table.set_column_layout(
+            ((3, 2, 174), (1, .5, 112), (7, 3, 150), (8, 1, 108), (9, .5, 76)) if compact else
+            ((3, 2, 215), (1, .5, 140), (7, 3, 235), (8, 1, 155), (9, .5, 100)))
+        self.sale_table.set_column_layout(
+            ((3, 2, 174), (4, .6, 116), (8, 3, 144), (9, 1, 112), (1, .5, 92), (2, .5, 106)) if compact else
+            ((3, 2, 200), (4, .6, 140), (8, 3, 210), (9, 1, 145), (1, .5, 125), (2, .5, 144)))
 
     def run_job(self, title, work, on_success=None, refresh_on_error=True):
         starting = self.task is None
@@ -3707,7 +3760,10 @@ class SellerWindow(MainWindow):
 
     def configure_request_columns(self):
         large = bool(QApplication.instance().property("namufarmLargeFont"))
-        minimum = (205, 140, 190, 128, 100, 205) if not large else (210, 150, 195, 144, 112, 220)
+        if QApplication.instance().property("namufarmCompactLayout"):
+            minimum = (180, 124, 166, 116, 88, 158) if large else (174, 116, 156, 106, 74, 152)
+        else:
+            minimum = (205, 140, 190, 128, 100, 205) if not large else (210, 150, 195, 144, 112, 220)
         self.request_table.set_column_layout(tuple(
             (column, weight, width) for (column, weight), width in zip(
                 ((3, 2), (4, .5), (8, 3), (1, .5), (7, .3), (5, 3)), minimum)))
@@ -3820,6 +3876,7 @@ class SellerWindow(MainWindow):
         layout.setSpacing(12)
 
         bar = QHBoxLayout()
+        self.sales_toolbar = bar
         self.sale_search = QLineEdit()
         self.sale_search.setPlaceholderText("고객 · 주문번호 · 연락처 검색")
         self.sale_search.setToolTip("주문번호·고객명·연락처·이메일·수령인·주소·품목을 검색합니다.")
@@ -3838,9 +3895,12 @@ class SellerWindow(MainWindow):
         self.sales_download_button.setToolTip("서버 자료를 합칩니다. 로컬 미전송 수정과 삭제 기록은 유지합니다.")
         self.sales_export_button.setToolTip("확정견적·판매관리 두 엑셀에 복원용 원본과 미전송 변경을 보관합니다.")
         self.sales_import_button.setToolTip("나피에서 내보낸 파일의 보관자료를 합칩니다. 표의 셀을 직접 수정한 내용은 반영하지 않습니다.")
+        tools = QHBoxLayout()
+        tools.setContentsMargins(0, 0, 0, 0)
         for widget in (self.sales_upload_button, self.sales_download_button,
                        self.sales_export_button, self.sales_import_button):
-            bar.addWidget(widget)
+            tools.addWidget(widget)
+        bar.addLayout(tools)
         self.state_filter.hide()
         layout.addLayout(bar)
         filters, self.sales_filters = self.filter_buttons(

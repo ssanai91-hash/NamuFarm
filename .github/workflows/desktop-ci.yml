@@ -85,7 +85,7 @@ jobs:
       - name: Build Windows executable
         if: github.event_name == 'workflow_dispatch' && inputs.build_exe && github.ref == 'refs/heads/main'
         working-directory: desktop
-        run: python -m PyInstaller --noconfirm --clean --onefile --windowed --name NamuFarm-PC --collect-data namufarm_desktop run_desktop.py
+        run: python -m PyInstaller --noconfirm --clean --onefile --windowed --name NamuFarm-PC --manifest windows.manifest --collect-data namufarm_desktop run_desktop.py
       - name: Verify packaged Windows Qt startup
         if: github.event_name == 'workflow_dispatch' && inputs.build_exe && github.ref == 'refs/heads/main'
         env:
