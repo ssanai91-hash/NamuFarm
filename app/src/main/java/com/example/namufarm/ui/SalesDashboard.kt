@@ -7,6 +7,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.text.KeyboardOptions
@@ -61,14 +62,41 @@ internal fun SalesDashboardDialog(
     onTodayOrders: () -> Unit = {}
 ) {
     val today = remember { SalePolicy.period(Date().time, "day") }
-    var unit by remember { mutableStateOf("month") }
-    var from by remember { mutableStateOf(today.take(7) + "-01") }
-    var to by remember { mutableStateOf(today) }
-    var filter by remember { mutableStateOf("배송 대기") }
+    var unit by rememberSaveable { mutableStateOf("month") }
+    var from by rememberSaveable { mutableStateOf(today.take(7) + "-01") }
+    var to by rememberSaveable { mutableStateOf(today) }
+    var filter by rememberSaveable { mutableStateOf("미배송") }
+    var search by rememberSaveable { mutableStateOf("") }
+    var period by rememberSaveable { mutableStateOf("all") }
+    var customFrom by rememberSaveable { mutableStateOf("") }
+    var customTo by rememberSaveable { mutableStateOf("") }
+    var rowLimit by remember { mutableIntStateOf(50) }
+    var reportPeriod by rememberSaveable { mutableStateOf("month") }
+    LaunchedEffect(search, period, customFrom, customTo, filter) { rowLimit = 50 }
     val workOrders = state.allOrders.filter { it.orderNumber !in state.hiddenOrderNumbers }
     val pendingOrders = workOrders.count { it.status in setOf("구매확정", "입금확인") }
-    val rows = workOrders.filter { filter == "전체" || it.status in setOf("구매확정", "입금확인") }
+    fun paidDay(order: OrderEntity) = historyDay(order.paidAt) ?: historyDay(order.purchasedAt) ?: historyDate(order.orderDate)
+    fun deliveredDay(order: OrderEntity) = historyDay(order.deliveredAt) ?: historyDay(order.completedAt)
+    val rows = workOrders.filter { order ->
+        (when (filter) {
+            "미배송" -> order.status in setOf("구매확정", "입금확인")
+            "배송완료" -> order.status in setOf("배송확인", "배송완료", "판매완료")
+            else -> true
+        }) && historyMatches(if (filter == "배송완료") deliveredDay(order) else paidDay(order), period, customFrom, customTo) &&
+            historySearch(search, order.customerName, order.receiverName, order.customerPhone,
+                order.customerEmail, order.orderNumber, order.sourceQuoteNumber)
+    }
         .sortedByDescending { it.orderDate }
+    val (reportRangeStart, reportRangeEnd) = historyRange(reportPeriod, from, to)
+    val reportStart = reportRangeStart ?: workOrders.mapNotNull { paidDay(it) }.minOrNull() ?: today
+    val reportEnd = reportRangeEnd ?: today
+    val paidOrders = workOrders.filter { order ->
+        order.status in setOf("구매확정", "입금확인", "배송확인", "배송완료", "판매완료") &&
+            paidDay(order)?.let { it >= reportStart && it <= reportEnd } == true
+    }
+    val paidSales = paidOrders.sumOf { it.totalPrice.toLong() }
+    val paidShipping = paidOrders.sumOf { if (it.isPrepaid) it.shippingFee.toLong() else 0L }
+    val paidTax = paidOrders.sumOf { it.taxAmount }
 
     NamuDialog("매출 · 이익 분석", "판매 통계와 전체 주문 조회", onDismiss) {
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(20.dp),
@@ -82,17 +110,20 @@ internal fun SalesDashboardDialog(
                         Button(onClick = onSync, modifier = Modifier.weight(1f)) { Text("주문 동기화") }
                         OutlinedButton(onClick = onTodayOrders, modifier = Modifier.weight(1f)) { Text("오늘 주문") }
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        listOf("배송 대기", "전체").forEach { label ->
-                            FilterChip(selected = filter == label, onClick = { filter = label }, label = { Text(label) })
-                        }
-                    }
+                    HistoryFilters(search = search, onSearch = { search = it }, period = period,
+                        from = customFrom, to = customTo, status = filter,
+                        statuses = listOf("미배송", "배송완료", "전체"), count = rows.size,
+                        basis = if (filter == "배송완료") "배송완료일" else "입금확인일(이전 자료는 주문일)",
+                        defaultPeriod = "all", defaultStatus = "미배송",
+                        onApply = { key, start, end, status ->
+                            period = key; customFrom = start; customTo = end; filter = status
+                        })
                 }
             }
             if (rows.isEmpty()) item {
-                Text(if (filter == "전체") "등록된 주문이 없습니다." else "배송 대기 중인 주문이 없습니다.")
+                Text("조건에 맞는 주문이 없습니다. 검색어·기간·상태를 바꿔보세요.")
             }
-            items(rows, key = { it.orderNumber }) { order ->
+            items(rows.take(rowLimit), key = { it.orderNumber }) { order ->
                 Card(onClick = { onSelect(order) }, modifier = Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text("${if (order.status == "구매확정") "입금확인" else order.status} · ${order.orderDate}",
@@ -103,9 +134,18 @@ internal fun SalesDashboardDialog(
                     }
                 }
             }
+            if (rows.size > rowLimit) item {
+                TextButton(onClick = { rowLimit += 50 }, modifier = Modifier.fillMaxWidth()) { Text("50건 더 보기") }
+            }
             item {
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
                 Text("매출 · 이익 분석", style = MaterialTheme.typography.titleLarge)
+                HistoryFilters(period = reportPeriod, from = from, to = to, count = paidOrders.size,
+                    basis = "로컬 입금 기준", onApply = { key, start, end, _ ->
+                        reportPeriod = key; from = start; to = end
+                    })
+                Text("묘목 ${saleMoney(paidSales - paidShipping)} · 선불 택배비 ${saleMoney(paidShipping)}")
+                Text("추가 세액 ${saleMoney(paidTax)} · 총 입금 ${saleMoney(paidSales + paidTax)}")
                 Text("배송완료 등 최종 처리된 판매 내역을 기간별로 조회합니다.",
                     style = MaterialTheme.typography.bodySmall)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -113,11 +153,7 @@ internal fun SalesDashboardDialog(
                         FilterChip(selected = unit == value, onClick = { unit = value }, label = { Text(label) })
                     }
                 }
-                OutlinedTextField(from, { from = it }, label = { Text("시작일 (예: 2026-10-01)") },
-                    singleLine = true, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(to, { to = it }, label = { Text("종료일 (예: 2026-10-31)") },
-                    singleLine = true, modifier = Modifier.fillMaxWidth())
-                Button(onClick = { onReport(unit, from, to) }, enabled = !state.salesBusy,
+                Button(onClick = { onReport(unit, reportStart, reportEnd) }, enabled = !state.salesBusy,
                     modifier = Modifier.fillMaxWidth()) {
                     Text(if (state.salesBusy) "전송 대기 반영·조회 중…" else "시트 판매 통계 조회")
                 }

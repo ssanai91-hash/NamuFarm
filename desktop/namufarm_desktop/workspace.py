@@ -33,6 +33,7 @@ from .shipping_excel import shipping_xls, parse_tracking_xls, export_orders, UPL
 from .nursery_ui import NurseryPage, DigitalClock
 from .nursery import NurseryStore
 from .quote_species import SpeciesNameEditor, QuoteSpeciesPicker
+from .list_filters import ListPeriodFilter, first_date
 
 STYLE = workspace_style()
 
@@ -3648,6 +3649,7 @@ class SellerWindow(MainWindow):
         self.request_nav_badge = None
         self.tray_icon = None
         self.page_counts = {}
+        self._list_limits = {"draft": 50, "sale": 50, "shipping": 50}
         super().__init__(vault_path)
         self.setWindowTitle(f"나무팜 판매관리 | Ver {__version__}")
         self.setMinimumSize(1000, 620)
@@ -3914,8 +3916,7 @@ class SellerWindow(MainWindow):
         self.page_summary.layout().setContentsMargins(12 if compact else 16, 8 if compact else 14,
                                                       12 if compact else 16, 8 if compact else 14)
         self.page_summary.layout().setSpacing(2 if compact else 8)
-        self.sales_toolbar.setDirection(QBoxLayout.Direction.TopToBottom if stacked_tools
-                                        else QBoxLayout.Direction.LeftToRight)
+        self.sales_toolbar.setDirection(QBoxLayout.Direction.LeftToRight)
         # Do not restyle a modal editor's deliberately short item rows.
         for widget in self.stack.findChildren(QTableWidget):
             polish_table(widget)
@@ -4012,6 +4013,35 @@ class SellerWindow(MainWindow):
     def set_sales_filter(self, value):
         self.state_filter.setCurrentText(value)
 
+    def refresh_filtered_list(self, kind):
+        self._list_limits[kind] = 50
+        {"draft": self.refresh_workspace, "sale": self.refresh_sales,
+         "shipping": self.refresh_shipping}[kind]()
+
+    def more_list_rows(self, kind):
+        self._list_limits[kind] += 50
+        {"draft": self.refresh_workspace, "sale": self.refresh_sales,
+         "shipping": self.refresh_shipping}[kind]()
+
+    def reset_list_filters(self, kind):
+        search, period, state = {
+            "draft": (self.draft_search, self.draft_period, self.draft_state),
+            "sale": (self.sale_search, self.sale_period, self.state_filter),
+            "shipping": (self.shipping_search, self.shipping_period, self.shipping_filter),
+        }[kind]
+        for widget in (search, state):
+            widget.blockSignals(True)
+        search.clear()
+        state.setCurrentIndex(1 if kind == "sale" else 0)
+        for widget in (search, state):
+            widget.blockSignals(False)
+        period.reset()
+
+    def show_pending_quotes(self):
+        self.draft_search.clear()
+        self.draft_state.setCurrentText("입금대기")
+        self.draft_period.set_key("all")
+
 
     def build_drafts(self):
         page = QWidget()
@@ -4022,14 +4052,34 @@ class SellerWindow(MainWindow):
         self.draft_search.setPlaceholderText("고객명 · 견적번호 · 연락처 · 묘목 검색")
         self.draft_search.setToolTip("견적번호·고객명·연락처·메일주소·묘목·규격·판매자 요청사항을 검색합니다.")
         self.draft_search.setClearButtonEnabled(True)
-        self.draft_search.textChanged.connect(self.refresh_workspace)
-        layout.addWidget(self.draft_search)
+        self.draft_search.textChanged.connect(lambda: self.refresh_filtered_list("draft"))
+        self.draft_search.setMinimumWidth(150)
+        self.draft_search.setMaximumWidth(400)
+        filters = QHBoxLayout()
+        filters.addWidget(self.draft_search, 2)
+        filters.addStretch(1)
+        self.draft_period = ListPeriodFilter("month")
+        self.draft_state = QComboBox()
+        self.draft_state.addItems(["전체 상태", "입금대기", "작성중"])
+        self.draft_state.setAccessibleName("견적 상태")
+        self.draft_period.changed.connect(lambda: self.refresh_filtered_list("draft"))
+        self.draft_state.currentIndexChanged.connect(lambda: self.refresh_filtered_list("draft"))
+        filters.addWidget(self.draft_period)
+        filters.addWidget(self.draft_state)
+        filters.addWidget(button("초기화", lambda: self.reset_list_filters("draft")))
+        layout.addLayout(filters)
+        summary = QHBoxLayout()
+        self.draft_filter_summary = label("", "muted", True)
+        summary.addWidget(self.draft_filter_summary, 1)
+        self.pending_quotes_button = button("전체 입금대기 보기", self.show_pending_quotes)
+        summary.addWidget(self.pending_quotes_button)
+        layout.addLayout(summary)
         self.draft_table = table(["견적번호", "상태", "작성일", "고객명", "연락처", "메일", "공식견적서", "품목", "판매금액", "자료 위치"])
-        self.draft_sort_descending = False
+        self.draft_sort_descending = True
         header = self.draft_table.horizontalHeader()
         header.setStretchLastSection(False)
         header.setSortIndicatorShown(True)
-        header.setSortIndicator(3, Qt.SortOrder.AscendingOrder)
+        header.setSortIndicator(3, Qt.SortOrder.DescendingOrder)
         self.draft_table.horizontalHeaderItem(3).setText("고객 / 견적번호 ↕")
         self.draft_table.horizontalHeaderItem(3).setToolTip("클릭하면 견적번호 순서를 바꿉니다.")
         header.sectionClicked.connect(self.sort_drafts_by_header)
@@ -4044,6 +4094,9 @@ class SellerWindow(MainWindow):
         self.draft_table.itemSelectionChanged.connect(self.update_controls)
         self.draft_table.itemDoubleClicked.connect(self.open_draft)
         layout.addWidget(self.draft_table)
+        self.draft_more = button("50건 더 보기", lambda: self.more_list_rows("draft"))
+        self.draft_more.hide()
+        layout.addWidget(self.draft_more)
         bar = QHBoxLayout()
         self.draft_open = button("견적 결과 확인", self.open_draft, True)
         set_button_icon(self.draft_open, "open", "#ffffff")
@@ -4080,12 +4133,21 @@ class SellerWindow(MainWindow):
         self.sale_search.setPlaceholderText("고객 · 주문번호 · 연락처 검색")
         self.sale_search.setToolTip("주문번호·고객명·연락처·이메일·수령인·주소·품목을 검색합니다.")
         self.sale_search.setMinimumWidth(180)
-        self.sale_search.textChanged.connect(self.refresh_sales)
+        self.sale_search.setMaximumWidth(400)
+        self.sale_search.textChanged.connect(lambda: self.refresh_filtered_list("sale"))
         self.state_filter = QComboBox()
         self.state_filter.setParent(page)
         self.state_filter.addItems(["전체 상태", "입금확인", "배송완료", "구매취소"])
-        self.state_filter.currentIndexChanged.connect(self.refresh_sales)
-        bar.addWidget(self.sale_search, 1)
+        self.state_filter.setCurrentText("입금확인")
+        self.state_filter.currentIndexChanged.connect(lambda: self.refresh_filtered_list("sale"))
+        self.sale_period = ListPeriodFilter("all")
+        self.sale_period.changed.connect(lambda: self.refresh_filtered_list("sale"))
+        self.state_filter.setAccessibleName("판매 상태")
+        bar.addWidget(self.sale_search, 2)
+        bar.addStretch(1)
+        bar.addWidget(self.sale_period)
+        bar.addWidget(self.state_filter)
+        bar.addWidget(button("초기화", lambda: self.reset_list_filters("sale")))
         self.sales_upload_button = button("서버에 올리기", self.upload_sales)
         self.sales_download_button = button("서버로부터 가져오기", self.download_sales)
         self.sales_export_button = button("엑셀 파일 저장", self.export_local_sales)
@@ -4099,12 +4161,12 @@ class SellerWindow(MainWindow):
         for widget in (self.sales_upload_button, self.sales_download_button,
                        self.sales_export_button, self.sales_import_button):
             tools.addWidget(widget)
-        bar.addLayout(tools)
-        self.state_filter.hide()
         layout.addLayout(bar)
-        filters, self.sales_filters = self.filter_buttons(
-            (("전체", "전체 상태"), ("입금확인", "입금확인"), ("배송완료", "배송완료"), ("구매취소", "구매취소")), self.set_sales_filter)
-        layout.addLayout(filters)
+        self.sales_filters = {}
+        self.sale_filter_summary = label("", "muted", True)
+        layout.addWidget(self.sale_filter_summary)
+        tools.addStretch(1)
+        layout.addLayout(tools)
 
         self.sale_table = table([
             "주문번호", "상태", "주문일", "고객명", "연락처", "이메일",
@@ -4127,6 +4189,9 @@ class SellerWindow(MainWindow):
         self.sale_table.itemSelectionChanged.connect(self.select_sale)
         self.sale_table.itemDoubleClicked.connect(self.open_customer_order)
         layout.addWidget(self.sale_table, 1)
+        self.sale_more = button("50건 더 보기", lambda: self.more_list_rows("sale"))
+        self.sale_more.hide()
+        layout.addWidget(self.sale_more)
 
         bottom = QHBoxLayout()
         self.customer_list_status = label("주문을 선택하세요.", "muted", True)
@@ -4147,22 +4212,36 @@ class SellerWindow(MainWindow):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(8)
         bar = QHBoxLayout()
-        bar.addWidget(label("주문 선택", "sectionTitle"))
         self.shipping_search = QLineEdit()
         self.shipping_search.setPlaceholderText("주문번호 · 수령인 · 주소 · 송장번호 검색")
-        self.shipping_search.textChanged.connect(self.refresh_shipping)
+        self.shipping_search.setMinimumWidth(150)
+        self.shipping_search.setMaximumWidth(400)
+        self.shipping_search.textChanged.connect(lambda: self.refresh_filtered_list("shipping"))
         self.shipping_filter = QComboBox()
         self.shipping_filter.addItems(["송장·출고 대기", "배송완료", "전체 배송 주문"])
-        self.shipping_filter.currentIndexChanged.connect(self.refresh_shipping)
-        bar.addWidget(self.shipping_search, 1)
+        self.shipping_filter.currentIndexChanged.connect(self.shipping_filter_changed)
+        self.shipping_period = ListPeriodFilter("all")
+        self.shipping_period.changed.connect(lambda: self.refresh_filtered_list("shipping"))
+        self.shipping_filter.setAccessibleName("배송 상태")
+        bar.addWidget(self.shipping_search, 2)
+        bar.addStretch(1)
+        bar.addWidget(self.shipping_period)
         bar.addWidget(self.shipping_filter)
-        bar.addWidget(button("로젠 기업택배 열기 ↗", lambda: QDesktopServices.openUrl(QUrl("https://logis.ilogen.com"))))
+        bar.addWidget(button("초기화", lambda: self.reset_list_filters("shipping")))
         layout.addLayout(bar)
+        info = QHBoxLayout()
+        self.shipping_filter_summary = label("", "muted", True)
+        info.addWidget(self.shipping_filter_summary, 1)
+        info.addWidget(button("로젠 기업택배 열기 ↗", lambda: QDesktopServices.openUrl(QUrl("https://logis.ilogen.com"))))
+        layout.addLayout(info)
         self.shipping_table = table(["주문번호", "수령인", "연락처", "배송주소", "수량", "배송 준비", "송장번호"])
         self.shipping_table.setSelectionMode(self.shipping_table.SelectionMode.ExtendedSelection)
         self.shipping_table.itemSelectionChanged.connect(self.select_shipping)
         self.shipping_table.set_column_layout(((0, 1.8), (1, 1.4), (3, 2.8), (4, 1), (5, 1.8), (6, 1.8)))
         layout.addWidget(self.shipping_table, 1)
+        self.shipping_more = button("50건 더 보기", lambda: self.more_list_rows("shipping"))
+        self.shipping_more.hide()
+        layout.addWidget(self.shipping_more)
         self.shipping_status = label("주문을 선택하세요. Ctrl 또는 Shift로 여러 주문을 선택할 수 있습니다.", "muted", True)
         layout.addWidget(self.shipping_status)
         panel, box = card("송장번호 반영 · 확인")
@@ -4201,6 +4280,9 @@ class SellerWindow(MainWindow):
         set_button_icon(self.import_button, "folder")
         set_button_icon(self.tracking_save, "save", "#ffffff")
         return page
+
+    def shipping_filter_changed(self):
+        self.shipping_period.set_key("month" if self.shipping_filter.currentIndex() == 1 else "all")
 
     def navigate(self, index):
         self.stack.setCurrentIndex(index)
@@ -4453,6 +4535,12 @@ class SellerWindow(MainWindow):
             reverse=self.draft_sort_descending,
         )
         total_quotes = len(draft_pairs)
+        pending_count = sum(status == "견적확정" for _, status in draft_pairs)
+        self.pending_quotes_button.setText(f"전체 입금대기 {pending_count:,}건 보기")
+        wanted = self.draft_state.currentText()
+        draft_pairs = [(draft, status) for draft, status in draft_pairs
+                       if (wanted == "전체 상태" or (wanted == "입금대기" and status == "견적확정") or wanted == status)
+                       and self.draft_period.matches(first_date(draft.get("confirmedAt"), draft.get("createdAt")))]
         query = self.draft_search.text().strip().casefold()
         phone_query = query.replace("-", "").replace(" ", "")
         if query:
@@ -4466,6 +4554,11 @@ class SellerWindow(MainWindow):
                            )).casefold()
                            or (phone_query.isdigit() and phone_query in
                                draft.get("customerPhone", "").replace("-", "").replace(" ", ""))]
+        matched_count = len(draft_pairs)
+        draft_pairs = draft_pairs[:self._list_limits["draft"]]
+        self.draft_more.setVisible(matched_count > len(draft_pairs))
+        self.draft_filter_summary.setText(
+            f"총 {matched_count:,}건 · 표시 {len(draft_pairs):,}건 · {self.draft_period.description()} · 확정일 기준(이전 자료는 작성일)")
         previous_index = self.draft_table.currentRow()
         previous_rows = getattr(self, "draft_rows", [])
         previous_id = previous_rows[previous_index]["id"] if 0 <= previous_index < len(previous_rows) else None
@@ -4485,8 +4578,7 @@ class SellerWindow(MainWindow):
             "로컬 DB",
         ) for d, status in draft_pairs])
         self.draft_table.set_empty_message(
-            "검색 조건에 맞는 견적이 없습니다.\n검색어를 지워 전체 목록을 확인하세요." if query else
-            "표시할 견적이 없습니다.\n작성중 저장한 견적과 확정견적이 표시됩니다.")
+            "조건에 맞는 견적이 없습니다.\n검색어·기간·상태를 바꾸거나 전체 입금대기를 확인하세요.")
         center_table_columns(self.draft_table, (0, 1, 2, 3, 4, 6, 8))
         customer_reference(self.draft_table, 3, 0)
         self.draft_table.clearSelection()
@@ -4499,6 +4591,7 @@ class SellerWindow(MainWindow):
         self.draft_table.horizontalHeaderItem(9).setToolTip("이 PC의 로컬 DB에서 불러온 견적")
         self.refresh_sales()
         self.refresh_shipping()
+        self.refresh_payment_summary()
 
     def refresh_sales(self):
         if not getattr(self, "workspace_ready", False):
@@ -4509,6 +4602,7 @@ class SellerWindow(MainWindow):
             if self.selected_sale else None
         )
         query = self.sale_search.text().strip().casefold()
+        phone_query = query.replace("-", "").replace(" ", "")
         wanted = self.state_filter.currentText()
         for value, widget in self.sales_filters.items():
             count = sum(value == "전체 상태" or customer_status_text(row["metadata"]["status"]) == value
@@ -4523,6 +4617,8 @@ class SellerWindow(MainWindow):
             order = row["private"]["order"]
             display_status = customer_status_text(meta["status"])
             if wanted != "전체 상태" and display_status != wanted:
+                continue
+            if not self.sale_period.matches(first_date(meta.get("paidAt"), meta.get("purchasedAt"), meta.get("orderDate"))):
                 continue
             address = " ".join(filter(None, [
                 f"({order.get('zipNo')})" if order.get("zipNo") else "",
@@ -4539,7 +4635,8 @@ class SellerWindow(MainWindow):
                 order.get("customerEmail", ""), order.get("receiverName", ""),
                 address, items_text, tracking_number(order),
             ]).casefold()
-            if query and query not in searchable:
+            if query and query not in searchable and not (phone_query.isdigit() and phone_query in
+                    order.get("customerPhone", "").replace("-", "").replace(" ", "")):
                 continue
             rows.append(row)
 
@@ -4550,6 +4647,11 @@ class SellerWindow(MainWindow):
                 row["metadata"]["orderNumber"],
             )
         )
+        matched_count = len(rows)
+        rows = rows[:self._list_limits["sale"]]
+        self.sale_more.setVisible(matched_count > len(rows))
+        self.sale_filter_summary.setText(
+            f"총 {matched_count:,}건 · 표시 {len(rows):,}건 · {self.sale_period.description()} · 입금확인일 기준(이전 자료는 주문일)")
         self.sale_rows = rows
         table_rows = []
         for row in rows:
@@ -4607,7 +4709,7 @@ class SellerWindow(MainWindow):
             f"목록 {len(self.sale_rows):,}건 · 입금확인 주문을 우선 표시합니다."
             if self.sale_rows else "조건에 맞는 판매·고객 기록이 없습니다."
         )
-        self.set_page_count(self.PAGE_SALES, len(self.sale_rows))
+        self.set_page_count(self.PAGE_SALES, matched_count)
         if self.selected_sale:
             self.select_sale()
         self.update_controls()
@@ -4729,19 +4831,34 @@ class SellerWindow(MainWindow):
     def refresh_shipping(self):
         if not hasattr(self, "shipping_table"):
             return
-        query = self.shipping_search.text().casefold()
+        query = self.shipping_search.text().strip().casefold()
+        phone_query = query.replace("-", "").replace(" ", "")
         mode = self.shipping_filter.currentIndex()
         rows = []
         for row in self.data["sales"]:
             order = row["private"]["order"]
-            if not shipping_prepared(order) or query not in str(order).casefold():
+            searchable = f"{sale_number(row)} {row['metadata']['orderNumber']} {order}".casefold()
+            if not shipping_prepared(order) or (query not in searchable and not (phone_query.isdigit() and phone_query in
+                    order.get("customerPhone", "").replace("-", "").replace(" ", ""))):
                 continue
             if mode == 0 and order["status"] != "입금확인":
                 continue
             if mode == 1 and order["status"] not in ("배송완료", "판매완료"):
                 continue
+            meta = row["metadata"]
+            day = first_date(meta.get("deliveredAt"), meta.get("completedAt")) if mode == 1 else first_date(
+                meta.get("paidAt"), meta.get("purchasedAt"), meta.get("orderDate"))
+            if not self.shipping_period.matches(day):
+                continue
             rows.append(row)
-        self.set_page_count(self.PAGE_SHIPPING, len(rows))
+        rows.sort(key=lambda row: int(row["metadata"].get("deliveredAt" if mode == 1 else "paidAt", 0) or 0), reverse=True)
+        matched_count = len(rows)
+        rows = rows[:self._list_limits["shipping"]]
+        self.shipping_more.setVisible(matched_count > len(rows))
+        basis = "배송완료일" if mode == 1 else "입금확인일"
+        self.shipping_filter_summary.setText(
+            f"총 {matched_count:,}건 · 표시 {len(rows):,}건 · {self.shipping_period.description()} · {basis} 기준")
+        self.set_page_count(self.PAGE_SHIPPING, matched_count)
         self.shipping_rows = rows
         self.shipping_table.blockSignals(True)
         self.shipping_table.set_empty_message(
@@ -4910,6 +5027,7 @@ class SellerWindow(MainWindow):
             return
         self.dirty = False
         self.state_filter.setCurrentIndex(0)
+        self.sale_period.set_key("all")
         self.sale_search.setText(number)
         self.refresh_sales()
         if self.sale_rows:

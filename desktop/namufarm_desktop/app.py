@@ -2,6 +2,7 @@
 import sys
 from datetime import datetime
 from pathlib import Path
+from .list_filters import ListPeriodFilter, first_date
 
 from PySide6.QtCore import QDate, QStandardPaths, Qt, QThread, QTimer, Signal, QUrl
 from PySide6.QtGui import QCloseEvent, QRegularExpressionValidator, QDesktopServices
@@ -574,7 +575,9 @@ class MainWindow(QMainWindow):
         for label, key in (("일별", "day"), ("월별", "month"), ("연별", "year")):
             self.unit.addItem(label, key)
         today = QDate.currentDate()
-        self.start_date, self.end_date = QDateEdit(QDate(today.year(), 1, 1)), QDateEdit(today)
+        self.start_date, self.end_date = QDateEdit(QDate(today.year(), today.month(), 1)), QDateEdit(today)
+        self.report_period = ListPeriodFilter("month")
+        self.report_period.changed.connect(self.report_period_changed)
         for field in (self.start_date, self.end_date):
             field.setCalendarPopup(True)
             field.setDisplayFormat("yyyy-MM-dd")
@@ -590,10 +593,22 @@ QComboBox::drop-down,QDateEdit::drop-down{
             field.setStyleSheet(filter_style)
         self.report_button = QPushButton("통계 조회")
         self.report_button.clicked.connect(self.fetch_report)
-        for field in (self.unit, self.start_date, QLabel("~"), self.end_date, self.report_button):
+        self.report_date_separator = QLabel("~")
+        bar.addWidget(self.report_period)
+        for field in (self.unit, self.start_date, self.report_date_separator, self.end_date, self.report_button):
             bar.addWidget(field)
+        reset = QPushButton("초기화")
+        reset.clicked.connect(self.report_period.reset)
+        bar.addWidget(reset)
         bar.addStretch()
         layout.addLayout(bar)
+        self.payment_summary = QLabel("입금 기준 집계는 로컬 판매자료를 사용합니다.")
+        self.payment_summary.setWordWrap(True)
+        layout.addWidget(self.payment_summary)
+        self.start_date.dateChanged.connect(self.refresh_payment_summary)
+        self.end_date.dateChanged.connect(self.refresh_payment_summary)
+        for field in (self.start_date, self.report_date_separator, self.end_date):
+            field.hide()
         layout.addWidget(QLabel("배송완료일의 한국 시간 기준 · 매출은 세액 제외 · 확인한 원가를 기준으로 매출이익 계산"))
         self.report_table = table(["기간", "판매 건수", "수량", "매출", "세액", "원가", "비용", "확인 매출이익", "원가 미확인"])
         self.report_table.set_column_layout(((0, .5, 112), (1, .2, 80), (2, .3, 72),
@@ -605,7 +620,46 @@ QComboBox::drop-down,QDateEdit::drop-down{
         layout.addWidget(self.report_summary)
         self.tabs.addTab(page, "일·월·년 통계")
 
+    def report_period_changed(self):
+        start, end = self.report_period.bounds()
+        if start is None:
+            dates = [first_date(row["metadata"].get("paidAt"), row["metadata"].get("purchasedAt"),
+                                row["metadata"].get("orderDate")) for row in self.data.get("sales", [])]
+            start = min((day for day in dates if day is not None), default=datetime.now(SEOUL).date())
+            end = datetime.now(SEOUL).date()
+        for field, day in ((self.start_date, start), (self.end_date, end)):
+            field.blockSignals(True)
+            field.setDate(QDate(day.year, day.month, day.day))
+            field.blockSignals(False)
+        # The custom period dialog supplies dates, so the toolbar stays compact.
+        self.refresh_payment_summary()
+        fill_table(self.report_table, [])
+        self.report_summary.setText("선택한 기간의 배송완료 통계는 ‘통계 조회’를 눌러 확인하세요.")
+
+    def refresh_payment_summary(self):
+        if not hasattr(self, "payment_summary"):
+            return
+        start, end = self.report_period.bounds()
+        if start is None:
+            dates = [first_date(row["metadata"].get("paidAt"), row["metadata"].get("purchasedAt"),
+                                row["metadata"].get("orderDate")) for row in self.data.get("sales", [])]
+            start = min((day for day in dates if day is not None), default=datetime.now(SEOUL).date())
+            end = datetime.now(SEOUL).date()
+        paid = []
+        for row in self.data.get("sales", []):
+            meta = row["metadata"]
+            day = first_date(meta.get("paidAt"), meta.get("purchasedAt"), meta.get("orderDate"))
+            if meta.get("status") in ("입금확인", "구매확정", "배송확인", "배송완료", "판매완료") and day and start <= day <= end:
+                paid.append(meta)
+        shipping = sum(m.get("shippingFee", 0) if m.get("isPrepaid") else 0 for m in paid)
+        sales = sum(m["totalPrice"] for m in paid)
+        tax = sum(m.get("taxAmount", 0) for m in paid)
+        self.payment_summary.setText(
+            f"{start:%Y.%m.%d} ~ {end:%Y.%m.%d} · 로컬 입금 기준 {len(paid):,}건\n"
+            f"묘목 {money(sales - shipping)} · 선불 택배비 {money(shipping)} · 추가 세액 {money(tax)} · 총 입금 {money(sales + tax)}")
+
     def fetch_report(self):
+        self.report_period_changed()
         unit, start, end = self.unit.currentData(), self.start_date.date().toString("yyyy-MM-dd"), self.end_date.date().toString("yyyy-MM-dd")
         def work():
             report = self.manager.report(unit, start, end)
@@ -619,7 +673,7 @@ QComboBox::drop-down,QDateEdit::drop-down{
         self.report_table.set_empty_message("선택한 기간의 배송완료 판매 기록이 없습니다.")
         fill_table(self.report_table, [[money(b[k]) if k in ("sales", "tax", "cost", "expenses", "knownProfit") else b[k] for k in keys] for b in report["buckets"]])
         buckets = report["buckets"]
-        self.report_summary.setText(f"총 {sum(b['orders'] for b in buckets):,}건 · 매출 {money(sum(b['sales'] for b in buckets))} · 확인 매출이익 {money(sum(b['knownProfit'] for b in buckets))}")
+        self.report_summary.setText(f"{report['from']} ~ {report['to']} · 배송완료 {sum(b['orders'] for b in buckets):,}건 · 매출 {money(sum(b['sales'] for b in buckets))} · 확인 매출이익 {money(sum(b['knownProfit'] for b in buckets))}")
         self.message.setText("판매 통계 조회 완료")
 
     def build_connection(self):

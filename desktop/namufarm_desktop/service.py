@@ -87,6 +87,10 @@ class Manager(SoldNumbers, SalesWorkspace):
     def _store_local_quote(self, draft, status):
         quotes = self._local_quotes()
         updated = {**copy.deepcopy(draft), "quoteStatus": status}
+        previous = next((d for d in quotes if d["id"] == draft["id"] or
+                         (draft.get("sourceRequestId") and d.get("sourceRequestId") == draft["sourceRequestId"])), None)
+        # Keep the original confirmation day when the seller edits a quote.
+        updated["confirmedAt"] = (previous.get("confirmedAt") or previous["createdAt"]) if previous else now_ms()
         updated.pop("workingCopy", None)
         quotes = [d for d in quotes if d["id"] != draft["id"] and
                   not (draft.get("sourceRequestId") and d.get("sourceRequestId") == draft["sourceRequestId"])]

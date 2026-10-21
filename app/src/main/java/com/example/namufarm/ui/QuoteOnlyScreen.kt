@@ -51,6 +51,12 @@ internal fun QuoteOnlyScreen(viewModel: ManagementViewModel, connection: WebRequ
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+    var quoteSearch by rememberSaveable { mutableStateOf("") }
+    var quotePeriod by rememberSaveable { mutableStateOf("month") }
+    var quoteFrom by rememberSaveable { mutableStateOf("") }
+    var quoteTo by rememberSaveable { mutableStateOf("") }
+    var quoteLimit by remember { mutableIntStateOf(50) }
+    LaunchedEffect(quoteSearch, quotePeriod, quoteFrom, quoteTo) { quoteLimit = 50 }
     var result by remember { mutableStateOf<QuoteWorkflowRecord?>(null) }
     var legacyResult by remember { mutableStateOf<QuoteEntity?>(null) }
     var readyRequest by remember { mutableStateOf<WebQuoteRequestEntity?>(null) }
@@ -107,6 +113,23 @@ internal fun QuoteOnlyScreen(viewModel: ManagementViewModel, connection: WebRequ
         quote.sentAt > 0 &&
         management.quotesByRequest.entries.none { it.value.quoteNumber == quote.quoteNumber && it.key in confirmedIds }
     }
+    fun legacyCustomer(quote: QuoteEntity): String {
+        val sourceId = management.quotesByRequest.entries
+            .firstOrNull { it.value.quoteNumber == quote.quoteNumber }?.key
+        return inbox.requests.firstOrNull { it.requestId == sourceId }?.customerName.orEmpty()
+    }
+    val filteredConfirmed = confirmed.filter { saved ->
+        historyMatches(historyDay(saved.confirmedAt), quotePeriod, quoteFrom, quoteTo) &&
+            historySearch(quoteSearch, saved.request.receiptNumber, saved.request.requestId,
+                saved.draft.recipient.customerName, saved.draft.phone)
+    }
+    val filteredLegacy = legacy.filter { saved ->
+        historyMatches(historyDay(saved.sentAt) ?: historyDate(saved.saveDate), quotePeriod, quoteFrom, quoteTo) &&
+            historySearch(quoteSearch, saved.quoteNumber, legacyCustomer(saved), saved.customerPhone)
+    }.sortedByDescending { it.sentAt }
+    val shownConfirmed = filteredConfirmed.take(quoteLimit)
+    val shownLegacy = filteredLegacy.take((quoteLimit - shownConfirmed.size).coerceAtLeast(0))
+    val quoteCount = filteredConfirmed.size + filteredLegacy.size
     Scaffold(topBar = {
         TopAppBar(title = { Text("나무팜 · 견적 관리", fontWeight = FontWeight.Bold) }, actions = {
             TextButton(onClick = onSync, enabled = !busy && !inbox.busy && !deleting) { Text("↻ 가져오기") }
@@ -124,6 +147,10 @@ internal fun QuoteOnlyScreen(viewModel: ManagementViewModel, connection: WebRequ
             }
             message?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
             if (busy || inbox.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
+            if (selectedTab == 1) HistoryFilters(
+                search = quoteSearch, onSearch = { quoteSearch = it }, period = quotePeriod,
+                from = quoteFrom, to = quoteTo, count = quoteCount, basis = "확정일(이전 자료는 발송·저장일)",
+                onApply = { period, from, to, _ -> quotePeriod = period; quoteFrom = from; quoteTo = to })
             Surface(Modifier.fillMaxWidth().weight(1f),
                 shape = RoundedCornerShape(4.dp),
                 border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant)) {
@@ -147,20 +174,20 @@ internal fun QuoteOnlyScreen(viewModel: ManagementViewModel, connection: WebRequ
                                 }
                             }
                         } else {
-                            if (confirmed.isEmpty() && legacy.isEmpty()) item {
-                                Text("이 휴대폰에서 확정한 견적이 없습니다.", Modifier.padding(12.dp))
+                            if (quoteCount == 0) item {
+                                Text("조건에 맞는 확정견적이 없습니다. 검색어나 기간을 바꿔보세요.", Modifier.padding(12.dp))
                             }
-                            itemsIndexed(confirmed, key = { _, saved -> saved.request.requestId }) { index, saved ->
+                            itemsIndexed(shownConfirmed, key = { _, saved -> saved.request.requestId }) { index, saved ->
                                 QuoteTableRow(index + 1, saved.request.receiptNumber.ifBlank { saved.request.requestId },
                                     saved.draft.recipient.customerName, saved.draft.phone,
                                     detail = "견적확정 · ${workflowDate(saved.confirmedAt)}") { result = saved }
                             }
-                            itemsIndexed(legacy, key = { _, saved -> "legacy-${saved.quoteNumber}" }) { index, saved ->
-                                val sourceId = management.quotesByRequest.entries
-                                    .firstOrNull { it.value.quoteNumber == saved.quoteNumber }?.key
-                                val customer = inbox.requests.firstOrNull { it.requestId == sourceId }?.customerName.orEmpty()
-                                QuoteTableRow(confirmed.size + index + 1, saved.quoteNumber, customer, saved.customerPhone,
+                            itemsIndexed(shownLegacy, key = { _, saved -> "legacy-${saved.quoteNumber}" }) { index, saved ->
+                                QuoteTableRow(shownConfirmed.size + index + 1, saved.quoteNumber, legacyCustomer(saved), saved.customerPhone,
                                     detail = "이전 저장 견적 · ${saved.saveDate}") { legacyResult = saved }
+                            }
+                            if (quoteCount > quoteLimit) item {
+                                TextButton(onClick = { quoteLimit += 50 }, modifier = Modifier.fillMaxWidth()) { Text("50건 더 보기") }
                             }
                         }
                     }
