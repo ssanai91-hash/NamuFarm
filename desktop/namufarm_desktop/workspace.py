@@ -3129,7 +3129,14 @@ QDialog#quoteWorkbench QLabel#salesShippingFee{font-size:@freight@px;font-weight
         content = QVBoxLayout(workspace)
         content.setContentsMargins(12, 8, 12, 8)
         content.setSpacing(10)
-        content.addWidget(section("판매 품목", "leaf"))
+        self.customer_items_panel = QFrame()
+        self.customer_items_panel.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        item_content = QVBoxLayout(self.customer_items_panel)
+        item_content.setContentsMargins(0, 0, 0, 0)
+        item_content.setSpacing(10)
+        self.customer_items_heading = section("판매 품목", "leaf")
+        item_content.addWidget(self.customer_items_heading)
+        content.addWidget(self.customer_items_panel)
         self.items = table(["묘목명", "규격", "수량", "판매 단가", "판매 금액"])
         self.items.setObjectName("workbenchItems")
         specifications = [parts[3].strip() if len(parts) in (9, 10) else ""
@@ -3149,18 +3156,20 @@ QDialog#quoteWorkbench QLabel#salesShippingFee{font-size:@freight@px;font-weight
         self.items.verticalHeader().setMinimumSectionSize(row_height)
         self.items.verticalHeader().setDefaultSectionSize(row_height)
         self.items.verticalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Fixed)
-        self.items.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Ignored)
+        self.items.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.items.setFixedHeight(self.items.horizontalHeader().height() + 5 * row_height + 4)
-        content.addWidget(self.items)
+        item_content.addWidget(self.items)
         item_summary = QFrame()
+        self.customer_items_summary = item_summary
         item_summary.setObjectName("workbenchSummary")
+        item_summary.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         totals = QHBoxLayout(item_summary)
         totals.setContentsMargins(10, 6, 10, 6)
         shipping_text = f"선불 {money(self.meta['shippingFee'])}" if self.meta["isPrepaid"] else "후불"
         totals.addWidget(label("택배비  " + shipping_text, "salesShippingFee"))
         totals.addStretch(1)
         totals.addWidget(label("총금액  " + money(self.meta["totalPrice"] + self.meta.get("taxAmount", 0)), "deliverySectionTitle"))
-        content.addWidget(item_summary)
+        item_content.addWidget(item_summary)
         content.addSpacing(6)
         request_area = QFrame()
         request_area.setObjectName("workbenchOriginalRequest")
@@ -3325,13 +3334,26 @@ QDialog#quoteWorkbench QLabel#salesShippingFee{font-size:@freight@px;font-weight
         row_height = self.items.verticalHeader().defaultSectionSize()
         # Reserve blank row space too: one purchased item must not collapse the table.
         rows = max(5, min(8, (self.height() - 440) // row_height))
-        self.items.setFixedHeight(self.items.horizontalHeader().height() + rows * row_height + 4)
+        table_height = self.items.horizontalHeader().height() + rows * row_height + 4
+        self.items.setFixedHeight(table_height)
+        # Reserve the whole group, not just the table, before allocating delivery space.
+        item_layout = self.customer_items_panel.layout()
+        panel_height = (table_height + self.customer_items_heading.sizeHint().height() +
+                        self.customer_items_summary.sizeHint().height() + 2 * item_layout.spacing())
+        self.customer_items_panel.setFixedHeight(panel_height)
+        item_layout.invalidate()
         compact = self.height() < 900
         if compact == getattr(self, "_customer_compact", None):
             return
         self._customer_compact = compact
         for section in (self.customer_note_section, self.customer_request_section):
             section.findChild(QPushButton).setChecked(not compact)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        fit_quote_density(self)
+        self.fit_customer_rail()
+        self.fit_customer_content()
 
     def fit_customer_rail(self):
         # Give the uniform customer fields a little more width than the quote rail.
