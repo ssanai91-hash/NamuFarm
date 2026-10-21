@@ -1,6 +1,8 @@
 package com.example.namufarm.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -8,7 +10,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
@@ -18,6 +23,8 @@ import com.example.namufarm.ui.components.NamuDialog
 import com.example.namufarm.viewmodel.ManagementUiState
 import java.math.BigDecimal
 import java.util.Date
+import java.util.Calendar
+import java.util.TimeZone
 
 private fun saleMoney(value: Long) = String.format(java.util.Locale.KOREA,"%,d원",value)
 
@@ -52,6 +59,41 @@ internal fun SaleFinanceDialog(order: OrderEntity,onSave:(Long,Long,String,Int,B
     }
 }
 
+private data class SalesAmountBucket(val period: String, val orders: Int, val amount: Long)
+
+private fun salesAmountPeriod(day: String, unit: String): String {
+    if (unit == "month") return day.take(7)
+    if (unit != "week") return day
+    val parts = day.split("-").map { it.toInt() }
+    val calendar = Calendar.getInstance(TimeZone.getTimeZone("Asia/Seoul"))
+    calendar.set(parts[0], parts[1] - 1, parts[2])
+    calendar.add(Calendar.DAY_OF_MONTH, -((calendar.get(Calendar.DAY_OF_WEEK) + 5) % 7))
+    return historyDay(calendar.timeInMillis)!!
+}
+
+private fun salesAmountPeriodTitle(period: String, unit: String): String {
+    if (unit != "week") return period.replace('-', '.')
+    val parts = period.split("-").map { it.toInt() }
+    val calendar = Calendar.getInstance(TimeZone.getTimeZone("Asia/Seoul"))
+    calendar.set(parts[0], parts[1] - 1, parts[2])
+    calendar.add(Calendar.DAY_OF_MONTH, 6)
+    return "${period.replace('-', '.')} ~ ${historyDay(calendar.timeInMillis)!!.replace('-', '.')}"
+}
+
+@Composable
+private fun SalesAmountRow(period: String, orders: String, amount: String, header: Boolean = false) {
+    Surface(color = if (header) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface,
+        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant)) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            val weight = if (header) FontWeight.Bold else FontWeight.Normal
+            Text(period, Modifier.weight(2f), textAlign = TextAlign.Center, fontWeight = weight)
+            Text(orders, Modifier.weight(1f), textAlign = TextAlign.Center, fontWeight = weight)
+            Text(amount, Modifier.weight(2f), textAlign = TextAlign.Center, fontWeight = weight)
+        }
+    }
+}
+
 @Composable
 internal fun SalesDashboardDialog(
     state: ManagementUiState,
@@ -62,7 +104,7 @@ internal fun SalesDashboardDialog(
     onTodayOrders: () -> Unit = {}
 ) {
     val today = remember { SalePolicy.period(Date().time, "day") }
-    var unit by rememberSaveable { mutableStateOf("month") }
+    var unit by rememberSaveable { mutableStateOf("day") }
     var from by rememberSaveable { mutableStateOf(today.take(7) + "-01") }
     var to by rememberSaveable { mutableStateOf(today) }
     var filter by rememberSaveable { mutableStateOf("미배송") }
@@ -72,6 +114,7 @@ internal fun SalesDashboardDialog(
     var customTo by rememberSaveable { mutableStateOf("") }
     var rowLimit by remember { mutableIntStateOf(50) }
     var reportPeriod by rememberSaveable { mutableStateOf("month") }
+    var reportSearch by rememberSaveable { mutableStateOf("") }
     LaunchedEffect(search, period, customFrom, customTo, filter) { rowLimit = 50 }
     val workOrders = state.allOrders.filter { it.orderNumber !in state.hiddenOrderNumbers }
     val pendingOrders = workOrders.count { it.status in setOf("구매확정", "입금확인") }
@@ -92,17 +135,52 @@ internal fun SalesDashboardDialog(
     val reportEnd = reportRangeEnd ?: today
     val paidOrders = workOrders.filter { order ->
         order.status in setOf("구매확정", "입금확인", "배송확인", "배송완료", "판매완료") &&
-            paidDay(order)?.let { it >= reportStart && it <= reportEnd } == true
+            paidDay(order)?.let { it >= reportStart && it <= reportEnd } == true &&
+            historySearch(reportSearch, order.customerName, order.receiverName, order.customerPhone,
+                order.orderNumber, order.sourceQuoteNumber)
     }
-    val paidSales = paidOrders.sumOf { it.totalPrice.toLong() }
-    val paidShipping = paidOrders.sumOf { if (it.isPrepaid) it.shippingFee.toLong() else 0L }
-    val paidTax = paidOrders.sumOf { it.taxAmount }
+    val paidTotal = paidOrders.sumOf { it.totalPrice.toLong() + it.taxAmount }
+    val amountBuckets = paidOrders.groupBy { salesAmountPeriod(paidDay(it)!!, unit) }
+        .map { (period, orders) -> SalesAmountBucket(period, orders.size,
+            orders.sumOf { it.totalPrice.toLong() + it.taxAmount }) }.sortedByDescending { it.period }
 
-    NamuDialog("매출 · 이익 분석", "판매 통계와 전체 주문 조회", onDismiss) {
+    NamuDialog("매출", "입금확인 기준 판매금액 합계", onDismiss) {
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(20.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)) {
             item {
+                Text("판매금액 합계", style = MaterialTheme.typography.titleLarge)
+                HistoryFilters(search = reportSearch, onSearch = { reportSearch = it },
+                    period = reportPeriod, from = from, to = to, count = paidOrders.size,
+                    basis = "입금확인일(이전 자료는 주문일)", onApply = { key, start, end, _ ->
+                        reportPeriod = key; from = start; to = end
+                    })
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf("day" to "일별", "week" to "주별", "month" to "월별").forEach { (value, label) ->
+                        FilterChip(selected = unit == value, onClick = { unit = value }, label = { Text(label) })
+                    }
+                    TextButton(onClick = {
+                        reportSearch = ""; reportPeriod = "month"; from = ""; to = ""; unit = "day"
+                    }) { Text("초기화") }
+                }
+                Surface(Modifier.fillMaxWidth(), shape = RoundedCornerShape(4.dp),
+                    border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant)) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("총 판매금액 · ${paidOrders.size}건")
+                        Text(saleMoney(paidTotal), style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold)
+                    }
+                }
+                Text("주문 총금액 합계 · 선불 택배비 포함 / 후불 제외 · 취소 제외\n주별은 월요일~일요일",
+                    style = MaterialTheme.typography.bodySmall)
+            }
+            item { SalesAmountRow("날짜 / 기간", "판매 건수", "판매금액 합계", header = true) }
+            if (amountBuckets.isEmpty()) item { Text("선택한 조건에 맞는 판매 기록이 없습니다.") }
+            items(amountBuckets, key = { "amount-${it.period}" }) { bucket ->
+                SalesAmountRow(salesAmountPeriodTitle(bucket.period, unit), "${bucket.orders}건", saleMoney(bucket.amount))
+            }
+            item {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    HorizontalDivider(Modifier.padding(vertical = 8.dp))
                     Text("주문 · 배송 관리", style = MaterialTheme.typography.titleLarge)
                     Text("입금확인된 주문 ${workOrders.size}건 · 배송 대기 ${pendingOrders}건",
                         style = MaterialTheme.typography.bodyMedium)
@@ -130,53 +208,11 @@ internal fun SalesDashboardDialog(
                             style = MaterialTheme.typography.titleMedium)
                         Text("${order.customerName} ${order.customerPhone}")
                         Text("${order.totalQty}주 · ${saleMoney(order.totalPrice.toLong() + order.taxAmount)}")
-                        if (!order.costConfirmed) Text("원가·비용 확인 전", style = MaterialTheme.typography.bodySmall)
                     }
                 }
             }
             if (rows.size > rowLimit) item {
                 TextButton(onClick = { rowLimit += 50 }, modifier = Modifier.fillMaxWidth()) { Text("50건 더 보기") }
-            }
-            item {
-                HorizontalDivider(Modifier.padding(vertical = 8.dp))
-                Text("매출 · 이익 분석", style = MaterialTheme.typography.titleLarge)
-                HistoryFilters(period = reportPeriod, from = from, to = to, count = paidOrders.size,
-                    basis = "로컬 입금 기준", onApply = { key, start, end, _ ->
-                        reportPeriod = key; from = start; to = end
-                    })
-                Text("묘목 ${saleMoney(paidSales - paidShipping)} · 선불 택배비 ${saleMoney(paidShipping)}")
-                Text("추가 세액 ${saleMoney(paidTax)} · 총 입금 ${saleMoney(paidSales + paidTax)}")
-                Text("배송완료 등 최종 처리된 판매 내역을 기간별로 조회합니다.",
-                    style = MaterialTheme.typography.bodySmall)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf("day" to "일", "month" to "월", "year" to "년").forEach { (value, label) ->
-                        FilterChip(selected = unit == value, onClick = { unit = value }, label = { Text(label) })
-                    }
-                }
-                Button(onClick = { onReport(unit, reportStart, reportEnd) }, enabled = !state.salesBusy,
-                    modifier = Modifier.fillMaxWidth()) {
-                    Text(if (state.salesBusy) "전송 대기 반영·조회 중…" else "시트 판매 통계 조회")
-                }
-                Text("완료된 판매만 집계합니다. 취소·미입금·배송 중 주문은 포함하지 않습니다.",
-                    style = MaterialTheme.typography.bodySmall)
-                state.message?.let { Text(it) }
-            }
-            state.salesReport?.let { report ->
-                item { Text("${report.from} ~ ${report.to}", style = MaterialTheme.typography.titleMedium) }
-                if (report.buckets.isEmpty()) item { Text("이 기간에 완료된 판매가 없습니다.") }
-                items(report.buckets, key = { it.period }) { b ->
-                    Card(Modifier.fillMaxWidth()) {
-                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Text(b.period, style = MaterialTheme.typography.titleMedium)
-                            Text("판매 ${b.orders}건 · ${b.quantity}주")
-                            Text("매출 ${saleMoney(b.sales)} · 부가세 ${saleMoney(b.tax)}")
-                            Text("원가 ${saleMoney(b.cost)} · 비용 ${saleMoney(b.expenses)}")
-                            Text("확인된 매출이익 ${saleMoney(b.knownProfit)}")
-                            if (b.unknownProfitOrders > 0)
-                                Text("원가 미확인 ${b.unknownProfitOrders}건은 매출이익에서 제외했습니다.")
-                        }
-                    }
-                }
             }
         }
     }

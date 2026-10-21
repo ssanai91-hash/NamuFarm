@@ -1,20 +1,21 @@
 """Qt desktop manager. Network, cryptography and SQLite run on one worker at a time."""
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from .list_filters import ListPeriodFilter, first_date
 
-from PySide6.QtCore import QDate, QStandardPaths, Qt, QThread, QTimer, Signal, QUrl
+from PySide6.QtCore import QStandardPaths, Qt, QThread, QTimer, Signal, QUrl
 from PySide6.QtGui import QCloseEvent, QRegularExpressionValidator, QDesktopServices
 from PySide6.QtCore import QRegularExpression
 from PySide6.QtWidgets import (
     QApplication, QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFileDialog,
-    QFormLayout, QGroupBox, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMainWindow,
+    QFormLayout, QFrame, QGroupBox, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMainWindow,
     QMessageBox, QPlainTextEdit, QPushButton, QScrollArea, QSplitter, QTabWidget,
-    QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget, QDateEdit, QDoubleSpinBox,
+    QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget, QDoubleSpinBox,
 )
 
 from .api import DEFAULT_URL
+from .commerce import sale_number
 from .crypto import SellerKey
 from .domain import EDITABLE, NEXT, SEOUL, STATES, MAX_SAFE, profit, require
 from .errors import ConflictError, UserError
@@ -289,7 +290,7 @@ class MainWindow(QMainWindow):
         self.save_button.setEnabled(editable and self.dirty)
         self.next_button.setEnabled(editable and self.selected_sale["metadata"]["status"] in NEXT)
         self.cancel_sale_button.setEnabled(editable and self.selected_sale["metadata"]["status"] in ("입금확인", "구매확정"))
-        self.report_button.setEnabled(paired)
+        self.report_button.setEnabled(ready)
         self.resolve_button.setEnabled(paired and pending and self.conflict)
         self.connection_status.setText("연결 정보 저장됨" if self.data["paired"] else "서버 연결 필요")
         self.pending_status.setText(f"전송 대기 {len(self.data['pending']):,}건 · 판매관리의 ‘서버에 올리기’로 백업하세요." if pending else "전송 대기 0건")
@@ -314,6 +315,7 @@ class MainWindow(QMainWindow):
         self.refresh_requests()
         self.refresh_sales()
         self.update_controls()
+        self.refresh_payment_summary()
 
     def build_requests(self):
         page = QWidget()
@@ -569,112 +571,121 @@ class MainWindow(QMainWindow):
         page = QWidget()
         layout = QVBoxLayout(page)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(8)
+        layout.setSpacing(10)
         bar = QHBoxLayout()
-        self.unit = QComboBox()
-        for label, key in (("일별", "day"), ("월별", "month"), ("연별", "year")):
-            self.unit.addItem(label, key)
-        today = QDate.currentDate()
-        self.start_date, self.end_date = QDateEdit(QDate(today.year(), today.month(), 1)), QDateEdit(today)
+        self.report_search = QLineEdit()
+        self.report_search.setPlaceholderText("고객명 · 전화번호 · 판매번호 검색")
+        self.report_search.setClearButtonEnabled(True)
+        self.report_search.setMinimumWidth(150)
+        self.report_search.setMaximumWidth(400)
+        bar.addWidget(self.report_search, 2)
+        bar.addStretch(1)
         self.report_period = ListPeriodFilter("month")
-        self.report_period.changed.connect(self.report_period_changed)
-        for field in (self.start_date, self.end_date):
-            field.setCalendarPopup(True)
-            field.setDisplayFormat("yyyy-MM-dd")
-        filter_style = """
-QComboBox,QDateEdit{padding-right:26px;}
-QComboBox:focus,QDateEdit:focus{padding-right:25px;}
-QComboBox::drop-down,QDateEdit::drop-down{
-    subcontrol-origin:border;subcontrol-position:top right;
-    width:22px;border:0;margin:1px 2px 1px 0;
-}
-"""
-        for field in (self.unit, self.start_date, self.end_date):
-            field.setStyleSheet(filter_style)
-        self.report_button = QPushButton("통계 조회")
-        self.report_button.clicked.connect(self.fetch_report)
-        self.report_date_separator = QLabel("~")
         bar.addWidget(self.report_period)
-        for field in (self.unit, self.start_date, self.report_date_separator, self.end_date, self.report_button):
-            bar.addWidget(field)
+        self.unit = QComboBox()
+        self.unit.setAccessibleName("판매금액 집계 단위")
+        for title, key in (("일별", "day"), ("주별", "week"), ("월별", "month")):
+            self.unit.addItem(title, key)
+        bar.addWidget(self.unit)
+        self.report_button = QPushButton("새로고침")
+        self.report_button.clicked.connect(self.fetch_report)
+        set_button_icon(self.report_button, "refresh")
+        bar.addWidget(self.report_button)
         reset = QPushButton("초기화")
-        reset.clicked.connect(self.report_period.reset)
+        reset.clicked.connect(self.reset_report_filters)
         bar.addWidget(reset)
-        bar.addStretch()
         layout.addLayout(bar)
-        self.payment_summary = QLabel("입금 기준 집계는 로컬 판매자료를 사용합니다.")
-        self.payment_summary.setWordWrap(True)
-        layout.addWidget(self.payment_summary)
-        self.start_date.dateChanged.connect(self.refresh_payment_summary)
-        self.end_date.dateChanged.connect(self.refresh_payment_summary)
-        for field in (self.start_date, self.report_date_separator, self.end_date):
-            field.hide()
-        layout.addWidget(QLabel("배송완료일의 한국 시간 기준 · 매출은 세액 제외 · 확인한 원가를 기준으로 매출이익 계산"))
-        self.report_table = table(["기간", "판매 건수", "수량", "매출", "세액", "원가", "비용", "확인 매출이익", "원가 미확인"])
-        self.report_table.set_column_layout(((0, .5, 112), (1, .2, 80), (2, .3, 72),
-            (3, 1, 130), (4, .7, 108), (5, 1, 130), (6, .7, 100), (7, 1, 145), (8, .2, 110)))
-        self.report_table.set_empty_message("집계할 기간을 선택한 뒤 통계 조회를 눌러주세요.")
-        set_button_icon(self.report_button, "reports")
-        layout.addWidget(self.report_table, 1)
-        self.report_summary = QLabel("기간을 선택하고 통계를 조회하세요.")
+        self.report_summary = QLabel()
+        self.report_summary.setObjectName("muted")
+        self.report_summary.setWordWrap(True)
         layout.addWidget(self.report_summary)
-        self.tabs.addTab(page, "일·월·년 통계")
+        summary = QFrame()
+        summary.setObjectName("card")
+        summary_layout = QHBoxLayout(summary)
+        summary_layout.setContentsMargins(16, 12, 16, 12)
+        title = QLabel("총 판매금액")
+        title.setObjectName("sectionTitle")
+        summary_layout.addWidget(title)
+        self.payment_summary = QLabel("0건")
+        self.payment_summary.setObjectName("muted")
+        summary_layout.addWidget(self.payment_summary, 1)
+        self.report_total = QLabel("0원")
+        self.report_total.setObjectName("sectionTitle")
+        self.report_total.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        summary_layout.addWidget(self.report_total)
+        layout.addWidget(summary)
+        self.report_table = table(["날짜 / 기간", "판매 건수", "판매금액 합계"])
+        self.report_table.set_column_layout(((0, 2, 230), (1, 1, 120), (2, 2, 180)))
+        self.report_table.set_empty_message("선택한 조건에 맞는 판매 기록이 없습니다.")
+        layout.addWidget(self.report_table, 1)
+        self.report_search.textChanged.connect(self.refresh_payment_summary)
+        self.report_period.changed.connect(self.report_period_changed)
+        self.unit.currentIndexChanged.connect(self.refresh_payment_summary)
+        self.tabs.addTab(page, "매출")
+        self.refresh_payment_summary()
+
+    def reset_report_filters(self):
+        self.report_search.blockSignals(True)
+        self.unit.blockSignals(True)
+        self.report_search.clear()
+        self.unit.setCurrentIndex(0)
+        self.report_search.blockSignals(False)
+        self.unit.blockSignals(False)
+        self.report_period.reset()
 
     def report_period_changed(self):
-        start, end = self.report_period.bounds()
-        if start is None:
-            dates = [first_date(row["metadata"].get("paidAt"), row["metadata"].get("purchasedAt"),
-                                row["metadata"].get("orderDate")) for row in self.data.get("sales", [])]
-            start = min((day for day in dates if day is not None), default=datetime.now(SEOUL).date())
-            end = datetime.now(SEOUL).date()
-        for field, day in ((self.start_date, start), (self.end_date, end)):
-            field.blockSignals(True)
-            field.setDate(QDate(day.year, day.month, day.day))
-            field.blockSignals(False)
-        # The custom period dialog supplies dates, so the toolbar stays compact.
         self.refresh_payment_summary()
-        fill_table(self.report_table, [])
-        self.report_summary.setText("선택한 기간의 배송완료 통계는 ‘통계 조회’를 눌러 확인하세요.")
 
     def refresh_payment_summary(self):
-        if not hasattr(self, "payment_summary"):
+        if not hasattr(self, "report_total"):
             return
         start, end = self.report_period.bounds()
-        if start is None:
-            dates = [first_date(row["metadata"].get("paidAt"), row["metadata"].get("purchasedAt"),
-                                row["metadata"].get("orderDate")) for row in self.data.get("sales", [])]
-            start = min((day for day in dates if day is not None), default=datetime.now(SEOUL).date())
-            end = datetime.now(SEOUL).date()
-        paid = []
+        query = self.report_search.text().strip().casefold()
+        phone_query = query.replace("-", "").replace(" ", "")
+        unit = self.unit.currentData()
+        buckets = {}
+        count = total = 0
         for row in self.data.get("sales", []):
             meta = row["metadata"]
+            if meta.get("status") not in ("입금확인", "구매확정", "배송확인", "배송완료", "판매완료"):
+                continue
             day = first_date(meta.get("paidAt"), meta.get("purchasedAt"), meta.get("orderDate"))
-            if meta.get("status") in ("입금확인", "구매확정", "배송확인", "배송완료", "판매완료") and day and start <= day <= end:
-                paid.append(meta)
-        shipping = sum(m.get("shippingFee", 0) if m.get("isPrepaid") else 0 for m in paid)
-        sales = sum(m["totalPrice"] for m in paid)
-        tax = sum(m.get("taxAmount", 0) for m in paid)
-        self.payment_summary.setText(
-            f"{start:%Y.%m.%d} ~ {end:%Y.%m.%d} · 로컬 입금 기준 {len(paid):,}건\n"
-            f"묘목 {money(sales - shipping)} · 선불 택배비 {money(shipping)} · 추가 세액 {money(tax)} · 총 입금 {money(sales + tax)}")
+            if day is None or (start is not None and not start <= day <= end):
+                continue
+            order = row["private"]["order"]
+            searchable = " ".join((sale_number(row), meta["orderNumber"],
+                                   order.get("customerName", ""), order.get("receiverName", ""),
+                                   order.get("customerPhone", ""), order.get("sourceQuoteNumber", ""))).casefold()
+            if query and query not in searchable and not (phone_query.isdigit() and phone_query in
+                    order.get("customerPhone", "").replace("-", "").replace(" ", "")):
+                continue
+            period = day - timedelta(days=day.weekday()) if unit == "week" else day.replace(day=1) if unit == "month" else day
+            bucket = buckets.setdefault(period, [0, 0])
+            amount = meta["totalPrice"] + meta.get("taxAmount", 0)
+            bucket[0] += 1
+            bucket[1] += amount
+            count += 1
+            total += amount
+        rows = []
+        for period, (orders, amount) in sorted(buckets.items(), reverse=True):
+            title = (f"{period:%Y.%m.%d} ~ {period + timedelta(days=6):%Y.%m.%d}" if unit == "week" else
+                     f"{period:%Y.%m}" if unit == "month" else f"{period:%Y.%m.%d}")
+            rows.append((title, f"{orders:,}건", money(amount)))
+        fill_table(self.report_table, rows)
+        for row in range(self.report_table.rowCount()):
+            for column in range(3):
+                self.report_table.item(row, column).setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.payment_summary.setText(f"{count:,}건")
+        self.report_total.setText(money(total))
+        self.report_summary.setText(
+            f"{self.report_period.description()} · 입금확인일 기준(이전 자료는 주문일) · 취소 제외\n"
+            "주문 총금액 합계 · 선불 택배비 포함 / 후불 제외 · 주별은 월요일~일요일")
+        if hasattr(self, "set_page_count") and getattr(self, "workspace_ready", False):
+            self.set_page_count(self.PAGE_REPORTS, count)
 
     def fetch_report(self):
-        self.report_period_changed()
-        unit, start, end = self.unit.currentData(), self.start_date.date().toString("yyyy-MM-dd"), self.end_date.date().toString("yyyy-MM-dd")
-        def work():
-            report = self.manager.report(unit, start, end)
-            return report, self.manager.vault.pending()
-        self.run_job("판매 통계 조회 중…", work, self.apply_report, False)
-
-    def apply_report(self, result):
-        report, pending = result
-        self.data["pending"] = pending
-        keys = ("period", "orders", "quantity", "sales", "tax", "cost", "expenses", "knownProfit", "unknownProfitOrders")
-        self.report_table.set_empty_message("선택한 기간의 배송완료 판매 기록이 없습니다.")
-        fill_table(self.report_table, [[money(b[k]) if k in ("sales", "tax", "cost", "expenses", "knownProfit") else b[k] for k in keys] for b in report["buckets"]])
-        buckets = report["buckets"]
-        self.report_summary.setText(f"{report['from']} ~ {report['to']} · 배송완료 {sum(b['orders'] for b in buckets):,}건 · 매출 {money(sum(b['sales'] for b in buckets))} · 확인 매출이익 {money(sum(b['knownProfit'] for b in buckets))}")
-        self.message.setText("판매 통계 조회 완료")
+        # Display the local DB immediately; this action never writes to the server.
+        self.refresh_payment_summary()
 
     def build_connection(self):
         page = QWidget()

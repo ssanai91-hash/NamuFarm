@@ -3638,7 +3638,7 @@ class ShippingExportDialog(QDialog):
 class SellerWindow(MainWindow):
     PAGE_REQUESTS, PAGE_QUOTES, PAGE_SALES, PAGE_SHIPPING, PAGE_REPORTS, PAGE_FARMS, PAGE_SPECIES, PAGE_SETTINGS = range(8)
     PAGES = (("견적요청", "INBOX"), ("견적 작업대", "QUOTATIONS"),
-             ("판매관리", "ORDERS"), ("배송 · 송장", "FULFILLMENT"), ("매출 · 이익", "REPORTS"),
+             ("판매관리", "ORDERS"), ("배송 · 송장", "FULFILLMENT"), ("매출", "REPORTS"),
              ("농원관리", "FARMS"), ("묘목관리", "SPECIES"), ("연결 · 설정", "SETTINGS"))
 
     def __init__(self, vault_path=None):
