@@ -1988,7 +1988,7 @@ class DeliveryStatusLog(QLineEdit):
         large = bool(QApplication.instance().property("namufarmLargeFont"))
         self.setFixedHeight(42 if large else 38)
         self.setStyleSheet("""
-QLineEdit#deliveryStatusLog{background:#f5f8f6;color:#314e41;border:2px solid #a6bbaf;border-radius:8px;min-height:0;max-height:16777215px;padding:4px 8px;font-size:@font@px;}
+QLineEdit#deliveryStatusLog{background:#f5f8f6;color:#314e41;border:2px solid #a6bbaf;border-radius:8px;min-height:0;padding:4px 8px;font-size:@font@px;}
 QLineEdit#deliveryStatusLog[state="pending"]{border-color:#c0a463;}
 QLineEdit#deliveryStatusLog[state="ready"],QLineEdit#deliveryStatusLog[state="success"]{border-color:#4f916b;}
 QLineEdit#deliveryStatusLog[state="failed"]{border-color:#b96155;}
