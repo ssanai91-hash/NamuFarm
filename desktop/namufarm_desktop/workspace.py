@@ -151,7 +151,7 @@ class UnitPriceEditor(QWidget):
     STEP = 500
     MAX_PRICE = 2147483647
 
-    def __init__(self, value=2000, parent=None, *, compact=False):
+    def __init__(self, value=2000, parent=None, *, compact=False, caption="판매 단가"):
         super().__init__(parent)
         self.setObjectName("unitPriceEditor")
         large = bool(QApplication.instance().property("namufarmLargeFont"))
@@ -162,17 +162,17 @@ class UnitPriceEditor(QWidget):
         row.setSpacing(6 if compact else 4)
 
         self.minus = QPushButton("-")
-        self.minus.setToolTip("판매 단가 500원 내리기")
+        self.minus.setToolTip(caption + " 500원 내리기")
         self.minus.setFixedSize(control_width, control_height)
-        self.minus.setAccessibleName("판매 단가 500원 내리기")
+        self.minus.setAccessibleName(caption + " 500원 내리기")
         self.minus.clicked.connect(lambda: self.adjust(-self.STEP))
         row.addWidget(self.minus)
 
         self.input = QLineEdit(str(max(0, int(value or 0))))
         self.input.setValidator(QIntValidator(0, self.MAX_PRICE, self.input))
         self.input.setAlignment(Qt.AlignmentFlag.AlignRight)
-        self.input.setPlaceholderText("판매 단가")
-        self.input.setAccessibleName("판매 단가 (원)")
+        self.input.setPlaceholderText(caption)
+        self.input.setAccessibleName(caption + " (원)")
         if compact:
             self.input.setFixedHeight(control_height)
             self.input.setMinimumWidth(120 if large else 104)
@@ -180,9 +180,9 @@ class UnitPriceEditor(QWidget):
         row.addWidget(self.input, 1)
 
         self.plus = QPushButton("+")
-        self.plus.setToolTip("판매 단가 500원 올리기")
+        self.plus.setToolTip(caption + " 500원 올리기")
         self.plus.setFixedSize(control_width, control_height)
-        self.plus.setAccessibleName("판매 단가 500원 올리기")
+        self.plus.setAccessibleName(caption + " 500원 올리기")
         self.plus.clicked.connect(lambda: self.adjust(self.STEP))
         row.addWidget(self.plus)
 
@@ -1093,10 +1093,15 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         self.prepaid.setChecked(draft['isPrepaid'])
         form.addRow(self.prepaid)
         for key, title in (('shippingFee', '배송비 (원)'), ('taxAmount', '세액 (원)')):
-            field = QLineEdit(str(draft[key]))
+            if key == 'shippingFee':
+                self.shipping_fee_editor = UnitPriceEditor(draft[key], compact=True, caption="선불 택배비")
+                field = self.shipping_fee_editor.input
+                form.addRow(title, self.shipping_fee_editor)
+            else:
+                field = QLineEdit(str(draft[key]))
+                form.addRow(title, field)
             self.fields[key] = field
             field.textChanged.connect(self.recalculate)
-            form.addRow(title, field)
         self.cost = QCheckBox('입력한 매입 원가를 확인했습니다')
         self.cost.setChecked(draft['costConfirmed'])
         form.addRow(self.cost)
@@ -1368,24 +1373,37 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         self.workbench_shipping = shipping
         shipping.setObjectName("workbenchShipping")
         shipping_row = QHBoxLayout(shipping)
-        shipping_row.setContentsMargins(12, 4, 12, 4)
-        shipping_row.setSpacing(10)
+        shipping_row.setContentsMargins(16, 8, 16, 8)
+        shipping_row.setSpacing(12)
         shipping_row.addWidget(workbench_icon("shipping", 28))
         shipping_row.addWidget(label("택배비", "deliverySectionTitle"))
+        shipping_choices = QWidget()
+        shipping_choices.setObjectName("shippingChoices")
+        shipping_choices.setStyleSheet(
+            "QWidget#shippingChoices QRadioButton{spacing:8px;margin:0;padding:4px 2px;}"
+            "QWidget#shippingChoices QRadioButton::indicator{width:20px;height:20px;}")
+        choices = QHBoxLayout(shipping_choices)
+        choices.setContentsMargins(6, 0, 6, 0)
+        choices.setSpacing(18)
         self.shipping_cod = QRadioButton("후불")
         self.shipping_prepaid = QRadioButton("선불")
         self.shipping_prepaid.setChecked(bool(self.draft.get("isPrepaid")))
         self.shipping_cod.setChecked(not self.shipping_prepaid.isChecked())
-        shipping_row.addWidget(self.shipping_cod)
-        shipping_row.addWidget(self.shipping_prepaid)
-        self.shipping_fee = QLineEdit(str(int(self.draft.get("shippingFee") or 6000)))
-        self.shipping_fee.setValidator(QIntValidator(0, 2147483647, self.shipping_fee))
-        self.shipping_fee.setFixedWidth(100)
-        self.shipping_fee.setAlignment(Qt.AlignmentFlag.AlignRight)
+        for choice in (self.shipping_cod, self.shipping_prepaid):
+            choice.setMinimumSize(80 if large else 72, 38)
+            choice.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
+            choices.addWidget(choice)
+        shipping_row.addWidget(shipping_choices)
+        self.shipping_fee_editor = UnitPriceEditor(int(self.draft.get("shippingFee") or 6000),
+                                                   compact=True, caption="선불 택배비")
+        self.shipping_fee_editor.setFixedWidth(232 if large else 212)
+        self.shipping_fee = self.shipping_fee_editor.input
         self.shipping_fee.setAccessibleName("선불 택배비 금액")
-        shipping_row.addWidget(self.shipping_fee)
+        shipping_row.addWidget(self.shipping_fee_editor)
         shipping_row.addWidget(label("원"))
         self.shipping_status = label("", "deliveryCaption", True)
+        self.shipping_status.setMinimumWidth(0)
+        self.shipping_status.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         shipping_row.addWidget(self.shipping_status, 1)
         content.addWidget(shipping)
         self.workbench_total_rule = QFrame()
@@ -1852,8 +1870,11 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
             self.quote_file_label.setText("공식 견적서 미생성")
         if self.workbench:
             prepaid = self.shipping_prepaid.isChecked()
+            self.shipping_fee_editor.setEnabled(prepaid)
             self.shipping_fee.setEnabled(prepaid)
             self.shipping_status.setText("선불 · 합계 포함" if prepaid else "후불 · 별도")
+        elif hasattr(self, "shipping_fee_editor"):
+            self.shipping_fee_editor.setEnabled(self.prepaid.isChecked())
         invalid = False
         try:
             draft = self.collect(False)
@@ -2736,6 +2757,7 @@ class QuoteDeliveryDialog(QuoteDialog):
             self.preview_quote_button.setEnabled(False)
             self.generate_quote_button.setText("공식견적서 생성")
             self.quote_file_label.setText("공식 견적서 미생성")
+        self.shipping_fee_editor.setEnabled(False)
         self.shipping_fee.setEnabled(False)
         invalid = False
         try:
@@ -2762,6 +2784,7 @@ class QuoteDeliveryDialog(QuoteDialog):
         self.confirm_button.setText("입금확인 완료" if self.payment_registered else "입금확인")
         self.shipping_cod.setEnabled(False)
         self.shipping_prepaid.setEnabled(False)
+        self.shipping_fee_editor.setEnabled(False)
         self.shipping_fee.setEnabled(False)
         self.sms_button.setEnabled(False)
         self.email_button.setEnabled(False)
