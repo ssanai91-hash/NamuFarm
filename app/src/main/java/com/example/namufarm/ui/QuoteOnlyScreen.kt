@@ -286,19 +286,84 @@ private fun workflowDate(value: Long): String = if (value <= 0) "전송 기록 �
 
 @Composable
 internal fun QuoteWorkflowResultDialog(saved: QuoteWorkflowRecord, onDismiss: () -> Unit) {
-        NamuDialog("확정견적 확인", saved.request.receiptNumber, onDismiss,
-            actions = { Button(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) { Text("닫기") } }) {
-            Column(Modifier.verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("고객명 ${saved.draft.recipient.customerName}", fontWeight = FontWeight.Bold)
-                Text("${saved.draft.phone}\n${saved.draft.recipient.customerEmail}")
-                HorizontalDivider()
-                Text(quoteWorkflowText(saved.request, saved.draft))
-                HorizontalDivider()
-                Text("문자 ${saved.delivery.smsLabel(saved.draft)} · ${workflowDate(saved.delivery.smsSentAt)}")
-                Text("메일 ${saved.delivery.emailLabel(saved.draft)} · ${workflowDate(saved.delivery.emailSentAt)}")
-                Text("확정 시각 ${workflowDate(saved.confirmedAt)}")
-                if (saved.request.message.isNotBlank()) Text("요청사항\n${saved.request.message}")
+    val draft = saved.draft
+    val lines = remember(draft.rows) { draft.rows.map { it.line() } }
+    val itemAmount = lines.sumOf { it.orderQty.toLong() * it.retailPrice }
+    val shipping = draft.shipping().toLong()
+    val tax = if (draft.recipient.formalQuoteRequested) draft.options.taxAmount() else 0L
+    val total = itemAmount + shipping + tax
+    NamuDialog("확정견적 확인", saved.request.receiptNumber.ifBlank { saved.request.requestId }, onDismiss,
+        actions = { Button(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) { Text("닫기") } }) {
+        LazyColumn(Modifier.fillMaxWidth(), contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            item {
+                QuoteBox("고객 정보") {
+                    QuoteResultField("고객명", draft.recipient.customerName.ifBlank { saved.request.customerName })
+                    QuoteResultField("연락처", draft.phone)
+                    QuoteResultField("이메일", draft.recipient.customerEmail)
+                    if (draft.recipient.recipientName.isNotBlank()) {
+                        QuoteResultField("수신인", draft.recipient.recipientName)
+                    }
+                    QuoteResultField("상태", "견적확정")
+                    QuoteResultField("확정일", workflowDate(saved.confirmedAt))
+                }
+            }
+            item {
+                Text("주문 내역 · ${lines.size}개 품목", style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold)
+            }
+            itemsIndexed(lines) { index, line ->
+                QuoteBox("${index + 1}. ${line.speciesName}") {
+                    QuoteResultField("규격", draft.rows[index].spec)
+                    QuoteResultField("수량", "${quoteResultNumber(line.orderQty.toLong())}주")
+                    QuoteResultField("단가", "${quoteResultNumber(line.retailPrice.toLong())}원")
+                    HorizontalDivider()
+                    QuoteResultField("금액", "${quoteResultNumber(line.orderQty.toLong() * line.retailPrice)}원",
+                        emphasized = true)
+                }
+            }
+            item {
+                QuoteBox("견적 금액") {
+                    QuoteResultField("묘목 합계", "${quoteResultNumber(itemAmount)}원")
+                    QuoteResultField("택배비", if (draft.prepaid) "선불 ${quoteResultNumber(shipping)}원" else "후불",
+                        emphasized = true)
+                    if (tax > 0) QuoteResultField("추가 세액", "${quoteResultNumber(tax)}원")
+                    HorizontalDivider()
+                    QuoteResultField("총금액", "${quoteResultNumber(total)}원", emphasized = true)
+                    Text(if (draft.prepaid) "선불 택배비 포함" else "후불 택배비는 총금액에 포함되지 않습니다.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            item {
+                QuoteBox("고객 요청사항") {
+                    Text(saved.request.message.ifBlank { "등록된 요청사항이 없습니다." },
+                        style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+            item {
+                QuoteBox("전송 기록") {
+                    QuoteResultField("문자", saved.delivery.smsLabel(draft))
+                    if (saved.delivery.smsSentAt > 0) QuoteResultField("전송일", workflowDate(saved.delivery.smsSentAt))
+                    QuoteResultField("메일", saved.delivery.emailLabel(draft))
+                    if (saved.delivery.emailSentAt > 0) QuoteResultField("전송일", workflowDate(saved.delivery.emailSentAt))
+                }
             }
         }
+    }
 }
+
+@Composable
+private fun QuoteResultField(label: String, value: String, emphasized: Boolean = false) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.Top) {
+        Text(label, Modifier.width(72.dp), style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(value.ifBlank { "—" }, Modifier.weight(1f), textAlign = TextAlign.End,
+            style = if (emphasized) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyMedium,
+            fontWeight = if (emphasized) FontWeight.Bold else FontWeight.Normal)
+    }
+}
+
+private fun quoteResultNumber(value: Long): String = "%,d".format(java.util.Locale.KOREA, value)
 
