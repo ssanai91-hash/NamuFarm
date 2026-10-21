@@ -3159,7 +3159,8 @@ QDialog#quoteWorkbench QLabel#salesShippingFee{font-size:@freight@px;font-weight
         self.items.verticalHeader().setMinimumSectionSize(row_height)
         self.items.verticalHeader().setDefaultSectionSize(row_height)
         self.items.verticalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Fixed)
-        size_table_to_rows(self.items, 8 if self.height() >= 900 else 3)
+        self.items.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Ignored)
+        self.items.setFixedHeight(self.items.horizontalHeader().height() + 5 * row_height + 4)
         content.addWidget(self.items)
         item_summary = QFrame()
         item_summary.setObjectName("workbenchSummary")
@@ -3243,12 +3244,18 @@ QDialog#quoteWorkbench QLabel#salesShippingFee{font-size:@freight@px;font-weight
         form_row.addWidget(form_area, 1)
         form_row.addStretch(0)
         shipping_layout.addLayout(form_row)
-        content.addWidget(shipping)
-        content.addWidget(self.customer_request_section)
-
-        content.addStretch(1)
-        work_scroll.setWidget(workspace)
-        body.addWidget(work_scroll, 1)
+        # Only delivery details scroll; the item table and totals retain their own space.
+        delivery_details = QWidget()
+        details = QVBoxLayout(delivery_details)
+        details.setContentsMargins(0, 0, 0, 0)
+        details.setSpacing(10)
+        details.addWidget(shipping)
+        details.addWidget(self.customer_request_section)
+        details.addStretch(1)
+        work_scroll.setWidget(delivery_details)
+        work_scroll.setMinimumHeight(120)
+        content.addWidget(work_scroll, 1)
+        body.addWidget(workspace, 1)
         root.addLayout(body, 1)
 
         terminal = self.meta["status"] in ("배송완료", "구매취소", "판매완료", "주문취소")
@@ -3325,11 +3332,14 @@ QDialog#quoteWorkbench QLabel#salesShippingFee{font-size:@freight@px;font-weight
             self.fit_customer_content()
 
     def fit_customer_content(self):
+        row_height = self.items.verticalHeader().defaultSectionSize()
+        # Reserve blank row space too: one purchased item must not collapse the table.
+        rows = max(5, min(8, (self.height() - 440) // row_height))
+        self.items.setFixedHeight(self.items.horizontalHeader().height() + rows * row_height + 4)
         compact = self.height() < 900
         if compact == getattr(self, "_customer_compact", None):
             return
         self._customer_compact = compact
-        size_table_to_rows(self.items, 3 if compact else 8)
         for section in (self.customer_note_section, self.customer_request_section):
             section.findChild(QPushButton).setChecked(not compact)
 
