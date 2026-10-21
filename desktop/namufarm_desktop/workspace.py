@@ -256,6 +256,11 @@ def _quote_wrapped_lines(text, width, size):
     return result
 
 
+# Name 2/3, specification x3, unit price 1/2, tax 1/3, remarks 1/2;
+# normalize those relative widths to the existing 884-pixel A4 table.
+OFFICIAL_QUOTE_COLUMN_WIDTHS = (167, 248, 64, 78, 151, 52, 124)
+
+
 def official_quote_page_plan(draft):
     """Paginate item rows and long notes instead of dropping rows or clipping text."""
     validate_draft(draft)
@@ -267,9 +272,10 @@ def official_quote_page_plan(draft):
         rows.append(("운반비", "선불", 1, fee, fee, "", "택배비"))
     pages, current, used = [], [], 0
     for values in rows:
-        height = max(32, *[int(len(_quote_wrapped_lines(values[column], width, size)) *
+        height = max(32, *[int(len(_quote_wrapped_lines(
+                                  values[column], OFFICIAL_QUOTE_COLUMN_WIDTHS[column] - 8, size)) *
                                   QFontMetricsF(_quote_font(size)).height() + 8)
-                          for column, width, size in ((0, 192, 15), (1, 58, 12), (6, 189, 12))])
+                          for column, size in ((0, 15), (1, 12), (6, 12))])
         require(height <= 743, "한 품목의 이름·규격·비고가 너무 깁니다. 내용을 줄여주세요.")
         if current and used + height > 743:
             pages.append({"rows": current})
@@ -449,7 +455,9 @@ def render_official_quote_image(draft, *, _page=None):
                 f"₩{amounts['total']:,}원", 19, True,
                 Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
 
-    xs = [26, 226, 292, 343, 468, 588, 713, 910]
+    xs = [left]
+    for column_width in OFFICIAL_QUOTE_COLUMN_WIDTHS:
+        xs.append(xs[-1] + column_width)
     box(left, header_top, right, notes_top, thick)
     if _page["continuation"]:
         fitted_text((left, header_top, right - left, data_top - header_top), "요청사항 (계속)", 16, True)
