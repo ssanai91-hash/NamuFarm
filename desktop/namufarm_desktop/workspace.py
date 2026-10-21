@@ -3235,10 +3235,10 @@ QDialog#quoteWorkbench[compactLayout="true"] QFrame#workbenchShipping QLabel#wor
         item_summary.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         totals = QHBoxLayout(item_summary)
         totals.setContentsMargins(10, 6, 10, 6)
-        shipping_text = f"선불 {money(self.meta['shippingFee'])}" if self.meta["isPrepaid"] else "후불"
-        totals.addWidget(label("택배비  " + shipping_text, "salesShippingFee"))
+        shipping_text = f"선불 {money(self.meta['shippingFee'])} 포함" if self.meta["isPrepaid"] else "후불"
         totals.addStretch(1)
-        totals.addWidget(label("총금액  " + money(self.meta["totalPrice"] + self.meta.get("taxAmount", 0)), "deliverySectionTitle"))
+        total_text = money(self.meta["totalPrice"] + self.meta.get("taxAmount", 0))
+        totals.addWidget(label(f"총금액  {total_text} ({shipping_text})", "deliverySectionTitle"))
         item_content.addWidget(item_summary)
         request_area = QFrame()
         request_area.setObjectName("workbenchOriginalRequest")
