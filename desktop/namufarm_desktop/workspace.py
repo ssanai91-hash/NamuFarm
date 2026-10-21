@@ -8,7 +8,7 @@ from importlib.resources import files as package_files
 from pathlib import Path
 from html import escape as html_escape
 
-from PySide6.QtCore import QSettings, Qt, QUrl, QSaveFile, QIODevice, QTimer, Signal, Slot, QRectF, QSize, QEvent
+from PySide6.QtCore import QSettings, Qt, QUrl, QSaveFile, QIODevice, QTimer, Signal, Slot, QRectF, QSize, QPoint, QEvent
 from PySide6.QtGui import (QColor, QDesktopServices, QFont, QFontMetricsF, QImage, QIntValidator,
     QKeySequence, QPainter, QPdfWriter, QPen, QPixmap, QShortcut, QTextDocument, QTextOption, QPageSize)
 from PySide6.QtPrintSupport import QPrinter, QPrintDialog
@@ -1487,6 +1487,8 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         document_content.addWidget(self.workbench_note_area)
         self.note.installEventFilter(self)
         self.workbench_original_area.installEventFilter(self)
+        self.sms_button.installEventFilter(self)
+        self.customer_scroll.viewport().installEventFilter(self)
 
         self.working_save_status = label("", "deliveryCaption", True)
         footer.addWidget(self.working_save_status, 1)
@@ -1627,6 +1629,13 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         # Totals and delivery actions stay outside that workspace.
         layout = self.workbench_content_layout
         margins = layout.contentsMargins()
+        if self.sms_button.isVisible():
+            # Leave the same bottom inset as the left editor and its enclosing card.
+            bottom = (self.customer_scroll.widget().layout().contentsMargins().bottom()
+                      + self.workbench_document_area.layout().contentsMargins().bottom() + 2)
+            if margins.bottom() != bottom:
+                layout.setContentsMargins(margins.left(), margins.top(), margins.right(), bottom)
+                margins = layout.contentsMargins()
         other_height, visible_parts = margins.top() + margins.bottom(), 0
         for index in range(layout.count()):
             part = layout.itemAt(index)
@@ -1672,12 +1681,15 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         self._workbench_notes_timer.stop()
         self.note.removeEventFilter(self)
         self.workbench_original_area.removeEventFilter(self)
+        self.sms_button.removeEventFilter(self)
+        self.customer_scroll.viewport().removeEventFilter(self)
         self.cleanup_generated_quote()
 
     def eventFilter(self, watched, event):
         if (getattr(self, "_workbench_ready", False) and not self._workbench_closed and
-                event.type() == QEvent.Type.Resize and watched in (
-                getattr(self, "note", None), getattr(self, "workbench_original_area", None))):
+                event.type() in (QEvent.Type.Resize, QEvent.Type.Move) and watched in (
+                self.note, self.workbench_original_area, self.sms_button,
+                self.customer_scroll.viewport())):
             self._workbench_notes_timer.start(0)
         return super().eventFilter(watched, event)
 
@@ -1692,6 +1704,21 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         measure.setTextWidth(max(1, self.note.viewport().width() - 12))
         note_height = max(76 if large else 64,
                           min(132 if large else 112, int(measure.size().height()) + 12))
+        if self.sms_button.isVisible():
+            # Compare unscrolled content positions so scrolling cannot grow the editor.
+            rail = self.customer_scroll.widget()
+            left_viewport = self.customer_scroll.viewport()
+            right_viewport = self.workbench_scroll.viewport()
+            note_top = self.note.mapTo(rail, QPoint(0, 0)).y()
+            button_bottom = (self.sms_button.mapTo(self.workbench_scroll.widget(), QPoint(0, 0)).y()
+                             + self.sms_button.height())
+            aligned_height = (right_viewport.mapTo(self, QPoint(0, 0)).y() + button_bottom
+                              - left_viewport.mapTo(self, QPoint(0, 0)).y() - note_top)
+            bottom_padding = (rail.layout().contentsMargins().bottom()
+                              + self.workbench_document_area.layout().contentsMargins().bottom()
+                              + self.workbench_note_area.layout().contentsMargins().bottom() + 2)
+            available_height = left_viewport.height() - note_top - bottom_padding
+            note_height = max(76 if large else 64, min(available_height, aligned_height))
         if self.note.height() != note_height:
             self.note.setFixedHeight(note_height)
         height = 64 if large else 52
