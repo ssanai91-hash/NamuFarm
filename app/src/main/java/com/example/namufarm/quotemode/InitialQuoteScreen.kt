@@ -202,23 +202,18 @@ internal fun InitialQuoteScreen(viewModel: InitialQuoteViewModel, connection: In
             onDeleteRequest = if (saved?.confirmationPending == true) null else ({ onDelete(request.requestId) }),
             verifiedDelivery = saved?.delivery, verifyDelivery = true,
             onSave = { draft, action -> handleAction(draft, action) },
-            onConfirmSent = { draft, method -> handleAction(draft, QuoteDelivery.COMPLETE, method) })
+            onConfirmSent = { draft, method -> handleAction(draft, QuoteDelivery.COMPLETE, method) },
+            onPrepareDocument = { draft ->
+                withContext(Dispatchers.IO) {
+                    workflow.prepareExternalDelivery(request, draft, QuoteDelivery.SMS)
+                }
+                records = withContext(Dispatchers.IO) { workflow.records() }
+            })
     }
     result?.let { QuoteWorkflowResultDialog(it) { result = null } }
     serverResult?.let { saved ->
-        NamuDialog("확정견적 확인", saved.receiptNumber, { serverResult = null },
-            actions = { Button(onClick = { serverResult = null }, modifier = Modifier.fillMaxWidth()) { Text("닫기") } }) {
-            Column(Modifier.verticalScroll(rememberScrollState()).padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("고객명 ${saved.customerName}", fontWeight = FontWeight.Bold)
-                Text("${saved.customerPhone} · ${saved.customerEmail}")
-                val draft = remember(saved) { runCatching { serverConfirmedDraft(saved) }.getOrNull() }
-                if (draft != null) Text(quoteWorkflowText(saved, draft))
-                else Text("이전 버전에서 확정한 견적으로 단가 내역이 없습니다. 확정한 기기에서 확인해주세요.")
-                Text("운영 시트에 확정된 견적입니다.")
-                if (saved.message.isNotBlank()) Text("요청사항\n${saved.message}")
-            }
-        }
+        val draft = remember(saved) { runCatching { serverConfirmedDraft(saved) }.getOrNull() }
+        InitialConfirmedQuoteDialog(saved, draft, onDismiss = { serverResult = null })
     }
 }
 
@@ -272,18 +267,6 @@ private fun workflowDate(value: Long): String = if (value <= 0) "전송 기록 �
 
 @Composable
 internal fun QuoteWorkflowResultDialog(saved: QuoteWorkflowRecord, onDismiss: () -> Unit) {
-        NamuDialog("확정견적 확인", saved.request.receiptNumber, onDismiss,
-            actions = { Button(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) { Text("닫기") } }) {
-            Column(Modifier.verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("고객명 ${saved.draft.recipient.customerName}", fontWeight = FontWeight.Bold)
-                Text("${saved.draft.phone}\n${saved.draft.recipient.customerEmail}")
-                HorizontalDivider()
-                Text(quoteWorkflowText(saved.request, saved.draft))
-                HorizontalDivider()
-                Text("문자 ${saved.delivery.smsLabel(saved.draft)} · ${workflowDate(saved.delivery.smsSentAt)}")
-                Text("메일 ${saved.delivery.emailLabel(saved.draft)} · ${workflowDate(saved.delivery.emailSentAt)}")
-                Text("확정 시각 ${workflowDate(saved.confirmedAt)}")
-                if (saved.request.message.isNotBlank()) Text("요청사항\n${saved.request.message}")
-            }
-        }
+    InitialConfirmedQuoteDialog(saved.request, saved.draft, saved.confirmedAt,
+        saved.delivery, onDismiss)
 }

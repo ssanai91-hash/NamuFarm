@@ -155,7 +155,8 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
     onDismiss: () -> Unit, onSave: (SellerQuoteDraft, QuoteDelivery) -> Unit, initialDraft: SellerQuoteDraft? = null,
     draftKey: String? = request?.requestId, onDeleteRequest: (() -> Unit)? = null,
     verifiedDelivery: QuoteDeliveryRecord? = null, verifyDelivery: Boolean = false,
-    onConfirmSent: ((SellerQuoteDraft, String) -> Unit)? = null) {
+    onConfirmSent: ((SellerQuoteDraft, String) -> Unit)? = null,
+    onPrepareDocument: suspend (SellerQuoteDraft) -> Unit = {}) {
     val context = LocalContext.current
     val firstRequest = request != null && initialDraft == null
     val manualEntry = request == null
@@ -168,14 +169,18 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
     var expandedRow by rememberSaveable(draftKey) { mutableIntStateOf(-1) }
     var specDetails by remember { mutableStateOf<SellerQuoteRow?>(null) }
     var messageExpanded by remember { mutableStateOf(false) }
+    var remarksRow by remember { mutableIntStateOf(-1) }
+    var remarksText by remember { mutableStateOf("") }
+    var formalDraft by remember { mutableStateOf<SellerQuoteDraft?>(null) }
+    var issueDetails by rememberSaveable(draftKey) { mutableStateOf(false) }
     var step by rememberSaveable { mutableIntStateOf(1000) }
     var error by rememberSaveable { mutableStateOf<String?>(null) }
     var discard by remember { mutableStateOf(false) }
     var deleteConfirm by remember { mutableStateOf(false) }
     var confirmSent by remember { mutableStateOf(false) }
     var deliveryRequired by remember { mutableStateOf(false) }
-    val initial = remember(draftKey) {
-        initialDraft ?: SellerQuoteDraft.from(request, QuoteIssuerSettings(context).load())
+    var initial by remember(draftKey) {
+        mutableStateOf(initialDraft ?: SellerQuoteDraft.from(request, QuoteIssuerSettings(context).load()))
     }
     fun close() {
         if (!saving) {
@@ -420,6 +425,16 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
                                     fontWeight = FontWeight.Bold,
                                     style = MaterialTheme.typography.titleSmall)
                             }
+                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                Text(row.remarks.ifBlank { "비고 없음" }, Modifier.weight(1f),
+                                    fontSize = 12.sp, color = editorMuted,
+                                    maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                TextButton(onClick = { remarksText = row.remarks; remarksRow = index },
+                                    enabled = !saving) {
+                                    Text(if (row.remarks.isBlank()) "비고 입력" else "비고 수정",
+                                        fontSize = 12.sp)
+                                }
+                            }
                             if (manualEntry && expandedRow == index) {
                                 ManualField("묘목명 *", row.name, { update(row.copy(name = it)) },
                                     saving, limit = 200)
@@ -500,11 +515,35 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
                     Icon(Icons.Outlined.SpeakerNotes, null,
                         tint = editorMuted, modifier = Modifier.size(20.dp))
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        Text("요청사항", color = editorMuted, fontSize = 12.sp)
+                        Text("고객 요청사항", color = editorMuted, fontSize = 12.sp)
                         Text(request?.message?.ifBlank { "없음" } ?: "없음",
                             modifier = Modifier.clickable { if (!request?.message.isNullOrBlank()) messageExpanded = true },
                             fontSize = 14.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     }
+                }
+            }
+            QuoteBox("공식견적서") {
+                OutlinedTextField(draft.options.notes, { value ->
+                    draft = draft.copy(options = draft.options.copy(notes = value.take(500)))
+                }, label = { Text("요청사항 · 판매자 입력") },
+                    placeholder = { Text("공식견적서 중요사항에 넣을 내용을 입력하세요") },
+                    enabled = !saving, minLines = 2, maxLines = 4, modifier = Modifier.fillMaxWidth())
+                Button(onClick = {
+                    try {
+                        val current = draft.copy(recipient = draft.recipient.copy(formalQuoteRequested = true))
+                        current.validate(QuoteDelivery.COMPLETE)
+                        draft = current
+                        formalDraft = current
+                        error = null
+                    } catch (e: Exception) { error = e.message ?: "견적 내용을 확인해주세요." }
+                }, enabled = !saving && request != null, modifier = Modifier.fillMaxWidth()) {
+                    Text("공식견적서 생성", fontWeight = FontWeight.Bold)
+                }
+                TextButton(onClick = { issueDetails = !issueDetails }, enabled = !saving) {
+                    Text(if (issueDetails) "발행정보 접기" else "공급자 · 계좌 · 발행정보")
+                }
+                if (issueDetails) QuoteIssueFields(draft.options, saving) {
+                    draft = draft.copy(options = it)
                 }
             }
             val itemsTotal = draft.rows.sumOf {
@@ -540,6 +579,26 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
             }
         }
     }
+    formalDraft?.let { snapshot ->
+        request?.let { source ->
+            InitialFormalQuoteDialog(source, snapshot, onDismiss = { formalDraft = null },
+                onPrepare = { onPrepareDocument(snapshot); initial = snapshot })
+        }
+    }
+    if (remarksRow in draft.rows.indices) AlertDialog(
+        onDismissRequest = { remarksRow = -1 },
+        title = { Text("비고 · ${draft.rows[remarksRow].name}") },
+        text = { OutlinedTextField(remarksText, { remarksText = it.take(500) },
+            placeholder = { Text("년생 · 크기 · 묘목 상태 등을 입력하세요") },
+            modifier = Modifier.fillMaxWidth(), minLines = 3, maxLines = 8) },
+        confirmButton = { TextButton(onClick = {
+            val index = remarksRow
+            draft = draft.copy(rows = draft.rows.mapIndexed { i, row ->
+                if (i == index) row.copy(remarks = remarksText.trim()) else row
+            })
+            remarksRow = -1
+        }) { Text("적용") } },
+        dismissButton = { TextButton(onClick = { remarksRow = -1 }) { Text("취소") } })
     specDetails?.let { item ->
         AlertDialog(onDismissRequest = { specDetails = null },
             title = { Text("${item.name} · ${item.quantity}주") },
@@ -588,7 +647,7 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
 
 @Composable
 internal fun QuoteIssueFields(options: QuoteIssueOptions, saving: Boolean, onChange: (QuoteIssueOptions) -> Unit) {
-    var expanded by rememberSaveable { mutableStateOf(false) }
+    var expanded by rememberSaveable { mutableStateOf(true) }
     QuoteBox("공식 견적서 발행 정보") {
         Text("${options.issuer.businessName} · ${options.issuer.representative}")
         Text("${options.issuer.businessNumber}\n${options.validUntil} · 추가 세액 ${options.tax}원", style = MaterialTheme.typography.bodySmall)
@@ -603,7 +662,6 @@ internal fun QuoteIssueFields(options: QuoteIssueOptions, saving: Boolean, onCha
             ManualField("추가 세액 (원)", options.tax, { onChange(options.copy(tax = it)) }, saving, KeyboardType.Number)
             ManualField("견적 유효기간", options.validUntil, { onChange(options.copy(validUntil = it)) }, saving, limit = 100)
             ManualField("입금 계좌 · 선택", options.account, { onChange(options.copy(account = it)) }, saving, limit = 500)
-            ManualField("안내 문구", options.notes, { onChange(options.copy(notes = it)) }, saving, limit = 500)
         }
     }
 }

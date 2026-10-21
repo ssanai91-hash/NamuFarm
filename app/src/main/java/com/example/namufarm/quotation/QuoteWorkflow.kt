@@ -36,8 +36,16 @@ data class QuoteWorkflowRecord(
     val confirmationPending: Boolean = false, val confirmedAt: Long = 0
 )
 
-fun quoteWorkflowFingerprint(draft: SellerQuoteDraft): String = MessageDigest.getInstance("SHA-256")
-    .digest(Gson().toJson(draft).toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
+fun quoteWorkflowFingerprint(draft: SellerQuoteDraft): String {
+    val json = Gson().toJsonTree(draft).asJsonObject
+    // Preserve delivery fingerprints for records written before per-item remarks existed.
+    json.getAsJsonArray("rows").forEach { row ->
+        if (row.asJsonObject.get("remarks")?.let { !it.isJsonNull && it.asString.isNotBlank() } != true)
+            row.asJsonObject.remove("remarks")
+    }
+    return MessageDigest.getInstance("SHA-256").digest(Gson().toJson(json).toByteArray(Charsets.UTF_8))
+        .joinToString("") { "%02x".format(it) }
+}
 
 interface QuoteWorkflowStore {
     fun records(): List<QuoteWorkflowRecord>
@@ -188,8 +196,10 @@ fun quoteWorkflowText(request: WebQuoteRequestEntity, draft: SellerQuoteDraft,
     val separator = "-".repeat(53)
     val items = lines.flatMapIndexed { index, line ->
         listOf("품목${index + 1} : ${line.speciesName} ${number(line.orderQty.toLong())}주",
-            "판매금액 : ${number(line.orderQty.toLong() * line.retailPrice)}원", "")
+            "판매금액 : ${number(line.orderQty.toLong() * line.retailPrice)}원") +
+            draft.rows[index].remarks.takeIf(String::isNotBlank)?.let { listOf("비고 : $it") }.orEmpty() + listOf("")
     }
+    val sellerNotes = draft.options.notes.trim().takeIf(String::isNotBlank)?.let { listOf("요청사항 : $it", "") }.orEmpty()
     val shippingFee = if (draft.prepaid) draft.shipping() else
         draft.fee.toIntOrNull()?.coerceAtLeast(0) ?: 0
     val shippingLine = if (draft.prepaid) "택배비 : 선불 ${number(shippingFee.toLong())}원" else
@@ -206,7 +216,7 @@ fun quoteWorkflowText(request: WebQuoteRequestEntity, draft: SellerQuoteDraft,
             "${customer}님, 안녕하세요.", "",
             "나무팜농원입니다.", "요청하신 묘목 견적을 안내드립니다.", "",
             separator, "", "견적번호 : $quoteNumber", ""
-        ) + items + listOf(
+        ) + items + sellerNotes + listOf(
             shippingLine,
             if (draft.prepaid) "총금액 : ${number(total)}원  (총금액 포함)" else "총금액 : ${number(total)}원",
             "", payment, "", separator, "",
@@ -218,7 +228,7 @@ fun quoteWorkflowText(request: WebQuoteRequestEntity, draft: SellerQuoteDraft,
             "${customer}님, 안녕하세요.", "",
             "나무팜농원입니다.", "", "요청하신 묘목 견적을 안내드립니다.", "",
             separator, "견적번호 : $quoteNumber", ""
-        ) + items + listOf(
+        ) + items + sellerNotes + listOf(
             shippingLine,
             if (draft.prepaid) "총금액 : ${number(total)}원 (택배비 포함)" else "총금액 : ${number(total)}원",
             separator, "", payment, "", "감사합니다."
