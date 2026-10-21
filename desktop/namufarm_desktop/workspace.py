@@ -3792,6 +3792,7 @@ class SellerWindow(MainWindow):
         self.storage_status = label("PC 자료를 열면 저장 상태가 표시됩니다.", "storageStatus", True)
         self.storage_status.setAccessibleName("PC 저장 및 서버 반영 상태")
         content_layout.addWidget(self.storage_status)
+        self.storage_status.hide()
 
         self.stack = QStackedWidget()
         self.stack.addWidget(old_pages[0])
