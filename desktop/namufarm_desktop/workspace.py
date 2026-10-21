@@ -7,7 +7,7 @@ from importlib.resources import files as package_files
 from pathlib import Path
 from html import escape as html_escape
 
-from PySide6.QtCore import QSettings, Qt, QUrl, QSaveFile, QIODevice, QTimer, Signal, Slot, QRectF, QSize, QEvent, QPoint
+from PySide6.QtCore import QSettings, Qt, QUrl, QSaveFile, QIODevice, QTimer, Signal, Slot, QRectF, QSize, QEvent
 from PySide6.QtGui import (QColor, QDesktopServices, QFont, QFontMetricsF, QImage, QIntValidator,
     QKeySequence, QPainter, QPdfWriter, QPen, QPixmap, QShortcut, QTextDocument, QTextOption, QPageSize)
 from PySide6.QtPrintSupport import QPrinter, QPrintDialog
@@ -1271,6 +1271,13 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         self.workbench_content_layout = content
         content.setContentsMargins(16, 14, 16, 8)
         content.setSpacing(6)
+        self.workbench_items_panel = QFrame()
+        self.workbench_items_panel.setObjectName("workbenchItemsPanel")
+        self.workbench_items_panel.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        item_content = QVBoxLayout(self.workbench_items_panel)
+        item_content.setContentsMargins(0, 0, 0, 0)
+        item_content.setSpacing(8)
+        content.addWidget(self.workbench_items_panel, 1)
         item_tools = QHBoxLayout()
         item_tools.addWidget(section_heading("견적 품목", "leaf", 28), 1)
         self.workbench_items_hint = label("묘목명은 직접 입력하거나 초성검색 · 규격·수량은 두 번 클릭해 수정", "deliveryCaption", True)
@@ -1278,8 +1285,8 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         self.remove_item_button = button("선택 묘목 삭제", self.remove_item)
         item_tools.addWidget(self.add_item_button)
         item_tools.addWidget(self.remove_item_button)
-        content.addLayout(item_tools)
-        content.addWidget(self.workbench_items_hint)
+        item_content.addLayout(item_tools)
+        item_content.addWidget(self.workbench_items_hint)
         # Logical indices stay stable for collection; visual order puts price before amount.
         self.items = table(["묘목명", "수량", "판매 금액", "판매 단가", "순번", "규격"])
         self.items.setEditTriggers(self.items.EditTrigger.DoubleClicked | self.items.EditTrigger.EditKeyPressed | self.items.EditTrigger.AnyKeyPressed)
@@ -1298,7 +1305,7 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         self.items.fit_columns()
         self.items.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Ignored)
         self.items.itemChanged.connect(self.recalculate)
-        content.addWidget(self.items, 1)
+        item_content.addWidget(self.items, 1)
 
         shipping = QFrame()
         self.workbench_shipping = shipping
@@ -1352,6 +1359,7 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         footer.setContentsMargins(16, 8, 16, 8)
         footer.setSpacing(12)
         self.build_delivery_tools(content, compact=True, document_content=document_content)
+        self.delivery_heading.hide()
 
         self.workbench_original_area = QFrame()
         self.workbench_original_area.setObjectName("workbenchOriginalRequest")
@@ -1374,8 +1382,8 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         self.request_note_view.setFixedHeight(88 if large else 76)
         original.addWidget(self.request_note_view, 1)
         self.original_request_toggle.toggled.connect(self.set_original_request_visible)
-        content.addWidget(self.workbench_original_area)
-        content.addStretch()
+        # Keep customer reference text in the left rail, independent of the item table.
+        customer.insertWidget(customer.count() - 1, self.workbench_original_area)
         self.workbench_scroll.setWidget(right)
         body.addWidget(self.workbench_scroll, 1)
         root.addLayout(body, 1)
@@ -1418,8 +1426,7 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
             self.add_item()
         row_height = self.items.verticalHeader().defaultSectionSize()
         table_header = self.items.horizontalHeader().height()
-        self.items.setMinimumHeight(table_header + 4 * row_height + 4)
-        self.items.setMaximumHeight(table_header + 8 * row_height + 4)
+        self.items.setMinimumHeight(table_header + 5 * row_height + 4)
         self.shipping_cod.toggled.connect(self.recalculate)
         self.shipping_prepaid.toggled.connect(self.recalculate)
         self.shipping_fee.textChanged.connect(self.recalculate)
@@ -1530,25 +1537,36 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         for row in range(self.items.rowCount()):
             self.items.setRowHeight(row, row_height)
         header = self.items.horizontalHeader().height()
-        # Spend the available height on real rows, leaving totals and delivery actions visible.
+        # Reserve a separate 5–8-row workspace even when the quote has only one item.
+        # Totals and delivery actions stay outside that workspace.
         layout = self.workbench_content_layout
         margins = layout.contentsMargins()
         other_height, visible_parts = margins.top() + margins.bottom(), 0
         for index in range(layout.count()):
             part = layout.itemAt(index)
             widget = part.widget()
-            if widget is self.items or (widget is not None and widget.isHidden()):
+            if widget is self.workbench_items_panel or (widget is not None and widget.isHidden()):
                 continue
             other_height += max(0, part.sizeHint().height())
             visible_parts += 1
         other_height += visible_parts * layout.spacing()
+        item_layout = self.workbench_items_panel.layout()
+        item_parts = 0
+        for index in range(item_layout.count()):
+            part = item_layout.itemAt(index)
+            widget = part.widget()
+            if widget is self.items or (widget is not None and widget.isHidden()):
+                continue
+            other_height += max(0, part.sizeHint().height())
+            item_parts += 1
+        other_height += item_parts * item_layout.spacing()
         scrollbar = self.items.horizontalScrollBar()
         extra = scrollbar.sizeHint().height() if scrollbar.maximum() > 0 else 0
         room = self.workbench_scroll.viewport().height() - other_height - header - extra - 4
-        rows = min(8, max(1, self.items.rowCount()), max(1, room // row_height))
+        rows = min(8, max(5, room // row_height))
         height = header + rows * row_height + extra + 4
         self.items.setMinimumHeight(height)
-        self.items.setMaximumHeight(height)
+        self.items.setMaximumHeight(16777215)
         self._workbench_notes_timer.start(0)
 
     def set_original_request_visible(self, expanded):
@@ -1588,11 +1606,8 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
             return
         if not self.original_request_toggle.isChecked():
             return
-        note_bottom = self.note.mapTo(self, QPoint(0, self.note.height())).y()
-        visible_bottom = self.workbench_scroll.viewport().mapTo(
-            self, QPoint(0, self.workbench_scroll.viewport().height())).y() - 8
-        top = self.request_note_view.mapTo(self, QPoint()).y()
-        height = max(48, min(note_bottom, visible_bottom) - top)
+        # Both notes now belong to the customer rail; no cross-column alignment is needed.
+        height = 88 if QApplication.instance().property("namufarmLargeFont") else 76
         if self.request_note_view.height() != height:
             self.request_note_view.setFixedHeight(height)
 
@@ -2609,8 +2624,7 @@ class QuoteDeliveryDialog(QuoteDialog):
         self.confirm_button.clicked.disconnect()
         self.confirm_button.clicked.connect(self.receive_payment)
         self.payment_status = label("", "deliveryCaption", True)
-        self.workbench_scroll.widget().layout().insertWidget(
-            self.workbench_scroll.widget().layout().indexOf(self.workbench_original_area), self.payment_status)
+        self.workbench_content_layout.addWidget(self.payment_status)
         self._render_confirmed_items()
         self._set_actions_enabled()
         self.recalculate()
