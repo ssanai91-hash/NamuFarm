@@ -73,46 +73,27 @@ def quote_amount_detail(draft):
     return " · ".join(parts)
 
 
-def delivery_amount_summary(draft, recipient=None, *, payment=False):
-    amount = draft_amounts(draft)
-    title = "입금확인 금액" if payment else "견적 금액"
-    summary = label(f"{title} {amount['total']:,}원 · {quote_amount_detail(draft)}",
-                    "deliveryAmountSummary", True)
-    summary.setAccessibleName("발송 전 견적 금액 확인")
-    summary.setToolTip("저장된 견적 기준 요약입니다. 직접 수정한 발송 본문과 금액이 같은지 확인해주세요.")
-    summary.setStyleSheet("background:#eaf3ed;color:#193c32;border:1px solid #b8cebf;"
-                         "border-radius:8px;padding:6px 10px;font-weight:600;")
-    return summary
-
-
 def fit_delivery_message(dialog):
     if not hasattr(dialog, "status"):
         return
     large = bool(QApplication.instance().property("namufarmLargeFont"))
     dialog.message.setMinimumHeight(100)
-    expanded = hasattr(dialog, "status_toggle") and dialog.status_toggle.isChecked()
-    dialog.status.setFixedHeight((144 if large else 128) if expanded else (68 if large else 58))
+    dialog.status.setFixedHeight(42 if large else 38)
     layout = dialog.layout()
-    layout.setSpacing(6)
-    layout.setContentsMargins(14, 10, 14, 10)
+    layout.setSpacing(4)
+    layout.setContentsMargins(12, 8, 12, 8)
 
 
 def setup_delivery_reading(dialog, layout):
-    """One expanding message editor, fixed actions, optional full transmission log."""
+    """Give the body all remaining space, with one line for the current status."""
     dialog.setMinimumSize(620, 560)
     dialog.message.setLineWrapMode(QPlainTextEdit.LineWrapMode.WidgetWidth)
     dialog.message.setStyleSheet("QPlainTextEdit{padding:6px;font-size:@size@px;}".replace(
         "@size@", "18" if QApplication.instance().property("namufarmLargeFont") else "16"))
-    dialog.status_toggle = button("전송 기록 펼치기")
-    dialog.status_toggle.setCheckable(True)
-    dialog.status_toggle.setStyleSheet("QPushButton{min-height:16px;max-height:16px;padding:2px 8px;font-size:13px;}")
-    dialog.status_toggle.setAccessibleName("전송 상태 기록 펼치기 또는 접기")
-    def toggle(expanded):
-        dialog.status_toggle.setText("전송 기록 접기" if expanded else "전송 기록 펼치기")
-        fit_delivery_message(dialog)
-        dialog.status.ensureCursorVisible()
-    dialog.status_toggle.toggled.connect(toggle)
-    layout.insertWidget(layout.indexOf(dialog.status), dialog.status_toggle, 0, Qt.AlignmentFlag.AlignRight)
+    dialog.message.document().setDocumentMargin(0)
+    # Compact only the initial template; later user edits keep their own line breaks.
+    dialog.message.setPlainText("\n".join(
+        line for line in dialog.message.toPlainText().splitlines() if line.strip()))
     fit_delivery_message(dialog)
 
 
@@ -1913,23 +1894,21 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
             QMessageBox.warning(self, "견적 입력 확인", str(error))
 
 
-class DeliveryStatusLog(QPlainTextEdit):
-    """Bordered, in-window history. Repeated pending polls do not flood the log."""
+class DeliveryStatusLog(QLineEdit):
+    """Bordered single-line current status, with the full text available for copying."""
 
     def __init__(self, initial, parent=None):
         super().__init__(parent)
         self.setObjectName("deliveryStatusLog")
-        self.setAccessibleName("전송 상태 및 단계별 기록")
+        self.setAccessibleName("현재 전송 상태")
         self.setReadOnly(True)
-        self.setUndoRedoEnabled(False)
-        self.document().setMaximumBlockCount(200)
         large = bool(QApplication.instance().property("namufarmLargeFont"))
-        self.setFixedHeight(144 if large else 128)
+        self.setFixedHeight(42 if large else 38)
         self.setStyleSheet("""
-QPlainTextEdit#deliveryStatusLog{background:#f5f8f6;color:#314e41;border:2px solid #a6bbaf;border-radius:8px;padding:8px;font-size:@font@px;}
-QPlainTextEdit#deliveryStatusLog[state="pending"]{border-color:#c0a463;}
-QPlainTextEdit#deliveryStatusLog[state="ready"],QPlainTextEdit#deliveryStatusLog[state="success"]{border-color:#4f916b;}
-QPlainTextEdit#deliveryStatusLog[state="failed"]{border-color:#b96155;}
+QLineEdit#deliveryStatusLog{background:#f5f8f6;color:#314e41;border:2px solid #a6bbaf;border-radius:8px;min-height:0;max-height:16777215px;padding:4px 8px;font-size:@font@px;}
+QLineEdit#deliveryStatusLog[state="pending"]{border-color:#c0a463;}
+QLineEdit#deliveryStatusLog[state="ready"],QLineEdit#deliveryStatusLog[state="success"]{border-color:#4f916b;}
+QLineEdit#deliveryStatusLog[state="failed"]{border-color:#b96155;}
 """.replace("@font@", "17" if large else "15"))
         self._last_text = ""
         self.setText(initial)
@@ -1954,8 +1933,10 @@ QPlainTextEdit#deliveryStatusLog[state="failed"]{border-color:#b96155;}
         self.style().unpolish(self)
         self.style().polish(self)
         stamp = datetime.now(SEOUL).strftime("%H:%M:%S")
-        self.appendPlainText(f"[{stamp}] {text}")
-        self.ensureCursorVisible()
+        display = f"[{stamp}] " + " ".join(text.splitlines())
+        super().setText(display)
+        self.setCursorPosition(0)
+        self.setToolTip(display)
 
 
 class QuoteSmsDialog(QDialog):
@@ -1990,7 +1971,7 @@ class QuoteSmsDialog(QDialog):
         screen = parent.screen() if parent is not None and hasattr(parent, "screen") else QApplication.primaryScreen()
         available = screen.availableGeometry() if screen else None
         if available:
-            width = min(1080, max(760, int(available.width() * 0.82)))
+            width = min(1280, max(760, int(available.width() * 0.96)))
             height = min(1160, max(720, int(available.height() * 0.96)))
             width = min(width, max(620, available.width() - 40))
             height = min(height, max(620, available.height() - 50))
@@ -2058,8 +2039,6 @@ class QuoteSmsDialog(QDialog):
             self.payment_confirm_button.setEnabled(False)
             actions.addWidget(self.payment_confirm_button)
         layout.addLayout(actions)
-        self.amount_summary = delivery_amount_summary(self.draft, payment=payment)
-        layout.insertWidget(layout.indexOf(address_card) + 1, self.amount_summary)
         setup_delivery_reading(self, layout)
 
         QTimer.singleShot(0, self.load_profile)
@@ -2331,7 +2310,7 @@ class QuoteEmailDialog(QDialog):
         screen = parent.screen() if parent is not None and hasattr(parent, "screen") else QApplication.primaryScreen()
         available = screen.availableGeometry() if screen else None
         if available:
-            width = min(1120, max(760, int(available.width() * 0.84)))
+            width = min(1280, max(760, int(available.width() * 0.96)))
             height = min(1160, max(720, int(available.height() * 0.96)))
             width = min(width, max(620, available.width() - 40))
             height = min(height, max(560, available.height() - 50))
@@ -2405,8 +2384,6 @@ class QuoteEmailDialog(QDialog):
         actions.addWidget(self.cancel_button)
         actions.addWidget(self.send_button)
         layout.addLayout(actions)
-        self.amount_summary = delivery_amount_summary(self.draft)
-        layout.insertWidget(layout.indexOf(address_card) + 1, self.amount_summary)
         setup_delivery_reading(self, layout)
 
         QTimer.singleShot(0, self.load_profile)
