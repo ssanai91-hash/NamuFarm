@@ -1,9 +1,42 @@
-"""Per-row seedling search using the nursery data already cached on this PC."""
+"""Per-row seedling search with an offline base catalog and cached nursery names."""
 from PySide6.QtCore import QEvent, Qt, Signal
 from PySide6.QtWidgets import (QButtonGroup, QDialog, QGridLayout, QHBoxLayout,
     QLabel, QLineEdit, QListWidget, QPushButton, QSizePolicy, QVBoxLayout, QWidget)
 
 from .nursery import INITIALS, initial
+
+
+# Website catalog (website/lib/species-data.json), with the same name grouping as
+# species-catalog.ts. Kept in Python so the base list is also bundled in the EXE.
+DEFAULT_SPECIES_NAMES = (
+    "가죽나무", "감", "개나리", "개암", "계수나무", "고로쇠",
+    "골담초", "구기자", "구상나무", "금송", "꽃잔디", "낙우송",
+    "남경도", "남천", "눈주목", "느티나무", "능소화", "다래",
+    "단풍나무", "담쟁이덩굴", "대왕송", "대추", "등나무", "때죽나무",
+    "떡갈잎수국", "라일락", "러시아올리브", "마가목", "마로니에", "마키베리",
+    "만병초", "매실", "맥문동", "메타세쿼이아", "명자나무", "모감주나무",
+    "모과", "목련", "목백합", "무궁화", "무늬호랑가시", "무스카리",
+    "무화과", "문그로우", "미니백일홍", "미산딸나무", "미스김라일락", "미측백나무",
+    "민들레", "바이오체리", "박태기", "반송", "밤", "배",
+    "백일홍", "벚나무", "별목련", "보리수", "복분자", "복숭아",
+    "분꽃", "불두화", "블랙초코베리", "블랙커런트", "블루매트", "블루베리",
+    "블루엔젤", "비파", "뽕", "사계패랭이", "사과", "사철나무",
+    "산딸나무", "산사나무", "산수국", "산수유", "산초", "살구",
+    "상수리나무", "석류나무", "설중매", "소나무", "소사나무", "수국",
+    "수사해당화", "수생식물", "수선화", "슈가메이플", "슈퍼블랙베리", "스카이로켓",
+    "스트로브잣나무", "아나벨수국", "아마릴리스", "앵두나무", "양잔디", "엄나무",
+    "에메랄드 그린", "오가피", "오미자", "오이도", "옥향", "옻나무",
+    "유칼립투스", "으름", "은목서", "은청가문비", "은테 사철", "은행나무",
+    "이팝나무", "일세다래", "자귀나무", "자두", "자작나무", "잔디",
+    "잣나무", "전나무", "조팝나무", "좀눈향", "주목", "쥐똥나무",
+    "직립꽝꽝이", "직송", "짐드롭", "철쭉", "체리", "측백나무",
+    "층층나무", "치자나무", "칠자화", "칼슘나무", "코니카가문비", "키위",
+    "탱자", "팜콘수국", "팥배나무", "팽나무", "편백나무", "포도",
+    "포포나무", "플루오트", "피라미드 수국", "피라칸타스", "피칸", "하이드랑게아",
+    "해당화", "해송", "헛개나무", "호두", "홀리", "홍가시",
+    "홍도화", "화살나무", "황금꽝꽝이", "황금주목", "황금측백", "황칠나무",
+    "회양목", "회화나무", "히아신스",
+)
 
 
 class SpeciesNameEditor(QWidget):
@@ -44,10 +77,11 @@ class QuoteSpeciesPicker(QDialog):
         super().__init__(parent)
         self.setWindowTitle("묘목 초성검색")
         self.resize(680, 540)
-        self.names = sorted({str(name).strip() for name in names if str(name).strip()})
+        self.names = sorted(set(DEFAULT_SPECIES_NAMES) |
+                            {str(name).strip() for name in names if str(name).strip()})
         self.selected_initial = ""
         self.selected_name = ""
-        self.notice = notice
+        self.notice = "기본 묘목 목록이 포함되어 있습니다. " + notice
         layout = QVBoxLayout(self)
         layout.addWidget(QLabel("초성을 누르고 묘목을 선택해주세요."))
         self.search = QLineEdit()
@@ -72,7 +106,7 @@ class QuoteSpeciesPicker(QDialog):
         self.results.itemDoubleClicked.connect(lambda _item: self.accept_selection())
         self.results.itemSelectionChanged.connect(self.update_selection)
         layout.addWidget(self.results, 1)
-        self.status = QLabel(notice)
+        self.status = QLabel(self.notice)
         self.status.setWordWrap(True)
         layout.addWidget(self.status)
         actions = QHBoxLayout()
@@ -106,7 +140,7 @@ class QuoteSpeciesPicker(QDialog):
         self.results.addItems(names)
         self.choose_button.setEnabled(False)
         self.status.setText(self.notice if names else
-                            "검색 결과가 없습니다. 묘목·농원에서 동기화하거나 묘목명을 직접 입력해주세요.")
+                            "검색 결과가 없습니다. 검색어·초성을 바꾸거나 묘목명을 직접 입력해주세요.")
 
     def update_selection(self):
         self.choose_button.setEnabled(self.results.currentItem() is not None)
