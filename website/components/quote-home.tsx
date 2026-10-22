@@ -22,6 +22,8 @@ import { toggleCatalogLine, emptyLine, isEmptyLine, quoteFieldProblems, type Fie
 import type { VideoResource } from "@/lib/content-library";
 import { createVideoQuoteDraft, stageVideoQuote, videoQuoteSpecies, videoQuoteSpeciesName, type VideoQuoteDraft } from "@/lib/video-quote";
 
+const quantityPresets = [10, 20, 50, 100] as const;
+
 export default function QuoteHome({ initialTestMode = false, initialConfigured = false }: { initialTestMode?: boolean; initialConfigured?: boolean }) {
   const [lines, setLines] = useState<Line[]>([emptyLine(0)]);
   const nextLine = useRef(1);
@@ -390,6 +392,12 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
                       <Plus className="size-5" aria-hidden="true" />
                     </Button>
                     <span className="quantity-unit">주</span>
+                  </div>
+                  <div className="quantity-quick-select">
+                    <p>수량 빠른선택</p>
+                    <div className="quantity-presets" role="group" aria-label={`품목 ${index + 1} 수량 빠른선택`}>
+                      {quantityPresets.map(quantity => <Button key={quantity} type="button" variant="outline" aria-label={`품목 ${index + 1} 수량 ${quantity}주로 설정`} aria-pressed={Number(line.quantity) === quantity} onClick={() => updateLine(line.id, "quantity", String(quantity))}>{quantity}주</Button>)}
+                    </div>
                   </div>
                   {fieldError("quantity-" + line.id)}
                 </div>

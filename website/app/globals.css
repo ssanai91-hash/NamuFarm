@@ -2707,3 +2707,44 @@ body { background:#fafbf7; }
   .catalog-section .catalog-grid .catalog-card { min-width: 0; min-height: 3.3rem; }
   .catalog-section .catalog-grid .catalog-card-name { font-size: 1rem; }
 }
+
+/* Quantity presets replace the current value; the stepper still changes one. */
+.quote-form .item-fields { grid-template-columns: minmax(0,1fr); }
+.quote-form .quantity-field {
+  padding: .85rem;
+  border-radius: .85rem;
+  background: #edf5ef;
+  gap: .65rem;
+}
+.quantity-field .quantity-stepper { grid-template-columns: 3.25rem minmax(0,1fr) 3.25rem auto; gap: .45rem; }
+.quantity-field .quantity-stepper .quantity-step-button {
+  min-height: 3.5rem;
+  border: 1px solid #a3c0ae;
+  border-radius: .65rem;
+  background: #e4efe7;
+  color: #205844;
+}
+.quantity-field .quantity-stepper .quantity-step-button:hover { background: #d5e7da; }
+.quantity-field .quantity-stepper .quantity-step-button:disabled { background: #e9eee7; color: #65766a; }
+.quantity-field .quantity-stepper .quantity-value { border: 1px solid #a3bbaa; border-radius: .65rem; background: #fff; }
+.quantity-field .quantity-unit { padding-left: .1rem; }
+.quantity-quick-select { display: grid; gap: .45rem; }
+.quantity-quick-select>p { color: #526350; font-size: 1rem; line-height: 1.5; }
+.quantity-presets { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: .4rem; }
+.quantity-presets>button {
+  width: 100%;
+  min-width: 0;
+  height: auto;
+  min-height: 2.875rem;
+  padding: .5rem .15rem;
+  border: 1px solid #b5cbbd;
+  border-radius: .65rem;
+  background: #fff;
+  color: #205844;
+  font-size: 1rem;
+  font-weight: 700;
+  box-shadow: none;
+}
+.quantity-presets>button:hover { background: #e3efe6; border-color: #527f62; }
+.quantity-presets>button[aria-pressed=true] { background: #205844; border-color: #205844; color: #fff; }
+.quantity-presets>button:focus-visible { outline: 3px solid #ae771d; outline-offset: 2px; }
