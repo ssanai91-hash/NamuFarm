@@ -1,10 +1,12 @@
 """Qt desktop manager. Network, cryptography and SQLite run on one worker at a time."""
 import sys
+import copy
+import re
 from datetime import datetime, timedelta
 from pathlib import Path
 from .list_filters import ListPeriodFilter, first_date
 
-from PySide6.QtCore import QStandardPaths, Qt, QThread, QTimer, Signal, QUrl
+from PySide6.QtCore import QSettings, QStandardPaths, Qt, QThread, QTimer, Signal, QUrl
 from PySide6.QtGui import QCloseEvent, QRegularExpressionValidator, QDesktopServices
 from PySide6.QtCore import QRegularExpression
 from PySide6.QtWidgets import (
@@ -23,6 +25,7 @@ from .service import Manager
 from .store import Vault
 from .ui_theme import DataTable, StatusMessage, align_table, workspace_style
 from .ui_icons import set_button_icon
+from .report_excel import write_sales_report
 
 
 def money(value):
@@ -129,6 +132,39 @@ class LegacyImportDialog(QDialog):
         path, _ = QFileDialog.getOpenFileName(self, "이전 백업 선택", "", "이전 백업 (*.json)")
         if path:
             self.backup.setText(path)
+
+
+class ReportEmailDialog(QDialog):
+    """Ask the operator to confirm the seller's address after saving an export."""
+
+    def __init__(self, path, recipient, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("엑셀 저장 완료")
+        self.setMinimumWidth(440)
+        layout = QFormLayout(self)
+        question = QLabel("매출 엑셀을 저장했습니다.\n판매자 메일로 첨부해서 보낼까요?")
+        question.setWordWrap(True)
+        layout.addRow(question)
+        attachment = QLabel(path.name)
+        attachment.setTextFormat(Qt.TextFormat.PlainText)
+        attachment.setWordWrap(True)
+        layout.addRow("첨부파일", attachment)
+        self.recipient = QLineEdit(recipient)
+        self.recipient.setPlaceholderText("판매자 이메일 주소")
+        self.recipient.setMaxLength(254)
+        self.recipient.setClearButtonEnabled(True)
+        layout.addRow("받는 메일", self.recipient)
+        buttons = QDialogButtonBox()
+        send = buttons.addButton("메일 전송", QDialogButtonBox.ButtonRole.AcceptRole)
+        save_only = buttons.addButton("저장만", QDialogButtonBox.ButtonRole.RejectRole)
+        save_only.setDefault(True)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        def update_recipient():
+            send.setEnabled(bool(re.fullmatch(r"[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+", self.recipient.text().strip())))
+        self.recipient.textChanged.connect(update_recipient)
+        update_recipient()
+        layout.addRow(buttons)
 
 
 class MainWindow(QMainWindow):
@@ -291,6 +327,7 @@ class MainWindow(QMainWindow):
         self.next_button.setEnabled(editable and self.selected_sale["metadata"]["status"] in NEXT)
         self.cancel_sale_button.setEnabled(editable and self.selected_sale["metadata"]["status"] in ("입금확인", "구매확정"))
         self.report_button.setEnabled(ready)
+        self.report_export_button.setEnabled(self.task is None)
         self.resolve_button.setEnabled(paired and pending and self.conflict)
         self.connection_status.setText("연결 정보 저장됨" if self.data["paired"] else "서버 연결 필요")
         self.pending_status.setText(f"전송 대기 {len(self.data['pending']):,}건 · 판매관리의 ‘서버에 올리기’로 백업하세요." if pending else "전송 대기 0건")
@@ -594,6 +631,10 @@ class MainWindow(QMainWindow):
         reset = QPushButton("초기화")
         reset.clicked.connect(self.reset_report_filters)
         bar.addWidget(reset)
+        self.report_export_button = QPushButton("엑셀 저장")
+        self.report_export_button.clicked.connect(self.export_sales_report)
+        set_button_icon(self.report_export_button, "document")
+        bar.addWidget(self.report_export_button)
         layout.addLayout(bar)
         self.report_summary = QLabel()
         self.report_summary.setObjectName("muted")
@@ -667,16 +708,21 @@ class MainWindow(QMainWindow):
             count += 1
             total += amount
         rows = []
+        export_rows = []
         for period, (orders, amount) in sorted(buckets.items(), reverse=True):
             title = (f"{period:%Y.%m.%d} ~ {period + timedelta(days=6):%Y.%m.%d}" if unit == "week" else
                      f"{period:%Y.%m}" if unit == "month" else f"{period:%Y.%m.%d}")
             rows.append((title, f"{orders:,}건", money(amount)))
+            export_rows.append((title, orders, amount))
         fill_table(self.report_table, rows)
         for row in range(self.report_table.rowCount()):
             for column in range(3):
                 self.report_table.item(row, column).setTextAlignment(Qt.AlignmentFlag.AlignCenter)
         self.payment_summary.setText(f"{count:,}건")
         self.report_total.setText(money(total))
+        self.report_export_data = {"period": self.report_period.description(), "unit": self.unit.currentText(),
+                                   "query": self.report_search.text().strip(), "rows": export_rows,
+                                   "count": count, "amount": total}
         self.report_summary.setText(
             f"{self.report_period.description()} · 입금확인일 기준(이전 자료는 주문일) · 취소 제외\n"
             "주문 총금액 합계 · 선불 택배비 포함 / 후불 제외 · 주별은 월요일~일요일")
@@ -686,6 +732,64 @@ class MainWindow(QMainWindow):
     def fetch_report(self):
         # Display the local DB immediately; this action never writes to the server.
         self.refresh_payment_summary()
+
+    def export_sales_report(self):
+        if self.task:
+            return
+        self.refresh_payment_summary()
+        report = copy.deepcopy(self.report_export_data)
+        settings = QSettings("NamuFarm", "Desktop")
+        folder = str(settings.value("salesReportExportFolder", "") or
+                     QStandardPaths.writableLocation(QStandardPaths.StandardLocation.DocumentsLocation) or Path.cwd())
+        name = f"나무팜_매출_{report['unit']}_{datetime.now(SEOUL):%Y%m%d-%H%M%S}.xlsx"
+        filename, _ = QFileDialog.getSaveFileName(self, "매출 엑셀 저장", str(Path(folder) / name), "엑셀 파일 (*.xlsx)")
+        if not filename:
+            return
+        path = Path(filename)
+        if path.suffix.lower() != ".xlsx":
+            path = Path(str(path) + ".xlsx")
+            if path.exists() and QMessageBox.question(self, "파일 덮어쓰기", f"{path.name} 파일을 덮어쓸까요?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
+                return
+        self.run_job("매출 엑셀 저장 중…", lambda: write_sales_report(path, report),
+                     lambda data: self.sales_report_exported(path, report, data), False)
+
+    def sales_report_exported(self, path, report, data):
+        settings = QSettings("NamuFarm", "Desktop")
+        settings.setValue("salesReportExportFolder", str(path.parent))
+        self.message.setText(f"매출 엑셀 저장 완료 · {path}")
+        QTimer.singleShot(0, lambda: self.offer_sales_report_email(path, report, data))
+
+    def offer_sales_report_email(self, path, report, data):
+        settings = QSettings("NamuFarm", "Desktop")
+        dialog = ReportEmailDialog(path, str(settings.value("salesReportSellerEmail", "") or ""), self)
+        was_active = self.timer.isActive()
+        self.timer.stop()
+        try:
+            accepted = dialog.exec() == QDialog.DialogCode.Accepted
+            recipient = dialog.recipient.text().strip()
+        finally:
+            dialog.deleteLater()
+            if was_active:
+                self.timer.start()
+        if not accepted:
+            return
+        settings.setValue("salesReportSellerEmail", recipient)
+        if not self.manager:
+            QMessageBox.information(self, "메일 전송", "엑셀은 저장했습니다. 메일 전송은 PC 서버 연결 후 사용할 수 있습니다.")
+            return
+        subject = f"[나무팜] {report['unit']} 매출 집계 · {report['period']}"
+        body = (f"나무팜 매출 집계 엑셀을 첨부합니다.\n\n조회 기간: {report['period']}\n집계 단위: {report['unit']}\n"
+                f"검색어: {report['query'] or '전체'}\n판매 건수: {report['count']:,}건\n판매금액 합계: {money(report['amount'])}\n\n"
+                "입금확인일 기준 · 선불 택배비 포함 / 후불 제외 · 취소 제외")
+        self.run_job("매출 엑셀 메일 전송 중…", lambda: self.manager.send_sales_report_email(
+            recipient, path.name, data, subject, body),
+            lambda result: self.sales_report_email_sent(path, result), False)
+
+    def sales_report_email_sent(self, path, result):
+        self.message.setText(f"매출 엑셀 저장 · 메일 전송 완료 · {result['recipientEmail']}")
+        QMessageBox.information(self, "매출 엑셀 메일 전송 완료", f"받는 메일: {result['recipientEmail']}\n첨부파일: {path.name}")
 
     def build_connection(self):
         page = QWidget()

@@ -15,7 +15,7 @@ function doPost(e) {
     const text = e && e.postData && e.postData.contents;
     assert_(typeof text === 'string' && text.length <= 3000000, 'INVALID');
     const body = JSON.parse(text);
-    if(body.action!=='send_quote_email')assert_(text.length<=65000,'INVALID');
+    if(!['send_quote_email','send_sales_report_email'].includes(body.action))assert_(text.length<=65000,'INVALID');
     let value;
     if (body.action === 'submit_request') {
       const secret = PropertiesService.getScriptProperties().getProperty('WEB_SECRET');
@@ -33,6 +33,7 @@ function doPost(e) {
       else if (body.action === 'save_quote_pricing') value = saveQuotePricing_(body);
       else if (body.action === 'email_profile') value = quoteEmailProfile_();
       else if (body.action === 'send_quote_email') value = sendQuoteEmail_(body);
+      else if (body.action === 'send_sales_report_email') value = sendSalesReportEmail_(body);
       else if (body.action === 'sms_profile') value = quoteSmsProfile_();
       else if (body.action === 'send_quote_sms') value = sendQuoteSms_(body);
       else if (body.action === 'quote_sms_status') value = quoteSmsStatus_(body);

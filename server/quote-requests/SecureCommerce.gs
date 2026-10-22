@@ -35,7 +35,7 @@ function secureServiceInfo_() {
     encryptionReady:false,customerDataStorage:'plain',sellerKey:key,retentionDays:30,requestDeletionSync:true,saleDeletionSync:true,
     receiptFormat:'NAMU-YYYYMMDD-NNNN',receiptTimeZone:'Asia/Seoul',connectionFile:true,requestSnapshot:true,
     connectionAuth:'auto-v1',quoteReadMode:twoBookActive_()?'annual-two-tabs':'legacy-storage',legacyDeviceAuth:true,
-    quoteEmail:true,quoteEmailSender:QUOTE_SENDER_EMAIL,
+    quoteEmail:true,quoteEmailSender:QUOTE_SENDER_EMAIL,salesReportEmail:true,
     quoteSms:true,quoteSmsProvider:'SOLAPI',soldNumberReservation:1,soldDisplayNumbers:1,
     commerceStates:['입금확인','배송완료','구매취소']};
 }
@@ -483,6 +483,25 @@ function sendQuoteEmail_(body) {
   return {sent:true,quoteNumber:quoteNumber,recipientEmail:recipient,senderEmail:profile.senderEmail,
     attachmentName:attachmentName,sentAt:new Date().toISOString(),
     remainingDailyQuota:MailApp.getRemainingDailyQuota()};
+}
+
+function sendSalesReportEmail_(body) {
+  const recipient=text_(body.recipientEmail,254,3);
+  assert_(/^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/.test(recipient),'INVALID');
+  const subject=text_(body.subject,160,1);
+  const plainBody=text_(body.bodyText,12000,1);
+  const attachmentName=text_(body.attachmentName,180,6);
+  assert_(/^[^\\/:*?"<>|\r\n]+\.xlsx$/i.test(attachmentName),'INVALID');
+  const encoded=byteString_(body.attachmentBase64,4,2*1024*1024);
+  const bytes=Utilities.base64Decode(encoded);
+  assert_(bytes[0]===80 && bytes[1]===75 && bytes[2]===3 && bytes[3]===4,'INVALID');
+  const profile=quoteEmailProfile_();
+  assert_(profile.remainingDailyQuota>0,'NOT_READY');
+  // This is a seller's report attachment; it does not advance quote/order states.
+  MailApp.sendEmail({to:recipient,subject:subject,body:plainBody,name:'나무팜농원',
+    attachments:[Utilities.newBlob(bytes,'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',attachmentName)]});
+  return {sent:true,recipientEmail:recipient,senderEmail:profile.senderEmail,attachmentName:attachmentName,
+    sentAt:new Date().toISOString(),remainingDailyQuota:MailApp.getRemainingDailyQuota()};
 }
 
 function quoteSmsSettings_() {

@@ -582,6 +582,27 @@ class Manager(SoldNumbers, SalesWorkspace):
                 "attachmentName": result.get("attachmentName", ""),
                 "sentAt": result.get("sentAt", ""), "remainingDailyQuota": result.get("remainingDailyQuota", 0)}
 
+    def send_sales_report_email(self, recipient, attachment_name, attachment_data, subject, body_text):
+        recipient = recipient.strip()
+        require(len(recipient) <= 254 and re.fullmatch(r"[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+", recipient),
+                "판매자 이메일 주소를 확인해주세요.")
+        require(isinstance(attachment_name, str) and len(attachment_name) <= 180 and
+                re.fullmatch(r'[^\\/:*?"<>|\r\n]+\.xlsx', attachment_name, re.IGNORECASE), "첨부할 매출 엑셀 파일명을 확인해주세요.")
+        require(isinstance(attachment_data, bytes) and 0 < len(attachment_data) <= 2 * 1024 * 1024
+                and attachment_data.startswith(b"PK\x03\x04"), "메일에 첨부할 매출 엑셀은 2MB 이하여야 합니다.")
+        require(isinstance(subject, str) and 1 <= len(subject.strip()) <= 160, "메일 제목을 확인해주세요.")
+        require(isinstance(body_text, str) and 1 <= len(body_text.strip()) <= 12000, "메일 내용을 확인해주세요.")
+        info = self.verify_server()
+        require(info.get("salesReportEmail") is True,
+                "엑셀은 저장했습니다. 매출 엑셀 메일 기능을 사용하려면 기존 Apps Script /exec 웹앱을 최신 코드로 새 버전 배포해주세요.")
+        result = self.api.call("send_sales_report_email", recipientEmail=recipient,
+                               subject=subject.strip(), bodyText=body_text.strip(), attachmentName=attachment_name,
+                               attachmentBase64=base64.b64encode(attachment_data).decode("ascii"))
+        require(result.get("sent") is True and result.get("recipientEmail") == recipient
+                and result.get("attachmentName") == attachment_name,
+                "엑셀은 저장했습니다. 메일 전송 결과를 확인하지 못했습니다. 받은편지함을 확인해주세요.")
+        return result
+
     def request_notification_state(self):
         state = self.vault.preference("request_notifications")
         if not isinstance(state, dict):
