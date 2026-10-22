@@ -2748,3 +2748,48 @@ body { background:#fafbf7; }
 .quantity-presets>button:hover { background: #e3efe6; border-color: #527f62; }
 .quantity-presets>button[aria-pressed=true] { background: #205844; border-color: #205844; color: #fff; }
 .quantity-presets>button:focus-visible { outline: 3px solid #ae771d; outline-offset: 2px; }
+
+/* Compact selections stay visible above the species choices across filters. */
+.selected-species-summary {
+  min-width: 0;
+  margin-top: .85rem;
+  padding: .75rem .85rem;
+  border-radius: .85rem;
+  background: #edf5ef;
+  color: #205844;
+}
+.selected-species-summary h3 { margin: 0; font-size: .9375rem; font-weight: 750; line-height: 1.5; }
+.selected-species-summary>p { margin-top: .3rem; color: #526350; font-size: .9375rem; line-height: 1.5; }
+.selected-species-tags { display: flex; flex-wrap: wrap; gap: .4rem .55rem; margin: .45rem 0 0; padding: 0; list-style: none; }
+.selected-species-tags>li {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+  padding-left: .7rem;
+  border: 1px solid #e0e9e1;
+  border-radius: .65rem;
+  background: #fff;
+  font-size: .9375rem;
+  font-weight: 650;
+  line-height: 1.4;
+}
+.selected-species-tags>li>span { min-width: 0; overflow-wrap: anywhere; }
+.selected-species-tags button {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  margin-left: .1rem;
+  border-radius: .55rem;
+  color: #637268;
+  background: transparent;
+  cursor: pointer;
+}
+.selected-species-tags button svg { width: 1.05rem; height: 1.05rem; }
+.selected-species-tags button:hover { background: #e7f0e9; color: #205844; }
+.selected-species-tags button:focus-visible { outline: 3px solid #ae771d; outline-offset: 1px; }
+.selected-species-tags button:disabled { opacity: .5; cursor: default; }
+.species-picker-dialog>.selected-species-summary { flex-shrink: 0; margin-top: 0; }
+.species-picker-dialog .selected-species-tags { max-height: 6.5rem; overflow-y: auto; overscroll-behavior: contain; padding: .15rem; }

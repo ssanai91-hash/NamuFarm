@@ -495,7 +495,7 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
       </DialogContent>
     </Dialog>
     <BlogLibraryDialog open={blogOpen} onOpenChange={setBlogOpen} opener={blogOpener} />
-    <SpeciesPickerDialog open={pickerLineId !== null && !locked} onOpenChange={open => { if (!open) setPickerLineId(null); }} onChoose={choosePickedSpecies} selectedName={lines.find(line => line.id === pickerLineId)?.species ?? ""} />
+    <SpeciesPickerDialog open={pickerLineId !== null && !locked} onOpenChange={open => { if (!open) setPickerLineId(null); }} onChoose={choosePickedSpecies} selectedName={lines.find(line => line.id === pickerLineId)?.species ?? ""} lines={lines} onRemove={id => { removeLine(id); if (id === pickerLineId) setPickerLineId(null); }} />
     <Dialog open={resetOpen} onOpenChange={open => { setResetOpen(open); if (!open) setConfirmedNotReceived(false); }}>
       <DialogContent className="quote-reset-dialog" showCloseButton={false} onCloseAutoFocus={event => {
         if (!returnHomeAfterReset.current) return;

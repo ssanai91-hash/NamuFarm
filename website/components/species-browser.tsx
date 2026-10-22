@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { Apple, Fence, Flower2, Leaf, Search, ShoppingBasket, Sprout, TreeDeciduous, Trees, X } from "lucide-react";
 import SpeciesChoiceCard from "@/components/species-choice-card";
+import SelectedSpeciesSummary from "@/components/selected-species-summary";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { catalogInitials, filterSpecies, type CatalogInitial } from "@/lib/species-catalog";
@@ -37,6 +38,7 @@ export default function SpeciesBrowser({ lines, onSelect, onRemove, notice, lock
         <p id="search-help" className="field-help">이름이나 초성으로 검색해요.</p>
         <div className="initial-filter" role="group" aria-label="첫 글자로 묘목 찾기">{catalogInitials.map(value => <Button type="button" variant="ghost" key={value} className="initial-button" aria-pressed={initial === value} onClick={() => chooseInitial(value)}>{value}</Button>)}</div>
       </div>}
+      <SelectedSpeciesSummary lines={lines} onRemove={onRemove} locked={locked} />
       <div className="catalog-result-intro">{mode === "purpose" && <h3>{activePurpose.title}</h3>}<p className="catalog-results-heading">눌러서 담기 · 다시 눌러 해제</p></div>
       <p className={notice.startsWith("한 번에 20종") || notice.startsWith("20종까지") ? "catalog-live" : "sr-only"} role="status" aria-live="polite" aria-atomic="true">{notice}</p>
       <div className="catalog-grid">{matches.slice(0, visibleCount).map(species => <SpeciesChoiceCard key={species.id} id={species.id} name={species.name} selected={selected.has(species.name)} disabled={locked} onSelect={() => onSelect(species.name)} />)}</div>

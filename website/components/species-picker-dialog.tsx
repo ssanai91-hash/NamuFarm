@@ -3,19 +3,23 @@
 import { useEffect, useState } from "react";
 import { Search, X } from "lucide-react";
 import SpeciesChoiceCard from "@/components/species-choice-card";
+import SelectedSpeciesSummary from "@/components/selected-species-summary";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { catalogInitials, filterSpecies, type CatalogInitial } from "@/lib/species-catalog";
+import type { QuoteLine } from "@/lib/quote-form";
 
 type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onChoose: (name: string) => void;
   selectedName: string;
+  lines: Pick<QuoteLine, "id" | "species">[];
+  onRemove: (id: number) => void;
 };
 
-export default function SpeciesPickerDialog({ open, onOpenChange, onChoose, selectedName }: Props) {
+export default function SpeciesPickerDialog({ open, onOpenChange, onChoose, selectedName, lines, onRemove }: Props) {
   const [initial, setInitial] = useState<CatalogInitial | "all">("ㄱ");
   const [query, setQuery] = useState("");
 
@@ -55,6 +59,8 @@ export default function SpeciesPickerDialog({ open, onOpenChange, onChoose, sele
             </Button>
           ))}
         </div>
+
+        <SelectedSpeciesSummary lines={lines} onRemove={onRemove} />
 
         <div className="species-picker-results-heading">
           <strong>{query ? "검색 결과" : initial === "all" ? "전체 묘목" : initial + " 묘목"}</strong>
