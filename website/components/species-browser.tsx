@@ -1,34 +1,48 @@
 "use client";
 import { useState } from "react";
-import { Leaf, Search, X, ShoppingBasket } from "lucide-react";
+import { Apple, Fence, Flower2, Leaf, Search, ShoppingBasket, Sprout, TreeDeciduous, Trees, X } from "lucide-react";
 import SpeciesChoiceCard from "@/components/species-choice-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { catalogInitials, filterSpecies, type CatalogInitial } from "@/lib/species-catalog";
+import { filterSpeciesByPurpose, purposes, type PurposeId } from "@/lib/species-purposes";
 import type { QuoteLine } from "@/lib/quote-form";
 type Props = { lines: QuoteLine[]; onSelect: (name: string) => void; onRemove: (id: number) => void; notice: string; locked: boolean };
 const pageSize = 24;
+const purposeIcons = { fruit: Apple, hedge: Fence, flower: Flower2, shade: TreeDeciduous, garden: Trees, lawn: Sprout };
 export default function SpeciesBrowser({ lines, onSelect, onRemove, notice, locked }: Props) {
+  const [mode, setMode] = useState<"purpose" | "name">("purpose");
+  const [purpose, setPurpose] = useState<PurposeId>("fruit");
   const [initial, setInitial] = useState<CatalogInitial | "all">("ㄱ");
   const [query, setQuery] = useState("");
   const [visibleCount, setVisibleCount] = useState(pageSize);
-  const matches = filterSpecies(initial, query);
+  const matches = mode === "purpose" ? filterSpeciesByPurpose(filterSpecies("all", ""), purpose) : filterSpecies(initial, query);
+  const activePurpose = purposes.find(item => item.id === purpose)!;
   const selectedItems = lines.filter(line => line.species.trim());
   const selected = new Set(selectedItems.map(line => line.species.trim()));
   function chooseInitial(value: CatalogInitial | "all") { setInitial(value); setQuery(""); setVisibleCount(pageSize); }
+  function choosePurpose(value: PurposeId) { setPurpose(value); setVisibleCount(pageSize); }
   return <section id="trees" className="trees-section wrap catalog-section" aria-labelledby="trees-title">
     <div className="section-heading catalog-heading"><div><span className="overline">나무팜 묘목 안내</span><h2 id="trees-title">어떤 나무를 찾으세요?</h2></div><p className="catalog-direct-note">찾는 묘목이 없다면, 아래 견적 요청란에 묘목 이름을 직접 적어주세요.</p></div>
     <div className="catalog-layout"><div className="catalog-main">
-      <div className="catalog-controls"><label className="search-label" htmlFor="catalog-search">묘목 이름으로 찾기</label>
+      <div className="catalog-mode-tabs" role="group" aria-label="묘목 찾는 방법">
+        <button type="button" aria-pressed={mode === "name"} onClick={() => { setMode("name"); setVisibleCount(pageSize); }}>이름·초성으로 찾기</button>
+        <button type="button" aria-pressed={mode === "purpose"} onClick={() => { setMode("purpose"); setVisibleCount(pageSize); }}>용도별 찾기</button>
+      </div>
+      {mode === "purpose" ? <div className="catalog-purpose-controls">
+        <p className="purpose-prompt">어떤 용도로 찾으세요?</p>
+        <div className="purpose-options" role="group" aria-label="나무 용도">{purposes.map(item => { const Icon = purposeIcons[item.id]; return <button key={item.id} type="button" className="purpose-option" aria-pressed={purpose === item.id} onClick={() => choosePurpose(item.id)}><Icon aria-hidden="true" /><span>{item.label}</span></button>; })}</div>
+      </div> : <div className="catalog-controls"><label className="search-label" htmlFor="catalog-search">묘목 이름으로 찾기</label>
         <div className="catalog-search"><Search aria-hidden="true" /><Input id="catalog-search" type="search" autoComplete="off" maxLength={80} placeholder="예: 수국 또는 ㅅㄱ" aria-describedby="search-help" value={query} onChange={event => { setQuery(event.target.value); setInitial(event.target.value.trim() ? "all" : "ㄱ"); setVisibleCount(pageSize); }} />{query && <Button type="button" variant="ghost" size="icon" aria-label="묘목 검색 지우기" onClick={() => chooseInitial("ㄱ")}><X /></Button>}</div>
         <p id="search-help" className="field-help">이름이나 초성으로 검색해요.</p>
         <div className="initial-filter" role="group" aria-label="첫 글자로 묘목 찾기">{catalogInitials.map(value => <Button type="button" variant="ghost" key={value} className="initial-button" aria-pressed={initial === value} onClick={() => chooseInitial(value)}>{value}</Button>)}</div>
-      </div>
-      <p className="catalog-results-heading">눌러서 선택 · 다시 눌러 해제</p>
+      </div>}
+      <div className="catalog-result-intro">{mode === "purpose" && <h3>{activePurpose.title}</h3>}<p className="catalog-results-heading">눌러서 담기 · 다시 눌러 해제</p></div>
       <p className={notice.startsWith("한 번에 20종") || notice.startsWith("20종까지") ? "catalog-live" : "sr-only"} role="status" aria-live="polite" aria-atomic="true">{notice}</p>
       <div className="catalog-grid">{matches.slice(0, visibleCount).map(species => <SpeciesChoiceCard key={species.id} id={species.id} name={species.name} selected={selected.has(species.name)} disabled={locked} onSelect={() => onSelect(species.name)} />)}</div>
       {matches.length === 0 && <div className="catalog-empty"><Leaf aria-hidden="true" /><h3>검색 결과가 없어요.</h3><p>다른 이름으로 찾거나 묘목 이름을 직접 적어주세요.</p><Button asChild variant="outline"><a href="#quote">묘목 이름 직접 적기</a></Button></div>}
       {matches.length > visibleCount && <div className="catalog-more"><Button type="button" variant="outline" onClick={() => setVisibleCount(count => count + pageSize)}>묘목 더 보기 <span>{Math.min(visibleCount, matches.length)} / {matches.length}</span></Button></div>}
+      {mode === "purpose" && <p className="purpose-note">용도는 묘목을 찾기 위한 안내예요. 재배 환경과 재고는 견적 요청 후 확인해 주세요.</p>}
     </div><aside className="catalog-basket" aria-labelledby="basket-title"><div className="basket-title"><ShoppingBasket aria-hidden="true" /><h3 id="basket-title">담은 묘목 <span>{selectedItems.length}종</span></h3></div>
       {selectedItems.length ? <ul>{selectedItems.map(line => <li key={line.id}><span><strong>{line.species}</strong><small>{line.quantity ? `${Number(line.quantity).toLocaleString()}주` : "수량을 입력해주세요"}</small></span><Button variant="ghost" type="button" disabled={locked} onClick={() => onRemove(line.id)} aria-label={`${line.species} 빼기`}>빼기</Button></li>)}</ul> : <p className="basket-empty">필요한 묘목을 담아보세요.<br />수량은 다음에 입력해요.</p>}
       <Button asChild className="basket-next"><a href="#quote">{selectedItems.length ? "수량 입력하기" : "묘목 이름 직접 적기"}</a></Button><p className="field-help">견적을 요청해도 주문이나 결제가 확정되지 않아요.</p>

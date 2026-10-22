@@ -2646,3 +2646,64 @@ body { background:#fafbf7; }
   .video-thumbnail { flex-basis: 6.5rem; }
   .video-card-copy strong { font-size: 1.125rem; }
 }
+
+/* Purpose-based seedling discovery, shared with the existing quote basket. */
+.catalog-mode-tabs {
+  display: grid;
+  grid-template-columns: repeat(2,minmax(0,1fr));
+  border-bottom: 1px solid #cad8cd;
+  margin-bottom: 1.45rem;
+}
+.catalog-mode-tabs button {
+  min-height: 3.5rem;
+  padding: .65rem .3rem;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  background: transparent;
+  color: #63756a;
+  font: inherit;
+  font-weight: 700;
+  font-size: 1.05rem;
+  line-height: 1.4;
+  cursor: pointer;
+}
+.catalog-mode-tabs button[aria-pressed=true] { border-bottom-color: #205844; color: #205844; }
+.catalog-mode-tabs button:hover { color: #205844; }
+.catalog-mode-tabs button:focus-visible,
+.purpose-option:focus-visible { outline: 3px solid #ae771d; outline-offset: 2px; }
+.purpose-prompt { margin: 0 0 .8rem; color: #193f2e; font-size: 1.2rem; font-weight: 750; }
+.purpose-options { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: .65rem; }
+.purpose-option {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .55rem;
+  min-width: 0;
+  min-height: 4.1rem;
+  padding: .6rem;
+  border: 1.5px solid #cfddcf;
+  border-radius: .85rem;
+  background: #fff;
+  color: #2e4937;
+  font: inherit;
+  font-size: 1.08rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.purpose-option svg { width: 1.5rem; height: 1.5rem; flex-shrink: 0; stroke-width: 1.8; }
+.purpose-option[aria-pressed=true] { border-color: #205844; background: #e8f2e8; color: #205844; box-shadow: inset 0 0 0 1px #205844; }
+.purpose-option:hover { border-color: #527f62; background: #f3f8f2; }
+.catalog-result-intro { margin: 1.65rem 0 .75rem; }
+.catalog-result-intro h3 { color: #193f2e; font-size: 1.4rem; line-height: 1.35; font-weight: 800; }
+.catalog-result-intro .catalog-results-heading { margin: .3rem 0 0; color: #56705d; }
+.purpose-note { margin-top: 1.25rem; color: #536750; font-size: .95rem; line-height: 1.65; }
+@media(max-width:48rem) {
+  .catalog-mode-tabs { margin-bottom: 1.3rem; }
+  .catalog-mode-tabs button { font-size: .98rem; }
+  .purpose-options { gap: .55rem; }
+  .purpose-option { flex-direction: column; gap: .25rem; min-height: 4.5rem; padding: .5rem .2rem; font-size: 1rem; }
+  .purpose-option svg { width: 1.4rem; height: 1.4rem; }
+  .catalog-section .catalog-grid { grid-template-columns: repeat(2,minmax(0,1fr)); gap: .5rem; }
+  .catalog-section .catalog-grid .catalog-card { min-width: 0; min-height: 3.3rem; }
+  .catalog-section .catalog-grid .catalog-card-name { font-size: 1rem; }
+}
