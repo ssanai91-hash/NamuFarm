@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent, type MouseEvent } from "react";
-import { Sprout, Plus, Minus, FileText, CheckCheck, MessageCircle, ShieldCheck, LoaderCircle, CircleCheck, CircleAlert, X, Copy, Phone, ChevronDown, ChevronUp, ChevronRight, RotateCcw, Play } from "lucide-react";
+import { Sprout, Plus, Minus, FileText, CheckCheck, MessageCircle, ShieldCheck, LoaderCircle, CircleCheck, CircleAlert, X, Copy, Phone, ChevronDown, ChevronRight, RotateCcw, Play } from "lucide-react";
 import SpeciesBrowser from "@/components/species-browser";
 import SpeciesPickerDialog from "@/components/species-picker-dialog";
 import VideoLibraryDialog from "@/components/video-library-dialog";
@@ -24,11 +24,9 @@ import { createVideoQuoteDraft, stageVideoQuote, videoQuoteSpecies, videoQuoteSp
 
 const quantityPresets = [5, 10, 20, 50, 100] as const;
 const hasValidQuantity = (value: string) => Number.isSafeInteger(Number(value)) && Number(value) >= 1 && Number(value) <= 1000000;
-const isCompleteQuoteLine = (line: Line) => quoteItemSchema.safeParse({ species: line.species, specification: line.specification, quantity: Number(line.quantity) }).success;
 
 export default function QuoteHome({ initialTestMode = false, initialConfigured = false }: { initialTestMode?: boolean; initialConfigured?: boolean }) {
   const [lines, setLines] = useState<Line[]>([emptyLine(0)]);
-  const [editingLineId, setEditingLineId] = useState<number | null>(0);
   const nextLine = useRef(1);
   const [pickerLineId, setPickerLineId] = useState<number | null>(null);
   const [name, setName] = useState(""); const [phone, setPhone] = useState("");
@@ -170,14 +168,7 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
 
   const clearProblem = (id: string) => setProblems(old => old.filter(problem => problem.id !== id));
   function focusField(id: string) {
-    const lineField = /^(?:species|quantity|spec)-(\d+)$/.exec(id);
-    if (lineField) setEditingLineId(Number(lineField[1]));
     requestAnimationFrame(() => document.getElementById(id)?.focus());
-  }
-  function collapseLine(id: number) {
-    if (locked) return;
-    setEditingLineId(null);
-    requestAnimationFrame(() => document.getElementById(`quote-summary-${id}`)?.focus({ preventScroll: true }));
   }
   const updateLine = (id: number, key: keyof Omit<Line, "id">, value: string) => {
     if (locked) return;
@@ -362,9 +353,6 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
   const count = lines.filter(line => line.species.trim()).length;
   const total = lines.reduce((n, line) => n + (Number.isSafeInteger(Number(line.quantity)) && Number(line.quantity) > 0 ? Number(line.quantity) : 0), 0);
   const pendingQuantityLines = lines.filter(line => line.species.trim() && !hasValidQuantity(line.quantity));
-  const completeLineIds = new Set(lines.filter(isCompleteQuoteLine).map(line => line.id));
-  const collapsedLines = lines.filter(line => completeLineIds.has(line.id) && line.id !== editingLineId);
-  const collapsedLineIds = new Set(collapsedLines.map(line => line.id));
   const hasInvalidQuantity = pendingQuantityLines.some(line => line.quantity.trim());
 
   // One form instance shares validation, pending receipts and submission across both locations.
@@ -384,18 +372,13 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
             {!ready && <div className="service-notice">온라인 접수를 준비하고 있어요. 지금은 양식을 살펴볼 수 있으며 요청은 전송되지 않습니다.</div>}
             {removed && <div className="undo-notice"><span>{removed.label} · 목록에서 뺐어요.</span><Button type="button" variant="ghost" onClick={undoRemove} disabled={locked}>되돌리기</Button></div>}
             <fieldset className="quote-section-box" disabled={locked}><legend><span>1</span>견적 요청 묘목</legend>
-              <div className="quote-item-progress"><strong>{count > 0 ? `${count}종 중 ${count - pendingQuantityLines.length}종 수량 입력` : "묘목과 수량을 입력해주세요"}</strong><p>입력한 품목은 접어서 볼 수 있어요.</p></div>
-              {collapsedLines.length > 0 && <div className="completed-quote-items" role="group" aria-label="접힌 견적 품목">
-                {collapsedLines.map(line => <button key={line.id} id={`quote-summary-${line.id}`} className="completed-quote-item" type="button" aria-expanded={false} aria-controls={`quote-line-${line.id}`} aria-label={`${line.species}, ${Number(line.quantity).toLocaleString("ko-KR")}주, 수정`} onClick={() => focusField(`quantity-${line.id}`)}>
-                  <CircleCheck aria-hidden="true" /><span className="completed-item-name">{line.species}</span><strong>{Number(line.quantity).toLocaleString("ko-KR")}주</strong><span className="completed-item-edit">수정<ChevronDown aria-hidden="true" /></span>
-                </button>)}
-              </div>}
+              <div className="quote-item-progress"><strong>{count > 0 ? `${count}종 중 ${count - pendingQuantityLines.length}종 수량 입력` : "묘목과 수량을 입력해주세요"}</strong></div>
               {pendingQuantityLines.length > 0 && <div className="pending-quantity-notice">
                 <CircleAlert aria-hidden="true" /><div role="status"><strong>수량 {hasInvalidQuantity ? "확인" : "미입력"} {pendingQuantityLines.length}건</strong><p>{pendingQuantityLines.slice(0, 3).map(line => line.species).join(" · ")}{pendingQuantityLines.length > 3 ? ` 외 ${pendingQuantityLines.length - 3}종` : ""}</p></div>
                 <Button type="button" variant="ghost" onClick={() => focusField(`quantity-${pendingQuantityLines[0].id}`)}>입력하기<ChevronRight aria-hidden="true" /></Button>
               </div>}
-              <div className="line-list">{lines.map((line, index) => <div className="item-line" id={`quote-line-${line.id}`} key={line.id} hidden={collapsedLineIds.has(line.id)} onFocusCapture={() => { if (!locked) setEditingLineId(line.id); }}>
-              <div className="item-number"><span className="item-badge">품목 {index + 1}</span><div className="item-header-actions">{completeLineIds.has(line.id) ? <Button type="button" variant="ghost" className="item-collapse-button" aria-expanded={true} aria-controls={`quote-line-${line.id}`} aria-label={`품목 ${index + 1} ${line.species} 접기`} onClick={() => collapseLine(line.id)}>접기<ChevronUp aria-hidden="true" /></Button> : line.species.trim() && !hasValidQuantity(line.quantity) ? <span className="item-pending-label">수량 {line.quantity.trim() ? "확인" : "필요"}</span> : null}{lines.length > 1 && <Button type="button" variant="ghost" className="item-remove-button" aria-label={`품목 ${index + 1} ${line.species} 빼기`} onClick={() => removeLine(line.id)}><X aria-hidden="true" />빼기</Button>}</div></div>
+              <div className="line-list">{lines.map((line, index) => <div className="item-line" key={line.id}>
+              <div className="item-number"><span className="item-badge">품목 {index + 1}</span><div className="item-header-actions">{line.species.trim() && !hasValidQuantity(line.quantity) ? <span className="item-pending-label">수량 {line.quantity.trim() ? "확인" : "필요"}</span> : null}{lines.length > 1 && <Button type="button" variant="ghost" className="item-remove-button" aria-label={`품목 ${index + 1} ${line.species} 빼기`} onClick={() => removeLine(line.id)}><X aria-hidden="true" />빼기</Button>}</div></div>
               <div className="item-fields">
                 <div className="field species-field">
                   <Label htmlFor={"species-" + line.id} onClick={() => { if (!locked) focusField("species-" + line.id); }}>묘목 이름 <small>필수</small></Label>
