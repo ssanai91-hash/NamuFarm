@@ -6,6 +6,7 @@ import SelectedSpeciesSummary from "@/components/selected-species-summary";
 import PlantingGuideDialog from "@/components/planting-guide-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { catalogInitials, filterSpecies, type CatalogInitial } from "@/lib/species-catalog";
 import { filterSpeciesByPurpose, purposes, type PurposeId } from "@/lib/species-purposes";
 import { isEmptyLine, type QuoteLine } from "@/lib/quote-form";
@@ -20,6 +21,8 @@ export default function SpeciesBrowser({ lines, onSelect, onRemove, notice, lock
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(0);
   const [month, setMonth] = useState(koreanMonth);
+  const [monthPickerOpen, setMonthPickerOpen] = useState(false);
+  const selectedMonthRef = useRef<HTMLButtonElement | null>(null);
   const [guideName, setGuideName] = useState<string | null>(null);
   const guideOpener = useRef<HTMLButtonElement | null>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
@@ -58,7 +61,12 @@ export default function SpeciesBrowser({ lines, onSelect, onRemove, notice, lock
         <p className="purpose-prompt">어떤 용도로 찾으세요?</p>
         <div className="purpose-options" role="group" aria-label="나무 용도">{purposes.map(item => { const Icon = purposeIcons[item.id]; return <button key={item.id} type="button" className="purpose-option" aria-pressed={purpose === item.id} onClick={() => choosePurpose(item.id)}><Icon aria-hidden="true" /><span>{item.label}</span></button>; })}</div>
       </div> : mode === "planting" ? <div className="planting-controls">
-        <div className="planting-heading"><h3>지금 심을 나무가 궁금하세요?</h3><label className="planting-month"><span className="sr-only">심는 시기 안내 월 선택</span><select value={month} aria-describedby="planting-month-help" onChange={event => { setMonth(Number(event.target.value)); setPage(0); }}>{Array.from({ length: 12 }, (_, index) => index + 1).map(value => <option key={value} value={value}>{value}월</option>)}</select><ChevronDown aria-hidden="true" /></label></div>
+        <div className="planting-heading"><h3>지금 심을 나무가 궁금하세요?</h3><Popover open={monthPickerOpen} onOpenChange={setMonthPickerOpen}>
+          <PopoverTrigger asChild><button type="button" className="planting-month" aria-label={`심는 시기 안내 월 선택, 현재 ${month}월`} aria-describedby="planting-month-help">{month}월<ChevronDown aria-hidden="true" /></button></PopoverTrigger>
+          <PopoverContent className="planting-month-picker" align="end" sideOffset={8} collisionPadding={12} aria-label="심는 시기 안내 월 선택" onOpenAutoFocus={event => { event.preventDefault(); selectedMonthRef.current?.focus({ preventScroll: true }); }}>
+            <p>월 선택</p><div className="planting-month-grid" role="group" aria-label="1월부터 12월">{Array.from({ length: 12 }, (_, index) => index + 1).map(value => <button key={value} ref={value === month ? selectedMonthRef : undefined} type="button" aria-pressed={month === value} onClick={() => { setMonth(value); setPage(0); setMonthPickerOpen(false); }}>{value}월</button>)}</div>
+          </PopoverContent>
+        </Popover></div>
         <p id="planting-month-help">{monthGuidance(month)}</p>
       </div> : <div className="catalog-controls"><label className="search-label" htmlFor="catalog-search">묘목 이름으로 찾기</label>
         <div className="catalog-search"><Search aria-hidden="true" /><Input id="catalog-search" type="search" autoComplete="off" maxLength={80} placeholder="예: 수국 또는 ㅅㄱ" aria-describedby="search-help" value={query} onChange={event => { setQuery(event.target.value); setInitial(event.target.value.trim() ? "all" : "ㄱ"); setPage(0); }} />{query && <Button type="button" variant="ghost" size="icon" aria-label="묘목 검색 지우기" onClick={() => chooseInitial("ㄱ")}><X /></Button>}</div>
