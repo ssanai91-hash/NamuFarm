@@ -1350,6 +1350,7 @@ section {
   text-align: center;
   padding: 1.5rem .25rem;
   outline: none;
+  scroll-margin-top: .75rem;
 }
 .success-panel>svg {
   width: 3rem;
@@ -1392,9 +1393,8 @@ section {
   font-size: 1rem;
   font-variant-numeric: tabular-nums;
 }
-.receipt-date-label {
-  margin-top: .8rem;
-}
+.receipt-date { display: flex; flex-direction: column; align-items: center; gap: .35rem; margin-top: .8rem; }
+.receipt-date-label { font-size: 1rem; color: #48653d; }
 .copy-notice {
   font-size: 1rem;
   color: #205844;
@@ -1407,6 +1407,24 @@ section {
 }
 .success-panel .success-followup {
   font-size: 1rem;
+}
+@media(max-width:48rem) {
+  .quote-form:has(>.success-panel) { padding-top: .5rem; }
+  .success-panel { padding: .5rem .25rem .75rem; }
+  .success-panel>svg { width: 2.25rem; height: 2.25rem; margin-bottom: .3rem; }
+  .success-panel>.overline { margin-bottom: .25rem; font-size: .875rem; line-height: 1.4; }
+  .success-panel h3 { margin: .25rem 0 .5rem; font-size: 1.25rem; line-height: 1.4; }
+  .success-panel>p { font-size: 1rem; line-height: 1.5; }
+  .success-panel .receipt { margin: .75rem 0; padding: .7rem; gap: .4rem; }
+  .success-panel .receipt>span { font-size: .875rem; line-height: 1.4; }
+  .success-panel .receipt code { font-size: 1.125rem; line-height: 1.5; }
+  .success-panel .receipt>button { min-height: 2.75rem; height: auto; padding: .5rem .8rem; font-size: .9375rem; }
+  .success-panel .receipt-date { flex-direction: row; flex-wrap: wrap; justify-content: center; gap: .15rem .45rem; margin-top: .15rem; }
+  .success-panel .receipt-date-label,.success-panel .receipt time { font-size: .875rem; line-height: 1.5; }
+  .success-panel .copy-notice { font-size: .875rem; line-height: 1.4; }
+  .success-panel .success-followup { font-size: .9375rem; line-height: 1.5; }
+  .success-panel>.submit-note { margin: .5rem 0 .65rem; font-size: .9375rem; line-height: 1.45; }
+  .success-panel>button { min-height: 2.875rem; height: auto; padding: .55rem 1rem; font-size: 1rem; }
 }
 .privacy-page {
   max-width: 50rem;

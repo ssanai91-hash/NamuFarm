@@ -134,7 +134,14 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
     if (formRef.current) observer.observe(formRef.current);
     return () => observer.disconnect();
   }, [videoQuoteOpen]);
-  useEffect(() => { if (success) successRef.current?.focus(); }, [success]);
+  useEffect(() => {
+    if (!success) return;
+    const frame = requestAnimationFrame(() => {
+      successRef.current?.focus({ preventScroll: true });
+      successRef.current?.scrollIntoView({ block: "start", behavior: "instant" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [success]);
   useEffect(() => {
     if (!problems.length && error === "아래 항목을 확인해주세요.") setError("");
   }, [problems, error]);
@@ -358,7 +365,20 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
   // One form instance shares validation, pending receipts and submission across both locations.
   const quoteForm = (
         <form className="quote-form" ref={formRef} onSubmit={prepare} noValidate aria-busy={busy}>
-          {success ? <div className="success-panel" ref={successRef} tabIndex={-1} role="status"><CircleCheck /><span className="overline">접수 완료</span><h3>{testMode ? "테스트 요청을 저장했어요." : "견적 상담 요청이 접수됐어요."}</h3><p>{testMode ? "테스트 요청만 저장됐습니다. 실제 상담·견적서 발송은 진행하지 않습니다." : "판매자가 여러 농원의 재고와 규격을 확인한 뒤 남겨주신 연락처로 안내드립니다."}</p><div className="receipt"><span>견적접수번호</span><code>{success.receiptNumber}</code><Button type="button" variant="outline" onClick={copyReceipt}><Copy />접수번호 복사</Button><p className="copy-notice" role="status">{copyNotice}</p><span className="receipt-date-label">접수일시 · 한국시간</span><time dateTime={success.createdAt}>{receiptTimeSeoul(success.createdAt)}</time></div>{successContact && <p className="success-followup">상담 연락처: 끝 네 자리 <strong>{successContact.phoneTail}</strong><br />공식 견적서: {successContact.formal ? successContact.channel === "both" ? "이메일과 문자로 수신" : successContact.channel === "email" ? "이메일로 수신" : "문자로 수신" : "요청 안 함"}</p>}<p className="submit-note">아직 주문이나 결제가 확정된 것은 아닙니다.</p><Button type="button" variant="outline" onClick={() => { setSuccess(null); setNotice(""); }}>{testMode ? "다른 테스트 요청하기" : "다른 견적 요청하기"}</Button></div> : <>
+          {success ? <div className="success-panel" ref={successRef} tabIndex={-1} role="status">
+            <CircleCheck aria-hidden="true" /><span className="overline">접수 완료</span>
+            <h3>{testMode ? "테스트 요청을 저장했어요." : "견적 상담 요청이 접수됐어요."}</h3>
+            <p>{testMode ? "테스트 요청만 저장됐습니다. 실제 상담·견적서 발송은 진행하지 않습니다." : "판매자가 여러 농원의 재고와 규격을 확인한 뒤 남겨주신 연락처로 안내드립니다."}</p>
+            <div className="receipt">
+              <span>견적접수번호</span><code>{success.receiptNumber}</code>
+              <Button type="button" variant="outline" onClick={copyReceipt}><Copy aria-hidden="true" />접수번호 복사</Button>
+              <p className="copy-notice" role="status">{copyNotice}</p>
+              <div className="receipt-date"><span className="receipt-date-label">접수일시 · 한국시간</span><time dateTime={success.createdAt}>{receiptTimeSeoul(success.createdAt)}</time></div>
+            </div>
+            {successContact && <p className="success-followup">상담 연락처: 끝 네 자리 <strong>{successContact.phoneTail}</strong><br />공식 견적서: {successContact.formal ? successContact.channel === "both" ? "이메일과 문자로 수신" : successContact.channel === "email" ? "이메일로 수신" : "문자로 수신" : "요청 안 함"}</p>}
+            <p className="submit-note">아직 주문이나 결제가 확정된 것은 아닙니다.</p>
+            <Button type="button" variant="outline" onClick={() => { setSuccess(null); setNotice(""); }}>{testMode ? "다른 테스트 요청하기" : "다른 견적 요청하기"}</Button>
+          </div> : <>
             <div className="form-title"><div><FileText /><h3>견적 상담 요청</h3></div><span>아래 항목을 입력해주세요</span></div>
             <p className="form-call-help">입력이 어려우신가요? <a href={`tel:${businessInfo.mobile.replaceAll("-", "")}`}><Phone aria-hidden="true" />전화 상담 · {businessInfo.mobile}</a></p>
             {uncertain && review && <section className="pending-request-notice service-notice" aria-label="접수 확인 대기">
