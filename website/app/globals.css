@@ -2749,6 +2749,35 @@ body { background:#fafbf7; }
 .quantity-presets>button[aria-pressed=true] { background: #205844; border-color: #205844; color: #fff; }
 .quantity-presets>button:focus-visible { outline: 3px solid #ae771d; outline-offset: 2px; }
 
+/* Finished items share one compact background; unfinished items stay editable. */
+.quote-item-progress { display: flex; flex-wrap: wrap; align-items: baseline; gap: .25rem .75rem; margin-bottom: .75rem; }
+.quote-item-progress strong { color: #205844; font-size: .9375rem; }
+.quote-item-progress p { color: #637366; font-size: .875rem; line-height: 1.5; }
+.completed-quote-items { margin-bottom: .8rem; padding: .25rem .75rem; border-radius: .85rem; background: #edf5ef; }
+.completed-quote-item { display: grid; grid-template-columns: 1.125rem minmax(0,1fr) auto auto; align-items: center; gap: .55rem; width: 100%; min-height: 3rem; padding: .65rem 0; color: #205844; text-align: left; font-size: .9375rem; line-height: 1.4; cursor: pointer; }
+.completed-quote-item+.completed-quote-item { border-top: 1px solid #d6e5da; }
+.completed-quote-item>svg { width: 1.125rem; height: 1.125rem; }
+.completed-item-name { min-width: 0; overflow-wrap: anywhere; font-weight: 600; }
+.completed-quote-item>strong { white-space: nowrap; font-size: .9375rem; }
+.completed-item-edit { display: flex; align-items: center; gap: .15rem; margin-left: .25rem; color: #536e5c; font-size: .8125rem; white-space: nowrap; }
+.completed-item-edit svg { width: 1rem; height: 1rem; }
+.completed-quote-item:hover .completed-item-edit { color: #205844; text-decoration: underline; }
+.completed-quote-item:focus-visible { outline: 3px solid #ae771d; outline-offset: 2px; border-radius: .35rem; }
+.completed-quote-item:disabled { cursor: default; opacity: .65; }
+.pending-quantity-notice { display: flex; align-items: center; gap: .55rem; margin-bottom: 1rem; padding: .6rem .75rem; border: 1px solid #ebd7b2; border-radius: .75rem; background: #fff8eb; color: #79551f; }
+.pending-quantity-notice>svg { width: 1.125rem; height: 1.125rem; flex: none; }
+.pending-quantity-notice>div { flex: 1; min-width: 0; }
+.pending-quantity-notice strong { font-size: .875rem; }
+.pending-quantity-notice p { font-size: .8125rem; line-height: 1.5; overflow-wrap: anywhere; }
+.pending-quantity-notice>button { flex: none; min-height: 2.75rem; padding: .45rem .25rem; gap: .1rem; color: #79551f; font-size: .875rem; }
+.pending-quantity-notice>button:hover { background: #f4e8d2; }
+.pending-quantity-notice>button svg { width: 1rem; height: 1rem; }
+.quote-form .item-line[hidden] { display: none; }
+.item-header-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: .35rem; }
+.item-number .item-collapse-button { min-width: 0; min-height: 2.75rem; padding: .35rem .5rem; gap: .2rem; color: #205844; font-size: .8125rem; }
+.item-collapse-button svg { width: 1rem; height: 1rem; }
+.item-pending-label { color: #8a6227; font-size: .8125rem; font-weight: 500; }
+
 /* Compact selections stay visible above the species choices across filters. */
 .selected-species-summary {
   min-width: 0;
