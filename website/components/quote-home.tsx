@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent, type MouseEvent } from "react";
-import { Sprout, Plus, Minus, FileText, CheckCheck, MessageCircle, ShieldCheck, LoaderCircle, CircleCheck, CircleAlert, X, Copy, Phone, ChevronDown, ChevronRight, RotateCcw, Play } from "lucide-react";
+import { Sprout, Plus, Minus, FileText, CheckCheck, MessageCircle, ShieldCheck, LoaderCircle, CircleCheck, CircleAlert, X, Copy, Phone, ChevronDown, ChevronRight, RotateCcw, Play, ShoppingBag, ExternalLink } from "lucide-react";
 import SpeciesBrowser from "@/components/species-browser";
 import SpeciesPickerDialog from "@/components/species-picker-dialog";
 import VideoLibraryDialog from "@/components/video-library-dialog";
@@ -23,6 +23,7 @@ import type { VideoResource } from "@/lib/content-library";
 import { createVideoQuoteDraft, stageVideoQuote, videoQuoteSpecies, videoQuoteSpeciesName, type VideoQuoteDraft } from "@/lib/video-quote";
 
 const quantityPresets = [5, 10, 20, 50, 100] as const;
+const naverStoreUrl = "https://m.smartstore.naver.com/farmstart";
 const hasValidQuantity = (value: string) => Number.isSafeInteger(Number(value)) && Number(value) >= 1 && Number(value) <= 1000000;
 
 export default function QuoteHome({ initialTestMode = false, initialConfigured = false }: { initialTestMode?: boolean; initialConfigured?: boolean }) {
@@ -469,7 +470,7 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
       <Button asChild variant="outline" className="header-call"><a href={`tel:${businessInfo.mobile.replaceAll("-", "")}`} aria-label={`전화 상담 ${businessInfo.mobile}`}><Phone aria-hidden="true" />전화 상담</a></Button>
       <Button asChild className="header-quote"><a href="#quote">견적 상담 요청</a></Button>
       <Button type="button" variant="outline" className="header-videos" aria-label="묘목 재배 영상 보기" aria-haspopup="dialog" onClick={openVideos}>재배 영상</Button>
-      <Dialog open={menuOpen} onOpenChange={setMenuOpen}><DialogTrigger asChild><Button variant="ghost" className="menu-button" aria-label="메뉴 열기">메뉴</Button></DialogTrigger><DialogContent className="menu-dialog" showCloseButton={false}><DialogClose asChild><Button className="dialog-dismiss" variant="ghost" aria-label="메뉴 닫기"><X /></Button></DialogClose><DialogHeader><DialogTitle>나무팜</DialogTitle><DialogDescription>묘목 찾기와 견적 상담</DialogDescription></DialogHeader><nav aria-label="모바일 메뉴"><button type="button" onClick={openBlogFromMenu} aria-haspopup="dialog">묘목 정보·블로그 보기</button>{[["trees", "묘목 찾기"], ["quote", "견적 상담 요청"], ["guide", "이용 안내"], ["questions", "자주 묻는 질문"]].map(([id, title]) => <a key={id} href={`#${id}`} onClick={() => setMenuOpen(false)}>{title}</a>)}<a href={`tel:${businessInfo.mobile.replaceAll("-", "")}`}><Phone aria-hidden="true" />전화 상담 · {businessInfo.mobile}</a></nav></DialogContent></Dialog>
+      <Dialog open={menuOpen} onOpenChange={setMenuOpen}><DialogTrigger asChild><Button variant="ghost" className="menu-button" aria-label="메뉴 열기">메뉴</Button></DialogTrigger><DialogContent className="menu-dialog" showCloseButton={false}><DialogClose asChild><Button className="dialog-dismiss" variant="ghost" aria-label="메뉴 닫기"><X /></Button></DialogClose><DialogHeader><DialogTitle>나무팜</DialogTitle><DialogDescription>묘목 찾기와 견적 상담</DialogDescription></DialogHeader><nav aria-label="모바일 메뉴"><button type="button" onClick={openBlogFromMenu} aria-haspopup="dialog">묘목 정보·블로그 보기</button><a href={naverStoreUrl} target="_blank" rel="noopener noreferrer" aria-label="네이버 스토어 바로가기 · 새 창" onClick={() => setMenuOpen(false)}><ShoppingBag aria-hidden="true" />네이버 스토어<ExternalLink aria-hidden="true" /></a>{[["trees", "묘목 찾기"], ["quote", "견적 상담 요청"], ["guide", "이용 안내"], ["questions", "자주 묻는 질문"]].map(([id, title]) => <a key={id} href={`#${id}`} onClick={() => setMenuOpen(false)}>{title}</a>)}<a href={`tel:${businessInfo.mobile.replaceAll("-", "")}`}><Phone aria-hidden="true" />전화 상담 · {businessInfo.mobile}</a></nav></DialogContent></Dialog>
     </div></header>
     <main id="home">
       <section className="hero" aria-labelledby="hero-title">
@@ -479,7 +480,7 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
           <h1 id="hero-title">심고 싶은 나무,<br />견적부터 <em>편하게.</em></h1>
           <p>원하는 묘목을 고르고 수량을 알려주세요.<br />규격과 배송은 상담을 통해 안내해 드립니다.</p>
           <div className="hero-actions"><Button asChild className="hero-cta"><a href="#trees"><Sprout />묘목 찾아보기</a></Button><a className="hero-direct" href="#quote">견적 바로 작성 →</a></div>
-          <div className="hero-resource-actions"><Button type="button" variant="outline" className="hero-videos" aria-haspopup="dialog" onClick={openVideos}><Play aria-hidden="true" />묘목 재배 영상 보기</Button><Button type="button" variant="outline" className="hero-videos" aria-haspopup="dialog" ref={heroBlogButton} onClick={openBlog}><FileText aria-hidden="true" />묘목 정보·블로그 보기</Button></div>
+          <div className="hero-resource-actions"><Button type="button" variant="outline" className="hero-videos" aria-haspopup="dialog" onClick={openVideos}><Play aria-hidden="true" />묘목 재배 영상 보기</Button><Button type="button" variant="outline" className="hero-videos" aria-haspopup="dialog" ref={heroBlogButton} onClick={openBlog}><FileText aria-hidden="true" />묘목 정보·블로그 보기</Button><Button asChild variant="outline" className="hero-videos"><a href={naverStoreUrl} target="_blank" rel="noopener noreferrer" aria-label="네이버 스토어 바로가기 · 새 창"><ShoppingBag aria-hidden="true" />네이버 스토어<ExternalLink aria-hidden="true" /></a></Button></div>
           <div className="hero-highlights" aria-label="견적 상담 특징"><span>회원가입 없이 요청</span><span>규격 상담 가능</span><span>결제는 상담 후 결정</span></div>
         </div>
       </section>
