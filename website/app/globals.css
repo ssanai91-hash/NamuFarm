@@ -2297,6 +2297,7 @@ body { background:#fafbf7; }
 @media(max-width:48rem) {
   /* The bottom quick action already leads to the quote form. */
   .header-quote,
+  .hero-actions,
   .hero-direct { display:none; }
   .menu-button { margin-left:auto; }
 

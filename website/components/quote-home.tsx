@@ -479,7 +479,7 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
           <span className="eyebrow">충북 옥천 · 묘목 견적 상담</span>
           <h1 id="hero-title">심고 싶은 나무,<br />견적부터 <em>편하게.</em></h1>
           <p>원하는 묘목을 고르고 수량을 알려주세요.<br />규격과 배송은 상담을 통해 안내해 드립니다.</p>
-          <div className="hero-actions"><Button asChild className="hero-cta"><a href="#trees"><Sprout />묘목 찾아보기</a></Button><a className="hero-direct" href="#quote">견적 바로 작성 →</a></div>
+          <div className="hero-actions"><a className="hero-direct" href="#quote">견적 바로 작성 →</a></div>
           <div className="hero-resource-actions"><Button type="button" variant="outline" className="hero-videos" aria-haspopup="dialog" onClick={openVideos}><Play aria-hidden="true" />묘목 재배 영상 보기</Button><Button type="button" variant="outline" className="hero-videos" aria-haspopup="dialog" ref={heroBlogButton} onClick={openBlog}><FileText aria-hidden="true" />묘목 정보·블로그 보기</Button><Button asChild variant="outline" className="hero-videos"><a href={naverStoreUrl} target="_blank" rel="noopener noreferrer" aria-label="네이버 스토어 바로가기 · 새 창"><ShoppingBag aria-hidden="true" />네이버 스토어<ExternalLink aria-hidden="true" /></a></Button></div>
           <div className="hero-highlights" aria-label="견적 상담 특징"><span>회원가입 없이 요청</span><span>규격 상담 가능</span><span>결제는 상담 후 결정</span></div>
         </div>
