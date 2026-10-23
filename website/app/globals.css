@@ -2730,18 +2730,18 @@ body { background:#fafbf7; }
 .quantity-field .quantity-unit { padding-left: .1rem; }
 .quantity-quick-select { display: grid; gap: .45rem; }
 .quantity-quick-select>p { color: #526350; font-size: 1rem; line-height: 1.5; }
-.quantity-presets { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: .4rem; }
+.quantity-presets { display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); gap: .35rem; }
 .quantity-presets>button {
   width: 100%;
   min-width: 0;
   height: auto;
-  min-height: 2.875rem;
-  padding: .5rem .15rem;
+  min-height: 2.625rem;
+  padding: .4rem .1rem;
   border: 1px solid #b5cbbd;
   border-radius: .65rem;
   background: #fff;
   color: #205844;
-  font-size: 1rem;
+  font-size: .9375rem;
   font-weight: 700;
   box-shadow: none;
 }

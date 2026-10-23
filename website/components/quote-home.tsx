@@ -22,7 +22,7 @@ import { toggleCatalogLine, emptyLine, isEmptyLine, quoteFieldProblems, type Fie
 import type { VideoResource } from "@/lib/content-library";
 import { createVideoQuoteDraft, stageVideoQuote, videoQuoteSpecies, videoQuoteSpeciesName, type VideoQuoteDraft } from "@/lib/video-quote";
 
-const quantityPresets = [10, 20, 50, 100] as const;
+const quantityPresets = [5, 10, 20, 50, 100] as const;
 
 export default function QuoteHome({ initialTestMode = false, initialConfigured = false }: { initialTestMode?: boolean; initialConfigured?: boolean }) {
   const [lines, setLines] = useState<Line[]>([emptyLine(0)]);
