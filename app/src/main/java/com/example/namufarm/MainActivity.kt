@@ -93,6 +93,10 @@ class MainActivity : ComponentActivity() {
         }
         val webInbox = ViewModelProvider(this, WebInboxViewModelFactory(quoteConnection))[WebInboxViewModel::class.java]
 
+        val inquiries = ViewModelProvider(this, com.example.namufarm.viewmodel.CustomerInquiryViewModelFactory(
+            com.example.namufarm.data.repository.CustomerInquiryRepository(database, quoteConnection)
+        ))[com.example.namufarm.viewmodel.CustomerInquiryViewModel::class.java]
+
         setContent {
             NamuFarmTheme {
                 val navController = rememberNavController()
@@ -136,7 +140,7 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                     composable("selling") {
-                        val modeNames = listOf("견적모드", "농장관리", "묘목관리")
+                        val modeNames = listOf("견적모드", "문의처리", "농장관리", "묘목관리")
                         val pagerState = rememberPagerState(initialPage = 0) { modeNames.size }
                         val modeScope = rememberCoroutineScope()
                         val navigateTo: (Int) -> Unit = { page ->
@@ -151,7 +155,7 @@ class MainActivity : ComponentActivity() {
                                             selected = pagerState.currentPage == index,
                                             onClick = { navigateTo(index) },
                                             modifier = Modifier.weight(1f),
-                                            label = { Text(title, fontSize = 14.sp, fontWeight = FontWeight.Bold) }
+                                            label = { Text(title, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1) }
                                         )
                                     }
                                 }
@@ -163,11 +167,12 @@ class MainActivity : ComponentActivity() {
                                         onSync = webInbox::refresh,
                                         onSettings = { connectionOnly = true; showWebInbox = true },
                                         onRead = webInbox::read, onDelete = webInbox::close)
-                                    1 -> com.example.namufarm.ui.ManagementModeScreen(viewModel,
+                                    1 -> com.example.namufarm.ui.CustomerInquiryScreen(inquiries)
+                                    2 -> com.example.namufarm.ui.ManagementModeScreen(viewModel,
                                         quoteConnection, onBack = { navigateTo(0) },
-                                        onManageSpecies = { navigateTo(2) })
+                                        onManageSpecies = { navigateTo(3) })
                                     else -> com.example.namufarm.ui.SpeciesManagementScreen(viewModel,
-                                        quoteConnection, onBack = { navigateTo(1) })
+                                        quoteConnection, onBack = { navigateTo(2) })
                                 }
                             }
                         }

@@ -15,6 +15,7 @@ class PrivacyCleanupWorker(context: Context,params: WorkerParameters): Coroutine
         val db=AppDatabase.getDatabase(applicationContext)
         val local=LocalDataSource(db,db.managementDao(),SellerKeys(applicationContext))
         local.protectLegacyCustomerCopies();local.cleanupPrivacy()
+        com.example.namufarm.data.repository.CustomerInquiryRepository.purgeExpired(db)
         java.io.File(applicationContext.cacheDir,"quote-documents").listFiles()?.filter { System.currentTimeMillis()-it.lastModified()>24L*60*60*1000 }?.forEach { it.deleteRecursively() }
         Result.success()
     } catch(e: kotlinx.coroutines.CancellationException) { throw e }

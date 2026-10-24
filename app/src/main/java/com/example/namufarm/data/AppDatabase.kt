@@ -18,9 +18,11 @@ import kotlinx.coroutines.sync.Mutex
         PendingSyncEntity::class,
         WebQuoteRequestEntity::class,
         DeferredWebRequestEntity::class,
-        QuoteContactEntity::class, QuoteDocumentEntity::class, PrivacySyncEntity::class
+        QuoteContactEntity::class, QuoteDocumentEntity::class, PrivacySyncEntity::class,
+        CustomerInquiryEntity::class, CustomerInquiryDraftEntity::class,
+        CustomerInquiryOperationEntity::class, CustomerInquirySyncEntity::class
     ],
-    version = 19, // 홈페이지 공식 견적접수번호를 로컬 요청 목록에 보존
+    version = 20, // 고객문의는 견적 자료와 별도 테이블에 추가
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -29,6 +31,7 @@ abstract class AppDatabase : RoomDatabase() {
     internal val syncMutex = Mutex()
 
     abstract fun managementDao(): ManagementDao
+    abstract fun customerInquiryDao(): CustomerInquiryDao
 
     companion object {
         @Volatile
@@ -673,11 +676,19 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE web_quote_request ADD COLUMN receiptNumber TEXT NOT NULL DEFAULT ''")
             }
         }
+        private val MIGRATION_19_20 = object : Migration(19, 20) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS customer_inquiry (requestId TEXT NOT NULL PRIMARY KEY, revision INTEGER NOT NULL, body TEXT NOT NULL, localExpiry INTEGER NOT NULL)")
+                db.execSQL("CREATE TABLE IF NOT EXISTS customer_inquiry_draft (requestId TEXT NOT NULL PRIMARY KEY, text TEXT NOT NULL, channel TEXT NOT NULL, baseRevision INTEGER NOT NULL)")
+                db.execSQL("CREATE TABLE IF NOT EXISTS customer_inquiry_operation (requestId TEXT NOT NULL PRIMARY KEY, action TEXT NOT NULL, payload TEXT NOT NULL)")
+                db.execSQL("CREATE TABLE IF NOT EXISTS customer_inquiry_sync (name TEXT NOT NULL PRIMARY KEY, serverUrl TEXT NOT NULL, cursor INTEGER NOT NULL)")
+            }
+        }
         internal val ALL_MIGRATIONS = arrayOf(
             MIGRATION_1_7, MIGRATION_2_7, MIGRATION_3_7,
             MIGRATION_4_7, MIGRATION_5_7, MIGRATION_6_7,
             MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10,
-            MIGRATION_10_12, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19
+            MIGRATION_10_12, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20
         )
 
         fun getDatabase(context: Context): AppDatabase {

@@ -239,6 +239,17 @@ class WebRequestConnection(context: Context, private val repository: NamuFarmRep
         return inventory.count { it.quantity > 0 }
     }
 
+    suspend fun inquiryAction(action: String, fields: Map<String, Any> = emptyMap()): com.example.namufarm.data.remote.WebQuoteEnvelope {
+        check(configured && paired) { "견적모드의 연결 · 설정에서 서버에 먼저 연결해주세요." }
+        require(action in setOf("list_customer_inquiries", "save_inquiry_reply", "send_inquiry_reply", "set_inquiry_status", "inquiry_sms_status"))
+        val response = api.request(settings.url, fields + mapOf("action" to action, "deviceToken" to settings.deviceToken))
+        if (response.ok != true && response.code in setOf("NOT_READY", "INVALID_ACTION", "UPGRADE_REQUIRED")) {
+            throw IllegalStateException("고객문의 서버를 최신 버전으로 재배포하고 setupCustomerInquiries를 실행해주세요.")
+        }
+        WebQuoteValidator.checkResponse(response)
+        return response
+    }
+
     suspend fun quoteAction(action: String, fields: Map<String, Any>): com.example.namufarm.data.remote.WebQuoteEnvelope {
         check(paired) { "서버를 먼저 연결해주세요." }
         require(action in setOf("send_quote_sms", "quote_sms_status", "send_quote_email"))
