@@ -22,12 +22,11 @@ interface WebQuoteApi {
 data class WebQuoteEnvelope(
     val ok: Boolean? = null, val code: String? = null,
     val paired: Boolean? = null, val registered: Boolean? = null,
-    val inquiries: List<CustomerInquiryRemote?>? = null, val inquiry: CustomerInquiryRemote? = null,
-    val nextSequence: Long? = null,
     val authMode: String? = null,
     val requests: List<WebQuoteRemote?>? = null, val hasMore: Boolean? = null,
+    val inquiries: List<CustomerInquiryRemote?>? = null, val inquiry: CustomerInquiryRemote? = null,
+    val nextSequence: Long? = null,
     val saved: Boolean? = null, val orderNumber: String? = null, val revision: Long? = null, val fingerprint: String? = null,
-    val sales: List<com.example.namufarm.sales.SaleRemote>? = null, val report: com.example.namufarm.sales.SalesReport? = null,
     val keyRegistered: Boolean? = null, val keyId: String? = null, val encryptionReady: Boolean? = null,
     val closed: Boolean? = null, val updated: Boolean? = null, val hidden: Boolean? = null,
     val requestId: String? = null, val status: String? = null,
@@ -35,9 +34,6 @@ data class WebQuoteEnvelope(
     val sent: Boolean? = null, val recipientPhone: String? = null, val recipientEmail: String? = null,
     val messageId: String? = null, val checked: Boolean? = null, val state: String? = null,
     val statusCode: String? = null, val statusMessage: String? = null,
-    val farms: List<FarmDirectoryRecord>? = null, val farm: FarmDirectoryRecord? = null,
-    val inventory: List<InventoryDirectoryRecord>? = null, val inventoryRecord: InventoryDirectoryRecord? = null,
-    val species: List<SpeciesDirectoryRecord>? = null, val speciesRecord: SpeciesDirectoryRecord? = null,
     val speciesId: Int? = null,
     val deleted: Boolean? = null, val farmId: Int? = null, val operationId: String? = null
 )
@@ -49,7 +45,8 @@ data class WebQuoteRemote(
     val recipientName: String? = null, val replyChannel: String? = null,
     val encryptedRequest: com.example.namufarm.privacy.PrivacyEnvelope? = null,
     val expired: Boolean? = null, val expiresAt: Long? = null, val status: String? = null,
-    val receiptNumber: String? = null
+    val receiptNumber: String? = null,
+    val quotePricing: com.google.gson.JsonObject? = null
 )
 data class WebQuoteItemRemote(val species: String? = null, val specification: String? = null, val quantity: Int? = null)
 
@@ -155,12 +152,13 @@ object WebQuoteValidator {
                 formalQuoteRequested = row.formalQuoteRequested ?: false, recipientName = recipient, replyChannel = channel, status = requestStatus,
                 receiptNumber = row.receiptNumber?.also {
                     check(Regex("(NAMU|NFQ)-[0-9]{8}-[0-9]{4,16}").matches(it)) { "견적접수번호를 확인해주세요." }
-                }.orEmpty())
+                }.orEmpty(), quotePricingJson = outer.quotePricing?.toString().orEmpty())
         }
         return Page(checked, previous, expiredIds, deferred)
     }
     private fun text(value: String?, max: Int, min: Int): String = checkNotNull(value).also { check(it.length in min..max && it == it.trim()) { "견적에 저장된 글자 형식을 확인해주세요." } }
 }
+
 
 
 

@@ -46,7 +46,7 @@ data class QuoteIssuer(
     ).also { require(Regex("[0-9]{3}-?[0-9]{2}-?[0-9]{5}").matches(it.businessNumber)) { "사업자등록번호를 확인해주세요." } }
 }
 
-data class QuoteDocumentLine(val name: String, val specification: String, val quantity: Int, val unitPrice: Long, val unit: String = "주") {
+data class QuoteDocumentLine(val name: String, val specification: String, val quantity: Int, val unitPrice: Long, val unit: String = "주", val remarks: String? = null) {
     val amount: Long get() = Math.multiplyExact(quantity.toLong(), unitPrice)
 }
 
@@ -62,7 +62,7 @@ data class QuoteDocument(
         recipient.checked(); issuer.checked()
         require(recipient.recipientName.isNotBlank() || recipient.customerName.isNotBlank()) { "견적서 수신인 또는 고객 성함을 입력해주세요." }
         require(lines.isNotEmpty() && lines.size <= 201)
-        lines.forEach { require(it.name.isNotBlank() && it.name.length <= 200 && it.specification.length <= 500 && it.quantity > 0 && it.unitPrice >= 0) }
+        lines.forEach { require(it.name.isNotBlank() && it.name.length <= 200 && it.specification.length <= 500 && it.quantity > 0 && it.unitPrice >= 0 && it.remarks.orEmpty().length <= 500 && it.remarks.orEmpty().none { char -> char.code < 32 && char != '\n' }) }
         val sum = lines.fold(0L) { total, line -> Math.addExact(total, line.amount) }
         require(supplyAmount == sum && taxAmount in 0..Int.MAX_VALUE.toLong() && totalAmount == Math.addExact(sum, taxAmount)) { "견적 합계를 확인해주세요." }
         cleanText(validUntil, 100, true)
@@ -88,3 +88,4 @@ data class QuoteDocument(
         }
     }
 }
+

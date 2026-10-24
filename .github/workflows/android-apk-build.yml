@@ -19,7 +19,8 @@ permissions:
 
 jobs:
   apk:
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[build apk]')
+    # Retired after main consolidation; use the original certificate and local signing tool.
+    if: ${{ false }}
     name: Build ${{ inputs.apk_type || 'release' }} APK
     # Job scope is intentional: an unmarked push must not cancel a requested APK.
     concurrency:

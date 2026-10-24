@@ -6,7 +6,6 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
-import kotlinx.coroutines.sync.Mutex
 
 @Database(
     entities = [
@@ -16,22 +15,14 @@ import kotlinx.coroutines.sync.Mutex
         QuoteEntity::class,
         OrderEntity::class,
         PendingSyncEntity::class,
-        WebQuoteRequestEntity::class,
-        DeferredWebRequestEntity::class,
-        QuoteContactEntity::class, QuoteDocumentEntity::class, PrivacySyncEntity::class,
-        CustomerInquiryEntity::class, CustomerInquiryDraftEntity::class,
-        CustomerInquiryOperationEntity::class, CustomerInquirySyncEntity::class
+        MasterLinkEntity::class
     ],
-    version = 20, // 고객문의는 견적 자료와 별도 테이블에 추가
+    version = 13, // Preserve local IDs and add operations-sheet links.
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
 
-    // Serialize network work across repositories sharing this DB, never local writes.
-    internal val syncMutex = Mutex()
-
     abstract fun managementDao(): ManagementDao
-    abstract fun customerInquiryDao(): CustomerInquiryDao
 
     companion object {
         @Volatile
@@ -321,162 +312,6 @@ abstract class AppDatabase : RoomDatabase() {
             """.trimIndent())
         }
 
-        /**
-         * v10/v11 계열 DB를 현재 v12 스키마로 안전하게 맞춘다.
-         * 기존 데이터를 보존하면서 견적/주문의 배송비 필드를 추가하고,
-         * 주문상태 기본값을 '입금확인'으로 통일한다.
-         */
-        private fun migrateCommerceSchemaToV12(db: SupportSQLiteDatabase) {
-            // =========================
-            // quote_list
-            // =========================
-            if (tableExists(db, "quote_list")) {
-                db.execSQL("ALTER TABLE quote_list RENAME TO quote_list_old_v12")
-
-                db.execSQL("""
-                    CREATE TABLE quote_list (
-                        quote_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        is_prepaid INTEGER NOT NULL,
-                        shipping_fee INTEGER NOT NULL,
-                        quote_number TEXT NOT NULL,
-                        save_date TEXT NOT NULL,
-                        customer_phone TEXT NOT NULL,
-                        total_qty INTEGER NOT NULL,
-                        total_price INTEGER NOT NULL,
-                        item_summary TEXT NOT NULL
-                    )
-                """.trimIndent())
-
-                val isPrepaidExpr =
-                    if (columnExists(db, "quote_list_old_v12", "is_prepaid")) "is_prepaid" else "0"
-                val shippingFeeExpr =
-                    if (columnExists(db, "quote_list_old_v12", "shipping_fee")) "shipping_fee" else "0"
-
-                db.execSQL("""
-                    INSERT INTO quote_list (
-                        quote_id, is_prepaid, shipping_fee,
-                        quote_number, save_date, customer_phone,
-                        total_qty, total_price, item_summary
-                    )
-                    SELECT
-                        quote_id, $isPrepaidExpr, $shippingFeeExpr,
-                        quote_number, save_date, customer_phone,
-                        total_qty, total_price, item_summary
-                    FROM quote_list_old_v12
-                """.trimIndent())
-
-                db.execSQL("DROP TABLE quote_list_old_v12")
-            } else {
-                db.execSQL("""
-                    CREATE TABLE quote_list (
-                        quote_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        is_prepaid INTEGER NOT NULL,
-                        shipping_fee INTEGER NOT NULL,
-                        quote_number TEXT NOT NULL,
-                        save_date TEXT NOT NULL,
-                        customer_phone TEXT NOT NULL,
-                        total_qty INTEGER NOT NULL,
-                        total_price INTEGER NOT NULL,
-                        item_summary TEXT NOT NULL
-                    )
-                """.trimIndent())
-            }
-
-            // =========================
-            // order_list
-            // =========================
-            if (tableExists(db, "order_list")) {
-                db.execSQL("ALTER TABLE order_list RENAME TO order_list_old_v12")
-
-                db.execSQL("""
-                    CREATE TABLE order_list (
-                        order_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        is_prepaid INTEGER NOT NULL,
-                        shipping_fee INTEGER NOT NULL,
-                        order_number TEXT NOT NULL,
-                        status TEXT NOT NULL DEFAULT '입금확인',
-                        order_date TEXT NOT NULL,
-                        customer_phone TEXT NOT NULL,
-                        total_qty INTEGER NOT NULL,
-                        total_price INTEGER NOT NULL,
-                        item_summary TEXT NOT NULL,
-                        receiver_name TEXT NOT NULL DEFAULT '',
-                        zip_no TEXT NOT NULL DEFAULT '',
-                        road_address TEXT NOT NULL DEFAULT '',
-                        detail_address TEXT NOT NULL DEFAULT '',
-                        note TEXT NOT NULL DEFAULT ''
-                    )
-                """.trimIndent())
-
-                val isPrepaidExpr =
-                    if (columnExists(db, "order_list_old_v12", "is_prepaid")) "is_prepaid" else "0"
-                val shippingFeeExpr =
-                    if (columnExists(db, "order_list_old_v12", "shipping_fee")) "shipping_fee" else "0"
-                val receiverExpr =
-                    if (columnExists(db, "order_list_old_v12", "receiver_name")) "receiver_name" else "''"
-                val zipExpr =
-                    if (columnExists(db, "order_list_old_v12", "zip_no")) "zip_no" else "''"
-                val roadExpr =
-                    if (columnExists(db, "order_list_old_v12", "road_address")) "road_address" else "''"
-                val detailExpr =
-                    if (columnExists(db, "order_list_old_v12", "detail_address")) "detail_address" else "''"
-                val noteExpr =
-                    if (columnExists(db, "order_list_old_v12", "note")) "note" else "''"
-                val statusExpr =
-                    if (columnExists(db, "order_list_old_v12", "status")) {
-                        """
-                        CASE
-                            WHEN status IS NULL
-                              OR status = ''
-                              OR status = '입금대기'
-                              OR status = '입금완료'
-                            THEN '입금확인'
-                            ELSE status
-                        END
-                        """.trimIndent()
-                    } else {
-                        "'입금확인'"
-                    }
-
-                db.execSQL("""
-                    INSERT INTO order_list (
-                        order_id, is_prepaid, shipping_fee,
-                        order_number, status, order_date, customer_phone,
-                        total_qty, total_price, item_summary,
-                        receiver_name, zip_no, road_address, detail_address, note
-                    )
-                    SELECT
-                        order_id, $isPrepaidExpr, $shippingFeeExpr,
-                        order_number, $statusExpr, order_date, customer_phone,
-                        total_qty, total_price, item_summary,
-                        $receiverExpr, $zipExpr, $roadExpr, $detailExpr, $noteExpr
-                    FROM order_list_old_v12
-                """.trimIndent())
-
-                db.execSQL("DROP TABLE order_list_old_v12")
-            } else {
-                db.execSQL("""
-                    CREATE TABLE order_list (
-                        order_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        is_prepaid INTEGER NOT NULL,
-                        shipping_fee INTEGER NOT NULL,
-                        order_number TEXT NOT NULL,
-                        status TEXT NOT NULL DEFAULT '입금확인',
-                        order_date TEXT NOT NULL,
-                        customer_phone TEXT NOT NULL,
-                        total_qty INTEGER NOT NULL,
-                        total_price INTEGER NOT NULL,
-                        item_summary TEXT NOT NULL,
-                        receiver_name TEXT NOT NULL DEFAULT '',
-                        zip_no TEXT NOT NULL DEFAULT '',
-                        road_address TEXT NOT NULL DEFAULT '',
-                        detail_address TEXT NOT NULL DEFAULT '',
-                        note TEXT NOT NULL DEFAULT ''
-                    )
-                """.trimIndent())
-            }
-        }
-
         private val MIGRATION_1_7 = object : Migration(1, 7) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 migrateLegacySchemaToV7(db)
@@ -592,134 +427,57 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+
         private val MIGRATION_10_12 = object : Migration(10, 12) {
-            override fun migrate(db: SupportSQLiteDatabase) {
-                migrateCommerceSchemaToV12(db)
-            }
+            override fun migrate(db: SupportSQLiteDatabase) { addShippingColumns(db) }
         }
-
         private val MIGRATION_11_12 = object : Migration(11, 12) {
-            override fun migrate(db: SupportSQLiteDatabase) {
-                migrateCommerceSchemaToV12(db)
+            override fun migrate(db: SupportSQLiteDatabase) { addShippingColumns(db) }
+        }
+        private fun addShippingColumns(db: SupportSQLiteDatabase) {
+            for (table in listOf("quote_list", "order_list")) {
+                if (!columnExists(db, table, "is_prepaid"))
+                    db.execSQL("ALTER TABLE $table ADD COLUMN is_prepaid INTEGER NOT NULL DEFAULT 0")
+                if (!columnExists(db, table, "shipping_fee"))
+                    db.execSQL("ALTER TABLE $table ADD COLUMN shipping_fee INTEGER NOT NULL DEFAULT 0")
             }
         }
-
         private val MIGRATION_12_13 = object : Migration(12, 13) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("""
-                    CREATE TABLE IF NOT EXISTS web_quote_request (
-                        requestId TEXT NOT NULL PRIMARY KEY,
-                        sequence INTEGER NOT NULL, createdAt TEXT NOT NULL,
-                        customerName TEXT NOT NULL, customerPhone TEXT NOT NULL,
-                        region TEXT NOT NULL, itemsJson TEXT NOT NULL,
-                        message TEXT NOT NULL, readAt INTEGER
-                    )
-                """.trimIndent())
-                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_web_quote_request_sequence ON web_quote_request(sequence)")
+                db.execSQL("""CREATE TABLE IF NOT EXISTS master_links (
+                    kind TEXT NOT NULL, local_id INTEGER NOT NULL,
+                    remote_id INTEGER NOT NULL, version TEXT NOT NULL,
+                    PRIMARY KEY(kind, local_id))""".trimIndent())
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_master_links_kind_remote_id ON master_links(kind, remote_id)")
             }
         }
-
-        private val MIGRATION_13_14 = object : Migration(13, 14) {
-            override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE web_quote_request ADD COLUMN customerEmail TEXT NOT NULL DEFAULT ''")
-                db.execSQL("ALTER TABLE web_quote_request ADD COLUMN formalQuoteRequested INTEGER NOT NULL DEFAULT 0")
-                db.execSQL("ALTER TABLE web_quote_request ADD COLUMN recipientName TEXT NOT NULL DEFAULT ''")
-                db.execSQL("ALTER TABLE web_quote_request ADD COLUMN replyChannel TEXT NOT NULL DEFAULT 'sms'")
-                db.execSQL("CREATE TABLE IF NOT EXISTS quote_contact (quoteNumber TEXT NOT NULL PRIMARY KEY, recipientJson TEXT NOT NULL)")
-                db.execSQL("CREATE TABLE IF NOT EXISTS quote_document (documentId TEXT NOT NULL PRIMARY KEY, quoteNumber TEXT NOT NULL, issuedNumber TEXT NOT NULL, issuedAt INTEGER NOT NULL, snapshotJson TEXT NOT NULL)")
-                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_quote_document_quoteNumber ON quote_document(quoteNumber)")
-                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_quote_document_issuedNumber ON quote_document(issuedNumber)")
-            }
-        }
-
-        private val MIGRATION_14_15 = object : Migration(14, 15) {
-            override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE order_list ADD COLUMN customer_name TEXT NOT NULL DEFAULT ''")
-                db.execSQL("ALTER TABLE order_list ADD COLUMN customer_email TEXT NOT NULL DEFAULT ''")
-                db.execSQL("ALTER TABLE order_list ADD COLUMN source_request_id TEXT NOT NULL DEFAULT ''")
-                db.execSQL("ALTER TABLE order_list ADD COLUMN source_quote_number TEXT NOT NULL DEFAULT ''")
-                db.execSQL("ALTER TABLE order_list ADD COLUMN revision INTEGER NOT NULL DEFAULT 0")
-                db.execSQL("ALTER TABLE order_list ADD COLUMN purchased_at INTEGER NOT NULL DEFAULT 0")
-                db.execSQL("ALTER TABLE order_list ADD COLUMN paid_at INTEGER NOT NULL DEFAULT 0")
-                db.execSQL("ALTER TABLE order_list ADD COLUMN delivered_at INTEGER NOT NULL DEFAULT 0")
-                db.execSQL("ALTER TABLE order_list ADD COLUMN completed_at INTEGER NOT NULL DEFAULT 0")
-                db.execSQL("ALTER TABLE order_list ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0")
-                db.execSQL("ALTER TABLE order_list ADD COLUMN cost_total INTEGER NOT NULL DEFAULT 0")
-                db.execSQL("ALTER TABLE order_list ADD COLUMN expense_total INTEGER NOT NULL DEFAULT 0")
-                db.execSQL("ALTER TABLE order_list ADD COLUMN cost_confirmed INTEGER NOT NULL DEFAULT 0")
-                db.execSQL("ALTER TABLE order_list ADD COLUMN profit_mode TEXT NOT NULL DEFAULT 'resale'")
-                db.execSQL("ALTER TABLE order_list ADD COLUMN commission_bps INTEGER NOT NULL DEFAULT 3000")
-                db.execSQL("ALTER TABLE order_list ADD COLUMN tax_amount INTEGER NOT NULL DEFAULT 0")
-                db.execSQL("CREATE TABLE IF NOT EXISTS privacy_sync (name TEXT NOT NULL PRIMARY KEY, cursor INTEGER NOT NULL)")
-                db.execSQL("INSERT OR IGNORE INTO privacy_sync(name,cursor) SELECT 'web', COALESCE(MAX(sequence),0) FROM web_quote_request")
-            }
-        }
-
-        private val MIGRATION_15_16 = object : Migration(15, 16) {
-            override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE quote_list ADD COLUMN sent_at INTEGER NOT NULL DEFAULT 0")
-            }
-        }
-        private val MIGRATION_16_17 = object : Migration(16, 17) {
-            override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("CREATE TABLE IF NOT EXISTS deferred_web_request (requestId TEXT NOT NULL PRIMARY KEY, sequence INTEGER NOT NULL, createdAt TEXT NOT NULL, envelopeJson TEXT NOT NULL)")
-                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_deferred_web_request_sequence ON deferred_web_request(sequence)")
-            }
-        }
-        private val MIGRATION_17_18 = object : Migration(17, 18) {
-            override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE web_quote_request ADD COLUMN status TEXT NOT NULL DEFAULT '신규'")
-            }
-        }
-        private val MIGRATION_18_19 = object : Migration(18, 19) {
-            override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE web_quote_request ADD COLUMN receiptNumber TEXT NOT NULL DEFAULT ''")
-            }
-        }
-        private val MIGRATION_19_20 = object : Migration(19, 20) {
-            override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("CREATE TABLE IF NOT EXISTS customer_inquiry (requestId TEXT NOT NULL PRIMARY KEY, revision INTEGER NOT NULL, body TEXT NOT NULL, localExpiry INTEGER NOT NULL)")
-                db.execSQL("CREATE TABLE IF NOT EXISTS customer_inquiry_draft (requestId TEXT NOT NULL PRIMARY KEY, text TEXT NOT NULL, channel TEXT NOT NULL, baseRevision INTEGER NOT NULL)")
-                db.execSQL("CREATE TABLE IF NOT EXISTS customer_inquiry_operation (requestId TEXT NOT NULL PRIMARY KEY, action TEXT NOT NULL, payload TEXT NOT NULL)")
-                db.execSQL("CREATE TABLE IF NOT EXISTS customer_inquiry_sync (name TEXT NOT NULL PRIMARY KEY, serverUrl TEXT NOT NULL, cursor INTEGER NOT NULL)")
-            }
-        }
-        internal val ALL_MIGRATIONS = arrayOf(
-            MIGRATION_1_7, MIGRATION_2_7, MIGRATION_3_7,
-            MIGRATION_4_7, MIGRATION_5_7, MIGRATION_6_7,
-            MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10,
-            MIGRATION_10_12, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20
-        )
 
         fun getDatabase(context: Context): AppDatabase {
             return instance ?: synchronized(this) {
-                instance ?: createDatabase(context).also { instance = it }
+                val newInstance = Room.databaseBuilder(
+                    context.applicationContext,
+                    AppDatabase::class.java,
+                    "NamuFarm.db"
+                )
+                    .addMigrations(
+                        MIGRATION_1_7,
+                        MIGRATION_2_7,
+                        MIGRATION_3_7,
+                        MIGRATION_4_7,
+                        MIGRATION_5_7,
+                        MIGRATION_6_7,
+                        MIGRATION_7_8,
+                        MIGRATION_8_9,
+                        MIGRATION_9_10,
+                        MIGRATION_10_12,
+                        MIGRATION_11_12,
+                        MIGRATION_12_13
+                    )
+                    .build()
+
+                instance = newInstance
+                newInstance
             }
         }
-
-        internal fun createDatabase(context: Context): AppDatabase = Room.databaseBuilder(
-            context.applicationContext,
-            AppDatabase::class.java,
-            "NamuFarm.db"
-        )
-            .addMigrations(*ALL_MIGRATIONS)
-            .addCallback(object : RoomDatabase.Callback() {
-                override fun onOpen(db: SupportSQLiteDatabase) {
-                    // This PRAGMA returns a row, so Android requires query(), not execSQL().
-                    // Pin the writable connection: WAL reads may use a separate connection.
-                    db.beginTransaction()
-                    try {
-                        db.query("PRAGMA secure_delete=ON").use { cursor ->
-                            check(cursor.moveToFirst() && cursor.getInt(0) == 1) {
-                                "고객정보 삭제 보호 설정을 적용하지 못했습니다."
-                            }
-                        }
-                        db.setTransactionSuccessful()
-                    } finally {
-                        db.endTransaction()
-                    }
-                }
-            })
-            .build()
     }
 }

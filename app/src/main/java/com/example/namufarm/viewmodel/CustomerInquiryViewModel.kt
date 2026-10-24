@@ -85,8 +85,8 @@ class CustomerInquiryViewModel(private val repository: CustomerInquiryRepository
 
     fun refresh() = operate { "문의 변경사항 ${repository.refresh()}건을 반영했습니다." }
     fun save(id: String) = operate { repository.save(id); "초안을 서버에 저장했습니다. 나피에서 불러올 수 있습니다." }
-    fun send(id: String, channel: String) = operate {
-        repository.send(id, channel)
+    fun send(id: String, channel: String, preparedText: String, sourceDraft: CustomerInquiryDraftEntity) = operate {
+        repository.send(id, channel, preparedText, sourceDraft)
         "서버 발송 요청을 처리했습니다. 아래 발송 상태를 확인해주세요."
     }
     fun check(id: String) = operate { repository.checkResult(id); "현재 발송·처리 결과를 반영했습니다." }
@@ -106,3 +106,4 @@ class CustomerInquiryViewModelFactory(private val repository: CustomerInquiryRep
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T = CustomerInquiryViewModel(repository) as T
 }
+

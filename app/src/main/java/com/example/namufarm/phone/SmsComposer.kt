@@ -22,3 +22,4 @@ fun openSmsComposer(context: Context, phone: String, body: String): String? {
         "문자 앱을 열 수 없습니다. 휴대폰 설정을 확인해주세요."
     }
 }
+

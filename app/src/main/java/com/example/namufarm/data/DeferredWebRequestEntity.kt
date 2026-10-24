@@ -12,3 +12,4 @@ data class DeferredWebRequestEntity(
     val createdAt: String,
     val envelopeJson: String
 )
+

@@ -22,7 +22,9 @@ data class WebQuoteRequestEntity(
     @ColumnInfo(defaultValue = "''") val recipientName: String = "",
     @ColumnInfo(defaultValue = "'sms'") val replyChannel: String = "sms",
     @ColumnInfo(defaultValue = "'신규'") val status: String = "신규",
-    @ColumnInfo(defaultValue = "''") val receiptNumber: String = ""
+    @ColumnInfo(defaultValue = "''") val receiptNumber: String = "",
+    @ColumnInfo(defaultValue = "''") val quotePricingJson: String = ""
 )
 
 data class WebQuoteItem(val species: String, val specification: String, val quantity: Int)
+

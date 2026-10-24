@@ -3,7 +3,7 @@ package com.example.namufarm.data.repository
 import androidx.room.withTransaction
 import com.example.namufarm.data.*
 import com.example.namufarm.data.remote.*
-import com.example.namufarm.webrequests.WebRequestConnection
+import com.example.namufarm.quotemode.CustomerInquiryConnection
 import com.google.gson.Gson
 import com.google.gson.JsonObject
 import java.util.UUID
@@ -15,7 +15,7 @@ data class CustomerInquiryCache(
 )
 
 /** Separate delta cursor and durable operation IDs; never touches quote/order tables. */
-class CustomerInquiryRepository(private val db: AppDatabase, private val connection: WebRequestConnection) {
+class CustomerInquiryRepository(private val db: CustomerInquiryDatabase, private val connection: CustomerInquiryConnection) {
     private val dao = db.customerInquiryDao()
     private val gson = Gson()
     private fun decode(entity: CustomerInquiryEntity): CustomerInquiryRemote =
@@ -70,12 +70,16 @@ class CustomerInquiryRepository(private val db: AppDatabase, private val connect
             if (draft != null && before != null && draft.baseRevision == before.revision &&
                 draft.text == before.reply?.text && draft.channel == before.reply?.channel) {
                 dao.put(CustomerInquiryDraftEntity(id, value.reply!!.text!!, value.reply.channel!!, value.revision!!))
+            } else if (draft != null && before != null && draft.baseRevision == before.revision &&
+                before.reply == value.reply) {
+                // Delivery/status updates do not conflict with the unchanged answer editor.
+                dao.put(draft.copy(baseRevision = value.revision!!))
             }
         }
     }
 
     suspend fun refresh(): Int {
-        check(connection.configured && connection.paired) { "견적모드의 연결 · 설정에서 서버에 먼저 연결해주세요." }
+        check(connection.configured) { "운영 서버 연결 주소를 확인해주세요." }
         var cursor = bindServer().cursor
         var imported = 0
         repeat(100) {
@@ -128,7 +132,8 @@ class CustomerInquiryRepository(private val db: AppDatabase, private val connect
 
     private suspend fun execute(operation: CustomerInquiryOperationEntity): CustomerInquiryRemote {
         val payload = fields(operation)
-        val result = call(operation.action, payload)
+        // Local editor text is recovery metadata, never part of the server contract.
+        val result = call(operation.action, payload.filterKeys { it != "localDraftText" })
         val value = checkNotNull(result.inquiry) { "문의 처리 응답을 확인하지 못했습니다. 결과 확인을 눌러주세요." }.checked()
         check(value.requestId == operation.requestId && value.expired != true) { "문의 처리 결과를 확인할 수 없습니다." }
         when (operation.action) {
@@ -139,11 +144,13 @@ class CustomerInquiryRepository(private val db: AppDatabase, private val connect
             "set_inquiry_status" -> check(value.history.orEmpty().any { it?.kind == "status" && it.id == payload["eventId"] }) { "처리 상태를 확인하지 못했습니다." }
         }
         db.withTransaction {
+            val editor = dao.draft(operation.requestId)
             merge(value)
             if (operation.action == "save_inquiry_reply") {
-                val currentDraft = dao.draft(operation.requestId)
-                if (currentDraft != null && currentDraft.text == payload["replyText"] && currentDraft.channel == payload["replyChannel"]) {
-                    dao.put(currentDraft.copy(baseRevision = value.revision!!))
+                if (editor != null && editor.text == (payload["localDraftText"] ?: payload["replyText"]) &&
+                    editor.channel == payload["replyChannel"]) {
+                    // Preserve the answer editor while the server stores the composed message.
+                    dao.put(editor.copy(baseRevision = value.revision!!))
                 }
             }
             dao.deleteOperation(operation.requestId)
@@ -151,28 +158,37 @@ class CustomerInquiryRepository(private val db: AppDatabase, private val connect
         return value
     }
 
-    suspend fun save(id: String, channel: String? = null) {
+    suspend fun save(id: String, channel: String? = null, preparedText: String? = null,
+                     sourceDraft: CustomerInquiryDraftEntity? = null) {
         bindServer()
         val operation = db.withTransaction {
             val current = row(id)
             check(dao.operation(id) == null && !current.blockedDelivery) { "이전 작업의 결과를 먼저 확인해주세요." }
-            val draft = draft(current).let { it.copy(text = it.text.trim(), channel = channel ?: it.channel) }
+            val draft = draft(current).let {
+                val chosen = channel ?: if (it.text.trim().length > 900 &&
+                    !current.inquiry?.customerEmail.isNullOrBlank()) "email" else it.channel
+                it.copy(text = it.text.trim(), channel = chosen)
+            }
+            if (sourceDraft != null) check(draft.text == sourceDraft.text.trim() &&
+                draft.baseRevision == sourceDraft.baseRevision) { "답변이 변경됐습니다. 전송창을 다시 열어 확인해주세요." }
             check(draft.baseRevision == current.revision) { "다른 기기에서 수정했습니다. 불러온 답변과 내 초안을 비교해주세요." }
-            check(draft.channel in setOf("sms", "email") && draft.text.length <= 2000 &&
-                (draft.channel != "sms" || draft.text.length <= 900)) { "문자는 900자, 메일은 2,000자까지 보낼 수 있습니다." }
+            val outgoing = preparedText?.trim() ?: draft.text
+            check(draft.channel in setOf("sms", "email") && outgoing.length <= 2000 &&
+                (draft.channel != "sms" || outgoing.length <= 900)) { "인사말을 포함해 문자는 900자, 메일은 2,000자까지 보낼 수 있습니다." }
             check(draft.channel != "email" || !current.inquiry?.customerEmail.isNullOrBlank()) { "고객이 이메일을 남기지 않았습니다." }
             dao.put(draft)
             persist(id, "save_inquiry_reply", mapOf("requestId" to id, "revision" to current.revision!!,
-                "eventId" to UUID.randomUUID().toString(), "replyText" to draft.text, "replyChannel" to draft.channel))
+                "eventId" to UUID.randomUUID().toString(), "replyText" to outgoing, "replyChannel" to draft.channel) +
+                if (preparedText != null) mapOf("localDraftText" to draft.text) else emptyMap())
         }
         execute(operation)
     }
 
-    suspend fun send(id: String, channel: String) {
+    suspend fun send(id: String, channel: String, preparedText: String, sourceDraft: CustomerInquiryDraftEntity) {
         val current = row(id)
-        check(draft(current).text.isNotBlank()) { "답변을 입력해주세요." }
+        check(draft(current).text.isNotBlank() && preparedText.isNotBlank()) { "답변을 입력해주세요." }
         // Saving and sending are separate durable operations. A failed save never sends.
-        save(id, channel)
+        save(id, channel, preparedText, sourceDraft)
         val saved = row(id)
         execute(persist(id, "send_inquiry_reply", mapOf("requestId" to id,
             "revision" to saved.revision!!, "deliveryId" to UUID.randomUUID().toString())))
@@ -238,7 +254,7 @@ class CustomerInquiryRepository(private val db: AppDatabase, private val connect
             value.status == "closed" && !value.answeredAt.isNullOrEmpty() &&
             inquiryTimestamp(value.answeredAt) + 30L * 86400000 <= System.currentTimeMillis()
 
-        suspend fun purgeExpired(db: AppDatabase) {
+        suspend fun purgeExpired(db: CustomerInquiryDatabase) {
             val dao = db.customerInquiryDao()
             val gson = Gson()
             db.withTransaction {
@@ -253,3 +269,4 @@ class CustomerInquiryRepository(private val db: AppDatabase, private val connect
         }
     }
 }
+

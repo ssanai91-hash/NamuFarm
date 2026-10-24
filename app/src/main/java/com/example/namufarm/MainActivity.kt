@@ -1,285 +1,161 @@
 package com.example.namufarm
 
 import android.Manifest
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
-import android.os.Build
 import android.os.Bundle
+import android.telephony.TelephonyManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.core.content.ContextCompat
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.unit.dp
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
+import androidx.core.view.WindowCompat
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModelProvider
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.namufarm.data.AppDatabase
 import com.example.namufarm.data.SyncManager
-import com.example.namufarm.data.local.LocalDataSource
-import com.example.namufarm.data.repository.NamuFarmRepository
 import com.example.namufarm.data.remote.RetrofitClient
-import com.example.namufarm.ui.QuoteOnlyScreen
-import com.example.namufarm.ui.IncomingCallAssistDialog
-import com.example.namufarm.phone.CallAssistRequest
-import androidx.compose.runtime.saveable.rememberSaveable
-import com.example.namufarm.ui.theme.NamuFarmTheme
+import com.example.namufarm.ui.ManagementModeScreen
+import com.example.namufarm.ui.SellingModeScreen
 import com.example.namufarm.viewmodel.ManagementViewModel
 import com.example.namufarm.viewmodel.ManagementViewModelFactory
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.flow.collect
-import com.example.namufarm.ui.WebQuoteInboxDialog
-import com.example.namufarm.viewmodel.WebInboxViewModel
-import com.example.namufarm.viewmodel.WebInboxViewModelFactory
-import com.example.namufarm.webrequests.WebRequestConnection
-import com.example.namufarm.webrequests.WebRequestPush
 
 class MainActivity : ComponentActivity() {
 
+    // 🚨 뷰모델을 클래스 전역에서 쓸 수 있게 빼줌
     private lateinit var viewModel: ManagementViewModel
-    private var webRequestId by mutableStateOf<String?>(null)
-    private var callAssistRequest by mutableStateOf<CallAssistRequest?>(null)
+
+    // 🚨 통화 상태를 실시간으로 감시할 스파이(리시버)
+    private var phoneStateReceiver: BroadcastReceiver? = null
+
+    // 🚨 앱 시작 시 권한을 물어보는 런처
+    private val requestPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val phoneStateGranted = permissions[Manifest.permission.READ_PHONE_STATE] ?: false
+        val callLogGranted = permissions[Manifest.permission.READ_CALL_LOG] ?: false
+
+        if (phoneStateGranted && callLogGranted) {
+            registerPhoneStateReceiver() // 권한 받으면 감시자 투입!
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        webRequestId = if (savedInstanceState == null) WebRequestPush.fromIntent(intent) else savedInstanceState.getString("web_request_id")
-        callAssistRequest = if (savedInstanceState == null) CallAssistRequest.fromIntent(intent)
-        else savedInstanceState.getString("incoming_caller_id")?.let {
-            CallAssistRequest(it, savedInstanceState.getBoolean("incoming_reply"))
-        }
+        WindowCompat.getInsetsController(window, window.decorView).isAppearanceLightStatusBars = true
+        @Suppress("DEPRECATION")
+        window.statusBarColor = android.graphics.Color.WHITE
 
         // 1. DB와 DAO 가져오기
         val database = AppDatabase.getDatabase(this)
         val dao = database.managementDao()
 
-        // 2. 데이터 계층 조립
-        val api = RetrofitClient.api
-        val keys = com.example.namufarm.privacy.SellerKeys(this)
-        val localDataSource = LocalDataSource(database, dao, keys)
-        // 1차 Android is quote-only. Keep existing local order data untouched,
-        // but do not connect this app to the order/sales workbook.
-        val syncManager = SyncManager(localDataSource, api)
-        com.example.namufarm.privacy.PrivacyCleanupWorker.schedule(this)
-        val repository = NamuFarmRepository(localDataSource, syncManager, RetrofitClient.jusoApi)
+        // 2. 동기화 엔진(API 통신망) 생성 및 조립
+        val masterClient = com.example.namufarm.data.remote.OperationsMasterClient(
+            com.example.namufarm.data.remote.MasterDeviceCredentials(this))
+        val masterSync = com.example.namufarm.data.OperationsMasterSync(database, masterClient)
+        val syncManager = SyncManager(dao, masterSync)
 
-        // 3. ViewModel은 Repository만 바라본다.
-        val factory = ManagementViewModelFactory(repository)
+        // 3. 공장에 dao와 syncManager 둘 다 넘겨주기!
+        val factory = ManagementViewModelFactory(dao, syncManager)
 
+        // 🚨 위에서 선언한 전역 변수에 뷰모델 할당!
         viewModel = ViewModelProvider(this, factory)[ManagementViewModel::class.java]
 
-        val quoteConnection = WebRequestConnection(this, repository)
-        syncManager.inventoryUploader = { syncId, payload ->
-            quoteConnection.uploadPendingInventory(syncId, payload)
-        }
-        val webInbox = ViewModelProvider(this, WebInboxViewModelFactory(quoteConnection))[WebInboxViewModel::class.java]
+        val quoteConnection = com.example.namufarm.quotemode.InitialQuoteConnection(
+            com.example.namufarm.quotemode.InitialQuoteDatabase.get(this), masterClient)
+        val quoteViewModel = ViewModelProvider(this,
+            com.example.namufarm.quotemode.InitialQuoteViewModelFactory(quoteConnection, this))[
+                com.example.namufarm.quotemode.InitialQuoteViewModel::class.java]
 
-        val inquiries = ViewModelProvider(this, com.example.namufarm.viewmodel.CustomerInquiryViewModelFactory(
-            com.example.namufarm.data.repository.CustomerInquiryRepository(database, quoteConnection)
-        ))[com.example.namufarm.viewmodel.CustomerInquiryViewModel::class.java]
+        val inquiryRepository = com.example.namufarm.data.repository.CustomerInquiryRepository(
+            com.example.namufarm.data.CustomerInquiryDatabase.get(this),
+            com.example.namufarm.quotemode.CustomerInquiryConnection(masterClient))
+        val inquiryViewModel = ViewModelProvider(this,
+            com.example.namufarm.viewmodel.CustomerInquiryViewModelFactory(inquiryRepository))[
+                com.example.namufarm.viewmodel.CustomerInquiryViewModel::class.java]
+        com.example.namufarm.quotemode.CustomerInquiryCleanupWorker.schedule(this)
+
+        // 🚨 4. 권한 체크 및 통화 감시자 작동 시작!
+        checkAndRequestPermissions()
 
         setContent {
-            NamuFarmTheme {
-                val navController = rememberNavController()
-                var showWebInbox by rememberSaveable { mutableStateOf(false) }
-                var connectionOnly by rememberSaveable { mutableStateOf(false) }
-                val webState by webInbox.state.collectAsState()
-                val notificationPermission = rememberLauncherForActivityResult(
-                    ActivityResultContracts.RequestPermission()
-                ) { /* No permission means no notification; manual sync remains available. */ }
-                LaunchedEffect(webState.paired, webState.pushConfigured) {
-                    if (webState.paired && webState.pushConfigured &&
-                        Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-                        ContextCompat.checkSelfPermission(this@MainActivity,
-                            Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-                    ) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
-                }
-                LaunchedEffect(showWebInbox, webRequestId, webState.paired) {
-                    if (webState.paired && (showWebInbox || webRequestId != null)) webInbox.refresh()
-                }
-                // Refresh the badge after returning from other apps, even if
-                // the notification was not opened directly.
-                DisposableEffect(webState.paired) {
-                    val observer = LifecycleEventObserver { _, event ->
-                        if (event == Lifecycle.Event.ON_RESUME && webState.paired) webInbox.refresh()
-                    }
-                    lifecycle.addObserver(observer)
-                    onDispose { lifecycle.removeObserver(observer) }
-                }
-                LaunchedEffect(webState.paired) {
-                    if (webState.paired) WebRequestPush.incomingRequests.collect { webInbox.refresh() }
-                }
-                var showCallAssist by rememberSaveable { mutableStateOf(false) }
-                val uiState by viewModel.uiState.collectAsState()
+            val navController = rememberNavController()
 
-                NavHost(navController = navController, startDestination = "splash") {
-                    composable("splash") {
-                        SplashScreen {
-                            navController.navigate("selling") {
-                                popUpTo("splash") { inclusive = true }
-                            }
-                        }
-                    }
-                    composable("selling") {
-                        val modeNames = listOf("견적모드", "문의처리", "농장관리", "묘목관리")
-                        val pagerState = rememberPagerState(initialPage = 0) { modeNames.size }
-                        val modeScope = rememberCoroutineScope()
-                        val navigateTo: (Int) -> Unit = { page ->
-                            modeScope.launch { pagerState.animateScrollToPage(page) }
-                        }
-                        Column(Modifier.fillMaxSize()) {
-                            Surface(color = MaterialTheme.colorScheme.surface) {
-                                Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    modeNames.forEachIndexed { index, title ->
-                                        androidx.compose.material3.FilterChip(
-                                            selected = pagerState.currentPage == index,
-                                            onClick = { navigateTo(index) },
-                                            modifier = Modifier.weight(1f),
-                                            label = { Text(title, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1) }
-                                        )
-                                    }
-                                }
-                            }
-                            HorizontalPager(state = pagerState, modifier = Modifier.weight(1f),
-                                beyondViewportPageCount = 2) { page ->
-                                when (page) {
-                                    0 -> QuoteOnlyScreen(viewModel, quoteConnection, webState,
-                                        onSync = webInbox::refresh,
-                                        onSettings = { connectionOnly = true; showWebInbox = true },
-                                        onRead = webInbox::read, onDelete = webInbox::close)
-                                    1 -> com.example.namufarm.ui.CustomerInquiryScreen(inquiries)
-                                    2 -> com.example.namufarm.ui.ManagementModeScreen(viewModel,
-                                        quoteConnection, onBack = { navigateTo(0) },
-                                        onManageSpecies = { navigateTo(3) })
-                                    else -> com.example.namufarm.ui.SpeciesManagementScreen(viewModel,
-                                        quoteConnection, onBack = { navigateTo(2) })
-                                }
-                            }
-                        }
-                    }
-
-                }
-                LaunchedEffect(webState.message, showWebInbox, webRequestId) {
-                    if (!showWebInbox && webRequestId == null) webState.message?.let {
-                        viewModel.showMessage(it); webInbox.clearMessage()
+            NavHost(navController = navController, startDestination = "splash") {
+                composable("splash") {
+                    SplashScreen {
+                        navController.navigate("modes") { popUpTo("splash") { inclusive = true } }
                     }
                 }
-                LaunchedEffect(webState.busy) { if (!webState.busy) viewModel.loadTodayData() }
-                LaunchedEffect(webState.deleteFeedback?.phase) {
-                    if (webState.deleteFeedback?.phase == "success") viewModel.loadTodayData()
-                }
-                if (showWebInbox || webRequestId != null) {
-                    WebQuoteInboxDialog(webState, webRequestId, uiState.customerPhone, uiState.estimateCart.size,
-                        onRefresh = webInbox::refresh, onRead = webInbox::read,
-                        onRestore=webInbox::restore,onClose=webInbox::close,onConnect=webInbox::connect,
-                        onConfirm = { id ->
-                            webState.requests.firstOrNull { it.requestId == id }?.let { request ->
-                                if (!uiState.isSavingQuote) {
-                                    viewModel.useWebRequestForQuote(request)
-                                    webInbox.read(id)
-                                    showWebInbox = false
-                                    webRequestId = null
-                                }
-                            }
-                        },
-                        onUseRequest = { request ->
-                            if (uiState.isSavingQuote) webInbox.showMessage("견적 저장이 끝난 뒤 고객 번호를 적용해주세요.")
-                            else {
-                                viewModel.useWebRequestForQuote(request)
-                                viewModel.showMessage("희망 묘목을 불러왔어요. 규격과 판매 단가를 입력해주세요.")
-                                showWebInbox = false; webRequestId = null
-                            }
-                        }, onMessageConsumed = webInbox::clearMessage,
-                        onDismiss = { showWebInbox = false; webRequestId = null; connectionOnly = false },
-                        connectionOnly = connectionOnly && webRequestId == null)
-                } else if (showCallAssist || callAssistRequest != null) {
-                    IncomingCallAssistDialog(
-                        request = callAssistRequest,
-                        customerPhone = uiState.customerPhone,
-                        cartItemCount = uiState.estimateCart.size,
-                        onUseNumber = { phone ->
-                            if (uiState.isSavingQuote) {
-                                viewModel.showMessage("견적 저장이 끝난 뒤 고객 번호를 적용해주세요.")
-                            } else {
-                                viewModel.updateCustomerPhone(phone)
-                                viewModel.showMessage("고객 번호를 적용했어요. 판매화면에서 품목을 담고 견적을 작성해주세요.")
-                            }
-                            showCallAssist = false
-                            callAssistRequest = null
-                        },
-                        onDismiss = { showCallAssist = false; callAssistRequest = null }
-                    )
-                }
-                // Keep this dialog visible until the sheet server and local
-                // deletion both complete; never show success before ACK.
-                webState.deleteFeedback?.let { feedback ->
-                    AlertDialog(
-                        onDismissRequest = {
-                            if (feedback.phase != "deleting") webInbox.acknowledgeDelete()
-                        },
-                        title = {
-                            Text(when (feedback.phase) {
-                                "deleting" -> "삭제 중…"
-                                "success" -> "삭제 완료"
-                                else -> "삭제 실패"
-                            })
-                        },
-                        text = {
-                            if (feedback.phase == "deleting") {
-                                Row(verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                    CircularProgressIndicator(modifier = Modifier.size(32.dp))
-                                    Text("구글시트와 휴대폰의 견적 요청을 삭제하고 있습니다.")
-                                }
-                            } else Text(if (feedback.phase == "success")
-                                "견적 요청 삭제가 완료됐습니다."
-                                else "삭제 완료를 확인하지 못했습니다. 견적 요청 가져오기로 상태를 확인해주세요. ${feedback.error.orEmpty()}")
-                        },
-                        confirmButton = {
-                            if (feedback.phase != "deleting") TextButton(onClick = webInbox::acknowledgeDelete) {
-                                Text("확인")
-                            }
-                        }
-                    )
+                composable("modes") {
+                    com.example.namufarm.quotemode.InitialAppModes(viewModel, quoteViewModel, inquiryViewModel)
                 }
             }
         }
     }
 
-    override fun onNewIntent(intent: Intent) {
-        super.onNewIntent(intent)
-        setIntent(intent)
-        WebRequestPush.fromIntent(intent)?.let { webRequestId = it }
-        CallAssistRequest.fromIntent(intent)?.let { callAssistRequest = it }
+    // --- 🚨 [통화 감시 관련 핵심 로직] ---
+
+    private fun checkAndRequestPermissions() {
+        val hasPhoneState = ContextCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED
+        val hasCallLog = ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CALL_LOG) == PackageManager.PERMISSION_GRANTED
+
+        if (hasPhoneState && hasCallLog) {
+            registerPhoneStateReceiver() // 이미 권한 있으면 바로 감시자 투입
+        } else {
+            // 없으면 권한 요청 팝업 띄우기
+            requestPermissionLauncher.launch(
+                arrayOf(Manifest.permission.READ_PHONE_STATE, Manifest.permission.READ_CALL_LOG)
+            )
+        }
     }
 
-    override fun onSaveInstanceState(outState: Bundle) {
-        webRequestId?.let { outState.putString("web_request_id", it) }
-        callAssistRequest?.let {
-            outState.putString("incoming_caller_id", it.callerId)
-            outState.putBoolean("incoming_reply", it.reply)
+    private fun registerPhoneStateReceiver() {
+        if (phoneStateReceiver != null) return
+
+        phoneStateReceiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                if (intent?.action == TelephonyManager.ACTION_PHONE_STATE_CHANGED) {
+                    val state = intent.getStringExtra(TelephonyManager.EXTRA_STATE)
+                    val incomingNumber = intent.getStringExtra(TelephonyManager.EXTRA_INCOMING_NUMBER)
+
+                    // 🚨 전화벨이 울리거나(RINGING) 통화가 연결되었을 때(OFFHOOK)!
+                    if (state == TelephonyManager.EXTRA_STATE_RINGING || state == TelephonyManager.EXTRA_STATE_OFFHOOK) {
+                        if (!incomingNumber.isNullOrBlank()) {
+                            // 뷰모델의 전화번호 업데이트 함수를 쏴버림! -> UI에 마법처럼 촥 꽂힘
+                            viewModel.updateCustomerPhone(incomingNumber)
+                            android.util.Log.d("NamuFarm", "통화 감지됨! 번호: $incomingNumber")
+                        }
+                    }
+                }
+            }
         }
-        super.onSaveInstanceState(outState)
+
+        // 안드로이드 시스템에 우리 감시자를 정식으로 등록
+        val filter = IntentFilter(TelephonyManager.ACTION_PHONE_STATE_CHANGED)
+        registerReceiver(phoneStateReceiver, filter)
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        // 앱 꺼질 때 감시자도 같이 퇴근시킴 (메모리 누수 방지)
+        phoneStateReceiver?.let { unregisterReceiver(it) }
     }
 }
 
@@ -287,51 +163,18 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun SplashScreen(onTimeout: () -> Unit) {
     LaunchedEffect(Unit) {
-        delay(900)
+        delay(1500)
         onTimeout()
     }
-
     Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
+        modifier = Modifier.fillMaxSize().background(Color(0xFFE8F5E9)),
         contentAlignment = Alignment.Center
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Surface(
-                modifier = Modifier.size(88.dp),
-                shape = RoundedCornerShape(28.dp),
-                color = MaterialTheme.colorScheme.primary
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Text(
-                        text = "나",
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        fontSize = 38.sp,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(4.dp))
-
-            Text(
-                text = "나무팜",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.ExtraBold,
-                color = MaterialTheme.colorScheme.onBackground
-            )
-
-            Text(
-                text = "묘목 판매 · 재고 관리",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("🌲", fontSize = 100.sp)
+            Text("나무팜 NamuFarm", fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF2E7D32))
+            Text("재고 및 견적 관리 시스템", fontSize = 14.sp, color = Color(0xFF388E3C))
         }
     }
 }
-
 

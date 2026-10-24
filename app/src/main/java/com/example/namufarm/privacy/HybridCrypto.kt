@@ -74,3 +74,4 @@ object HybridCrypto {
         } finally { secret.fill(0) }
     }
 }
+

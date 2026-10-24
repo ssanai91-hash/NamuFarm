@@ -51,6 +51,9 @@ concurrency:
 
 jobs:
   build:
+    # Retired main-app pipeline: Android now uses the original app source and local signing.
+    # Do not build/publish with the old package, interop tests or release credentials.
+    if: ${{ false }}
     runs-on: ubuntu-latest
     timeout-minutes: 40
     permissions:

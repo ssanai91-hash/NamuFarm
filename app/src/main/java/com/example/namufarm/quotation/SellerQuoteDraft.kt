@@ -12,9 +12,10 @@ import com.google.gson.Gson
 
 enum class QuoteDelivery { SAVE, SMS, EMAIL, COMPLETE }
 
-data class SellerQuoteRow(val name: String = "", val spec: String = "", val quantity: String = "", val price: String = "2000") {
+data class SellerQuoteRow(val name: String = "", val spec: String = "", val quantity: String = "", val price: String = "2000", val remarks: String = "") {
     fun line(): OrderLine {
         require(name.isNotBlank()) { "묘목명을 입력해주세요." }
+        require(remarks.length <= 500 && remarks.none { it.code < 32 && it != '\n' }) { "비고는 500자 이내로 입력해주세요." }
         val qty = quantity.toIntOrNull()?.takeIf { it > 0 } ?: error("수량은 1주 이상 입력해주세요.")
         val unit = price.toIntOrNull()?.takeIf { it >= 0 } ?: error("모든 품목의 판매 단가를 입력해주세요.")
         return OrderLine(name.trim(), spec.trim(), "", "", "", qty, unit, "수기견적", 0, OrderLineSource.MANUAL)
@@ -29,7 +30,7 @@ fun adjustedQuotePrice(value: String, delta: Int): String =
 data class QuoteIssueOptions(
     val issuer: QuoteIssuer = QuoteIssuer(), val tax: String = "0",
     val validUntil: String = "발행일로부터 7일",
-    val notes: String = "견적 유효기간 경과 후에는 가격과 묘목 확보 가능 여부를 다시 확인해 주세요.",
+    val notes: String = "",
     val account: String = BuildConfig.PAYMENT_ACCOUNT_TEXT
 ) {
     fun taxAmount(): Long = tax.toLongOrNull()?.takeIf { it in 0..Int.MAX_VALUE.toLong() }
@@ -74,3 +75,4 @@ data class SellerQuoteDraft(
         )
     }
 }
+

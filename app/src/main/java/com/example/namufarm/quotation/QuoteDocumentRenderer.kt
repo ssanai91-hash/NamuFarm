@@ -49,6 +49,7 @@ object QuoteDocumentRenderer {
         canvas.drawText("견  적  서", 221f, 52f, paint(24f, true))
         val date = SimpleDateFormat("yyyy년 M월 d일", Locale.KOREA).apply { timeZone = TimeZone.getTimeZone("Asia/Seoul") }.format(Date(doc.issuedAt))
         canvas.drawText("NO. ${doc.number}", LEFT, 27f, paint(9f))
+        canvas.drawText("견적번호 ${doc.sourceQuoteNumber}", LEFT, 64f, paint(9f))
         var yLeft = text(canvas, date, LEFT, 77f, 235f, paint(11f)) + 12f
         yLeft = text(canvas, "${doc.recipient.recipientName.ifBlank { doc.recipient.customerName }} 귀하", LEFT, yLeft, 235f, paint(12f, true)) + 5f
         yLeft = text(canvas, doc.customerPhone, LEFT, yLeft, 235f, paint(10f))
@@ -76,7 +77,7 @@ object QuoteDocumentRenderer {
         }
         return y + 70f
     }
-    private fun values(line: QuoteDocumentLine) = listOf(line.name, line.specification, money(line.quantity.toLong()), money(line.unitPrice), money(line.amount), "", line.unit)
+    private fun values(line: QuoteDocumentLine) = listOf(line.name, line.specification, money(line.quantity.toLong()) + line.unit, money(line.unitPrice), money(line.amount), "", line.remarks.orEmpty())
     private fun rowHeight(line: QuoteDocumentLine): Float = maxOf(29f, values(line).mapIndexed { i, value -> wrap(value, columns[i] - 10f, paint(9f)).size }.max() * 13f + 10f)
     private data class Page(val lines: List<QuoteDocumentLine>, val footer: List<String>)
     private fun pages(doc: QuoteDocument): List<Page> {
