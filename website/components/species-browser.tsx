@@ -25,7 +25,6 @@ export default function SpeciesBrowser({ lines, onSelect, onRemove, notice, lock
   const selectedMonthRef = useRef<HTMLButtonElement | null>(null);
   const [guideName, setGuideName] = useState<string | null>(null);
   const guideOpener = useRef<HTMLButtonElement | null>(null);
-  const resultsRef = useRef<HTMLDivElement>(null);
   const monthGuides = guidesForMonth(month);
   const allSpecies = filterSpecies("all", "");
   const matches = mode === "planting" ? monthGuides.flatMap(guide => {
@@ -43,11 +42,8 @@ export default function SpeciesBrowser({ lines, onSelect, onRemove, notice, lock
   function chooseInitial(value: CatalogInitial | "all") { setInitial(value); setQuery(""); setPage(0); }
   function choosePurpose(value: PurposeId) { setPurpose(value); setPage(0); }
   function changePage(nextPage: number) {
+    // Pagination changes only the list; keep the viewport and pager focus in place.
     setPage(Math.max(0, Math.min(nextPage, pageCount - 1)));
-    requestAnimationFrame(() => {
-      resultsRef.current?.focus({ preventScroll: true });
-      resultsRef.current?.scrollIntoView({ block: "start", behavior: "instant" });
-    });
   }
   return <section id="trees" className="trees-section wrap catalog-section" aria-labelledby="trees-title">
     <div className="section-heading catalog-heading"><div><span className="overline">나무팜 묘목 안내</span><h2 id="trees-title">어떤 나무를 찾으세요?</h2></div><p className="catalog-direct-note">찾는 묘목이 없다면, 아래 견적 요청란에 묘목 이름을 직접 적어주세요.</p></div>
@@ -74,7 +70,7 @@ export default function SpeciesBrowser({ lines, onSelect, onRemove, notice, lock
         <div className="initial-filter" role="group" aria-label="첫 글자로 묘목 찾기">{catalogInitials.map(value => <Button type="button" variant="ghost" key={value} className="initial-button" aria-pressed={initial === value} onClick={() => chooseInitial(value)}>{value}</Button>)}</div>
       </div>}
       <SelectedSpeciesSummary lines={lines} onRemove={onRemove} locked={locked} />
-      <div className="catalog-result-intro" ref={resultsRef} tabIndex={-1}>{mode === "purpose" && <h3>{activePurpose.title}</h3>}<p className="catalog-results-heading">{mode === "planting" ? matches.length > 0 ? "묘목을 누르면 심는 시기를 알아볼 수 있어요." : "다른 달의 묘목을 미리 알아보세요." : "눌러서 담기 · 다시 눌러 해제"}</p></div>
+      <div className="catalog-result-intro">{mode === "purpose" && <h3>{activePurpose.title}</h3>}<p className="catalog-results-heading">{mode === "planting" ? matches.length > 0 ? "묘목을 누르면 심는 시기를 알아볼 수 있어요." : "다른 달의 묘목을 미리 알아보세요." : "눌러서 담기 · 다시 눌러 해제"}</p></div>
       <p className={notice.startsWith("한 번에 20종") || notice.startsWith("20종까지") ? "catalog-live" : "sr-only"} role="status" aria-live="polite" aria-atomic="true">{notice}</p>
       <div className="catalog-grid" id="catalog-species-list">{pageMatches.map(species => mode === "planting" ? <button key={species.id} type="button" className={`catalog-card planting-choice${selected.has(species.name) ? " selected" : ""}`} aria-haspopup="dialog" aria-label={`${species.name} 심는 시기 알아보기${selected.has(species.name) ? " · 이미 담김" : ""}`} onClick={event => { guideOpener.current = event.currentTarget; setGuideName(species.name); }}>
         <span className="catalog-card-name">{species.name}{!monthGuides.find(guide => guide.name === species.name)?.plantingMonths.includes(month) && <small>다음 식재 준비</small>}</span><span className="planting-choice-icon" aria-hidden="true">{selected.has(species.name) ? <Check /> : <ChevronRight />}</span>
