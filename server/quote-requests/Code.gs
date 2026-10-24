@@ -23,11 +23,19 @@ function doPost(e) {
       value = submitRequest_(body);
       // The durable PENDING outbox is delivered by the existing minute trigger.
       // Return the committed receipt without waiting for FCM or another lock.
+    } else if (body.action === 'submit_customer_inquiry') {
+      const secret = PropertiesService.getScriptProperties().getProperty('WEB_SECRET');
+      assert_(secret && secret.length >= 32 && equal_(body.webSecret, secret), 'UNAUTHORIZED');
+      value = submitCustomerInquiry_(body);
     } else if (body.action === 'pair_device') value = pairDevice_(body);
     else if (body.action === 'connect_app') value = connectApp_(body);
     else {
       const device = authenticateApp_(body);
       if (body.action === 'list_requests') value = listRequests_(body);
+      else if (body.action === 'list_customer_inquiries') value = listCustomerInquiries_(body);
+      else if (body.action === 'save_inquiry_reply') value = saveInquiryReply_(body);
+      else if (body.action === 'send_inquiry_reply') value = sendInquiryReply_(body);
+      else if (body.action === 'inquiry_sms_status') value = inquirySmsStatus_(body);
       else if (body.action === 'snapshot_requests') value = snapshotRequests_(body);
       else if (body.action === 'update_request_status') value = updateRequestStatus_(body);
       else if (body.action === 'save_quote_pricing') value = saveQuotePricing_(body);
@@ -420,6 +428,7 @@ function revokeDevice(deviceHash) {
     }
   });
 }
+
 
 
 
