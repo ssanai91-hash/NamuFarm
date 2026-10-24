@@ -79,6 +79,21 @@ private fun EditorChannelChip(label: String, selectedColor: Color, textColor: Co
 }
 
 
+/** Labelled rows in the selected quotation-table layout. */
+@Composable
+private fun QuoteItemField(label: String, content: @Composable RowScope.() -> Unit) {
+    HorizontalDivider(color = editorBorder, thickness = 0.5.dp)
+    Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), verticalAlignment = Alignment.CenterVertically) {
+        Text(label, Modifier.width(76.dp).padding(vertical = 10.dp, horizontal = 2.dp),
+            fontSize = 14.sp, color = if (label == "묘목 설명") editorGreen else editorMuted,
+            fontWeight = if (label == "묘목 설명") FontWeight.SemiBold else FontWeight.Normal)
+        VerticalDivider(Modifier.fillMaxHeight(), color = editorBorder, thickness = 0.5.dp)
+        Row(Modifier.weight(1f).padding(start = 10.dp, top = 6.dp, bottom = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically,
+            content = content)
+    }
+}
+
 /** The app cannot detect external SMS/email success; this is the seller's explicit attestation. */
 @Composable
 internal fun ConfirmQuoteSentDialog(onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
@@ -182,8 +197,6 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
     var expandedRow by rememberSaveable(draftKey) { mutableIntStateOf(-1) }
     var specDetails by remember { mutableStateOf<SellerQuoteRow?>(null) }
     var messageExpanded by remember { mutableStateOf(false) }
-    var remarksRow by remember { mutableIntStateOf(-1) }
-    var remarksText by remember { mutableStateOf("") }
     var formalDraft by remember { mutableStateOf<SellerQuoteDraft?>(null) }
     var issueDetails by rememberSaveable(draftKey) { mutableStateOf(false) }
     var step by rememberSaveable { mutableIntStateOf(1000) }
@@ -355,132 +368,108 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
                 }
             }
 
-            draft.rows.forEachIndexed { index, row ->
-                key(index) {
-                    fun update(value: SellerQuoteRow) {
-                        draft = draft.copy(rows = draft.rows.toMutableList().also { it[index] = value })
-                    }
-                    Surface(shape = RoundedCornerShape(16.dp),
-                        border = BorderStroke(0.5.dp, editorBorder),
-                        color = Color.White) {
-                        Column(Modifier.fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 10.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+            Surface(shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, editorBorder), color = Color.White) {
+                Column(Modifier.fillMaxWidth()) {
+                    draft.rows.forEachIndexed { index, row ->
+                        key(index) {
+                            fun update(value: SellerQuoteRow) {
+                                draft = draft.copy(rows = draft.rows.toMutableList().also { it[index] = value })
+                            }
+                            if (index > 0) HorizontalDivider(color = Color(0xFFCBD5CE), thickness = 1.dp)
+                            Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp)) {
+                                Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    Text("${index+1}. ${row.name.ifBlank { "새 품목" }}",
-                                        modifier = Modifier.weight(1f), maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis, fontSize = 17.sp,
-                                        fontWeight = FontWeight.SemiBold)
-                                    Surface(shape = RoundedCornerShape(50),
-                                        color = Color(0xFFE3EEE6)) {
-                                        Text("${row.quantity.ifBlank { "0" }}주",
-                                            Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                                            color = editorGreen, fontSize = 13.sp)
+                                    Text("${index + 1}. ${row.name.ifBlank { "새 품목" }}", Modifier.weight(1f),
+                                        fontSize = 17.sp, fontWeight = FontWeight.SemiBold,
+                                        maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                    Surface(shape = RoundedCornerShape(50), color = Color(0xFFE3EEE6)) {
+                                        Text("${row.quantity.ifBlank { "0" }}주", Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                            color = editorGreen, fontSize = 14.sp)
                                     }
-                                    if (manualEntry) {
-                                        TextButton(onClick = {
-                                            expandedRow = if (expandedRow == index) -1 else index
-                                        }, enabled = !saving) { Text("수정") }
-                                    }
+                                    if (manualEntry) TextButton(onClick = {
+                                        expandedRow = if (expandedRow == index) -1 else index
+                                    }, enabled = !saving) { Text("수정") }
                                 }
-                            }
-                            // The customer's original per-item request is separate from seller remarks.
-                            val itemRequest = requestedItems.getOrNull(index)
-                                ?.takeIf { it.species == row.name }?.specification ?: row.spec
-                            Surface(color = Color(0xFFF0F5FA), shape = RoundedCornerShape(8.dp),
-                                border = BorderStroke(1.dp, Color(0xFFD2DFEA)),
-                                modifier = Modifier.fillMaxWidth().clickable {
-                                    specDetails = row.copy(spec = itemRequest.ifBlank { "별도 요청사항 없음" })
-                                }) {
-                                Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    Text("고객 요청사항 · 희망규격", fontSize = 13.sp,
-                                        fontWeight = FontWeight.SemiBold, color = Color(0xFF356080))
-                                    SelectionContainer {
-                                        Text(itemRequest.ifBlank { "별도 요청사항 없음" }, fontSize = 15.sp,
-                                            color = Color(0xFF263D4D))
+                                val specification = requestedItems.getOrNull(index)
+                                    ?.takeIf { it.species == row.name }?.specification ?: row.spec
+                                QuoteItemField("희망규격") {
+                                    SelectionContainer(Modifier.weight(1f).clickable {
+                                        specDetails = row.copy(spec = specification.ifBlank { "미입력" })
+                                    }) {
+                                        Text(specification.ifBlank { "미입력" }, fontSize = 15.sp,
+                                            color = if (specification.isBlank()) editorMuted else Color(0xFF263D4D))
                                     }
                                 }
-                            }
-                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Text("1주 가격", fontSize = 13.sp,
-                                    color = Color(0xFF5E7566))
-                                FilledTonalIconButton(onClick = {
-                                    update(row.copy(price = adjustedQuotePrice(row.price, -step)))
-                                }, enabled = !saving, modifier = Modifier.size(48.dp),
-                                    colors = IconButtonDefaults.filledTonalIconButtonColors(
-                                        containerColor = Color(0xFFE6F1E8),
-                                        contentColor = Color(0xFF205943))) {
-                                    Icon(Icons.Outlined.Remove, "${index+1}번 단가 내리기")
-                                }
-                                val priceInteraction = remember { MutableInteractionSource() }
-                                val priceFocused by priceInteraction.collectIsFocusedAsState()
-                                BasicTextField(row.price, {
-                                    if (it.all(Char::isDigit) && it.length <= 10)
-                                        update(row.copy(price = it))
-                                }, singleLine = true, enabled = !saving,
-                                    interactionSource = priceInteraction,
-                                    textStyle = MaterialTheme.typography.titleMedium.copy(
-                                        fontSize = 17.sp, textAlign = TextAlign.Center, color = Color(0xFF1B2A22)),
-                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                    modifier = Modifier.weight(1f).heightIn(min = 52.dp)
-                                        .border(if (priceFocused) 2.dp else 1.dp,
-                                            if (priceFocused) editorGreen else editorMuted, RoundedCornerShape(6.dp))
-                                        .testTag("unit_price_$index")
-                                        .semantics { contentDescription = "${index + 1}번 1주 가격" },
-                                    decorationBox = { inner ->
-                                        Box(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 10.dp),
-                                            contentAlignment = Alignment.Center) {
-                                            if (row.price.isBlank()) Text("0", fontSize = 16.sp, color = editorMuted)
-                                            inner()
-                                        }
-                                    })
-                                FilledTonalIconButton(onClick = {
-                                    update(row.copy(price = adjustedQuotePrice(row.price, step)))
-                                }, enabled = !saving, modifier = Modifier.size(48.dp),
-                                    colors = IconButtonDefaults.filledTonalIconButtonColors(
-                                        containerColor = Color(0xFFE6F1E8),
-                                        contentColor = Color(0xFF205943))) {
-                                    Icon(Icons.Outlined.Add, "${index+1}번 단가 올리기")
-                                }
-                            }
-                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                                Text("소계", Modifier.weight(1f), color = Color(0xFF53695B), fontSize = 14.sp)
-                                val subtotal = (row.quantity.toIntOrNull()?.toLong() ?: 0L) *
-                                    (row.price.toIntOrNull()?.toLong() ?: 0L)
-                                Text(money(subtotal), color = Color(0xFF205943), fontWeight = FontWeight.Bold, fontSize = 17.sp)
-                            }
-                            Surface(color = Color(0xFFF7F9F6), shape = RoundedCornerShape(8.dp),
-                                border = BorderStroke(1.dp, editorBorder)) {
-                                Column(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 4.dp),
-                                    verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text("판매자 비고", Modifier.weight(1f), fontSize = 13.sp,
-                                            fontWeight = FontWeight.SemiBold, color = editorGreen)
-                                        TextButton(onClick = { remarksText = row.remarks; remarksRow = index },
-                                            enabled = !saving, contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)) {
-                                            Text(if (row.remarks.isBlank()) "비고 입력" else "비고 수정", fontSize = 13.sp)
-                                        }
+                                QuoteItemField("1주 가격") {
+                                    FilledTonalIconButton(onClick = {
+                                        update(row.copy(price = adjustedQuotePrice(row.price, -step)))
+                                    }, enabled = !saving, modifier = Modifier.size(48.dp),
+                                        colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                            containerColor = Color(0xFFE6F1E8),
+                                            contentColor = Color(0xFF205943))) {
+                                        Icon(Icons.Outlined.Remove, "${index+1}번 단가 내리기")
                                     }
-                                    if (row.remarks.isNotBlank()) Text(row.remarks, fontSize = 15.sp, color = Color(0xFF334B3B),
-                                        modifier = Modifier.padding(bottom = 6.dp).clickable(enabled = !saving) {
-                                            remarksText = row.remarks; remarksRow = index
+                                    val priceInteraction = remember { MutableInteractionSource() }
+                                    val priceFocused by priceInteraction.collectIsFocusedAsState()
+                                    BasicTextField(row.price, {
+                                        if (it.all(Char::isDigit) && it.length <= 10)
+                                            update(row.copy(price = it))
+                                    }, singleLine = true, enabled = !saving,
+                                        interactionSource = priceInteraction,
+                                        textStyle = MaterialTheme.typography.titleMedium.copy(
+                                            fontSize = 17.sp, textAlign = TextAlign.Center, color = Color(0xFF1B2A22)),
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                        modifier = Modifier.weight(1f).heightIn(min = 52.dp)
+                                            .border(if (priceFocused) 2.dp else 1.dp,
+                                                if (priceFocused) editorGreen else editorMuted, RoundedCornerShape(6.dp))
+                                            .testTag("unit_price_$index")
+                                            .semantics { contentDescription = "${index + 1}번 1주 가격" },
+                                        decorationBox = { inner ->
+                                            Box(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 10.dp),
+                                                contentAlignment = Alignment.Center) {
+                                                if (row.price.isBlank()) Text("0", fontSize = 16.sp, color = editorMuted)
+                                                inner()
+                                            }
                                         })
+                                    FilledTonalIconButton(onClick = {
+                                        update(row.copy(price = adjustedQuotePrice(row.price, step)))
+                                    }, enabled = !saving, modifier = Modifier.size(48.dp),
+                                        colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                            containerColor = Color(0xFFE6F1E8),
+                                            contentColor = Color(0xFF205943))) {
+                                        Icon(Icons.Outlined.Add, "${index+1}번 단가 올리기")
+                                    }
                                 }
-                            }
-                            if (manualEntry && expandedRow == index) {
-                                ManualField("묘목명 *", row.name, { update(row.copy(name = it)) },
-                                    saving, limit = 200)
-                                ManualField("규격", row.spec, { update(row.copy(spec = it)) },
-                                    saving, limit = 200)
-                                ManualField("수량 (주) *", row.quantity, { update(row.copy(quantity = it)) },
-                                    saving, KeyboardType.Number)
-                                if (draft.rows.size > 1) TextButton(onClick = {
-                                    draft = draft.copy(rows = draft.rows.filterIndexed { i, _ -> i != index })
-                                    expandedRow = -1
-                                }, enabled = !saving) { Text("이 품목 삭제") }
+                                QuoteItemField("소계") {
+                                    val subtotal = (row.quantity.toIntOrNull()?.toLong() ?: 0L) *
+                                        (row.price.toIntOrNull()?.toLong() ?: 0L)
+                                    Text(money(subtotal), Modifier.fillMaxWidth(), textAlign = TextAlign.End,
+                                        color = Color(0xFF205943), fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                                }
+                                QuoteItemField("묘목 설명") {
+                                    OutlinedTextField(value = row.remarks,
+                                        onValueChange = { update(row.copy(remarks = it.take(500))) }, enabled = !saving,
+                                        placeholder = { Text("년생·크기·상태 입력", fontSize = 14.sp) },
+                                        minLines = 1, maxLines = 4, shape = RoundedCornerShape(7.dp),
+                                        textStyle = LocalTextStyle.current.copy(fontSize = 15.sp),
+                                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = editorGreen,
+                                            unfocusedBorderColor = editorBorder, focusedContainerColor = Color(0xFFFAFCFA),
+                                            unfocusedContainerColor = Color(0xFFFAFCFA)),
+                                        modifier = Modifier.weight(1f).testTag("seedling_description_$index")
+                                            .semantics { contentDescription = "${index + 1}번 묘목 설명" })
+                                }
+                                if (manualEntry && expandedRow == index) {
+                                    ManualField("묘목명 *", row.name, { update(row.copy(name = it)) },
+                                        saving, limit = 200)
+                                    ManualField("규격", row.spec, { update(row.copy(spec = it)) },
+                                        saving, limit = 200)
+                                    ManualField("수량 (주) *", row.quantity, { update(row.copy(quantity = it)) },
+                                        saving, KeyboardType.Number)
+                                    if (draft.rows.size > 1) TextButton(onClick = {
+                                        draft = draft.copy(rows = draft.rows.filterIndexed { i, _ -> i != index })
+                                        expandedRow = -1
+                                    }, enabled = !saving) { Text("이 품목 삭제") }
+                                }
                             }
                         }
                     }
@@ -491,6 +480,23 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
                     expandedRow = draft.rows.lastIndex
                 }, enabled = !saving && draft.rows.size < 50,
                     modifier = Modifier.align(Alignment.End)) { Text("+ 품목 추가") }
+            }
+
+            Surface(shape = RoundedCornerShape(16.dp),
+                border = BorderStroke(0.5.dp, editorBorder),
+                color = Color.White) {
+                Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Icon(Icons.Outlined.SpeakerNotes, null,
+                        tint = editorMuted, modifier = Modifier.size(20.dp))
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Text("고객 요청사항", color = editorMuted, fontSize = 12.sp)
+                        Text(request?.message?.ifBlank { "없음" } ?: "없음",
+                            modifier = Modifier.clickable { if (!request?.message.isNullOrBlank()) messageExpanded = true },
+                            fontSize = 15.sp)
+                    }
+                }
             }
 
             // Preserve 500-won delivery adjustments independently of the item-price step.
@@ -541,22 +547,6 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
                     }
                 }
             }
-            Surface(shape = RoundedCornerShape(16.dp),
-                border = BorderStroke(0.5.dp, editorBorder),
-                color = Color.White) {
-                Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Icon(Icons.Outlined.SpeakerNotes, null,
-                        tint = editorMuted, modifier = Modifier.size(20.dp))
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        Text("고객 요청사항", color = editorMuted, fontSize = 12.sp)
-                        Text(request?.message?.ifBlank { "없음" } ?: "없음",
-                            modifier = Modifier.clickable { if (!request?.message.isNullOrBlank()) messageExpanded = true },
-                            fontSize = 14.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    }
-                }
-            }
             QuoteBox("공식견적서") {
                 OutlinedTextField(draft.options.notes, { value ->
                     draft = draft.copy(options = draft.options.copy(notes = value.take(500)))
@@ -590,20 +580,6 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
                 onPrepare = { onPrepareDocument(snapshot); initial = snapshot })
         }
     }
-    if (remarksRow in draft.rows.indices) AlertDialog(
-        onDismissRequest = { remarksRow = -1 },
-        title = { Text("비고 · ${draft.rows[remarksRow].name}") },
-        text = { OutlinedTextField(remarksText, { remarksText = it.take(500) },
-            placeholder = { Text("년생 · 크기 · 묘목 상태 등을 입력하세요") },
-            modifier = Modifier.fillMaxWidth(), minLines = 3, maxLines = 8) },
-        confirmButton = { TextButton(onClick = {
-            val index = remarksRow
-            draft = draft.copy(rows = draft.rows.mapIndexed { i, row ->
-                if (i == index) row.copy(remarks = remarksText.trim()) else row
-            })
-            remarksRow = -1
-        }) { Text("적용") } },
-        dismissButton = { TextButton(onClick = { remarksRow = -1 }) { Text("취소") } })
     specDetails?.let { item ->
         AlertDialog(onDismissRequest = { specDetails = null },
             title = { Text("${item.name} · ${item.quantity}주") },
@@ -687,6 +663,7 @@ private fun ManualField(label: String, value: String, onValue: (String) -> Unit,
     OutlinedTextField(value, { if (keyboard != KeyboardType.Number || it.all(Char::isDigit)) onValue(it.take(if (keyboard == KeyboardType.Number) 10 else limit)) }, label = { Text(label) },
         singleLine = true, enabled = !saving, keyboardOptions = KeyboardOptions(keyboardType = keyboard), modifier = Modifier.fillMaxWidth())
 }
+
 
 
 
