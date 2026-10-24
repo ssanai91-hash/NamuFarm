@@ -79,6 +79,14 @@ class MainActivity : ComponentActivity() {
             com.example.namufarm.quotemode.InitialQuoteViewModelFactory(quoteConnection, this))[
                 com.example.namufarm.quotemode.InitialQuoteViewModel::class.java]
 
+        val inquiryRepository = com.example.namufarm.data.repository.CustomerInquiryRepository(
+            com.example.namufarm.data.CustomerInquiryDatabase.get(this),
+            com.example.namufarm.quotemode.CustomerInquiryConnection(masterClient))
+        val inquiryViewModel = ViewModelProvider(this,
+            com.example.namufarm.viewmodel.CustomerInquiryViewModelFactory(inquiryRepository))[
+                com.example.namufarm.viewmodel.CustomerInquiryViewModel::class.java]
+        com.example.namufarm.quotemode.CustomerInquiryCleanupWorker.schedule(this)
+
         // 🚨 4. 권한 체크 및 통화 감시자 작동 시작!
         checkAndRequestPermissions()
 
@@ -92,7 +100,7 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 composable("modes") {
-                    com.example.namufarm.quotemode.InitialAppModes(viewModel, quoteViewModel)
+                    com.example.namufarm.quotemode.InitialAppModes(viewModel, quoteViewModel, inquiryViewModel)
                 }
             }
         }

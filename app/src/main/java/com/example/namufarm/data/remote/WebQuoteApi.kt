@@ -24,6 +24,8 @@ data class WebQuoteEnvelope(
     val paired: Boolean? = null, val registered: Boolean? = null,
     val authMode: String? = null,
     val requests: List<WebQuoteRemote?>? = null, val hasMore: Boolean? = null,
+    val inquiries: List<CustomerInquiryRemote?>? = null, val inquiry: CustomerInquiryRemote? = null,
+    val nextSequence: Long? = null,
     val saved: Boolean? = null, val orderNumber: String? = null, val revision: Long? = null, val fingerprint: String? = null,
     val keyRegistered: Boolean? = null, val keyId: String? = null, val encryptionReady: Boolean? = null,
     val closed: Boolean? = null, val updated: Boolean? = null, val hidden: Boolean? = null,

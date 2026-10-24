@@ -16,8 +16,8 @@ android {
         applicationId = "com.example.namufarm.original"
         minSdk = 24
         targetSdk = 36
-        versionCode = 8
-        versionName = "1.1.5"
+        versionCode = 9
+        versionName = "1.1.6"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -67,6 +67,7 @@ dependencies {
     val room_version = "2.6.1"
     implementation("androidx.room:room-runtime:$room_version")
     implementation("androidx.room:room-ktx:$room_version")
+    implementation("androidx.work:work-runtime-ktx:2.9.1")
     ksp("androidx.room:room-compiler:$room_version")
     // 🚨 화면 이동(내비게이션)을 위한 라이브러리 추가!
     implementation("androidx.navigation:navigation-compose:2.7.7")
