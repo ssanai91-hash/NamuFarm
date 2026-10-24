@@ -2975,8 +2975,7 @@ body { background:#ffffff; }
 .inquiry-footer>p { margin:.35rem 0 0; color:#657368; font-size:.8125rem; text-align:center; }
 .inquiry-phone { display:flex; align-items:center; justify-content:center; gap:.4rem; min-height:2.75rem; margin-top:.5rem; padding-top:.45rem; border-top:1px solid #e1e8e2; color:var(--forest); font-size:1rem; font-weight:650; }
 .inquiry-phone svg { width:1.1rem; height:1.1rem; }
-.inquiry-availability,.inquiry-pending { padding:.65rem; margin-bottom:.65rem; background:#f6f9f6; color:#526350; border:1px solid var(--forest-border); border-radius:.5rem; font-size:.9375rem; line-height:1.5; }
-.inquiry-availability button { min-height:2.75rem; color:var(--forest); text-decoration:underline; cursor:pointer; }
+.inquiry-pending { padding:.65rem; margin-bottom:.65rem; background:#f6f9f6; color:#526350; border:1px solid var(--forest-border); border-radius:.5rem; font-size:.9375rem; line-height:1.5; }
 .inquiry-error,.inquiry-field-error { color:#a4352a; font-size:.875rem; line-height:1.5; }
 .inquiry-error { padding:.6rem; margin-bottom:.65rem; border:1px solid #e7b9af; border-radius:.5rem; background:#fff5f2; }
 .inquiry-field-error { margin-top:.25rem; }
@@ -2991,6 +2990,13 @@ body { background:#ffffff; }
 @media(max-width:48rem) {
   .mobile-cta-actions>button.mobile-inquiry { width:100%; min-width:0; min-height:3.25rem; height:auto; padding:.65rem .35rem; border:1px solid var(--forest); background:#fff; color:var(--forest); font-size:1rem; white-space:normal; }
   .mobile-cta-actions>button.mobile-inquiry svg { width:1.125rem; height:1.125rem; flex:none; }
-  .customer-inquiry-dialog[data-slot=dialog-content] { padding:1rem; gap:.6rem; }
+  .customer-inquiry-dialog[data-slot=dialog-content] { padding:.875rem; gap:.5rem; max-height:calc(100dvh - 1rem); }
   .customer-inquiry-dialog [data-slot=dialog-title] { font-size:1.375rem; }
+  .customer-inquiry-dialog legend { margin-bottom:.3rem; }
+  .inquiry-contact { margin-top:.4rem; padding-top:.4rem; }
+  .inquiry-contact h3 { margin-bottom:.2rem; }
+  .inquiry-email,.inquiry-message { margin-top:.5rem; }
+  .inquiry-private { margin:.25rem 0; }
+  .inquiry-footer>p { margin-top:.2rem; }
+  .inquiry-phone { margin-top:.25rem; padding-top:.25rem; }
 }

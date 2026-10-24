@@ -54,6 +54,7 @@ export default function CustomerInquiryDialog({ open, onOpenChange, opener }: { 
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (inFlight.current || conflict) return;
+    if (!pending && (ready !== true || checking)) { if (!checking) void checkReady(); return; }
     const hadPending = !!pending;
     const parsed = inquirySchema.safeParse(pending ?? { ...fields, requestId: newRequestId() });
     if (!parsed.success) {
@@ -93,10 +94,9 @@ export default function CustomerInquiryDialog({ open, onOpenChange, opener }: { 
   return <Dialog open={open} onOpenChange={changeOpen}>
     <DialogContent className="customer-inquiry-dialog" showCloseButton={false} onOpenAutoFocus={event => { event.preventDefault(); title.current?.focus({ preventScroll: true }); }} onCloseAutoFocus={event => { if (opener.current?.isConnected) { event.preventDefault(); opener.current.focus({ preventScroll: true }); } }}>
       <button type="button" className="inquiry-close" aria-label="문의 창 닫기" onClick={() => changeOpen(false)}><X aria-hidden="true" /></button>
-      <DialogHeader><DialogTitle ref={title} tabIndex={-1}>{receipt ? "문의가 접수됐어요" : "문의 남기기"}</DialogTitle><DialogDescription>{receipt ? "판매자가 확인한 뒤 남겨주신 연락처로 답변드려요." : "어떤 점이 궁금하세요?"}</DialogDescription></DialogHeader>
+      <DialogHeader><DialogTitle ref={title} tabIndex={-1}>{receipt ? "문의가 접수됐어요" : "문의 남기기"}</DialogTitle><DialogDescription className={receipt ? undefined : "sr-only"}>{receipt ? "판매자가 확인한 뒤 남겨주신 연락처로 답변드려요." : "문의 종류와 연락처, 궁금한 내용을 입력해주세요."}</DialogDescription></DialogHeader>
       <div className="inquiry-scroll">
         {receipt ? <div className="inquiry-success"><CircleCheck aria-hidden="true" /><p>문의 접수번호</p><strong>{receipt.inquiryNumber}</strong><p>질문 내용은 판매자만 확인할 수 있어요.</p></div> : <form id="customer-inquiry" onSubmit={submit} noValidate>
-          {ready === false && <div className="inquiry-availability" role="status"><p>온라인 문의 접수를 준비하고 있어요.<br />전화로 상담해주세요.</p><button type="button" disabled={checking} onClick={() => void checkReady()}>{checking ? "확인 중…" : "접수 가능 여부 다시 확인"}</button></div>}
           {pending && <p className="inquiry-pending" role="status">접수 확인 중인 문의예요. 중복되지 않도록 같은 내용으로 확인합니다.</p>}
           {error && <div className="inquiry-error" role="alert" ref={errorRef} tabIndex={-1}>{error}</div>}
           <fieldset disabled={locked}><legend>문의 종류</legend><div className="inquiry-types">{inquiryCategories.map(category => <button key={category} type="button" aria-pressed={fields.category === category} onClick={() => update("category", category)}>{category}</button>)}</div></fieldset>
@@ -108,7 +108,7 @@ export default function CustomerInquiryDialog({ open, onOpenChange, opener }: { 
           <div hidden aria-hidden="true"><label>Website<input tabIndex={-1} autoComplete="off" value={fields.website} onChange={event => update("website", event.target.value)} /></label></div>
         </form>}
       </div>
-      <div className="inquiry-footer">{receipt ? <Button type="button" className="inquiry-done" onClick={() => changeOpen(false)}><CheckCheck aria-hidden="true" />확인</Button> : <><div className="inquiry-actions"><Button type="button" variant="outline" onClick={() => changeOpen(false)}>{locked ? "닫기" : "취소"}</Button><Button type="submit" form="customer-inquiry" disabled={busy || conflict || (!pending && ready !== true)}>{busy && <LoaderCircle className="animate-spin" aria-hidden="true" />}{busy ? "접수 확인 중…" : conflict ? "전화로 문의해주세요" : pending ? "같은 문의로 접수 확인" : "문의 보내기"}</Button></div><p>남겨주신 연락처로 답변드려요.</p></>}
+      <div className="inquiry-footer">{receipt ? <Button type="button" className="inquiry-done" onClick={() => changeOpen(false)}><CheckCheck aria-hidden="true" />확인</Button> : <><div className="inquiry-actions"><Button type="button" variant="outline" onClick={() => changeOpen(false)}>{locked ? "닫기" : "취소"}</Button><Button type={!pending && ready !== true ? "button" : "submit"} form="customer-inquiry" aria-label={!pending && ready === false ? "온라인 문의 접수 준비 중 · 접수 가능 여부 다시 확인" : undefined} onClick={() => { if (!pending && ready !== true) void checkReady(); }} disabled={busy || conflict || (!pending && checking)}>{busy && <LoaderCircle className="animate-spin" aria-hidden="true" />}{busy ? "접수 확인 중…" : conflict ? "전화로 문의해주세요" : pending ? "같은 문의로 접수 확인" : checking || ready === null ? "접수 가능 여부 확인" : ready === false ? "접수 준비 중" : "문의 보내기"}</Button></div><p role="status">{ready === false ? "전화 상담을 이용해주세요." : "남겨주신 연락처로 답변드려요."}</p></>}
       <a className="inquiry-phone" href={`tel:${businessInfo.mobile.replaceAll("-", "")}`}><Phone aria-hidden="true" />전화로 상담하기<ChevronRight aria-hidden="true" /></a></div>
     </DialogContent>
   </Dialog>;
