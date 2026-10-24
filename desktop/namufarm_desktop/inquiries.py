@@ -142,7 +142,7 @@ class InquiryService:
             self.store.write('meta', 'server', {'url': manager.api.url})
 
     def ensure_connection(self):
-        info = self.manager.api.info()
+        info = self.manager.server_info()
         require(info.get('customerInquiry') == 1 and info.get('customerInquiryReady') is True
                 and info.get('customerInquiryWorkflow', 0) >= 2,
                 '고객문의 서버를 최신 버전으로 재배포하고 setupCustomerInquiries를 실행해주세요.')
@@ -214,7 +214,8 @@ class InquiryService:
                                 local_time(r.get('answeredAt')), draft.get('text', ''),
                                 json.dumps(r.get('history', []), ensure_ascii=False) if r.get('history') else ''])
             try:
-                _write_copy(path, content, '고객문의')
+                self.manager._write_copy_if_changed(path, content,
+                    lambda: _write_copy(path, content, '고객문의'))
                 paths.append(str(path))
             except OSError:
                 errors.append(f'{path.name}: 엑셀을 닫고 엑셀 저장을 다시 눌러주세요. DB와 답변은 저장되어 있습니다.')
@@ -314,3 +315,4 @@ class InquiryService:
         self.store.write('operations', identifier, operation)
         self._execute(identifier, operation)
         return self.export()
+

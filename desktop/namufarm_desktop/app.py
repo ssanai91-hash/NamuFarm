@@ -72,12 +72,18 @@ def fill_table(widget, rows):
 
 class Task(QThread):
     completed = Signal(object, str, bool)
+    progress = Signal(str)
 
-    def __init__(self, work, refresh_on_error=None, parent=None):
+    def __init__(self, work, refresh_on_error=None, parent=None, *, progress_source=None):
         super().__init__(parent)
         self.work, self.refresh_on_error = work, refresh_on_error
+        self.progress_source = progress_source
 
     def run(self):
+        source = self.progress_source
+        previous = getattr(source, "progress_callback", None)
+        if source is not None:
+            source.progress_callback = self.progress.emit
         try:
             self.completed.emit(self.work(), "", False)
         except Exception as error:
@@ -90,7 +96,10 @@ class Task(QThread):
             message = str(error) if isinstance(error, UserError) else "처리를 완료하지 못했습니다. 기존 기록과 전송 대기는 유지됩니다."
             self.completed.emit(state, message, isinstance(error, ConflictError))
         finally:
+            if source is not None:
+                source.progress_callback = previous
             self.work = self.refresh_on_error = None
+            self.progress_source = None
 
 
 class UnlockDialog(QDialog):
@@ -217,9 +226,10 @@ class MainWindow(QMainWindow):
         self.message.setStyleSheet("")
         self.message.setText(title)
         refresh = refresh_on_error if callable(refresh_on_error) else (self.manager.view if self.manager and refresh_on_error else None)
-        task = Task(work, refresh, self)
+        task = Task(work, refresh, self, progress_source=self.manager)
         task.operation_title = title
         self.task = task
+        task.progress.connect(lambda message: self.message.setText(message) if self.task is task else None)
         task.completed.connect(lambda value, error, conflict: self.job_finished(task, value, error, conflict, on_success))
         self.update_controls()
         task.start()
@@ -969,6 +979,7 @@ def main():
         return app.exec()
     QTimer.singleShot(0, window.open_vault)
     return app.exec()
+
 
 
 

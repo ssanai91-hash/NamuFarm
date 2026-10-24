@@ -1,8 +1,10 @@
 import base64
 import copy
+import hashlib
 import json
 import re
 import uuid
+from time import monotonic
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -31,6 +33,10 @@ class Manager(SoldNumbers, SalesWorkspace):
         self.request_snapshot = False
         self.quote_read_mode = None
         self.copy_error = ""
+        self._copy_signatures = {}
+        self._copy_errors = {}
+        self._server_info_cache = None
+        self.progress_callback = None
         self.sales_snapshot_verified = False
         self.inbox_requests = [r for r in vault.rows("requests") if r.get("status", "신규") == "신규"]
 
@@ -46,6 +52,9 @@ class Manager(SoldNumbers, SalesWorkspace):
         self.request_snapshot = False
         self.quote_read_mode = None
         self.copy_error = ""
+        self._copy_signatures.clear()
+        self._copy_errors.clear()
+        self._server_info_cache = None
         self.inbox_requests = []
         return self.view()
 
@@ -165,7 +174,7 @@ class Manager(SoldNumbers, SalesWorkspace):
             except AuthenticationError:
                 # A restored vault can outlive the server's device registry.
                 # Reuse its token and pending event IDs on this same server.
-                pass
+                self._server_info_cache = None
         info = self.verify_server()
         require(info.get("connectionAuth") == "auto-v1",
                 "운영 Apps Script 배포가 이전 인증 방식입니다. 기존 서버의 Code.gs와 SecureCommerce.gs를 최신 main 코드로 교체하고, 동일 배포 ID의 새 버전으로 업데이트해주세요. 기존 자료는 유지됩니다.")
@@ -211,28 +220,65 @@ class Manager(SoldNumbers, SalesWorkspace):
             raise
         return self.sync()
 
+    def report_progress(self, message):
+        callback = self.progress_callback
+        if callback is not None:
+            callback(message)
+
+    def _write_copy_if_changed(self, path, payload, write):
+        """Skip identical exports only while the same on-disk copy still exists."""
+        signature = hashlib.sha256(canonical(payload).encode("utf-8")).hexdigest()
+        try:
+            stat = path.stat()
+            unchanged = self._copy_signatures.get(path) == (signature, stat.st_mtime_ns, stat.st_size)
+        except FileNotFoundError:
+            unchanged = False
+        if not unchanged:
+            self.report_progress(f"로컬 엑셀 저장 중… · {path.name}")
+            write()
+            stat = path.stat()
+            self._copy_signatures[path] = (signature, stat.st_mtime_ns, stat.st_size)
+
     def local_copy_view(self):
         from .request_excel import write_request_copy
+        from .sales_excel import write_sales
+        from .confirmed_excel import write_confirmed_quotes
         value = self.view()
-        try:
-            write_request_copy(self.request_copy_path, value["requests"])
-            self.copy_error = ""
-        except OSError:
-            self.copy_error = "앱 동기화 완료. 엑셀 사본 갱신은 실패했습니다. 열린 파일을 닫고 다시 동기화해주세요."
         # Excel is an export/restore file; DB remains authoritative if Excel is locked.
-        try:
-            from .sales_excel import write_sales
-            from .confirmed_excel import write_confirmed_quotes
-            write_sales(self.sale_copy_path, self.vault.rows("sales"), self.vault.pending(),
-                        self.api.url, value["sales"])
-            write_confirmed_quotes(self.confirmed_quotes_path, self._local_quotes())
-        except OSError:
-            self.copy_error = "DB에 저장했습니다. 열린 엑셀을 닫고 로컬 내보내기로 사본을 갱신해주세요."
+        for name in ("requests", "sales", "quotes"):
+            try:
+                if name == "requests":
+                    self._write_copy_if_changed(self.request_copy_path, value["requests"],
+                        lambda: write_request_copy(self.request_copy_path, value["requests"]))
+                elif name == "sales":
+                    rows, pending = self.vault.rows("sales"), self.vault.pending()
+                    self._write_copy_if_changed(self.sale_copy_path, [rows, pending, self.api.url, value["sales"]],
+                        lambda: write_sales(self.sale_copy_path, rows, pending, self.api.url, value["sales"]))
+                elif name == "quotes":
+                    quotes = self._local_quotes()
+                    self._write_copy_if_changed(self.confirmed_quotes_path, quotes,
+                        lambda: write_confirmed_quotes(self.confirmed_quotes_path, quotes))
+                self._copy_errors.pop(name, None)
+            except OSError:
+                self._copy_errors[name] = "DB에 저장했습니다. 열린 엑셀을 닫고 로컬 내보내기로 사본을 갱신해주세요."
+        self.copy_error = " · ".join(dict.fromkeys(self._copy_errors.values()))
         value["copyError"] = " · ".join(filter(None, (value.get("copyError"), self.copy_error)))
         return value
 
-    def verify_server(self):
+    def server_info(self, *, force=False):
+        """Cache capabilities, never business records or authorization results."""
+        cached = self._server_info_cache
+        if not force and cached and cached[0] is self.api and cached[1] == self.api.url and monotonic() - cached[2] < 300:
+            return copy.deepcopy(cached[3])
+        self._server_info_cache = None
+        self.report_progress("서버 연결 확인 중…")
         info = self.api.info()
+        if info.get("customerDataReady") is True and info.get("requestDeletionSync") is True:
+            self._server_info_cache = (self.api, self.api.url, monotonic(), copy.deepcopy(info))
+        return info
+
+    def verify_server(self):
+        info = self.server_info()
         require(info.get("version") == 5 and info.get("connectionMode") == "device-auth"
                 and info.get("customerDataReady") is True,
                 "서버를 API v5로 업데이트해주세요. 기존 자료는 보존됩니다.")
@@ -801,6 +847,8 @@ class Manager(SoldNumbers, SalesWorkspace):
         snapshot_id, total, watermark, received = None, None, None, 0
         snapshot = field == "requests" and self.request_snapshot
         for _ in range(100):
+            label = "견적요청" if field == "requests" else "판매자료"
+            self.report_progress(f"{label} 가져오는 중… · {_ + 1}번째")
             extra = {"snapshot":True, **({"snapshotId":snapshot_id} if snapshot_id else {})} if snapshot else {}
             response = self.api.call(action, afterSequence=cursor, **extra)
             page = response.get(field)
@@ -918,6 +966,8 @@ class Manager(SoldNumbers, SalesWorkspace):
         self.verify_server()
         recovery_error = ""
         try:
+            if self.vault.preference("quote_write_pending"):
+                self.report_progress("이전 견적 저장 결과를 확인하는 중…")
             self._resume_quote_write()
         except OSError:
             pass
@@ -928,16 +978,18 @@ class Manager(SoldNumbers, SalesWorkspace):
         # A pending deletion may be retried without touching an unrelated sale edit.
         if any(op["action"] == "close_request" for op in self.vault.pending()):
             try:
+                self.report_progress("이전 삭제 처리 결과를 확인하는 중…")
                 self.flush(actions={"close_request"})
             except AuthenticationError:
                 raise
             except UserError as error:
                 recovery_error = str(error)
         requests, cursor, deleted = self._pages("list_requests", "requests", inbox_only=True)
+        self.report_progress("받은 견적요청을 PC에 저장하는 중…")
         self.vault.replace_requests(requests, cursor, deleted,
                                     quote_read_mode=self.quote_read_mode, authoritative=True)
         self.inbox_requests = [r for r in requests if r.get("status", "신규") == "신규"]
-        self._prefetch_sold_numbers()
+        # Sale numbering is prepared by sales/payment actions, not inbox reads.
         value = self.local_copy_view()
         value["copyError"] = " · ".join(filter(None, (value.get("copyError"), recovery_error)))
         return value
@@ -1061,6 +1113,7 @@ class Manager(SoldNumbers, SalesWorkspace):
             integer(bucket.get("knownProfit"), -9007199254740991)
             require(bucket["unknownProfitOrders"] <= bucket["orders"])
         return report
+
 
 
 
