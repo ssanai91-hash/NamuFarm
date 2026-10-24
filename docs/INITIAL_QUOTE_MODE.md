@@ -31,7 +31,7 @@
 
 ## 빌드와 확인
 
-applicationId: com.example.namufarm.original, versionCode: 9, versionName: 1.1.6.
+applicationId: com.example.namufarm.original, versionCode: 10, versionName: 1.1.7.
 기존 초기버전 APK와 같은 서명으로 업데이트한다.
 현재는 GitHub Actions를 실행하지 않고 로컬 환경에서 컴파일한다.
 기존 UI/리소스·DB 스키마 보존을 확인하고, 배포용 서명키가 없는 환경에서는 시험용 APK로 구분한다.
@@ -61,3 +61,7 @@ applicationId: com.example.namufarm.original, versionCode: 9, versionName: 1.1.6
 - 독립 DB `NamuFarmInquiries.db`에 목록·초안·작업·커서를 보관한다. 기존 `NamuFarm.db` v13 및 `NamuFarmQuotes.db` v1은 변경하지 않는다.
 - 완료 후 30일 만료 자료는 불러오기·기기 목록 로드·기기 내 정리 작업에서 제거한다. 정리 작업은 통신/발송하지 않는다.
 - 운영 서버 버전 36을 그대로 사용하며 이번 이식으로 서버를 다시 배포할 필요는 없다.
+
+## 문의 화면 디자인 (1.1.7)
+
+선택한 3안의 선명한 테두리와 색상 구분을 적용한다. 미처리·완료·전체는 실제 건수와 함께 주황·초록·파랑으로 표시하며, 미처리 기본 필터는 유지한다. 문의 상세에는 고객정보·원문·답변 영역의 테두리, 문자 파랑·메일 코럴 버튼, 전화 완료/다시 열기와 처리 이력을 유지한다. 디자인 수정으로 서버 데이터나 발송 동작을 바꾸지 않는다.
