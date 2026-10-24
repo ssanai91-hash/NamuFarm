@@ -10,9 +10,13 @@ Set-Location $PSScriptRoot
 $pythonPath = Join-Path $env:LOCALAPPDATA "Programs\Python\Python312\python.exe"
 $launcher = Get-Command py -ErrorAction SilentlyContinue
 if ($launcher) {
-    $detected = & $launcher.Source -3.12 -c "import sys; print(sys.executable)" 2>$null
-    if ($LASTEXITCODE -eq 0 -and $detected) {
-        $pythonPath = "$detected".Trim()
+    try {
+        $detected = & $launcher.Source -3.12 -c "import sys; print(sys.executable)" 2>$null
+        if ($LASTEXITCODE -eq 0 -and $detected) {
+            $pythonPath = "$detected".Trim()
+        }
+    } catch {
+        # A launcher may exist without a Python 3.12 installation.
     }
 }
 if (-not (Test-Path $pythonPath)) {
