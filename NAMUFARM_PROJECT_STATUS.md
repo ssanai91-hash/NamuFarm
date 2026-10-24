@@ -65,7 +65,7 @@
 ## 4. 미완료 또는 사용자가 확인할 항목
 
 - [x] **Android 문의처리 코드·로컬 APK 빌드:** Android 기준은 `restore/android-initial-20260927`, 커밋 `532c20b`. 견적 → 문의처리 → 매매 → 농원·묘목 구성. 기존 앱의 기기 인증과 서버 버전 36 문의 API를 사용한다. 문의는 백업 제외 영역의 독립 `NamuFarmInquiries.db` v1(4개 테이블)로 보관하며 기존 농원/주문 DB·견적 DB·공식견적서를 보존한다. 초안·UUID·요청 본문을 통신 전에 저장하고 결과 불명은 자동 재발송하지 않는다. main의 Room v20 마이그레이션을 초기 앱에 적용하지 않았다.
-- [ ] **Android 사용자 확인·업데이트 서명:** `NamuFarm-original-1.1.6-inquiry-test.apk`(또는 ZIP)로 확인한다. 로컬 `assembleDebug` 및 패키지·버전·v2 서명 검증 완료. 배포용 서명키가 없어 디버그 서명이며 설치된 초기버전과 서명 일치 여부는 미확인이다. 서명 불일치 시 기존 앱을 삭제하지 않는다. 문의 불러오기/검색·필터/초안 유지/원문·이력/문자·메일/나피 상호 반영/기존 자료 보존은 실제 기기 확인 대상이다.
+- [ ] **Android 사용자 확인·업데이트 서명:** 초기 앱 백업키를 복구해 기존 1.1.3·1.1.5 APK와 인증서 일치를 확인했다. 로컬 `assembleRelease` 및 lintVital 통과 후 동일 인증서로 `NamuFarm-initial-1.1.6-update.apk`(및 ZIP)를 전달했다. 패키지 `com.example.namufarm.original`, versionCode 9, debuggable=false, 서명·정렬 검증 완료. 앞선 `inquiry-test.apk`는 업데이트에 사용하지 않는다. 실기기 설치·기존 자료 유지·문의 불러오기/발송·나피 상호 반영은 사용자 확인 대상이다. 설치 실패 시 앱 삭제로 해결하지 않는다.
 
 - [x] **나피 Windows 폴더 배포본 생성 (2026-10-24):** 빌드 소스 `8617bb9`. GitHub Actions·Wine을 사용하지 않고 MinGW로 Windows x64 실행기를 컴파일하고 공식 Python 3.12.10 임베디드 실행환경·Windows 의존성 휠을 묶어 `NamuFarm-PC-Windows-x64.zip`(약 256 MiB)을 생성·전달했다. ZIP 전체를 풀고 `NamuFarm-PC.exe`와 `_runtime`을 함께 유지한다. 기존 나피 업무 코드는 보존했다. 컴파일·PE/DLL 구성·ZIP 무결성만 확인했으며 실제 Windows 화면·운영 서버·문자/메일은 사용자 확인 대상이다. 앞선 ‘Windows EXE 미제작’ 기록은 이 배포본 생성 이전의 상태다.
 
@@ -116,3 +116,11 @@
 관련 참고: [두 장부 전환 안내](docs/TWO_WORKBOOK_CUTOVER.md), [PC 실행 안내](desktop/README.md), [홈페이지 실행·게시 안내](website/README.md), [PC 2026-10-21 UX 보완 기록](desktop/UX_POLISH_20261021.md).
 
 **보존 원칙:** 기존 프로젝트 지침은 그대로 사용한다. 이 파일은 삭제·초기화·배포를 실행하는 스크립트가 아니라 **인수인계 기록**이다.
+
+### 초기 Android 서명 복구 (2026-10-24)
+
+- 초기 브랜치 서명 절차·인증서 고정 커밋: `eab4e4a`. APK 기능 소스는 `532c20b`의 1.1.6과 같다.
+- 보관된 `NamuFarm-signing-backup-20261019.zip`의 초기 앱 키는 기존 초기 1.1.3·1.1.5와 인증서가 일치한다. main용 `NamuFarm-Android-Signing-Backup.zip`의 키와 다르다.
+- 초기 앱 인증서 SHA-256: `a31a78a895be8f89bacb2c7b355f413e1cacecfbfd769b257801fcb619e616e1`.
+- 업데이트용 서명 APK: `NamuFarm-initial-1.1.6-update.apk`, SHA-256 `0f8f2f78fae0520155d463b828efb40312305a4ad06d7f2d56ab4f0a33da224d`.
+- 키와 비밀번호는 저장소에 넣지 않는다. 초기 브랜치의 `scripts/sign_initial_apk.py`로 이전 APK·고정 인증서·패키지·상향 버전을 검사한다. GitHub Actions와 실제 고객 발송은 수행하지 않았다.
