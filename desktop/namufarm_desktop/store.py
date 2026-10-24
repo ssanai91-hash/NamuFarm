@@ -157,6 +157,9 @@ class Vault:
             credentials = {**legacy_keys, "deviceToken": os.urandom(32).hex(), "paired": False, "url": url}
             db.execute("DELETE FROM cache")
             db.execute("DELETE FROM outbox")
+            for table in ('inquiry_records', 'inquiry_drafts', 'inquiry_operations', 'inquiry_meta'):
+                if db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,)).fetchone():
+                    db.execute(f"DELETE FROM {table}")
             db.execute("DELETE FROM config WHERE name='snapshot' OR name LIKE 'workspace:%'")
             db.execute("UPDATE config SET value=? WHERE name='credentials'",
                        (self._seal(credentials, "credentials"),))
@@ -304,3 +307,4 @@ class Vault:
                 # Server retention must never silently delete this PC's sales history.
                 if expired:
                     db.execute("DELETE FROM cache WHERE kind=? AND id=?", (kind, index))
+

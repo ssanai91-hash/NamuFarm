@@ -14,7 +14,9 @@ MAX_RESPONSE = 8 * 1024 * 1024
 # Allow the server's 15-second lock wait plus connection/startup overhead.
 # urllib applies this to blocking I/O, not the entire redirect/request chain.
 REQUEST_TIMEOUT = 75
-ACTION_LABELS = {"connect_app": "서버 재연결", "pair_device": "PC 연결", "close_request": "문의 삭제", "save_sale": "판매 저장", "delete_sale": "주문 삭제",
+ACTION_LABELS = {"list_customer_inquiries": "고객문의 불러오기", "save_inquiry_reply": "문의 답변 저장",
+                 "send_inquiry_reply": "문의 답변 발송", "inquiry_sms_status": "문의 문자 결과 확인",
+                 "set_inquiry_status": "문의 상태 저장", "connect_app": "서버 재연결", "pair_device": "PC 연결", "close_request": "문의 삭제", "save_sale": "판매 저장", "delete_sale": "주문 삭제",
                  "update_request_status": "견적 발송 상태 저장", "email_profile": "메일 발신 계정 확인",
                  "send_quote_email": "견적 메일 전송", "send_sales_report_email": "매출 엑셀 메일 전송",
                  "sms_profile": "문자 발신 설정 확인",
@@ -58,6 +60,8 @@ class ScriptApi:
         label = "서버 보안 확인" if payload is None else ACTION_LABELS.get(payload.get("action"), "서버 요청")
 
         def failure(reason):
+            if payload is not None and payload.get("action") in ("save_inquiry_reply", "send_inquiry_reply", "set_inquiry_status", "inquiry_sms_status"):
+                return NetworkError(f"{label} 중 {reason} 답변과 작업 ID를 보관했습니다. 고객문의의 결과 확인으로 확인해주세요.")
             if payload is not None and payload.get("action") == "send_sales_report_email":
                 return NetworkError(f"매출 엑셀은 저장했습니다. 메일 전송 중 {reason} 전송 결과를 확인하지 못했으니 받은편지함을 확인한 뒤 재시도해주세요.")
             return NetworkError(f"{label} 중 {reason} 로컬 기록과 전송 대기를 유지합니다. '지금 동기화'로 재시도해주세요.")
@@ -118,6 +122,7 @@ class ScriptApi:
         if not re.fullmatch(r"[a-f0-9]{64}", self.token):
             raise UserError("PC 기기 연결을 먼저 완료해주세요.")
         return self._send({"action": action, "deviceToken": self.token, **fields})
+
 
 
 

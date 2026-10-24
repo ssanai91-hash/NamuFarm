@@ -35,6 +35,7 @@ function doPost(e) {
       else if (body.action === 'list_customer_inquiries') value = listCustomerInquiries_(body);
       else if (body.action === 'save_inquiry_reply') value = saveInquiryReply_(body);
       else if (body.action === 'send_inquiry_reply') value = sendInquiryReply_(body);
+      else if (body.action === 'set_inquiry_status') value = setInquiryStatus_(body);
       else if (body.action === 'inquiry_sms_status') value = inquirySmsStatus_(body);
       else if (body.action === 'snapshot_requests') value = snapshotRequests_(body);
       else if (body.action === 'update_request_status') value = updateRequestStatus_(body);
@@ -428,6 +429,7 @@ function revokeDevice(deviceHash) {
     }
   });
 }
+
 
 
 

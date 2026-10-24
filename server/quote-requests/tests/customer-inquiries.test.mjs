@@ -69,11 +69,11 @@ test('committed-but-unconfirmed retries reuse receipt across Korean New Year; pe
 test('draft edits conflict safely; successful email send completes once; uncertain sends never auto-resend',()=>{
   const f=fixture();f.context.setupCustomerInquiries();f.post(f.body(1));
   const draft={requestId:uuid(1),eventId:uuid(10),revision:1,replyText:'답변입니다.',replyChannel:'email'};
-  const saved=f.context.saveInquiryReply_(draft);assert.equal(saved.inquiry.status,'답변 대기');
+  const saved=f.context.saveInquiryReply_(draft);assert.equal(saved.inquiry.status,'open');
   assert.equal(f.context.saveInquiryReply_(draft).duplicate,true);
   assert.throws(()=>f.context.saveInquiryReply_({...draft,eventId:uuid(11)}),e=>e.code==='CONFLICT');
   const send={requestId:uuid(1),deliveryId:uuid(12),revision:saved.inquiry.revision};
-  assert.equal(f.context.sendInquiryReply_(send).inquiry.status,'답변 완료');
+  assert.equal(f.context.sendInquiryReply_(send).inquiry.status,'closed');
   assert.equal(f.context.sendInquiryReply_(send).duplicate,true);assert.equal(f.mailCount(),1);
   f.post(f.body(2));const another=f.context.saveInquiryReply_({...draft,requestId:uuid(2),eventId:uuid(20)});
   f.failMail();const uncertain={requestId:uuid(2),deliveryId:uuid(21),revision:another.inquiry.revision};
@@ -84,11 +84,30 @@ test('SMS acceptance stays pending until confirmed; expiry removes personal data
   const f=fixture();f.context.setupCustomerInquiries();f.post(f.body(1));f.post(f.body(2));
   const draft=f.context.saveInquiryReply_({requestId:uuid(1),eventId:uuid(30),revision:1,replyText:'문자 답변입니다.',replyChannel:'sms'});
   const sent=f.context.sendInquiryReply_({requestId:uuid(1),deliveryId:uuid(31),revision:draft.inquiry.revision});
-  assert.equal(sent.inquiry.status,'답변 대기');assert.equal(sent.inquiry.delivery.state,'pending');
-  const complete=f.context.inquirySmsStatus_({requestId:uuid(1)});assert.equal(complete.inquiry.status,'답변 완료');assert.equal(f.smsCount(),1);
+  assert.equal(sent.inquiry.status,'open');assert.equal(sent.inquiry.delivery.state,'pending');
+  const complete=f.context.inquirySmsStatus_({requestId:uuid(1)});assert.equal(complete.inquiry.status,'closed');assert.equal(f.smsCount(),1);
   f.advance('2027-02-02T00:00:00Z');f.context.purgeExpiredInquiries();
   const updates=f.context.listCustomerInquiries_({afterSequence:complete.inquiry.sequence});assert.equal(updates.inquiries.length,1);
   assert.equal(updates.inquiries[0].expired,true);assert.equal(updates.inquiries[0].inquiry,undefined);
-  assert.equal(f.context.listCustomerInquiries_({afterSequence:0}).inquiries.find(i=>i.requestId===uuid(2)).status,'답변 대기');
+  assert.equal(f.context.listCustomerInquiries_({afterSequence:0}).inquiries.find(i=>i.requestId===uuid(2)).status,'open');
   const rows=[...f.books.values()][0].sheets[0].rows;assert.equal(rows[1][6],'');assert.equal(rows[1][9],'');assert.equal(rows[1][18],'{"expired":true}');
+});
+
+test('open/closed status actions preserve reply history, support phone resolution and legacy statuses',()=>{
+  const f=fixture();f.context.setupCustomerInquiries();f.post(f.body(1));
+  const draft=f.context.saveInquiryReply_({requestId:uuid(1),eventId:uuid(40),revision:1,replyText:'첫 답변',replyChannel:'email'});
+  const sent=f.context.sendInquiryReply_({requestId:uuid(1),deliveryId:uuid(41),revision:draft.inquiry.revision});
+  assert.equal(sent.inquiry.status,'closed');assert.equal(sent.inquiry.history[0].text,'첫 답변');
+  const change={requestId:uuid(1),eventId:uuid(42),revision:sent.inquiry.revision,status:'open',note:'추가 상담'};
+  const reopened=f.context.setInquiryStatus_(change);assert.equal(reopened.inquiry.status,'open');
+  assert.equal(f.context.setInquiryStatus_(change).duplicate,true);
+  const newDraft=f.context.saveInquiryReply_({requestId:uuid(1),eventId:uuid(43),revision:reopened.inquiry.revision,replyText:'두 번째 답변',replyChannel:'sms'});
+  assert.equal(newDraft.inquiry.history[0].text,'첫 답변');assert.equal(f.mailCount(),1);
+  assert.equal(f.context.sendInquiryReply_({requestId:uuid(1),deliveryId:uuid(41),revision:draft.inquiry.revision}).duplicate,true);
+  assert.equal(f.mailCount(),1);
+  const phone=f.context.setInquiryStatus_({requestId:uuid(1),eventId:uuid(44),revision:newDraft.inquiry.revision,status:'closed',note:'전화 안내 완료'});
+  assert.equal(phone.inquiry.status,'closed');assert.equal(phone.inquiry.history.at(-1).note,'전화 안내 완료');
+  assert.equal(f.post({action:'set_inquiry_status',requestId:uuid(1)}).code,'UNAUTHORIZED');
+  const row=[...f.books.values()][0].sheets[0].rows[1];row[10]='답변 완료';
+  assert.equal(f.context.listCustomerInquiries_({afterSequence:0}).inquiries[0].status,'closed');
 });

@@ -36,7 +36,7 @@ function secureServiceInfo_() {
     receiptFormat:'NAMU-YYYYMMDD-NNNN',receiptTimeZone:'Asia/Seoul',connectionFile:true,requestSnapshot:true,
     connectionAuth:'auto-v1',quoteReadMode:twoBookActive_()?'annual-two-tabs':'legacy-storage',legacyDeviceAuth:true,
     quoteEmail:true,quoteEmailSender:QUOTE_SENDER_EMAIL,salesReportEmail:true,
-    customerInquiry:1,customerInquiryReady:typeof customerInquiryReady_==='function' && customerInquiryReady_(),
+    customerInquiry:1,customerInquiryWorkflow:2,customerInquiryReady:typeof customerInquiryReady_==='function' && customerInquiryReady_(),
     quoteSms:true,quoteSmsProvider:'SOLAPI',soldNumberReservation:1,soldDisplayNumbers:1,
     commerceStates:['입금확인','배송완료','구매취소']};
 }
@@ -747,6 +747,7 @@ function purgeExpiredCustomerData() {
     });SpreadsheetApp.flush();
   });
 }
+
 
 
 

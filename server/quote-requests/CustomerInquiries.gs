@@ -94,8 +94,8 @@ function inquiryChange_(record,raw,eventId) {
 function inquiryReceipt_(row) {return {kind:'customer_inquiry',requestId:String(row[IC.id]),inquiryNumber:String(row[IC.number]),createdAt:String(row[IC.created])};}
 function inquiryResponse_(row) {
   const raw=JSON.parse(row[IC.raw]);
-  const base=Object.assign(inquiryReceipt_(row),{sequence:Number(row[IC.sequence]),revision:Number(row[IC.revision]),updatedAt:String(row[IC.updated]),status:String(row[IC.status])});
-  return raw.expired?Object.assign(base,{expired:true}):Object.assign(base,{inquiry:raw.inquiry,reply:raw.reply,delivery:raw.delivery||null,answeredAt:String(row[IC.answered]||'')});
+  const base=Object.assign(inquiryReceipt_(row),{sequence:Number(row[IC.sequence]),revision:Number(row[IC.revision]),updatedAt:String(row[IC.updated]),status:inquiryStatus_(row),lastEventId:String(row[IC.event]||'')});
+  return raw.expired?Object.assign(base,{expired:true}):Object.assign(base,{inquiry:raw.inquiry,reply:raw.reply,delivery:raw.delivery||null,history:raw.history||[],answeredAt:String(row[IC.answered]||'')});
 }
 function validateInquiry_(raw) {
   assert_(raw && typeof raw==='object' && !Array.isArray(raw),'INVALID');
@@ -121,8 +121,8 @@ function submitCustomerInquiry_(body) {
     const props=PropertiesService.getScriptProperties(),created=new Date().toISOString(),day=receiptDay_(created),key='INQUIRY_COUNTER:'+day;
     const floor=rows.reduce((max,r)=>String(r.row[IC.number]).startsWith('INQ-'+day+'-')?Math.max(max,Number(String(r.row[IC.number]).split('-')[2])||0):max,0);
     const stored=Number(props.getProperty(key)||0),count=Math.max(stored,floor)+1;assert_(Number.isSafeInteger(count) && count>0,'NOT_READY');props.setProperty(key,String(count));
-    const sheet=inquirySheet_(day.slice(0,4),true),raw={inquiry:input,reply:{text:'',channel:input.customerEmail?'email':'sms'},delivery:null};
-    const row=[input.requestId,'INQ-'+day+'-'+String(count).padStart(4,'0'),inquirySequence_(),created,receiptTime_(created),input.category,cell_(input.customerName),cell_(input.customerPhone),cell_(input.customerEmail),cell_(input.message),'답변 대기','',raw.reply.channel,'',created,1,'',body.fingerprint,JSON.stringify(raw)];
+    const sheet=inquirySheet_(day.slice(0,4),true),raw={inquiry:input,reply:{text:'',channel:input.customerEmail?'email':'sms'},delivery:null,history:[]};
+    const row=[input.requestId,'INQ-'+day+'-'+String(count).padStart(4,'0'),inquirySequence_(),created,receiptTime_(created),input.category,cell_(input.customerName),cell_(input.customerPhone),cell_(input.customerEmail),cell_(input.message),'open','',raw.reply.channel,'',created,1,'',body.fingerprint,JSON.stringify(raw)];
     inquiryWrite_(sheet,sheet.getLastRow()+1,row);return Object.assign(inquiryReceipt_(row),{duplicate:false});
   });
 }
@@ -148,7 +148,10 @@ function saveInquiryReply_(body) {
     assert_(Number(record.row[IC.revision])===body.revision,'CONFLICT');
     assert_(!raw.delivery || ['sent','success','failed'].includes(raw.delivery.state),'CONFLICT');
     assert_(channel!=='email' || raw.inquiry.customerEmail,'INVALID');
-    raw.reply={text:text,channel:channel};raw.delivery=null;record.row[IC.status]='답변 대기';record.row[IC.answered]='';
+    if(raw.delivery && !(raw.history||[]).some(h=>h.id===raw.delivery.id)){
+      raw.history=raw.history||[];raw.history.push({kind:'reply',id:raw.delivery.id,text:raw.reply.text,channel:raw.reply.channel,at:raw.delivery.startedAt||record.row[IC.updated],state:raw.delivery.state});
+    }
+    raw.reply={text:text,channel:channel};raw.delivery=null;record.row[IC.status]='open';record.row[IC.answered]='';
     inquiryChange_(record,raw,body.eventId);return {inquiry:inquiryResponse_(record.row),duplicate:false};
   });
 }
@@ -158,18 +161,20 @@ function sendInquiryReply_(body) {
   assert_(INQUIRY_UUID.test(body.deliveryId) && Number.isSafeInteger(body.revision),'INVALID');
   return lock_(()=>{
     const record=inquiryRecord_(body.requestId),raw=JSON.parse(record.row[IC.raw]);assert_(!raw.expired,'CONFLICT');
-    if(raw.delivery && raw.delivery.id===body.deliveryId)return {inquiry:inquiryResponse_(record.row),duplicate:true};
+    if(raw.delivery && raw.delivery.id===body.deliveryId || (raw.history||[]).some(h=>h.kind==='reply' && h.id===body.deliveryId))return {inquiry:inquiryResponse_(record.row),duplicate:true};
     assert_(Number(record.row[IC.revision])===body.revision && raw.reply.text.length>0 && (!raw.delivery || raw.delivery.state==='failed'),'CONFLICT');
     const message=raw.reply.channel==='email'?inquiryMailBody_(raw,record.row[IC.number]):'[나무팜 고객문의 답변]\n문의번호: '+record.row[IC.number]+'\n\n'+raw.reply.text;
     if(raw.reply.channel==='email'){assert_(raw.inquiry.customerEmail && MailApp.getRemainingDailyQuota()>0,'NOT_READY');}
     else assert_(quoteSmsSettings_().configured,'NOT_READY');
     assert_(raw.reply.channel!=='sms' || message.length<=1000,'INVALID');
+    raw.history=raw.history||[];
+    raw.history.push({kind:'reply',id:body.deliveryId,text:raw.reply.text,channel:raw.reply.channel,at:new Date().toISOString(),state:'sending'});
     raw.delivery={id:body.deliveryId,channel:raw.reply.channel,state:'sending',startedAt:new Date().toISOString()};
     inquiryChange_(record,raw,body.deliveryId);
     try {
       if(raw.reply.channel==='email') {
         MailApp.sendEmail({to:raw.inquiry.customerEmail,subject:'[나무팜] 고객문의 답변 · '+record.row[IC.number],body:message,name:'나무팜농원'});
-        raw.delivery.state='sent';raw.delivery.sentAt=new Date().toISOString();record.row[IC.status]='답변 완료';record.row[IC.answered]=raw.delivery.sentAt;
+        raw.delivery.state='sent';raw.delivery.sentAt=new Date().toISOString();record.row[IC.status]='closed';record.row[IC.answered]=raw.delivery.sentAt;
       } else {
         // Existing SOLAPI validation/authorization; no quote request ID/state transition.
         const result=sendQuoteSms_({recipientPhone:raw.inquiry.customerPhone,text:message});
@@ -177,6 +182,7 @@ function sendInquiryReply_(body) {
         raw.delivery.state='pending';raw.delivery.messageId=result.messageId;raw.delivery.sentAt=result.sentAt;
       }
     } catch(_) {raw.delivery.state='unknown';}
+    inquiryHistoryDelivery_(raw);
     inquiryChange_(record,raw,body.deliveryId);return {inquiry:inquiryResponse_(record.row),duplicate:false};
   });
 }
@@ -186,7 +192,8 @@ function inquirySmsStatus_(body) {
     assert_(!raw.expired && raw.delivery && raw.delivery.channel==='sms' && raw.delivery.messageId,'INVALID');
     if(['success','failed'].includes(raw.delivery.state))return {inquiry:inquiryResponse_(record.row)};
     const result=quoteSmsStatus_({messageId:raw.delivery.messageId});raw.delivery.state=result.state;raw.delivery.statusCode=result.statusCode;
-    if(result.success){record.row[IC.status]='답변 완료';record.row[IC.answered]=record.row[IC.answered]||new Date().toISOString();}
+    if(result.success){record.row[IC.status]='closed';record.row[IC.answered]=record.row[IC.answered]||new Date().toISOString();}
+    inquiryHistoryDelivery_(raw);
     inquiryChange_(record,raw,raw.delivery.id);return {inquiry:inquiryResponse_(record.row)};
   });
 }
@@ -194,8 +201,33 @@ function inquirySmsStatus_(body) {
 function purgeExpiredInquiries() {
   if(PropertiesService.getScriptProperties().getProperty('INQUIRY_SETUP')!=='1')return;
   lock_(()=>inquiryRecords_().forEach(record=>{
-    const row=record.row;if(row[IC.status]!=='답변 완료' || !row[IC.answered] || Date.parse(String(row[IC.answered]))+30*86400000>Date.now())return;
-    for(let c=IC.name;c<=IC.message;c++)row[c]='';row[IC.reply]='';row[IC.channel]='';row[IC.status]='보관종료';
+    const row=record.row;if(inquiryStatus_(row)!=='closed' || !row[IC.answered] || Date.parse(String(row[IC.answered]))+30*86400000>Date.now())return;
+    for(let c=IC.name;c<=IC.message;c++)row[c]='';row[IC.reply]='';row[IC.channel]='';row[IC.status]='closed';
     inquiryChange_(record,{expired:true},'');
   }));
+}
+
+
+/** Workflow state is independent of delivery and privacy expiry. Legacy rows are read compatibly. */
+function inquiryStatus_(row) {return ['closed','답변 완료','보관종료'].includes(String(row[IC.status]))?'closed':'open';}
+function inquiryHistoryDelivery_(raw) {
+  const entry=(raw.history||[]).find(h=>h.id===raw.delivery.id);
+  if(entry){entry.state=raw.delivery.state;entry.messageId=raw.delivery.messageId||'';entry.statusCode=raw.delivery.statusCode||'';}
+}
+/** Explicit phone resolution or reopening. Never changes the original question or sends a message. */
+function setInquiryStatus_(body) {
+  assert_(INQUIRY_UUID.test(body.eventId) && Number.isSafeInteger(body.revision) && ['open','closed'].includes(body.status),'INVALID');
+  const note=text_(body.note,500,1);
+  return lock_(()=>{
+    const record=inquiryRecord_(body.requestId),raw=JSON.parse(record.row[IC.raw]);assert_(!raw.expired,'CONFLICT');
+    raw.history=raw.history||[];
+    const previous=raw.history.find(h=>h.id===body.eventId);
+    if(previous){assert_(previous.kind==='status' && previous.status===body.status && previous.note===note,'CONFLICT');return {inquiry:inquiryResponse_(record.row),duplicate:true};}
+    assert_(Number(record.row[IC.revision])===body.revision,'CONFLICT');
+    assert_(!raw.delivery || !['sending','pending'].includes(raw.delivery.state),'CONFLICT');
+    const at=new Date().toISOString();
+    raw.history.push({kind:'status',id:body.eventId,status:body.status,note:note,at:at});
+    record.row[IC.status]=body.status;record.row[IC.answered]=body.status==='closed'?at:'';
+    inquiryChange_(record,raw,body.eventId);return {inquiry:inquiryResponse_(record.row),duplicate:false};
+  });
 }

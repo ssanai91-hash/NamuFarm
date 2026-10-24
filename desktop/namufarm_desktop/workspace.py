@@ -31,6 +31,7 @@ from .domain import SEOUL, profit, require
 from .errors import UserError
 from .shipping_excel import shipping_xls, parse_tracking_xls, export_orders, UPLOAD_SHEET
 from .nursery_ui import NurseryPage, DigitalClock
+from .inquiry_ui import InquiryPage
 from .nursery import NurseryStore
 from .quote_species import SpeciesNameEditor, QuoteSpeciesPicker
 from .list_filters import ListPeriodFilter, first_date
@@ -3636,10 +3637,10 @@ class ShippingExportDialog(QDialog):
 
 
 class SellerWindow(MainWindow):
-    PAGE_REQUESTS, PAGE_QUOTES, PAGE_SALES, PAGE_SHIPPING, PAGE_REPORTS, PAGE_FARMS, PAGE_SPECIES, PAGE_SETTINGS = range(8)
+    PAGE_REQUESTS, PAGE_QUOTES, PAGE_SALES, PAGE_SHIPPING, PAGE_REPORTS, PAGE_FARMS, PAGE_SPECIES, PAGE_INQUIRIES, PAGE_SETTINGS = range(9)
     PAGES = (("견적요청", "INBOX"), ("견적 작업대", "QUOTATIONS"),
              ("판매관리", "ORDERS"), ("배송 · 송장", "FULFILLMENT"), ("매출", "REPORTS"),
-             ("농원관리", "FARMS"), ("묘목관리", "SPECIES"), ("연결 · 설정", "SETTINGS"))
+             ("농원관리", "FARMS"), ("묘목관리", "SPECIES"), ("고객문의", "INQUIRIES"), ("연결 · 설정", "SETTINGS"))
 
     def __init__(self, vault_path=None):
         self.workspace_ready = False
@@ -3694,7 +3695,7 @@ class SellerWindow(MainWindow):
         for index, (title, _) in enumerate(self.PAGES):
             widget = NavigationButton(title)
             widget.clicked.connect(lambda checked=False, i=index: self.navigate(i))
-            icons = ("requests", "confirmed", "orders", "shipping", "reports", "farm", "leaf", "settings")
+            icons = ("requests", "confirmed", "orders", "shipping", "reports", "farm", "leaf", "requests", "settings")
             set_button_icon(widget, icons[index], "#e0ebe3", 22)
             widget.setCheckable(True)
             self.nav.append(widget)
@@ -3806,6 +3807,8 @@ class SellerWindow(MainWindow):
         self.species_page = NurseryPage(self, 'species')
         self.stack.addWidget(self.farms_page)
         self.stack.addWidget(self.species_page)
+        self.inquiries_page = InquiryPage(self)
+        self.stack.addWidget(self.inquiries_page)
         self.stack.addWidget(old_pages[3])
         for index in range(self.stack.count()):
             self.stack.widget(index).setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Ignored)
@@ -4286,6 +4289,9 @@ class SellerWindow(MainWindow):
 
     def navigate(self, index):
         self.stack.setCurrentIndex(index)
+        if index == self.PAGE_INQUIRIES:
+            self.inquiries_page.refresh_local()
+        self.sync_button.setText("불러오기" if index == self.PAGE_INQUIRIES else "가져오기")
         if index in (self.PAGE_FARMS, self.PAGE_SPECIES):
             # Do not rebuild the hidden species/inventory page when opening farms.
             page = self.farms_page if index == self.PAGE_FARMS else self.species_page
@@ -4462,6 +4468,8 @@ class SellerWindow(MainWindow):
         self.stack.setEnabled(self.task is None)
         for page in (self.farms_page, self.species_page):
             page.update_controls()
+        self.inquiries_page.refresh_local()
+        self.inquiries_page.update_controls()
         self.manual_quote_button.setEnabled(ready)
         self.request_quote_button.setEnabled(ready and self.request_table.currentRow() >= 0)
         selected_draft = self.draft_table.currentRow()
@@ -4514,6 +4522,7 @@ class SellerWindow(MainWindow):
         super().apply_view(value)
         if self.workspace_ready:
             self.refresh_nursery()
+            self.inquiries_page.refresh_local()
             self.refresh_workspace()
             self.refresh_request_notifications()
 
@@ -5177,7 +5186,7 @@ class SellerWindow(MainWindow):
     def manual_sync(self):
         if getattr(self, "demo_mode", False) or not self.manager or not self.allow_discard():
             return
-        if self.stack.currentIndex() in (self.PAGE_FARMS, self.PAGE_SPECIES):
+        if self.stack.currentIndex() in (self.PAGE_FARMS, self.PAGE_SPECIES, self.PAGE_INQUIRIES):
             self.stack.currentWidget().sync()
             return
         if self.stack.currentIndex() in (self.PAGE_SALES, self.PAGE_SHIPPING):
@@ -5188,11 +5197,12 @@ class SellerWindow(MainWindow):
                      lambda: self.manager.connect(include_sales=include_sales))
 
     def auto_sync(self):
-        if self.stack.currentIndex() in (self.PAGE_FARMS, self.PAGE_SPECIES, self.PAGE_SALES, self.PAGE_SHIPPING, self.PAGE_REPORTS):
+        if self.stack.currentIndex() in (self.PAGE_FARMS, self.PAGE_SPECIES, self.PAGE_INQUIRIES, self.PAGE_SALES, self.PAGE_SHIPPING, self.PAGE_REPORTS):
             return
         if self.manager and self.data["paired"] and self.auto_check.isChecked() and not self.task and not self.dirty and not self.conflict:
             pull = self.manager.sync if self.stack.currentIndex() in (self.PAGE_SALES, self.PAGE_SHIPPING, self.PAGE_REPORTS) else self.manager.sync_requests
             self.run_job("AUTO SYNC  >  서버 동기화 중…", pull)
+
 
 
 
