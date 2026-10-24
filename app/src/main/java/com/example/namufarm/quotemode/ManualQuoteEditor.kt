@@ -379,16 +379,31 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
                             Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp)) {
                                 Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    Text("${index + 1}. ${row.name.ifBlank { "새 품목" }}", Modifier.weight(1f),
+                                    Surface(shape = androidx.compose.foundation.shape.CircleShape,
+                                        color = editorGreen, modifier = Modifier.size(32.dp)) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Text("${index + 1}", color = Color.White, fontSize = 15.sp,
+                                                fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+                                    Text(row.name.ifBlank { "새 품목" }, Modifier.weight(1f),
                                         fontSize = 17.sp, fontWeight = FontWeight.SemiBold,
                                         maxLines = 2, overflow = TextOverflow.Ellipsis)
-                                    Surface(shape = RoundedCornerShape(50), color = Color(0xFFE3EEE6)) {
-                                        Text("${row.quantity.ifBlank { "0" }}주", Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                            color = editorGreen, fontSize = 14.sp)
-                                    }
                                     if (manualEntry) TextButton(onClick = {
                                         expandedRow = if (expandedRow == index) -1 else index
                                     }, enabled = !saving) { Text("수정") }
+                                    Surface(shape = RoundedCornerShape(6.dp), color = Color(0xFFE3EEE6),
+                                        border = BorderStroke(1.dp, editorGreen),
+                                        modifier = Modifier.width(84.dp).height(42.dp)
+                                            .semantics { contentDescription = "주문 수량 ${row.quantity.ifBlank { "0" }}주" }) {
+                                        Box(contentAlignment = Alignment.CenterEnd) {
+                                            Text("${row.quantity.ifBlank { "0" }}주",
+                                                Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                                                textAlign = TextAlign.End, color = editorGreen, fontSize = 18.sp,
+                                                fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false,
+                                                overflow = TextOverflow.Ellipsis)
+                                        }
+                                    }
                                 }
                                 val specification = requestedItems.getOrNull(index)
                                     ?.takeIf { it.species == row.name }?.specification ?: row.spec
@@ -660,6 +675,7 @@ private fun ManualField(label: String, value: String, onValue: (String) -> Unit,
     OutlinedTextField(value, { if (keyboard != KeyboardType.Number || it.all(Char::isDigit)) onValue(it.take(if (keyboard == KeyboardType.Number) 10 else limit)) }, label = { Text(label) },
         singleLine = true, enabled = !saving, keyboardOptions = KeyboardOptions(keyboardType = keyboard), modifier = Modifier.fillMaxWidth())
 }
+
 
 
 
