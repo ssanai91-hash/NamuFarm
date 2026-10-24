@@ -16,8 +16,8 @@ android {
         applicationId = "com.example.namufarm.original"
         minSdk = 24
         targetSdk = 36
-        versionCode = 13
-        versionName = "1.1.10"
+        versionCode = 14
+        versionName = "1.1.11"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -81,5 +81,6 @@ dependencies {
 base {
     archivesName.set("NamuFarm")
 }
+
 
 
