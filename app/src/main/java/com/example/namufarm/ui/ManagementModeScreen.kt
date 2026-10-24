@@ -26,6 +26,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import com.example.namufarm.quotemode.ModeDesign
+import androidx.compose.material.icons.filled.CloudSync
+import androidx.compose.ui.text.style.TextOverflow
 import com.example.namufarm.data.InventoryDisplayRow
 import com.example.namufarm.viewmodel.ManagementViewModel
 
@@ -72,9 +75,9 @@ fun ManagementModeScreen(viewModel: ManagementViewModel, onBack: () -> Unit) {
                         viewModel.syncSpeciesMasterFromGoogleSheet()
                     }) {
                         Icon(
-                            imageVector = Icons.Default.Refresh,
+                            imageVector = Icons.Default.CloudSync,
                             contentDescription = "마스터 동기화",
-                            tint = Color.White
+                            tint = Color.White, modifier = Modifier.size(20.dp)
                         )
                     }
 
@@ -89,14 +92,22 @@ fun ManagementModeScreen(viewModel: ManagementViewModel, onBack: () -> Unit) {
                         Text("매매모드", color = Color.Black, fontWeight = FontWeight.ExtraBold)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
-                modifier = Modifier.background(
-                    brush = Brush.horizontalGradient(
-                        colors = listOf(Color(0xFF4CAF50), Color(0xFF2E7D32))
-                    )
-                )
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = ModeDesign.farm),
+                windowInsets = WindowInsets(0, 0, 0, 0)
             )
-        }
+        },
+        bottomBar = {
+            if (!uiState.isInputActive) Surface(color = Color.White, shadowElevation = 3.dp) {
+                Button(onClick = { viewModel.activateNewInput() }, enabled = isInputEnabled,
+                    modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(8.dp).heightIn(min = 50.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = ModeDesign.farm),
+                    shape = RoundedCornerShape(8.dp)) {
+                    Text(uiState.selectedSpecies?.let { "${it.speciesName} 새 재고 입력" }
+                        ?: "묘목 선택 후 재고 입력", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        },
+        contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { padding ->
         // ... 아래 화면 내용은 기존 코드 그대로 유지 ... { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding).background(Color(0xFFF2F4F7)).verticalScroll(scrollState)) {
@@ -208,7 +219,7 @@ fun ManagementModeScreen(viewModel: ManagementViewModel, onBack: () -> Unit) {
 
                 GridSelectionMenu(
                     items = uiState.speciesList,
-                    columns = 5,
+                    columns = 3,
                     itemContent = { it.speciesName },
                     isSelected = { it.speciesId == uiState.selectedSpecies?.speciesId },
                     onSelect = { species ->
@@ -220,22 +231,7 @@ fun ManagementModeScreen(viewModel: ManagementViewModel, onBack: () -> Unit) {
             // 🚨 여기까지 덮어쓰기!
 
             if (isInputEnabled && uiState.inventoryList.isNotEmpty()) InventoryListSection(viewModel = viewModel)
-            Button(
-                onClick = { viewModel.activateNewInput() },
-                enabled = isInputEnabled,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp).height(50.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)), shape = RoundedCornerShape(8.dp)
-            ) {
-                Text(uiState.selectedSpecies?.let { "'${it.speciesName}' 추가" } ?: "묘목을 선택해주세요",
-                    fontSize = 16.sp, fontWeight = FontWeight.Bold)
-            }
-
-            Box(modifier = Modifier.alpha(if (uiState.isInputActive) 1f else 0.4f)) {
-                Box {
-                    InventoryInputPane(viewModel = viewModel)
-                    if (!uiState.isInputActive) Box(modifier = Modifier.matchParentSize().clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {})
-                }
-            }
+            if (uiState.isInputActive) InventoryInputPane(viewModel = viewModel)
             Spacer(modifier = Modifier.height(30.dp))
         }
     }
@@ -759,7 +755,7 @@ fun <T> GridSelectionMenu(
                     Box(
                         modifier = Modifier
                             .weight(1f)
-                            .height(48.dp)
+                            .heightIn(min = 64.dp)
                             .background(
                                 if (selected) Color(0xFFE3F2FD) else Color.White,
                                 RoundedCornerShape(8.dp)
@@ -772,21 +768,14 @@ fun <T> GridSelectionMenu(
                             .clickable { onSelect(item) },
                         contentAlignment = Alignment.Center
                     ) {
-                        // 🚨 1. 글자 길이에 따라 폰트 크기를 다르게 줍니다!
-                        val textStr = itemContent(item)
-                        val dynamicFontSize = when {
-                            textStr.length >= 7 -> 9.sp    // 가이즈까향나무 (아주 작게)
-                            textStr.length >= 5 -> 10.sp   // 5~6글자
-                            else -> 12.sp                  // 감, 사과나무 (기본 크기)
-                        }
-
                         Text(
-                            text = textStr,
-                            fontSize = dynamicFontSize,
+                            text = itemContent(item),
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp),
+                            fontSize = 14.sp,
                             textAlign = TextAlign.Center,
-                            maxLines = 1, // 🚨 무조건 1줄로 강제!
-                            softWrap = false, // 🚨 자동 줄바꿈 금지!
-                            letterSpacing = (-0.5).sp, // 🚨 자간을 살짝 좁혀서 공간 확보
+                            maxLines = 2,
+                            softWrap = true,
+                            overflow = TextOverflow.Ellipsis,
                             color = if (selected) Color(0xFF1565C0) else Color.DarkGray,
                             fontWeight = if (selected) selectedTextWeight else FontWeight.Normal
                         )
@@ -945,3 +934,4 @@ fun getChosungFromText(text: String): String {
     }
     return firstChar.toString()
 }
+

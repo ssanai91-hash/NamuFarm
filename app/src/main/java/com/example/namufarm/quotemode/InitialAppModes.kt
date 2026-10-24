@@ -1,6 +1,7 @@
 package com.example.namufarm.quotemode
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.*
@@ -29,7 +30,7 @@ import com.example.namufarm.viewmodel.ManagementViewModel
 import com.example.namufarm.viewmodel.CustomerInquiryViewModel
 import kotlinx.coroutines.launch
 
-/** Original screen functions stay byte-for-byte unchanged inside the added mode navigation. */
+/** Mode navigation preserves the original workflows and uses matching header/tab colors. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun InitialAppModes(management: ManagementViewModel, quote: InitialQuoteViewModel,
@@ -38,14 +39,14 @@ fun InitialAppModes(management: ManagementViewModel, quote: InitialQuoteViewMode
     val scope = rememberCoroutineScope()
     val inbox by quote.uiState.collectAsState()
     val inquiryState by inquiry.state.collectAsState()
-    val colors = listOf(Color(0xFF1565C0), Color(0xFF2E7D32), Color(0xFFEF6C00), Color(0xFF2E7D32))
+    val colors = listOf(ModeDesign.quote, ModeDesign.inquiry, ModeDesign.selling, ModeDesign.farm)
     val labels = listOf("견적", "문의처리", "매매", "농원·묘목")
     val icons = listOf(Icons.Outlined.ReceiptLong, Icons.AutoMirrored.Outlined.Chat,
         Icons.Outlined.Handshake, Icons.Outlined.Park)
     val stackedTabs = LocalDensity.current.fontScale > 1.15f
     fun move(page: Int) { scope.launch { pager.animateScrollToPage(page) } }
     BackHandler(enabled = pager.currentPage != 0) { move(0) }
-    Column(Modifier.fillMaxSize().statusBarsPadding().consumeWindowInsets(WindowInsets.statusBars)) {
+    Column(Modifier.fillMaxSize().background(Color.White).statusBarsPadding().consumeWindowInsets(WindowInsets.statusBars)) {
         Surface(color = Color.White, shadowElevation = 1.dp) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 3.dp, vertical = 2.dp),
                 horizontalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -98,3 +99,4 @@ fun InitialAppModes(management: ManagementViewModel, quote: InitialQuoteViewMode
         }
     }
 }
+

@@ -27,7 +27,7 @@ import com.example.namufarm.data.remote.inquiryLocalTime
 internal object InquiryDesign {
     val ink = Color(0xFF18372B)
     val muted = Color(0xFF5E6C76)
-    val green = Color(0xFF18753F)
+    val green = ModeDesign.inquiry
     val mint = Color(0xFFEFF8F2)
     val blue = Color(0xFF0969C1)
     val sky = Color(0xFFEFF6FF)
@@ -60,16 +60,17 @@ internal fun inquiryFieldColors(color: Color, tint: Color = Color.White) = Outli
 @Composable
 internal fun InquiryChoice(label: String, count: Int, selected: Boolean, color: Color,
                            tint: Color, icon: ImageVector, modifier: Modifier, onClick: () -> Unit) {
-    Surface(color = tint, shape = InquiryDesign.shape,
-        border = BorderStroke(if (selected) 2.dp else 1.dp, color), modifier = modifier) {
+    Surface(color = if (selected) InquiryDesign.mint else Color.White, shape = InquiryDesign.shape,
+        border = BorderStroke(if (selected) 2.dp else 1.dp,
+            if (selected) ModeDesign.inquiry else ModeDesign.line), modifier = modifier) {
         Column(Modifier.selectable(selected = selected, role = Role.Tab, onClick = onClick)
             .heightIn(min = 50.dp).padding(horizontal = 4.dp, vertical = 6.dp),
             horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                Icon(icon, null, tint = color, modifier = Modifier.size(16.dp))
-                Text(label, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = color)
+                Icon(icon, null, tint = if (selected) ModeDesign.inquiry else InquiryDesign.muted, modifier = Modifier.size(16.dp))
+                Text(label, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = if (selected) ModeDesign.inquiry else InquiryDesign.muted)
             }
-            Text("${count}건", fontSize = 12.sp, color = color,
+            Text("${count}건", fontSize = 12.sp, color = if (selected) ModeDesign.inquiry else InquiryDesign.muted,
                 fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal)
         }
     }
@@ -167,3 +168,4 @@ internal fun InquiryChannel(label: String, icon: ImageVector, selected: Boolean,
         }
     }
 }
+

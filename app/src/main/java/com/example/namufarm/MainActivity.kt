@@ -20,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
+import androidx.core.view.WindowCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModelProvider
 import androidx.navigation.compose.NavHost
@@ -56,6 +57,9 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        WindowCompat.getInsetsController(window, window.decorView).isAppearanceLightStatusBars = true
+        @Suppress("DEPRECATION")
+        window.statusBarColor = android.graphics.Color.WHITE
 
         // 1. DB와 DAO 가져오기
         val database = AppDatabase.getDatabase(this)
@@ -173,3 +177,4 @@ fun SplashScreen(onTimeout: () -> Unit) {
         }
     }
 }
+

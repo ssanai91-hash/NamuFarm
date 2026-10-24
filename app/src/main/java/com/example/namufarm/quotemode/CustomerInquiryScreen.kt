@@ -40,6 +40,7 @@ private val Amber600 = InquiryDesign.amber
 private val Canvas = InquiryDesign.canvas
 private val White = Color.White
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CustomerInquiryScreen(viewModel: CustomerInquiryViewModel) {
     val state by viewModel.state.collectAsState()
@@ -58,20 +59,21 @@ fun CustomerInquiryScreen(viewModel: CustomerInquiryViewModel) {
             listOf(row.inquiryNumber, row.inquiry?.customerName, row.inquiry?.customerPhone,
                 row.inquiry?.message).any { it.orEmpty().contains(search.trim(), ignoreCase = true) })
     }
-    Column(Modifier.fillMaxSize().background(Canvas).padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Icon(Icons.AutoMirrored.Outlined.Chat, null, tint = InquiryDesign.blue, modifier = Modifier.size(28.dp))
-            Text("고객문의", Modifier.weight(1f), fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, color = Forest800)
-            OutlinedButton(onClick = viewModel::refresh, enabled = !state.busy,
-                shape = InquiryDesign.shape, border = BorderStroke(1.5.dp, InquiryDesign.blue),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                modifier = Modifier.heightIn(min = 46.dp),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = InquiryDesign.blue, containerColor = InquiryDesign.sky)) {
-                Icon(Icons.Outlined.Refresh, null, Modifier.size(19.dp)); Spacer(Modifier.width(5.dp))
-                Text("불러오기", fontSize = 15.sp, fontWeight = FontWeight.Bold)
-            }
-        }
+    Scaffold(containerColor = Canvas, contentWindowInsets = WindowInsets(0, 0, 0, 0), topBar = {
+        TopAppBar(title = { Text("나무팜 문의처리", fontWeight = FontWeight.ExtraBold) },
+            windowInsets = WindowInsets(0, 0, 0, 0),
+            colors = TopAppBarDefaults.topAppBarColors(containerColor = ModeDesign.inquiry,
+                titleContentColor = Color.White, actionIconContentColor = Color.White),
+            actions = {
+                TextButton(onClick = viewModel::refresh, enabled = !state.busy,
+                    colors = ButtonDefaults.textButtonColors(contentColor = Color.White)) {
+                    Icon(Icons.Outlined.CloudSync, null, Modifier.size(20.dp))
+                    Spacer(Modifier.width(5.dp))
+                    Text("불러오기", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                }
+            })
+    }) { padding ->
+    Column(Modifier.fillMaxSize().padding(padding).padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             InquiryChoice("미처리", state.rows.count { it.status == "open" }, filter == "open",
                 InquiryDesign.amber, InquiryDesign.honey, Icons.AutoMirrored.Outlined.Chat,
@@ -85,7 +87,9 @@ fun CustomerInquiryScreen(viewModel: CustomerInquiryViewModel) {
         OutlinedTextField(value = search, onValueChange = { search = it; visible = 50 }, singleLine = true,
             placeholder = { Text("이름 · 전화 · 문의 검색", fontSize = 15.sp) },
             leadingIcon = { Icon(Icons.Outlined.Search, null, tint = InquiryDesign.blue) },
-            shape = InquiryDesign.shape, colors = inquiryFieldColors(InquiryDesign.blue, InquiryDesign.sky),
+            shape = InquiryDesign.shape, colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = ModeDesign.inquiry, unfocusedBorderColor = ModeDesign.line,
+                focusedContainerColor = Color.White, unfocusedContainerColor = Color.White),
             modifier = Modifier.fillMaxWidth())
         if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth(), color = InquiryDesign.blue, trackColor = InquiryDesign.sky)
         if (selected == null) state.message?.let { message ->
@@ -113,6 +117,7 @@ fun CustomerInquiryScreen(viewModel: CustomerInquiryViewModel) {
                 }
             }
         }
+    }
     }
     selected?.let { id ->
         val row = state.rows.find { it.requestId == id }
@@ -281,3 +286,4 @@ private fun InquiryDetailDialog(row: CustomerInquiryRemote, state: CustomerInqui
             dismissButton = { TextButton(onClick = { statusTarget = null }) { Text("취소") } })
     }
 }
+

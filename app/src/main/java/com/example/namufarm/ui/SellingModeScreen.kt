@@ -31,6 +31,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.example.namufarm.quotemode.ModeDesign
+import androidx.compose.runtime.saveable.rememberSaveable
 import com.example.namufarm.data.SellingDisplayRow
 import com.example.namufarm.domain.order.ShippingCharge
 import com.example.namufarm.viewmodel.ManagementViewModel
@@ -187,6 +189,9 @@ private fun buildSpecText(
 @Composable
 fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: () -> Unit) {
     val uiState by viewModel.uiState.collectAsState()
+    var showAllStock by rememberSaveable { mutableStateOf(true) }
+    val displayedStock = if (showAllStock) uiState.allSellingInventory else uiState.filteredSellingInventory
+
     val scrollState = rememberScrollState()
     val context = LocalContext.current
 
@@ -290,32 +295,33 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                         modifier = Modifier.clickable { viewModel.forceResetSyncQueue() } // 🚨 요 방아쇠 한 줄만 추가!
                     )
                 },
-                modifier = Modifier.statusBarsPadding(),
-                // 🚨 상단바 전체 배경을 빨간색(0xFFD32F2F)으로 변경!
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFFD32F2F)),
+                windowInsets = WindowInsets(0, 0, 0, 0),
+                // Match the selected trading tab with a calm navy header.
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = ModeDesign.selling),
                 actions = {
                     // 🚨 2. 구글 시트 동기화 버튼 (아이콘 형태) 추가!
                     Button(
                         onClick = { viewModel.syncDataWithGoogleSheet() },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.18f)),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = ModeDesign.selling),
                         shape = RoundedCornerShape(10.dp),
                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.CloudSync,
-                            contentDescription = "동기화",
-                            tint = Color.White
+                            contentDescription = null,
+                            tint = ModeDesign.selling, modifier = Modifier.size(20.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
                             text = "동기화",
-                            color = Color.White,
+                            color = ModeDesign.selling,
                             fontWeight = FontWeight.Bold,
                             fontSize = 12.sp
                         )
                     }
 
-                    // 🚨 흰색 바탕에 검정 글씨로 깔끔하게 튜닝!
+                    Spacer(Modifier.width(8.dp))
+                    // Switch modes using the existing unsaved-cart confirmation.
                     Button(
                         onClick = {
                             if (uiState.estimateCart.isNotEmpty()) {
@@ -463,7 +469,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                                     },
                                     modifier = Modifier.weight(1f).height(48.dp),
                                     colors = ButtonDefaults.buttonColors(
-                                        containerColor = Color(0xFF1976D2), // 파란색
+                                        containerColor = ModeDesign.quote,
                                         contentColor = Color.White
                                     ),
                                     shape = RoundedCornerShape(8.dp)
@@ -484,7 +490,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                                     },
                                     modifier = Modifier.weight(1f).height(48.dp),
                                     colors = ButtonDefaults.buttonColors(
-                                        containerColor = Color(0xFF00897B),
+                                        containerColor = ModeDesign.quote,
                                         contentColor = Color.White
                                     ),
                                     shape = RoundedCornerShape(8.dp)
@@ -514,7 +520,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                                     },
                                     modifier = Modifier.weight(1f).height(48.dp),
                                     colors = ButtonDefaults.buttonColors(
-                                        containerColor = Color(0xFF455A64), // 견적서 진회색 배경
+                                        containerColor = ModeDesign.neutral,
                                         contentColor = Color.White
                                     ),
                                     shape = RoundedCornerShape(8.dp)
@@ -538,7 +544,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                                     },
                                     modifier = Modifier.weight(1f).height(48.dp),
                                     colors = ButtonDefaults.buttonColors(
-                                        containerColor = Color(0xFF2E7D32), // 주문내역 초록색 배경
+                                        containerColor = ModeDesign.neutral,
                                         contentColor = Color.White
                                     ),
                                     shape = RoundedCornerShape(8.dp)
@@ -554,12 +560,16 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                     }
                 }
             }
-        }
+        },
+        contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { padding ->
         Column(
             modifier = Modifier.fillMaxSize().padding(padding).background(Color(0xFFF2F4F7))
                 .verticalScroll(scrollState)
         ) {
+            FilterChip(selected = showAllStock, onClick = { showAllStock = true },
+                label = { Text("전체 재고 (${uiState.allSellingInventory.size})") },
+                modifier = Modifier.padding(horizontal = 8.dp))
             val chosungRows = listOf(
                 listOf("ㄱ", "ㄴ", "ㄷ", "ㄹ", "ㅁ", "ㅂ", "ㅅ"),
                 listOf("ㅇ", "ㅈ", "ㅊ", "ㅋ", "ㅌ", "ㅍ", "ㅎ")
@@ -584,12 +594,13 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             rowItems.forEach { chosung ->
-                                val isSelected = uiState.selectedChosung == chosung
+                                val isSelected = !showAllStock && uiState.selectedChosung == chosung
                                 val hasItems = hasSellingItemsForChosung(uiState.allSellingInventory, chosung)
 
                                 Button(
                                     onClick = {
                                         if (hasItems) {
+                                            showAllStock = false
                                             viewModel.selectChosung(chosung)
                                         }
                                     },
@@ -639,15 +650,16 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            if (uiState.filteredSellingInventory.isEmpty()) {
+            if (displayedStock.isEmpty()) {
                 Text(
-                    "현재 초성에 해당하는 재고가 없습니다.",
+                    if (showAllStock) "등록된 재고가 없습니다. 동기화하거나 농원·묘목에서 재고를 등록해주세요."
+                    else "선택한 초성의 재고가 없습니다. 전체 재고를 눌러 확인해주세요.",
                     modifier = Modifier.fillMaxWidth().padding(30.dp),
                     textAlign = TextAlign.Center,
                     color = Color.Gray
                 )
             } else {
-                uiState.filteredSellingInventory.forEach { item ->
+                displayedStock.forEach { item ->
                     SellingItemRow(item) { qtyToAdd ->
                         viewModel.addToCart(
                             item,
