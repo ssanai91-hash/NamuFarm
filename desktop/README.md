@@ -4,10 +4,18 @@ Windows에서 견적 접수·작성, 입금확인, 배송완료, 로젠 송장�
 
 ## 실행
 
-- 실행 파일: GitHub Actions **Desktop EXE Build**를 수동 실행해 만든 `NamuFarm-PC.exe`. Python 설치 없이 실행합니다.
+- 실행 파일: 배포 ZIP을 모두 푼 뒤 `NamuFarm-PC.exe`를 실행합니다. Python 설치는 필요 없습니다. 폴더 배포본은 `_runtime`을 EXE 옆에 함께 보관합니다.
 - 소스로 실행: Python 3.11 이상을 설치하고 `start_windows.bat`. 최초 실행 시 PySide6·cryptography·XLS 입출력 패키지를 설치합니다.
 - 읽기 전용 화면 보기: `NamuFarm-PC.exe --demo` 또는 `preview_windows.bat`. 예시 데이터만 표시하고 운영 서버·보관함에 접근하지 않습니다.
 - 실행 파일 빌드: `build_windows.bat` → `dist/NamuFarm-PC.exe`.
+
+## GitHub Actions 없는 Windows 빌드
+
+- Windows PC에서 환경 설치와 단일 EXE 생성: `powershell -NoProfile -ExecutionPolicy RemoteSigned -File .\desktop\setup_windows_build.ps1`. Python 3.12 x64가 없으면 서명을 확인한 공식 설치본을 설치하고 별도 `.venv-build`에서 빌드합니다.
+- Linux에서 Windows 폴더 배포본 생성: `build_windows_portable.py`가 MinGW로 Windows x64 GUI 실행기를 컴파일하고 공식 Python 임베디드 실행환경과 Windows 휠을 함께 묶습니다. Wine과 GitHub Actions를 사용하지 않습니다.
+- 크로스 빌드 입력: `--python-embed`(Python 3.12 x64 임베디드 ZIP), `--wheels`(의존성 Windows 휠 폴더), `--compiler`(x86_64-w64-mingw32-gcc 경로), `--output`(새 출력 경로), `--source-commit`(소스 커밋).
+- 결과: `NamuFarm-PC-Windows-x64.zip`. 압축을 모두 풀고 `NamuFarm-PC.exe`와 `_runtime`을 함께 둡니다. 기존 `자료` 폴더는 보존하고 업데이트 시 프로그램과 실행환경만 교체합니다.
+- PE 형식·필수 파일·코드 문법 확인과 실제 Windows 실행 확인은 구분합니다. 크로스 빌드만으로 실제 화면·서버·문자·메일 동작을 검증한 것은 아닙니다.
 
 FHD 1920×1080 기준으로 최대화해서 시작합니다. Windows 125% 배율에 해당하는 1536×864 논리 크기에서도 목록과 고정 저장 버튼을 사용할 수 있습니다. 네트워크·암호화 작업은 별도 작업 스레드에서 실행합니다.
 
