@@ -505,45 +505,42 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
                 Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                    Text("배송비", color = Color(0xFF1B2A22), fontSize = 15.sp,
+                    Text("배송비", Modifier.width(48.dp), color = Color(0xFF1B2A22), fontSize = 15.sp,
                         fontWeight = FontWeight.SemiBold, maxLines = 1)
-                    Spacer(Modifier.weight(1f))
-                    Row(Modifier.background(Color(0xFFEEF1EF), RoundedCornerShape(10.dp))
+                    // Reserve the same space in both modes so neither the toggle nor fee buttons move.
+                    Row(Modifier.width(94.dp).background(Color(0xFFEEF1EF), RoundedCornerShape(10.dp))
                         .padding(3.dp), horizontalArrangement = Arrangement.spacedBy(1.dp)) {
                         listOf(false to "후불", true to "선불").forEach { (value, label) ->
                             Surface(onClick = { draft = draft.copy(prepaid = value) },
-                                enabled = !saving, shape = RoundedCornerShape(8.dp),
+                                enabled = !saving, modifier = Modifier.weight(1f), shape = RoundedCornerShape(8.dp),
                                 color = if (draft.prepaid == value) editorGreen else Color.Transparent) {
-                                Text(label, Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
+                                Text(label, Modifier.fillMaxWidth().padding(vertical = 8.dp), textAlign = TextAlign.Center,
                                     color = if (draft.prepaid == value) Color.White else editorMuted,
                                     fontSize = 13.sp, fontWeight = FontWeight.Medium)
                             }
                         }
                     }
-                    if (draft.prepaid) {
-                        Surface(onClick = {
-                            draft = draft.copy(fee = adjustedQuotePrice(draft.fee, -500))
-                        }, enabled = !saving, shape = androidx.compose.foundation.shape.CircleShape,
-                            color = Color(0xFFE3EEE6)) {
+                    Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                        Surface(onClick = { draft = draft.copy(fee = adjustedQuotePrice(draft.fee, -500)) },
+                            enabled = !saving && draft.prepaid, shape = androidx.compose.foundation.shape.CircleShape,
+                            color = if (draft.prepaid) Color(0xFFE3EEE6) else Color(0xFFF0F2F0)) {
                             Box(Modifier.size(37.dp), contentAlignment = Alignment.Center) {
                                 Icon(Icons.Outlined.Remove, "배송비 500원 내리기",
-                                    tint = editorGreen, modifier = Modifier.size(22.dp))
+                                    tint = if (draft.prepaid) editorGreen else editorMuted, modifier = Modifier.size(22.dp))
                             }
                         }
-                        Text(money(draft.shipping().toLong()),
-                            color = Color(0xFF1B2A22), fontSize = 15.sp,
-                            fontWeight = FontWeight.SemiBold, maxLines = 1)
-                        Surface(onClick = {
-                            draft = draft.copy(fee = adjustedQuotePrice(draft.fee, 500))
-                        }, enabled = !saving, shape = androidx.compose.foundation.shape.CircleShape,
-                            color = Color(0xFFE3EEE6)) {
+                        Text(if (draft.prepaid) money(draft.shipping().toLong()) else "착불", Modifier.weight(1f),
+                            textAlign = TextAlign.Center, color = if (draft.prepaid) Color(0xFF1B2A22) else editorMuted,
+                            fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Surface(onClick = { draft = draft.copy(fee = adjustedQuotePrice(draft.fee, 500)) },
+                            enabled = !saving && draft.prepaid, shape = androidx.compose.foundation.shape.CircleShape,
+                            color = if (draft.prepaid) Color(0xFFE3EEE6) else Color(0xFFF0F2F0)) {
                             Box(Modifier.size(37.dp), contentAlignment = Alignment.Center) {
                                 Icon(Icons.Outlined.Add, "배송비 500원 올리기",
-                                    tint = editorGreen, modifier = Modifier.size(22.dp))
+                                    tint = if (draft.prepaid) editorGreen else editorMuted, modifier = Modifier.size(22.dp))
                             }
                         }
-                    } else {
-                        Text("착불", color = editorMuted, fontSize = 14.sp)
                     }
                 }
             }
@@ -663,6 +660,7 @@ private fun ManualField(label: String, value: String, onValue: (String) -> Unit,
     OutlinedTextField(value, { if (keyboard != KeyboardType.Number || it.all(Char::isDigit)) onValue(it.take(if (keyboard == KeyboardType.Number) 10 else limit)) }, label = { Text(label) },
         singleLine = true, enabled = !saving, keyboardOptions = KeyboardOptions(keyboardType = keyboard), modifier = Modifier.fillMaxWidth())
 }
+
 
 
 
