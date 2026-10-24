@@ -1,7 +1,10 @@
 package com.example.namufarm.quotemode
 
+import android.content.Intent
+import android.net.Uri
+import android.telephony.PhoneNumberUtils
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -16,6 +19,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.text.font.FontWeight
@@ -27,6 +31,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.example.namufarm.data.CustomerInquiryDraftEntity
 import com.example.namufarm.data.remote.CustomerInquiryRemote
 import com.example.namufarm.data.remote.inquiryLocalTime
 import androidx.compose.ui.graphics.Color
@@ -143,62 +148,90 @@ private fun InquiryDetailDialog(row: CustomerInquiryRemote, state: CustomerInqui
     var resolveChoice by remember { mutableStateOf<Boolean?>(null) }
     var showOriginal by rememberSaveable(id) { mutableStateOf(false) }
     var showHistory by rememberSaveable(id) { mutableStateOf(false) }
+    var preparedDraft by remember { mutableStateOf<CustomerInquiryDraftEntity?>(null) }
+    val context = LocalContext.current
+    var actionError by remember { mutableStateOf<String?>(null) }
+    val green = InquiryReplyDesign.green
+    val ink = InquiryReplyDesign.ink
+    val muted = InquiryReplyDesign.muted
+    val line = InquiryReplyDesign.line
+    fun prepareReply(channel: String) {
+        preparedDraft = draft
+        sendChannel = channel
+    }
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Surface(shape = RoundedCornerShape(12.dp), color = White, border = BorderStroke(1.5.dp, Forest700),
+        Surface(shape = RoundedCornerShape(12.dp), color = InquiryReplyDesign.canvas,
             modifier = Modifier.imePadding().widthIn(max = 560.dp).fillMaxWidth(0.96f).fillMaxHeight(0.96f)) {
             BoxWithConstraints(Modifier.fillMaxSize()) {
-                // Use the available screen height for the editor. Small/keyboard/error layouts
-                // retain a scroll fallback so confirmations and recovery controls stay reachable.
                 val scrollBody = maxHeight < 560.dp || LocalDensity.current.fontScale > 1.2f ||
                     pending != null || row.blockedDelivery || conflict
-                Column(Modifier.fillMaxSize().padding(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Column(Modifier.fillMaxSize().padding(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Text("문의 확인 · 답변", Modifier.weight(1f), fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Forest800, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        TextButton(onClick = { showHistory = true }, contentPadding = PaddingValues(horizontal = 6.dp)) {
-                            Icon(Icons.Outlined.History, null, Modifier.size(17.dp))
+                        Text("문의 확인 · 답변", Modifier.weight(1f), fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold, color = ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        TextButton(onClick = { showHistory = true }, contentPadding = PaddingValues(horizontal = 6.dp),
+                            colors = ButtonDefaults.textButtonColors(contentColor = green)) {
+                            Icon(Icons.Outlined.History, null, Modifier.size(18.dp))
                             Spacer(Modifier.width(3.dp)); Text("이력", fontSize = 13.sp)
                         }
                         IconButton(onClick = onClose, modifier = Modifier.size(40.dp)) {
-                            Icon(Icons.Outlined.Close, "닫기", tint = Forest800)
+                            Icon(Icons.Outlined.Close, "닫기", tint = ink)
                         }
                     }
+                    HorizontalDivider(color = line)
                     Column(Modifier.weight(1f).then(if (scrollBody) Modifier.verticalScroll(rememberScrollState()) else Modifier),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Surface(color = Forest50, shape = InquiryDesign.shape, border = BorderStroke(1.dp, Forest700)) {
-                            Column(Modifier.fillMaxWidth().padding(8.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                                    Icon(InquiryDesign.categoryIcon(row.inquiry?.category), null, tint = Forest700, modifier = Modifier.size(20.dp))
-                                    Text(row.inquiry?.customerName.orEmpty(), Modifier.weight(1f), fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                                        fontWeight = FontWeight.Bold, color = Forest800)
-                                    InquiryStatus(row.status)
-                                }
-                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    Icon(Icons.Outlined.Phone, null, tint = Forest700, modifier = Modifier.size(17.dp))
-                                    SelectionContainer { Text(row.inquiry?.customerPhone.orEmpty(), fontSize = 15.sp) }
-                                }
-                                if (!row.inquiry?.customerEmail.isNullOrBlank()) {
-                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                        Icon(Icons.Outlined.Email, null, tint = Forest700, modifier = Modifier.size(17.dp))
-                                        SelectionContainer { Text(row.inquiry?.customerEmail.orEmpty(), fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                        verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Surface(color = White, shape = RoundedCornerShape(8.dp)) {
+                            Column(Modifier.fillMaxWidth().padding(10.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(row.inquiry?.customerName.orEmpty(), Modifier.weight(1f), fontSize = 20.sp,
+                                        fontWeight = FontWeight.Bold, color = ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    Surface(color = if (row.status == "closed") Color(0xFFEAF3EB) else Color(0xFFFFF2DF),
+                                        shape = RoundedCornerShape(7.dp)) {
+                                        Text(InquiryDesign.status(row.status), Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+                                            color = if (row.status == "closed") green else Amber600,
+                                            fontSize = 13.sp, fontWeight = FontWeight.Bold)
                                     }
                                 }
-                                Text("${row.inquiryNumber} · ${row.deliveryLabel}", fontSize = 12.sp, color = Ink500)
-                            }
-                        }
-                        Surface(color = InquiryDesign.sky, shape = InquiryDesign.shape, border = BorderStroke(1.dp, InquiryDesign.blue)) {
-                            Column(Modifier.fillMaxWidth().padding(8.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                                    Icon(Icons.AutoMirrored.Outlined.Chat, null, tint = InquiryDesign.blue, modifier = Modifier.size(18.dp))
-                                    Text("고객 문의 · ${row.inquiry?.category}", Modifier.weight(1f), fontSize = 13.sp,
-                                        fontWeight = FontWeight.Bold, color = InquiryDesign.blue, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    TextButton(onClick = { showOriginal = true }, modifier = Modifier.height(32.dp),
-                                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)) { Text("원문", fontSize = 12.sp) }
+                                Row(Modifier.clickable {
+                                    actionError = runCatching {
+                                        context.startActivity(Intent(Intent.ACTION_DIAL,
+                                            Uri.fromParts("tel", row.inquiry?.customerPhone.orEmpty(), null)))
+                                        null
+                                    }.getOrElse { "전화 앱을 열 수 없습니다." }
+                                }.heightIn(min = 32.dp), verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                                    Icon(Icons.Outlined.Phone, null, tint = green, modifier = Modifier.size(20.dp))
+                                    Text(PhoneNumberUtils.formatNumber(row.inquiry?.customerPhone.orEmpty(), "KR")
+                                        ?: row.inquiry?.customerPhone.orEmpty(), fontSize = 16.sp, color = green)
                                 }
-                                Text(inquiryLocalTime(row.createdAt), fontSize = 12.sp, color = Ink500)
-                                SelectionContainer { Text(row.inquiry?.message.orEmpty(), fontSize = 16.sp, color = Forest800,
-                                    maxLines = 2, overflow = TextOverflow.Ellipsis) }
+                                if (!row.inquiry?.customerEmail.isNullOrBlank()) {
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                                        Icon(Icons.Outlined.Email, null, tint = green, modifier = Modifier.size(20.dp))
+                                        SelectionContainer { Text(row.inquiry?.customerEmail.orEmpty(), fontSize = 14.sp, color = ink,
+                                            maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                                    }
+                                }
+                                Text("${row.inquiryNumber} · ${row.deliveryLabel}", fontSize = 12.sp, color = muted)
                             }
                         }
+                        HorizontalDivider(color = line)
+                        Column(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Icon(Icons.AutoMirrored.Outlined.Chat, null, tint = muted, modifier = Modifier.size(20.dp))
+                                Text("고객 문의 · ${row.inquiry?.category}", Modifier.weight(1f), fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold, color = muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                TextButton(onClick = { showOriginal = true }, modifier = Modifier.height(36.dp),
+                                    colors = ButtonDefaults.textButtonColors(contentColor = green),
+                                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)) { Text("원문", fontSize = 13.sp) }
+                            }
+                            Text(inquiryLocalTime(row.createdAt), fontSize = 12.sp, color = muted)
+                            Surface(color = White, shape = RoundedCornerShape(14.dp)) {
+                                SelectionContainer { Text(row.inquiry?.message.orEmpty(), Modifier.fillMaxWidth().padding(12.dp),
+                                    fontSize = 16.sp, color = ink, maxLines = 3, overflow = TextOverflow.Ellipsis) }
+                            }
+                        }
+                        actionError?.let { Text(it, color = Amber600, fontSize = 13.sp) }
                         state.message?.let { Text(it, color = Amber600, fontSize = 14.sp) }
                         if (pending != null || row.blockedDelivery) {
                             Text("이전 작업의 결과를 먼저 확인해주세요. 결과가 불명확한 상태에서는 다시 발송하지 않습니다.", fontSize = 14.sp, color = Amber600)
@@ -215,58 +248,57 @@ private fun InquiryDetailDialog(row: CustomerInquiryRemote, state: CustomerInqui
                                     modifier = Modifier.weight(1f)) { Text("내 초안 유지") }
                             }
                         }
-                        Surface(color = White, shape = InquiryDesign.shape, border = BorderStroke(1.2.dp, Forest700),
+                        Surface(color = White, shape = RoundedCornerShape(10.dp), border = BorderStroke(1.dp, line),
                             modifier = Modifier.fillMaxWidth().then(if (scrollBody) Modifier else Modifier.weight(1f))) {
-                            Column(Modifier.fillMaxWidth().then(if (scrollBody) Modifier else Modifier.fillMaxHeight()).padding(8.dp),
-                                verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    Icon(Icons.Outlined.Edit, null, tint = Forest700, modifier = Modifier.size(19.dp))
-                                    Text("답변 내용", Modifier.weight(1f), fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Forest800)
-                                    OutlinedButton(onClick = { viewModel.save(id) }, enabled = editable && !conflict,
-                                        border = BorderStroke(1.dp, InquiryDesign.blue), shape = RoundedCornerShape(7.dp),
-                                        contentPadding = PaddingValues(horizontal = 7.dp, vertical = 4.dp),
-                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = InquiryDesign.blue)) {
-                                        Icon(Icons.Outlined.Save, null, Modifier.size(16.dp)); Spacer(Modifier.width(4.dp))
-                                        Text("초안 저장", fontSize = 12.sp)
+                            Column(Modifier.fillMaxWidth().then(if (scrollBody) Modifier else Modifier.fillMaxHeight()).padding(10.dp),
+                                verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                                    Icon(Icons.Outlined.Edit, null, tint = green, modifier = Modifier.size(21.dp))
+                                    Text("답변 내용", Modifier.weight(1f), fontSize = 17.sp, fontWeight = FontWeight.Bold, color = ink)
+                                    TextButton(onClick = { viewModel.save(id) }, enabled = editable && !conflict,
+                                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp),
+                                        colors = ButtonDefaults.textButtonColors(contentColor = green)) {
+                                        Icon(Icons.Outlined.Save, null, Modifier.size(18.dp)); Spacer(Modifier.width(4.dp))
+                                        Text("초안 저장", fontSize = 13.sp)
                                     }
                                 }
                                 OutlinedTextField(value = draft.text, onValueChange = { viewModel.edit(id, it) },
-                                    enabled = editable, placeholder = { Text("고객에게 보낼 답변을 입력하세요.", fontSize = 15.sp) },
-                                    minLines = 2, maxLines = 4, shape = RoundedCornerShape(7.dp),
+                                    enabled = editable, placeholder = { Text("답변을 입력하세요.", fontSize = 16.sp) },
+                                    minLines = 2, maxLines = 6, shape = RoundedCornerShape(8.dp),
                                     textStyle = LocalTextStyle.current.copy(fontSize = 16.sp),
-                                    colors = inquiryFieldColors(Forest700), modifier = Modifier.fillMaxWidth().then(
-                                        if (scrollBody) Modifier.heightIn(min = 92.dp, max = 144.dp) else Modifier.weight(1f)))
-                                Text("${draft.text.length}자 · 문자 900자 / 메일 2,000자", fontSize = 11.sp, color = Ink500)
-                                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    Text("답변 방법", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Forest800)
-                                    InquiryChannel("문자", Icons.Outlined.Sms, draft.channel == "sms", editable,
-                                        InquiryDesign.blue, Modifier.weight(1f)) { viewModel.edit(id, draft.text, "sms") }
-                                    InquiryChannel("메일", Icons.Outlined.Email, draft.channel == "email",
-                                        editable && !row.inquiry?.customerEmail.isNullOrBlank(), InquiryDesign.coral,
-                                        Modifier.weight(1f)) { viewModel.edit(id, draft.text, "email") }
-                                }
+                                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = green, unfocusedBorderColor = line,
+                                        focusedContainerColor = White, unfocusedContainerColor = White,
+                                        focusedTextColor = ink, unfocusedTextColor = ink, cursorColor = green,
+                                        focusedPlaceholderColor = muted, unfocusedPlaceholderColor = muted),
+                                    modifier = Modifier.fillMaxWidth().then(
+                                        if (scrollBody) Modifier.heightIn(min = 112.dp, max = 180.dp) else Modifier.weight(1f)))
+                                Text("${draft.text.length}자 · 전송창에서 인사말·마무리 자동 작성", fontSize = 11.sp, color = muted)
                             }
                         }
                     }
-                    if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth(), color = InquiryDesign.blue, trackColor = InquiryDesign.sky)
-                    Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                        InquirySendButton("문자 보내기", Icons.Outlined.Sms, InquiryDesign.blue,
-                            editable && !conflict && draft.text.isNotBlank() && draft.text.trim().length <= 900,
-                            Modifier.weight(1f)) { sendChannel = "sms" }
-                        InquirySendButton("메일 보내기", Icons.Outlined.Email, InquiryDesign.coral,
+                    if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth(), color = green, trackColor = line)
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        InquirySendButton("문자", Icons.Outlined.Sms, green,
+                            editable && !conflict && draft.text.isNotBlank(), Modifier.weight(1f)) { prepareReply("sms") }
+                        InquirySendButton("메일", Icons.Outlined.Email, green,
                             editable && !conflict && draft.text.isNotBlank() && !row.inquiry?.customerEmail.isNullOrBlank(),
-                            Modifier.weight(1f)) { sendChannel = "email" }
-                    }
-                    OutlinedButton(onClick = { note = ""; statusTarget = if (row.status == "closed") "open" else "closed" },
-                        enabled = !state.busy && pending == null && row.delivery?.state !in setOf("sending", "pending"),
-                        border = BorderStroke(1.2.dp, Forest700), shape = InquiryDesign.shape,
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp)) {
-                        Icon(if (row.status == "closed") Icons.Outlined.Refresh else Icons.Outlined.Phone, null, Modifier.size(18.dp))
-                        Spacer(Modifier.width(6.dp)); Text(if (row.status == "closed") "다시 열기" else "전화 상담 완료", fontSize = 15.sp)
+                            Modifier.weight(1f)) { prepareReply("email") }
+                        OutlinedButton(onClick = {
+                            note = if (row.status == "closed") "문의 다시 열기" else "전화 상담 완료"
+                            statusTarget = if (row.status == "closed") "open" else "closed"
+                        },
+                            enabled = !state.busy && pending == null && !row.blockedDelivery,
+                            border = BorderStroke(1.dp, line), shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = muted, containerColor = White),
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 10.dp),
+                            modifier = Modifier.weight(1f).heightIn(min = 48.dp)) {
+                            Icon(if (row.status == "closed") Icons.Outlined.Refresh else Icons.Outlined.Phone, null, Modifier.size(18.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text(if (row.status == "closed") "다시 열기" else "상담완료", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
-        }
+            }
         }
     }
     if (showOriginal) AlertDialog(onDismissRequest = { showOriginal = false }, containerColor = White,
@@ -303,10 +335,11 @@ private fun InquiryDetailDialog(row: CustomerInquiryRemote, state: CustomerInqui
             }
         }, confirmButton = { TextButton(onClick = { showHistory = false }) { Text("닫기") } })
     sendChannel?.let { channel ->
-        AlertDialog(onDismissRequest = { sendChannel = null }, containerColor = White, title = { Text(if (channel == "sms") "문자 발송" else "메일 발송") },
-            text = { Text("${row.inquiry?.customerName}님\n${if (channel == "sms") row.inquiry?.customerPhone else row.inquiry?.customerEmail}\n\n작성한 답변을 서버에서 발송할까요?") },
-            confirmButton = { TextButton(onClick = { sendChannel = null; viewModel.send(id, channel) }) { Text("발송") } },
-            dismissButton = { TextButton(onClick = { sendChannel = null }) { Text("취소") } })
+        val sourceDraft = preparedDraft
+        if (sourceDraft != null) InquiryReplyDialog(row, channel, sourceDraft.text,
+            enabled = editable && !conflict && draft == sourceDraft,
+            onDismiss = { sendChannel = null },
+            onSend = { text -> sendChannel = null; viewModel.send(id, channel, text, sourceDraft) })
     }
     resolveChoice?.let { useServer ->
         AlertDialog(onDismissRequest = { resolveChoice = null }, containerColor = White, title = { Text(if (useServer) "서버 답변 적용" else "내 초안 유지") },
@@ -321,5 +354,6 @@ private fun InquiryDetailDialog(row: CustomerInquiryRemote, state: CustomerInqui
             dismissButton = { TextButton(onClick = { statusTarget = null }) { Text("취소") } })
     }
 }
+
 
 
