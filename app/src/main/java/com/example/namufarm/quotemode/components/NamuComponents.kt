@@ -12,6 +12,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.heading
@@ -37,25 +38,29 @@ internal fun NamuDialog(
     snackbarHostState: SnackbarHostState? = null,
     actions: @Composable ColumnScope.() -> Unit = {},
     compact: Boolean = false,
+    documentStyle: Boolean = false,
     content: @Composable ColumnScope.() -> Unit
 ) {
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(
-            modifier = Modifier.widthIn(max = 600.dp).fillMaxWidth().fillMaxHeight(0.96f).imePadding().testTag("namu_dialog"),
-            shape = MaterialTheme.shapes.extraLarge,
-            color = MaterialTheme.colorScheme.background
+            modifier = Modifier.widthIn(max = 600.dp).fillMaxWidth().fillMaxHeight(if (documentStyle) 1f else 0.96f).imePadding().testTag("namu_dialog"),
+            shape = if (documentStyle) RoundedCornerShape(12.dp) else MaterialTheme.shapes.extraLarge,
+            color = if (documentStyle) Color.White else MaterialTheme.colorScheme.background
         ) {
             Column {
-                NamuDialogHeader(title, subtitle, onDismiss, compact = compact)
+                NamuDialogHeader(title, subtitle, onDismiss, compact = compact, documentStyle = documentStyle)
+                if (documentStyle) HorizontalDivider(color = Color(0xFFE2E6ED))
                 Column(Modifier.weight(1f).fillMaxWidth(), content = content)
                 if (snackbarHostState != null) SnackbarHost(snackbarHostState)
-                Surface(color = MaterialTheme.colorScheme.surface) {
+                Surface(color = if (documentStyle) Color.White else MaterialTheme.colorScheme.surface) {
                     Column(
                         Modifier.fillMaxWidth().navigationBarsPadding()
                             .padding(horizontal = if (compact) 12.dp else 16.dp, vertical = if (compact) 8.dp else 16.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
-                        content = actions
-                    )
+                    ) {
+                        if (documentStyle) HorizontalDivider(color = Color(0xFFE2E6ED))
+                        actions()
+                    }
                 }
             }
         }
@@ -63,16 +68,18 @@ internal fun NamuDialog(
 }
 
 @Composable
-internal fun NamuDialogHeader(title: String, subtitle: String, onClose: () -> Unit, compact: Boolean = false) {
-    Surface(color = MaterialTheme.colorScheme.surface) {
+internal fun NamuDialogHeader(title: String, subtitle: String, onClose: () -> Unit, compact: Boolean = false,
+                              documentStyle: Boolean = false) {
+    Surface(color = if (documentStyle) Color.White else MaterialTheme.colorScheme.surface) {
         Row(
             Modifier.fillMaxWidth().padding(start = if (compact) 16.dp else 20.dp,
                 top = if (compact) 6.dp else 12.dp, end = 8.dp, bottom = if (compact) 8.dp else 16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.semantics { heading() })
-                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(title, style = if (documentStyle) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.titleLarge,
+                    fontWeight = if (documentStyle) FontWeight.Bold else FontWeight.Normal, modifier = Modifier.semantics { heading() })
+                Text(subtitle, style = if (documentStyle) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             IconButton(onClick = onClose) { Icon(Icons.Default.Close, contentDescription = "닫기") }
         }
@@ -204,5 +211,6 @@ internal fun CommerceItemCard(
         }
     }
 }
+
 
 
