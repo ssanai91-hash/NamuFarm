@@ -36,6 +36,7 @@ internal fun NamuDialog(
     onDismiss: () -> Unit,
     snackbarHostState: SnackbarHostState? = null,
     actions: @Composable ColumnScope.() -> Unit = {},
+    compact: Boolean = false,
     content: @Composable ColumnScope.() -> Unit
 ) {
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
@@ -45,12 +46,13 @@ internal fun NamuDialog(
             color = MaterialTheme.colorScheme.background
         ) {
             Column {
-                NamuDialogHeader(title, subtitle, onDismiss)
+                NamuDialogHeader(title, subtitle, onDismiss, compact = compact)
                 Column(Modifier.weight(1f).fillMaxWidth(), content = content)
                 if (snackbarHostState != null) SnackbarHost(snackbarHostState)
                 Surface(color = MaterialTheme.colorScheme.surface) {
                     Column(
-                        Modifier.fillMaxWidth().navigationBarsPadding().padding(16.dp),
+                        Modifier.fillMaxWidth().navigationBarsPadding()
+                            .padding(horizontal = if (compact) 12.dp else 16.dp, vertical = if (compact) 8.dp else 16.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         content = actions
                     )
@@ -61,10 +63,11 @@ internal fun NamuDialog(
 }
 
 @Composable
-internal fun NamuDialogHeader(title: String, subtitle: String, onClose: () -> Unit) {
+internal fun NamuDialogHeader(title: String, subtitle: String, onClose: () -> Unit, compact: Boolean = false) {
     Surface(color = MaterialTheme.colorScheme.surface) {
         Row(
-            Modifier.fillMaxWidth().padding(start = 20.dp, top = 12.dp, end = 8.dp, bottom = 16.dp),
+            Modifier.fillMaxWidth().padding(start = if (compact) 16.dp else 20.dp,
+                top = if (compact) 6.dp else 12.dp, end = 8.dp, bottom = if (compact) 8.dp else 16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -201,4 +204,5 @@ internal fun CommerceItemCard(
         }
     }
 }
+
 

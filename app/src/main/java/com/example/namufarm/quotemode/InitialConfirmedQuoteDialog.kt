@@ -1,6 +1,8 @@
 package com.example.namufarm.quotemode
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.*
@@ -36,20 +38,25 @@ internal fun InitialConfirmedQuoteDialog(request: WebQuoteRequestEntity, draft: 
     val shipping = draft?.shipping()?.toLong()
     val tax = draft?.let { if (it.recipient.formalQuoteRequested) it.options.taxAmount() else 0L }
     NamuDialog("확정견적 확인", request.receiptNumber.ifBlank { request.requestId }, onDismiss,
-        actions = {
-            if (draft != null) Button(onClick = { formal = true }, modifier = Modifier.fillMaxWidth()) {
-                Text("공식견적서 생성", fontWeight = FontWeight.Bold)
+        compact = true, actions = {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (draft != null) Button(onClick = { formal = true },
+                    modifier = Modifier.weight(1f).heightIn(min = 48.dp), shape = RoundedCornerShape(8.dp)) {
+                    Text("PDF 생성", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                }
+                OutlinedButton(onClick = onDismiss, modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                    shape = RoundedCornerShape(8.dp)) { Text("닫기", fontSize = 15.sp) }
             }
-            OutlinedButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) { Text("닫기") }
         }) {
-        LazyColumn(Modifier.fillMaxWidth(), contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        LazyColumn(Modifier.fillMaxWidth(), contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)) {
             item {
-                QuoteBox("고객 정보") {
+                QuoteBox("고객 정보", compact = true) {
                     ResultField("고객명", draft?.recipient?.customerName?.ifBlank { request.customerName }
                         ?: request.customerName)
                     ResultField("연락처", draft?.phone ?: request.customerPhone)
-                    ResultField("이메일", draft?.recipient?.customerEmail ?: request.customerEmail)
+                    val email = draft?.recipient?.customerEmail ?: request.customerEmail
+                    if (email.isNotBlank()) ResultField("이메일", email)
                     ResultField("상태", "견적확정")
                     if (confirmedAt > 0) ResultField("확정일", resultDate(confirmedAt))
                     if (draft?.recipient?.recipientName?.isNotBlank() == true)
@@ -59,18 +66,17 @@ internal fun InitialConfirmedQuoteDialog(request: WebQuoteRequestEntity, draft: 
             item { Text("주문 내역 · ${rows.size}품목", fontWeight = FontWeight.Bold,
                 style = MaterialTheme.typography.titleMedium) }
             itemsIndexed(rows) { index, row ->
-                QuoteBox("${index + 1}. ${row.name}") {
+                QuoteBox("${index + 1}. ${row.name}", compact = true) {
                     if (row.spec.isNotBlank()) ResultField("규격", row.spec)
-                    ResultField("수량", "${row.quantity}주")
                     if (draft != null) {
-                        ResultField("판매단가", "${resultNumber(row.price.toLong())}원")
+                        ResultField("수량·단가", "${row.quantity}주 × ${resultNumber(row.price.toLong())}원")
                         ResultField("판매금액", "${resultNumber(row.quantity.toLong() * row.price.toLong())}원", true)
-                    }
-                    if (row.remarks.isNotBlank()) ResultField("비고", row.remarks)
+                    } else ResultField("수량", "${row.quantity}주")
+                    if (row.remarks.isNotBlank()) ResultField("묘목 설명", row.remarks)
                 }
             }
             item {
-                if (itemAmount != null && shipping != null && tax != null) QuoteBox("견적 금액") {
+                if (itemAmount != null && shipping != null && tax != null) QuoteBox("견적 금액", compact = true) {
                     ResultField("묘목 합계", "${resultNumber(itemAmount)}원")
                     ResultField("택배비", if (draft?.prepaid == true) "선불 ${resultNumber(shipping)}원" else "후불")
                     if (tax > 0) ResultField("추가 세액", "${resultNumber(tax)}원")
@@ -80,15 +86,16 @@ internal fun InitialConfirmedQuoteDialog(request: WebQuoteRequestEntity, draft: 
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             if (!draft?.options?.notes.isNullOrBlank()) item {
-                QuoteBox("판매자 요청사항") { Text(draft!!.options.notes) }
+                QuoteBox("판매자 요청사항", compact = true) { Text(draft!!.options.notes) }
             }
             item {
-                QuoteBox("고객 요청사항") {
-                    Text(request.message.ifBlank { "등록된 요청사항이 없습니다." })
-                }
+                if (request.message.isNotBlank()) QuoteBox("고객 요청사항", compact = true) {
+                    Text(request.message)
+                } else Text("고객 요청사항 없음", style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             if (delivery != null && draft != null) item {
-                QuoteBox("전송 기록") {
+                QuoteBox("전송 기록", compact = true) {
                     ResultField("문자", delivery.smsLabel(draft))
                     if (delivery.smsSentAt > 0) ResultField("전송일", resultDate(delivery.smsSentAt))
                     ResultField("메일", delivery.emailLabel(draft))
@@ -116,3 +123,4 @@ private fun resultNumber(value: Long) = "%,d".format(Locale.KOREA, value)
 private fun resultDate(value: Long) = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.KOREA).apply {
     timeZone = TimeZone.getTimeZone("Asia/Seoul")
 }.format(Date(value))
+
