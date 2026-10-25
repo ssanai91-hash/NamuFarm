@@ -1368,7 +1368,6 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         self.items = table(["묘목명", "수량", "판매 금액", "판매 단가", "순번", "규격"])
         self.items.setEditTriggers(self.items.EditTrigger.DoubleClicked | self.items.EditTrigger.EditKeyPressed | self.items.EditTrigger.AnyKeyPressed)
         self.items.setObjectName("workbenchItems")
-        self.items.setToolTip(self.workbench_items_hint.text())
         polish_table(self.items)
         self.items.horizontalHeader().setFixedHeight(40 if large else 36)
         self.items.verticalHeader().setMinimumSectionSize(48 if large else 40)
@@ -2740,8 +2739,6 @@ class QuoteDeliveryDialog(QuoteDialog):
         self.save_note_button = button("요청사항 저장", lambda: self.save_confirmed_note())
         self.workbench_note_area.layout().addWidget(self.save_note_button)
         self.workbench_shipping.hide()
-        self.sms_button.hide()
-        self.email_button.hide()
         self.delivery_heading.hide()
         self.workbench_items_hint.setText("확정 품목은 읽기 전용입니다. 변경하려면 묘목정보 수정을 눌러주세요.")
         self.add_item_button.clicked.disconnect()
@@ -2842,8 +2839,8 @@ class QuoteDeliveryDialog(QuoteDialog):
         self.shipping_prepaid.setEnabled(False)
         self.shipping_fee_editor.setEnabled(False)
         self.shipping_fee.setEnabled(False)
-        self.sms_button.setEnabled(False)
-        self.email_button.setEnabled(False)
+        self.sms_button.setEnabled(editable and bool(self.draft.get("customerPhone")))
+        self.email_button.setEnabled(editable and bool(self.draft.get("customerEmail")))
         self.generate_quote_button.setEnabled(idle)
         self.preview_quote_button.setEnabled(idle and bool(self.generated_quote_path))
         self.close_button.setEnabled(idle)
@@ -2870,7 +2867,24 @@ class QuoteDeliveryDialog(QuoteDialog):
             return False
         return True
 
-    def save_confirmed_note(self, then_payment=False):
+    def open_sms(self):
+        self._open_confirmed_delivery("sms")
+
+    def open_email(self):
+        self._open_confirmed_delivery("email")
+
+    def _open_confirmed_delivery(self, channel):
+        if self.payment_registered or self.action_task is not None or self.manager is None:
+            return
+        if self.note.toPlainText().strip() != self.original_quote.get("note", "").strip():
+            self.save_confirmed_note(then_delivery=channel)
+            return
+        if channel == "sms":
+            QuoteDeliveryTools.open_sms(self)
+        else:
+            QuoteDeliveryTools.open_email(self)
+
+    def save_confirmed_note(self, then_payment=False, then_delivery=None):
         if self.payment_registered or self.action_task or self.manager is None:
             return
         try:
@@ -2879,6 +2893,7 @@ class QuoteDeliveryDialog(QuoteDialog):
             QMessageBox.warning(self, "요청사항 저장", str(error))
             return
         self._notes_then_payment = then_payment
+        self._notes_then_delivery = then_delivery
         updated = copy.deepcopy(self._pending_note_edit)
         self._run_action("판매자 요청사항을 확정견적 엑셀에 저장하고 있습니다…",
                          lambda: self.manager.save_draft(updated), self._note_saved)
@@ -2890,9 +2905,12 @@ class QuoteDeliveryDialog(QuoteDialog):
         self.original_quote = copy.deepcopy(self._pending_note_edit)
         self.draft = copy.deepcopy(self.original_quote)
         self.local_changed = True
+        self.recalculate()
         self.payment_status.setText("판매자 요청사항을 저장했습니다.")
         if self._notes_then_payment:
             self.receive_payment()
+        elif self._notes_then_delivery:
+            self._open_confirmed_delivery(self._notes_then_delivery)
 
     def edit_confirmed_items(self):
         if self.payment_registered or self.action_task or self.manager is None:
@@ -2949,7 +2967,7 @@ class QuoteDeliveryDialog(QuoteDialog):
     def receive_payment(self):
         if self.payment_registered or self.action_task or self.manager is None:
             return
-        if self.note.toPlainText().strip() != self.draft.get("note", "").strip():
+        if self.note.toPlainText().strip() != self.original_quote.get("note", "").strip():
             self.save_confirmed_note(then_payment=True)
             return
         try:
@@ -2978,7 +2996,7 @@ class QuoteDeliveryDialog(QuoteDialog):
     def reject(self):
         if self.action_task is not None:
             return
-        if self.note.toPlainText().strip() != self.draft.get("note", "").strip():
+        if self.note.toPlainText().strip() != self.original_quote.get("note", "").strip():
             if QMessageBox.question(
                     self, "요청사항 확인", "저장하지 않은 요청사항을 버리고 닫을까요?",
                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
@@ -5202,6 +5220,7 @@ class SellerWindow(MainWindow):
         if self.manager and self.data["paired"] and self.auto_check.isChecked() and not self.task and not self.dirty and not self.conflict:
             pull = self.manager.sync if self.stack.currentIndex() in (self.PAGE_SALES, self.PAGE_SHIPPING, self.PAGE_REPORTS) else self.manager.sync_requests
             self.run_job("AUTO SYNC  >  서버 동기화 중…", pull)
+
 
 
 
