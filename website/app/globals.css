@@ -3041,3 +3041,39 @@ h1,h2,h3,legend { color: var(--ink); }
 @media(max-width:48rem) {
   .header-inner { min-height: 76px; padding: .65rem 1.25rem; }
 }
+
+/* C안 3단계: 큰 두 가지 행동과 기존 농원 사진. */
+.hero { background: #fff; color: var(--ink); border-bottom: 1px solid var(--forest-border); }
+.hero-inner { width: min(75rem,calc(100% - 4rem)); display: grid; grid-template-columns: minmax(0,1.2fr) minmax(0,1fr); align-items: center; gap: 2.5rem; min-height: 0; padding: 3rem 0 1.75rem; }
+.hero-copy { min-width: 0; }
+.hero .hero-image { position: static; inset: auto; z-index: auto; width: 100%; height: 380px; border-radius: 28px; object-fit: cover; object-position: center; filter: none; }
+.hero .eyebrow { display: inline; padding: 0; border: 0; border-radius: 0; background: transparent; color: var(--forest); font-size: 1.125rem; font-weight: 700; }
+.hero h1 { margin: 1rem 0; font-size: clamp(2.35rem,3.5vw,3.25rem); line-height: 1.3; letter-spacing: -.045em; text-shadow: none; color: var(--ink); }
+.hero h1>span { display: block; color: var(--forest); }
+.hero p { max-width: 40rem; color: var(--body-text); font-size: 1.25rem; line-height: 1.75; }
+.hero .hero-actions { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1.3fr); width: 100%; gap: .75rem; margin-top: 1.75rem; }
+.hero-actions [data-slot=button] { width: 100%; min-width: 0; height: 72px; min-height: 72px; border-radius: 12px; font-size: 23px; font-weight: 750; line-height: 1.25; padding: .65rem; }
+.hero-quote-action { background: var(--forest-action); color: #fff; }
+.hero-quote-action:hover { background: var(--forest); }
+.hero-actions .hero-call-action { border: 2px solid var(--forest); background: #fff; color: var(--forest); }
+.hero-call-action>span>span { display: block; font-size: .9em; }
+.hero .hero-resource-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: .65rem; margin-top: 0; padding-top: 1rem; border-top: 1px solid var(--forest-border); }
+.hero-resource-actions .hero-videos { min-height: 48px; border: 1px solid var(--forest-border); background: #fff; color: var(--forest); font-size: 1rem; padding: .6rem .9rem; box-shadow: none; }
+.hero .hero-highlights { display: flex; flex-wrap: wrap; align-items: center; gap: .65rem 1rem; margin-top: 1.25rem; color: var(--body-text); font-size: 1rem; }
+.hero .hero-highlights span { width: auto; grid-column: auto; }
+.hero .hero-highlights span::before { width: 1.15rem; height: 1.15rem; background: transparent; color: var(--forest); font-size: 1rem; }
+@media(max-width:48rem) {
+  .hero-inner { width: 100%; grid-template-columns: minmax(0,1fr); gap: 0; padding: 0 0 1.25rem; }
+  .hero .hero-image { grid-row: 1; height: 150px; border-radius: 0; object-position: center 55%; }
+  .hero-copy { padding: 1.5rem 1.25rem 1rem; }
+  .hero h1 { font-size: clamp(1.9rem,6.4vw,2.5rem); margin: .75rem 0; }
+  .hero p { font-size: 1.1875rem; line-height: 1.65; }
+  .hero .eyebrow { font-size: 1rem; }
+  .hero .hero-actions { gap: .5rem; margin-top: 1.25rem; }
+  .hero-actions [data-slot=button] { height: 64px; min-height: 64px; font-size: 20px; padding: .5rem .35rem; gap: .35rem; }
+  .hero-actions [data-slot=button] svg { width: 1.1rem; height: 1.1rem; }
+  .hero-call-action>span>span { font-size: .8em; }
+  .hero .hero-highlights { gap: .45rem .8rem; font-size: 1rem; }
+  .hero .hero-resource-actions { margin: .25rem 1.25rem 0; padding-top: 1rem; gap: .5rem; }
+  .hero-resource-actions .hero-videos { flex: 1 1 8.5rem; font-size: .9375rem; }
+}
