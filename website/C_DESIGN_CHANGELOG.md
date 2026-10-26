@@ -46,3 +46,10 @@
 - GitHub 소스 `727ea262bde3ee6483a0518b520a974c5e6c6685`, Sites 버전 **71**, 소스 `ef580623a971e2d3906499a92328c570f9a21fb2`.
 - 배포 결과 succeeded. 기존 도메인 https://namufarm.co.kr · 서버 환경 revision 8 유지. 원복은 버전 70 재게시.
 - 사용자의 실제 화면/입력/선택/팝업 확인은 남아 있다. 실제 고객 접수·문자·메일 시험과 Apps Script 재배포는 하지 않았다.
+
+## 2026-10-26 묘목 찾기 팝업 배치 수정 · 버전 72
+
+- 버전 71의 모바일 창이 화면 밖으로 밀리는 원인을 소스/게시용 CSS에서 확인했다. literal translate 초기화가 transform으로 최적화되어 공통 -50% translate가 남는 문제였다.
+- 공통 DialogContent placement와 CSS offset 변수로 중앙/모바일 시트를 분리했다. 묘목 찾기·식재 안내는 responsive-sheet를 사용하고 위치 애니메이션을 제거했다. 홈페이지 AGENTS.md에 배치/빌드 산출물 대조 지침을 기록했다.
+- 코드 `b89d596b5f4e7a10e900a9723b331f30e18cc42b`, Sites **72**, 소스 `5dcf0d349a4c21394d4dd520953c481ca707876f`. 배포 succeeded, 기존 도메인·환경 revision 8 유지.
+- 게시용 빌드·최종 CSS 변수/0px offset 보존 확인. 미리보기는 browser route ERR_CONNECTION_REFUSED로 실제 화면 미확인. 접수·문자·메일 시험 없음.
