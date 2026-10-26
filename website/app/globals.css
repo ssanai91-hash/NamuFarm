@@ -60,6 +60,9 @@ html {
 }
 body {
   margin: 0;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+  line-break: strict;
   background: #ffffff;
   color: #24372e;
   font-family: "Pretendard","Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic",system-ui,sans-serif;
@@ -71,6 +74,8 @@ body {
 h1,h2,h3,p {
   margin: 0;
 }
+h1,h2,h3,legend { text-wrap: balance; }
+p,label,li { text-wrap: pretty; }
 h1,h2,h3,p,label,legend,button,a {
   word-break: keep-all;
   overflow-wrap: anywhere;
@@ -1932,7 +1937,7 @@ section {
   color: #fff;
   font-size: 1rem;
   font-weight: 700;
-  white-space: nowrap;
+  white-space: normal;
   gap: .25rem;
 }
 .species-select-button .species-picker-chevron {
@@ -2337,7 +2342,7 @@ body { background:#ffffff; }
     width:auto;
     min-width:0;
     gap:.3rem;
-    white-space:nowrap;
+    white-space:normal;
   }
   .hero-highlights span:last-child { grid-column:1 / -1; }
   .hero-highlights span::before {
@@ -2497,7 +2502,7 @@ body { background:#ffffff; }
     font-size: 1rem;
     font-weight: 700;
     justify-content: center;
-    white-space: nowrap;
+    white-space: normal;
   }
   .species-select-row .species-select-button:hover { background: #174734; }
   .quantity-stepper { grid-template-columns: 3.5rem minmax(0,1fr) 3.5rem auto; gap: 0; }
@@ -2602,7 +2607,7 @@ body { background:#ffffff; }
 .video-format-buttons button[aria-pressed=true] { background: var(--forest); border-color: var(--forest); color: #fff; }
 .video-format-buttons small { font-size: .85rem; font-weight: 500; }
 .video-filters { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .75rem; margin-top: .75rem; }
-.video-filters label { display: grid; gap: .4rem; min-width: 0; white-space: nowrap; font-size: 1rem; font-weight: 600; color: #425a47; }
+.video-filters label { display: grid; gap: .4rem; min-width: 0; white-space: normal; font-size: 1rem; font-weight: 600; color: #425a47; }
 .video-filters select { width: 100%; min-width: 0; min-height: 3rem; padding: .4rem .65rem; border: 1px solid #a8baa9; border-radius: .6rem; background: #fff; color: #24372e; }
 .video-filters select:focus-visible { outline: 3px solid #387953; outline-offset: 2px; }
 .video-list-toolbar { display: flex; align-items: center; justify-content: space-between; gap: .75rem; margin: .65rem 0 .4rem; }
@@ -3029,7 +3034,7 @@ body { background:#ffffff; }
   line-height: 1.3;
   text-align: center;
   text-decoration: none;
-  white-space: nowrap;
+  white-space: normal;
   cursor: pointer;
 }
 .desktop-nav .nav-action::after { content: none; }
@@ -3042,3 +3047,9 @@ body { background:#ffffff; }
 .menu-dialog nav .nav-action { width: 100%; flex-wrap: nowrap; }
 .hero .hero-actions { display: flex; }
 .site-header .menu-button { margin-left: auto; }
+
+/* C안 1단계: 버튼·칩은 단어 단위로 줄바꿈하고 모바일 강제 개행을 줄인다. */
+button, [role="button"], [data-slot="button"], .nav-action { word-break: keep-all; white-space: normal; }
+@media(max-width:48rem) {
+  .desktop-break, .hero h1 br, .quote-intro br, .faq-section h2 br { display: none; }
+}
