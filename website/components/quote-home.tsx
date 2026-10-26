@@ -399,6 +399,7 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
             <Button type="button" variant="outline" onClick={() => { setSuccess(null); setNotice(""); }}>{testMode ? "다른 테스트 요청하기" : "다른 견적 요청하기"}</Button>
           </div> : <>
             <div className="form-title"><div><FileText /><h3>견적 상담 요청</h3></div><span>아래 항목을 입력해주세요</span></div>
+            <p className="selection-notice" role="status" aria-live="polite" aria-atomic="true">{notice}</p>
             <p className="form-call-help">입력이 어려우신가요? <a href={`tel:${businessInfo.mobile.replaceAll("-", "")}`}><Phone aria-hidden="true" />전화 상담 · {businessInfo.mobile}</a></p>
             {uncertain && review && <section className="pending-request-notice service-notice" aria-label="접수 확인 대기">
               <strong>{busy ? "접수 결과를 기다리고 있어요" : "접수 여부 확인이 남아 있어요"}</strong>
@@ -417,7 +418,7 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
                 <Button type="button" variant="ghost" onClick={() => focusField(`quantity-${pendingQuantityLines[0].id}`)}>입력하기<ChevronRight aria-hidden="true" /></Button>
               </div>}
               <div className="line-list">{lines.map((line, index) => <div className="item-line" key={line.id}>
-              <div className="item-number"><span className="item-badge">품목 {index + 1}</span><div className="item-header-actions">{line.species.trim() && !hasValidQuantity(line.quantity) ? <span className="item-pending-label">수량 {line.quantity.trim() ? "확인" : "필요"}</span> : null}{lines.length > 1 && <Button type="button" variant="ghost" className="item-remove-button" aria-label={`품목 ${index + 1} ${line.species} 빼기`} onClick={() => removeLine(line.id)}><X aria-hidden="true" />빼기</Button>}</div></div>
+              <div className="item-number"><span className="item-badge"><span className="sr-only">품목 </span>{index + 1}</span><div className="item-header-actions">{line.species.trim() && !hasValidQuantity(line.quantity) ? <span className="item-pending-label">수량 {line.quantity.trim() ? "확인" : "필요"}</span> : null}{lines.length > 1 && <Button type="button" variant="ghost" className="item-remove-button" aria-label={`품목 ${index + 1} ${line.species} 빼기`} onClick={() => removeLine(line.id)}><X aria-hidden="true" />빼기</Button>}</div></div>
               <div className="item-fields">
                 <div className="field species-field">
                   <Label htmlFor={"species-" + line.id} onClick={() => { if (!locked) focusField("species-" + line.id); }}>묘목 이름 <small>필수</small></Label>
@@ -469,15 +470,14 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
             <div className="honeypot" aria-hidden="true"><label htmlFor="website">Website</label><input id="website" tabIndex={-1} autoComplete="off" value={website} onChange={e => setWebsite(e.target.value)} /></div>
             <div className="processing-notice"><p>{quoteProcessingNotice}</p><a href="/privacy">개인정보 처리방침</a></div>
             <div id="quote-errors" ref={errorRef} tabIndex={-1} className={error ? "form-error" : ""} role={error ? "alert" : undefined}>{error}{problems.length > 0 && <ul>{problems.map(problem => <li key={problem.id}><button type="button" onClick={() => focusField(problem.id)}>{problem.message}</button></li>)}</ul>}</div>
-            <div className="form-summary"><span>요청 품목 <strong>{count}종</strong></span><span>총 수량 <strong>{total.toLocaleString()}주</strong></span></div>
-            <div className="quote-submit-actions">
-              <Button className="submit-button" type="submit" disabled={busy} onClick={uncertain ? event => { event.preventDefault(); setReviewOpen(true); } : undefined}>{uncertain ? "접수 확인 이어가기" : "내용 확인하기"}</Button>
-              <Button className="quote-reset-button" type="button" variant="outline" disabled={busy}
-                onClick={() => requestQuoteReset("form")}>
-                <RotateCcw aria-hidden="true" />초기화
-              </Button>
+            <div className="quote-finish">
+              <div className="form-summary"><span>요청 품목 <strong>{count}종</strong></span><span>총 수량 <strong>{total.toLocaleString()}주</strong></span></div>
+              <div className="quote-submit-actions">
+                <Button className="quote-reset-button" type="button" variant="outline" disabled={busy} onClick={() => requestQuoteReset("form")}><RotateCcw aria-hidden="true" />초기화</Button>
+                <Button className="submit-button" type="submit" disabled={busy} onClick={uncertain ? event => { event.preventDefault(); setReviewOpen(true); } : undefined}>{uncertain ? "접수 확인 이어가기" : "내용 확인하기"}</Button>
+              </div>
+              <p className="submit-note">주문과 결제는 상담 후 결정합니다.</p>
             </div>
-            <p className="submit-note">주문과 결제는 상담 후 결정합니다.</p>
           </>}
         </form>
   );
@@ -525,7 +525,7 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
           <div className="hero-resource-actions"><Button type="button" variant="outline" className="hero-videos" aria-haspopup="dialog" onClick={openVideos}><Play aria-hidden="true" />묘목 재배 영상 보기</Button><Button type="button" variant="outline" className="hero-videos" aria-haspopup="dialog" onClick={openBlog}><FileText aria-hidden="true" />묘목 정보·블로그 보기</Button><Button asChild variant="outline" className="hero-videos"><a href={naverStoreUrl} target="_blank" rel="noopener noreferrer" aria-label="네이버 스토어 바로가기 · 새 창"><ShoppingBag aria-hidden="true" />네이버 스토어<ExternalLink aria-hidden="true" /></a></Button></div>
         </div>
       </section>
-      <section id="quote" className="quote-section" aria-labelledby="quote-title quote-mobile-title"><div className="quote-layout wrap">
+      <section id="quote" className="quote-section" aria-labelledby="quote-mobile-title"><div className="quote-layout wrap">
         <div className="quote-mobile-intro">
           <h2 id="quote-mobile-title">묘목 견적 상담</h2>
           <p>묘목과 수량을 알려주세요.</p><button type="button" className="inquiry-text-button" onClick={openInquiry} aria-haspopup="dialog">궁금한 점 문의 남기기 <ChevronRight aria-hidden="true" /></button>
