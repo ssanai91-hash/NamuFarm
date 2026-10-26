@@ -3067,3 +3067,23 @@ body { background:#ffffff; }
 .hero-inquiry.nav-action { background: #d5eca8; color: #102a1c; border-color: #d5eca8; }
 .hero-inquiry.nav-action:hover { background: #c6e293; color: #102a1c; border-color: #d5eca8; filter: none; }
 @media(max-width:48rem) { .hero-inquiry.nav-action { width: 100%; } }
+
+/* Button design 3 — step 3: resource buttons, existing destinations preserved. */
+.hero-resource-actions { display: flex; flex-wrap: nowrap; align-items: stretch; gap: .5rem; }
+.hero-resource-actions .hero-videos { height: 3.25rem; min-height: 3.25rem; }
+.hero-resource-actions .hero-youtube { background: #c4302b; color: #ffffff; border-color: #c4302b; }
+.hero-resource-actions .hero-youtube:hover { background: #a82822; color: #ffffff; border-color: #a82822; }
+.hero-resource-actions .hero-youtube .hero-brand-icon { color: #c4302b; }
+.hero-resource-actions .hero-youtube:hover .hero-brand-icon { color: #a82822; }
+.hero-resource-actions .hero-blog>svg { color: #236a46; }
+.hero-resource-actions .hero-store { background: #027a3d; color: #ffffff; border-color: #027a3d; }
+.hero-resource-actions .hero-store:hover { background: #016a35; color: #ffffff; border-color: #016a35; }
+.hero-resource-actions .hero-store .hero-brand-icon { color: #027a3d; }
+.hero-resource-actions .hero-store:hover .hero-brand-icon { color: #016a35; }
+.hero-resource-actions .hero-brand-icon { width: 1.6rem; height: 1.4rem; flex: none; stroke: none; }
+.hero-resource-actions .hero-store .hero-brand-icon { width: 1.5rem; height: 1.5rem; }
+@media(max-width:48rem) {
+  .hero-resource-actions { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: .5rem; }
+  .hero-resource-actions .hero-videos { min-width: 0; width: 100%; height: auto; min-height: 4.9rem; flex-direction: column; gap: .4rem; padding: .6rem .25rem; font-size: .875rem; font-weight: 700; white-space: normal; text-align: center; line-height: 1.35; }
+  .hero-resource-actions .hero-resource-external { display: none; }
+}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent, type MouseEvent } from "react";
-import { Sprout, Plus, Minus, FileText, CheckCheck, MessageCircle, ShieldCheck, LoaderCircle, CircleCheck, CircleAlert, X, Copy, Phone, ChevronDown, ChevronRight, RotateCcw, Play, ShoppingBag, ExternalLink } from "lucide-react";
+import { Sprout, Plus, Minus, FileText, CheckCheck, MessageCircle, ShieldCheck, LoaderCircle, CircleCheck, CircleAlert, X, Copy, Phone, ChevronDown, ChevronRight, RotateCcw, ExternalLink } from "lucide-react";
 import SpeciesBrowser from "@/components/species-browser";
 import SpeciesPickerDialog from "@/components/species-picker-dialog";
 import VideoLibraryDialog from "@/components/video-library-dialog";
@@ -497,7 +497,7 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
           <h1 id="hero-title">심고 싶은 나무,<br />견적부터 <em>편하게.</em></h1>
           <p>원하는 묘목을 고르고 수량을 알려주세요.<br />문자나 메일로 최대한 빨리 견적을 보내드립니다.</p>
           <div className="hero-actions"><button type="button" className="hero-inquiry nav-action nav-inquiry" onClick={openInquiry} aria-haspopup="dialog"><MessageCircle aria-hidden="true" />문의글 보내기</button></div>
-          <div className="hero-resource-actions"><Button type="button" variant="outline" className="hero-videos" aria-haspopup="dialog" onClick={openVideos}><Play aria-hidden="true" />묘목 재배 영상 보기</Button><Button type="button" variant="outline" className="hero-videos" aria-haspopup="dialog" onClick={openBlog}><FileText aria-hidden="true" />묘목 정보·블로그 보기</Button><Button asChild variant="outline" className="hero-videos"><a href={naverStoreUrl} target="_blank" rel="noopener noreferrer" aria-label="네이버 스토어 바로가기 · 새 창"><ShoppingBag aria-hidden="true" />네이버 스토어<ExternalLink aria-hidden="true" /></a></Button></div>
+          <div className="hero-resource-actions"><Button type="button" variant="outline" className="hero-videos hero-youtube" aria-haspopup="dialog" onClick={openVideos}><svg viewBox="0 0 28 22" aria-hidden="true" focusable="false" className="hero-brand-icon"><rect x="1" y="1" width="26" height="20" rx="6" fill="#ffffff" /><path d="M11 6.5 19 11 11 15.5Z" fill="currentColor" /></svg><span>유튜브 재배 영상</span></Button><Button type="button" variant="outline" className="hero-videos hero-blog" aria-haspopup="dialog" onClick={openBlog}><FileText aria-hidden="true" /><span>묘목 정보 블로그</span></Button><Button asChild variant="outline" className="hero-videos hero-store"><a href={naverStoreUrl} target="_blank" rel="noopener noreferrer" aria-label="네이버 스토어 바로가기 · 새 창"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" className="hero-brand-icon"><rect x="1" y="1" width="22" height="22" rx="5" fill="#ffffff" /><path d="M7 6h3l4 6.2V6h3v12h-3l-4-6.2V18H7Z" fill="currentColor" /></svg><span>네이버 스마트스토어</span><ExternalLink className="hero-resource-external" aria-hidden="true" /></a></Button></div>
           <div className="hero-highlights" aria-label="견적 상담 특징"><span>회원가입 없이 요청</span><span>규격 상담 가능</span><span>결제는 상담 후 결정</span></div>
         </div>
       </section>
