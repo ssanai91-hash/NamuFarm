@@ -20,7 +20,7 @@ type Props = {
 export default function PlantingGuideDialog({ guide, month, added, locked, canAdd, opener, onClose, onAdd }: Props) {
   const preparing = !!guide && !guide.plantingMonths.includes(month);
   return <Dialog open={guide !== null} onOpenChange={open => { if (!open) onClose(); }}>
-    <DialogContent className="planting-guide-dialog" showCloseButton={false} onCloseAutoFocus={event => { event.preventDefault(); opener.current?.focus({ preventScroll: true }); }}>
+    <DialogContent placement="responsive-sheet" className="planting-guide-dialog" showCloseButton={false} onCloseAutoFocus={event => { event.preventDefault(); opener.current?.focus({ preventScroll: true }); }}>
       <DialogClose asChild><Button type="button" variant="ghost" className="dialog-dismiss" aria-label="묘목 안내 닫기"><X aria-hidden="true" /></Button></DialogClose>
       <DialogHeader><DialogTitle>{guide?.name} 알아보기</DialogTitle><DialogDescription>{month}월 안내 · {preparing ? "다음 식재 준비" : "식재 조건 확인"}</DialogDescription></DialogHeader>
       {guide && <><div className="planting-guide-body">

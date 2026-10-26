@@ -71,7 +71,7 @@ export default function SpeciesPickerDialog({ open, onOpenChange, onChoose, onAd
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="species-picker-dialog integrated-species-picker" showCloseButton={false}
+      <DialogContent placement="responsive-sheet" className="species-picker-dialog integrated-species-picker" showCloseButton={false}
         onOpenAutoFocus={event => { event.preventDefault(); title.current?.focus({ preventScroll: true }); }}
         onCloseAutoFocus={event => { event.preventDefault(); opener.current?.focus({ preventScroll: true }); }}>
         <DialogClose asChild><Button type="button" variant="ghost" className="dialog-dismiss" aria-label="묘목 찾기 창 닫기"><X aria-hidden="true" /></Button></DialogClose>

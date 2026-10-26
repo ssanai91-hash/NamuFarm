@@ -1205,7 +1205,9 @@ section {
   right: auto;
   bottom: auto;
   margin: 0;
-  translate: -50% -50%;
+  /* Keep translate variable-based: production lowering can turn a literal
+     translate reset into transform and leave this independent offset active. */
+  translate: var(--dialog-offset-x, -50%) var(--dialog-offset-y, -50%);
   width: calc(100% - 2rem);
   max-width: 32rem;
   height: fit-content;
@@ -2940,7 +2942,7 @@ body { background:#fff; }
 .planting-guide-footer>p:first-child { margin: 0 0 .5rem; }
 @media(max-width:48rem) {
   .planting-heading h3 { font-size: 1.125rem; }
-  .planting-guide-dialog[data-slot=dialog-content] { top: auto; bottom: 0; left: 0; right: 0; translate: none; transform: none; width: 100%; max-width: none; max-height: calc(100dvh - .75rem); padding: 1.2rem 1rem max(.85rem,env(safe-area-inset-bottom)); border-radius: 1.25rem 1.25rem 0 0; }
+  .planting-guide-dialog[data-slot=dialog-content] { width: 100%; max-width: none; max-height: calc(100dvh - .75rem); padding: 1.2rem 1rem max(.85rem,env(safe-area-inset-bottom)); border-radius: 1.25rem 1.25rem 0 0; }
 }
 
 /* Private customer inquiries: compact centered dialog, taller writing area. */
@@ -3110,16 +3112,11 @@ h1,h2,h3,legend { color: var(--ink); }
 .picker-footer>p[role=status] { max-height: 4.5rem; overflow-y: auto; font-size: 1.0625rem; color: var(--forest); }
 .picker-footer>button { width: 100%; min-height: 56px; background: var(--forest-action); color: #fff; font-size: 1.25rem; }
 @media(max-width:48rem) {
-  .integrated-species-picker[data-slot=dialog-content] { top: auto; bottom: 0; left: 0; right: 0; transform: none; translate: none; width: 100%; max-width: 100%; height: min(90dvh,54rem); max-height: 94dvh; padding: 1rem 1rem max(1rem,env(safe-area-inset-bottom)); border-radius: 20px 20px 0 0; }
-  .integrated-species-picker[data-state=open] { animation: picker-sheet-in .2s ease-out; }
-  .integrated-species-picker[data-state=closed] { animation: picker-sheet-out .15s ease-in; }
+  .integrated-species-picker[data-slot=dialog-content] { width: 100%; max-width: 100%; height: min(90dvh,54rem); max-height: 94dvh; padding: 1rem 1rem max(1rem,env(safe-area-inset-bottom)); border-radius: 20px 20px 0 0; }
   .integrated-species-picker .planting-month-grid { grid-template-columns: repeat(4,minmax(0,1fr)); }
   .integrated-species-picker .catalog-card { padding: .65rem; }
   .picker-tabs>button { padding-inline: .25rem; font-size: 1.0625rem; }
 }
-@keyframes picker-sheet-in { from { translate: 0 100%; } to { translate: 0 0; } }
-@keyframes picker-sheet-out { from { translate: 0 0; } to { translate: 0 100%; } }
-@media(prefers-reduced-motion:reduce) { .integrated-species-picker[data-state] { animation: none; } }
 
 /* C안 5단계: 큰 입력칸, 같은 크기의 수량 버튼, 간결한 견적 양식. */
 .quote-section { padding-block: 3rem; background: var(--surface); border-color: var(--forest-border); }
@@ -3244,3 +3241,19 @@ h1,h2,h3,legend { color: var(--ink); }
 .customer-inquiry-dialog :is(.inquiry-footer>p,.inquiry-phone>p) { font-size: 1rem; }
 .planting-guide-dialog .planting-guide-body p { font-size: 1.1875rem; color: var(--body-text); }
 @media(max-width:48rem) { .hero-actions [data-slot=button] { padding-block: .35rem; } }
+
+/* Shared placement contract: per-dialog CSS controls size, not the anchor.
+   Offset variables survive production CSS lowering without retaining -50%. */
+@media(max-width:48rem) {
+  [data-slot=dialog-content][data-dialog-placement=responsive-sheet] {
+    --dialog-offset-x: 0px;
+    --dialog-offset-y: 0px;
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    margin: 0;
+    transform: none;
+    animation: none;
+  }
+}
