@@ -3002,13 +3002,8 @@ body { background:#ffffff; }
   .inquiry-phone { margin-top:.25rem; padding-top:.25rem; }
 }
 
-/* Five equal-sized navigation actions; each action has its own color. */
+/* Five equal-sized navigation actions; button design 3 uses a quiet shared palette. */
 .desktop-nav { gap: .5rem; }
-.nav-guide { --nav-color: #365f87; }
-.nav-faq { --nav-color: #725783; }
-.nav-inquiry { --nav-color: #94611b; }
-.nav-call { --nav-color: #26706d; }
-.nav-quote { --nav-color: #236a46; }
 .site-header .nav-action,
 .menu-dialog nav .nav-action,
 .hero-inquiry.nav-action {
@@ -3023,7 +3018,7 @@ body { background:#ffffff; }
   padding: .65rem .5rem;
   border: 1px solid transparent;
   border-radius: .65rem;
-  background: var(--nav-color);
+  background: #94611b;
   color: #ffffff;
   font-size: 1rem;
   font-weight: 700;
@@ -3036,7 +3031,7 @@ body { background:#ffffff; }
 .desktop-nav .nav-action::after { content: none; }
 .site-header .nav-action:hover,
 .menu-dialog nav .nav-action:hover,
-.hero-inquiry.nav-action:hover { background: var(--nav-color); color: #ffffff; filter: brightness(.93); }
+.hero-inquiry.nav-action:hover { background: #94611b; color: #ffffff; filter: brightness(.93); }
 .nav-action:focus-visible { outline: 3px solid #174e36; outline-offset: 3px; }
 .nav-action svg { width: 1.1rem; height: 1.1rem; flex-shrink: 0; }
 .menu-dialog nav { gap: .6rem; }
@@ -3053,3 +3048,17 @@ body { background:#ffffff; }
     margin: 0; transform: none; animation: none;
   }
 }
+
+/* Button design 3 — step 1: only header/mobile menu colors. */
+.site-header .nav-action:not(.nav-quote),
+.menu-dialog nav .nav-action:not(.nav-quote) {
+  background: #f1f6ee; color: #174e36; border-color: #f1f6ee;
+}
+.site-header .nav-action:not(.nav-quote):hover,
+.menu-dialog nav .nav-action:not(.nav-quote):hover {
+  background: #e2edd8; color: #174e36; border-color: #f1f6ee; filter: none;
+}
+.site-header .nav-quote,
+.menu-dialog nav .nav-quote { background: #236a46; color: #ffffff; border-color: #236a46; }
+.site-header .nav-quote:hover,
+.menu-dialog nav .nav-quote:hover { background: #236a46; color: #ffffff; filter: brightness(.93); }
