@@ -60,6 +60,8 @@ html {
 }
 body {
   margin: 0;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
   background: #ffffff;
   color: #24372e;
   font-family: "Pretendard","Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic",system-ui,sans-serif;
@@ -3087,3 +3089,8 @@ body { background:#ffffff; }
   .hero-resource-actions .hero-videos { min-width: 0; width: 100%; height: auto; min-height: 4.9rem; flex-direction: column; gap: .4rem; padding: .6rem .25rem; font-size: .875rem; font-weight: 700; white-space: normal; text-align: center; line-height: 1.35; }
   .hero-resource-actions .hero-resource-external { display: none; }
 }
+
+/* Button design 3 — step 4: preserve Korean words; allow button labels to wrap. */
+h1,h2,h3 { text-wrap: balance; }
+button,[data-slot=button],.nav-action { word-break: keep-all; overflow-wrap: anywhere; white-space: normal; }
+.site-header .nav-action,.menu-dialog nav .nav-action,.hero-inquiry.nav-action { white-space: normal; }
