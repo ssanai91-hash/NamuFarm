@@ -3,6 +3,7 @@
 const {fixture, pair}=require('../../server/quote-requests/tests/fixture.cjs');
 const readline=require('node:readline'),crypto=require('node:crypto');
 const f=fixture();
+f.properties.AUTO_ENROLL_UNTIL=String(Date.now()+365*86400000);
 function backup() {
  const salt=crypto.randomBytes(16),iv=crypto.randomBytes(12);
  const key=crypto.pbkdf2Sync('test-password-12345',salt,1300000,32,'sha1');

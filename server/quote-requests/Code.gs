@@ -286,13 +286,15 @@ function createAppConnectionFile() {
 }
 function connectApp_(body) {
   if (body.authMode === 'auto-v1') {
-    // User-chosen zero-input enrollment. Anyone knowing this endpoint can enroll.
+    // Existing devices reconnect; new devices require an owner-opened enrollment window.
     assert_(typeof body.deviceToken === 'string' && /^[a-f0-9]{64}$/.test(body.deviceToken), 'UNAUTHORIZED');
     return lock_(() => {
       const props = PropertiesService.getScriptProperties();
       const devices = JSON.parse(props.getProperty('AUTO_DEVICES') || '{}');
       const id = hash_(body.deviceToken);
       if (!devices[id]) {
+        const enrollUntil = Number(props.getProperty('AUTO_ENROLL_UNTIL') || 0);
+        assert_(Number.isFinite(enrollUntil) && enrollUntil > Date.now(), 'UNAUTHORIZED');
         assert_(Object.keys(devices).length < 32, 'DEVICE_LIMIT');
         devices[id] = new Date().toISOString();
         props.setProperty('AUTO_DEVICES', JSON.stringify(devices));
@@ -428,6 +430,38 @@ function revokeDevice(deviceHash) {
       delete autoDevices[deviceHash]; props.setProperty('AUTO_DEVICES', JSON.stringify(autoDevices));
     }
   });
+}
+
+/** Owner-only editor helpers. Never expose these through doPost actions. */
+function openAppEnrollment() {
+  const until = lock_(() => {
+    const until = Date.now() + 15 * 60 * 1000;
+    PropertiesService.getScriptProperties().setProperty('AUTO_ENROLL_UNTIL', String(until));
+    return until;
+  });
+  console.log('신규 앱 기기 등록 허용 종료: ' + new Date(until).toISOString() + ' (15분)');
+}
+function closeAppEnrollment() {
+  lock_(() => PropertiesService.getScriptProperties().deleteProperty('AUTO_ENROLL_UNTIL'));
+  console.log('신규 앱 기기 등록을 닫았습니다.');
+}
+function listAppDevices() {
+  const summary = lock_(() => {
+    const props = PropertiesService.getScriptProperties();
+    const registry = name => {
+      const devices = JSON.parse(props.getProperty(name) || '{}');
+      return {count:Object.keys(devices).length, devices:Object.keys(devices).sort().map(hash => ({
+        hash:hash, createdAt:name === 'AUTO_DEVICES' ? devices[hash] : (devices[hash] || {}).createdAt || ''
+      }))};
+    };
+    return {AUTO_DEVICES:registry('AUTO_DEVICES'), DEVICES:registry('DEVICES')};
+  });
+  // Only registry hashes and registration times; never tokens, labels, or customer data.
+  console.log(JSON.stringify(summary));
+}
+function revokeAllAutoDevices() {
+  lock_(() => PropertiesService.getScriptProperties().setProperty('AUTO_DEVICES', '{}'));
+  console.log('자동등록 기기 권한을 모두 해제했습니다. 고객자료는 유지됩니다.');
 }
 
 
