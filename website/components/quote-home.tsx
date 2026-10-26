@@ -2,8 +2,7 @@
 
 import { useEffect, useRef, useState, type FormEvent, type MouseEvent } from "react";
 import { Sprout, Plus, Minus, FileText, CheckCheck, MessageCircle, ShieldCheck, LoaderCircle, CircleCheck, CircleAlert, X, Copy, Phone, ChevronDown, ChevronRight, RotateCcw, Play, ShoppingBag, ExternalLink } from "lucide-react";
-import SpeciesBrowser from "@/components/species-browser";
-import SpeciesPickerDialog from "@/components/species-picker-dialog";
+import SpeciesPickerDialog, { type SpeciesPickerMode } from "@/components/species-picker-dialog";
 import VideoLibraryDialog from "@/components/video-library-dialog";
 import BlogLibraryDialog from "@/components/blog-library-dialog";
 import CustomerInquiryDialog from "@/components/customer-inquiry-dialog";
@@ -31,6 +30,8 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
   const [lines, setLines] = useState<Line[]>([emptyLine(0)]);
   const nextLine = useRef(1);
   const [pickerLineId, setPickerLineId] = useState<number | null>(null);
+  const [pickerMode, setPickerMode] = useState<SpeciesPickerMode>("name");
+  const pickerOpener = useRef<HTMLButtonElement | null>(null);
   const [name, setName] = useState(""); const [phone, setPhone] = useState("");
   const [region, setRegion] = useState(""); const [message, setMessage] = useState("");
   const [email, setEmail] = useState(""); const [formalQuote, setFormalQuote] = useState(false);
@@ -48,7 +49,6 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
   const [confirmedNotReceived, setConfirmedNotReceived] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
   const [resetTarget, setResetTarget] = useState<"form" | "home">("form");
-  const [catalogRevision, setCatalogRevision] = useState(0);
   const returnHomeAfterReset = useRef(false);
   const homeLinkRef = useRef<HTMLAnchorElement>(null);
   const inFlight = useRef(false);
@@ -197,6 +197,10 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
   function choosePickedSpecies(species: string) {
     if (pickerLineId === null || locked) return;
     const id = pickerLineId;
+    if (lines.some(line => line.id !== id && line.species.trim() === species)) {
+      setNotice(species + " · 이미 담겨 있어요. 기존 품목의 수량을 수정해주세요.");
+      return;
+    }
     setLines(old => old.map(line => line.id === id
       ? { ...line, species, quantity: line.quantity || "1" }
       : line));
@@ -206,12 +210,26 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
     setSuccess(null);
     setPickerLineId(null);
   }
-  function selectSpecies(species: string) {
+  function selectSpecies(names: string[]) {
     if (locked) return;
-    const result = toggleCatalogLine(lines, species, nextLine.current++);
-    setLines(result.lines); setNotice(result.notice); setProblems([]);
-    setRemoved(result.removed.length ? { lines: result.removed, label: species } : null);
-    if (result.added) setSuccess(null);
+    let updated = lines;
+    let added = 0;
+    let lastNotice = "";
+    for (const species of new Set(names)) {
+      if (updated.some(line => line.species.trim() === species)) continue;
+      const result = toggleCatalogLine(updated, species, nextLine.current++);
+      updated = result.lines; lastNotice = result.notice;
+      if (!result.added) break;
+      added++;
+    }
+    setLines(updated); setNotice(added ? `${added}종을 담았어요. 수량을 입력해주세요.` : lastNotice || "이미 담은 묘목입니다.");
+    setProblems([]); setRemoved(null);
+    if (added) setSuccess(null);
+    setPickerLineId(null);
+  }
+  function openSpeciesPicker(id: number, mode: SpeciesPickerMode, opener: HTMLButtonElement) {
+    if (locked) return;
+    pickerOpener.current = opener; setPickerMode(mode); setPickerLineId(id);
   }
   function addVideoSpecies(video: VideoResource, species: string, focus = false) {
     const result = stageVideoQuote(lines, video, species, nextLine.current++, locked);
@@ -299,7 +317,6 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
     videoQuoteDrafts.current.clear(); mainQuoteDraft.current = null; activeVideoQuote.current = null;
     setVideoQuoteOpen(false); setVideoQuoteSource(null); setVideoQuoteNotice("");
     setLines([emptyLine(nextLine.current++)]); setMessage("");
-    setCatalogRevision(value => value + 1);
     setMenuOpen(false); setSampleOpen(false);
   }
   function prepare(event: FormEvent) {
@@ -406,9 +423,11 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
                   <Label htmlFor={"species-" + line.id} onClick={() => { if (!locked) focusField("species-" + line.id); }}>묘목 이름 <small>필수</small></Label>
                   <div className="species-select-row">
                     <Input id={"species-" + line.id} required maxLength={80} placeholder="묘목 이름 직접 입력" value={line.species} onChange={e => updateLine(line.id, "species", e.target.value)} {...fieldAttrs("species-" + line.id)} />
-                    <Button id={"choose-species-" + line.id} type="button" className="species-select-button" aria-haspopup="dialog" aria-label={"품목 " + (index + 1) + " 초성으로 묘목 선택"} onClick={() => setPickerLineId(line.id)}>
-                      <span>초성검색</span><ChevronDown className="species-picker-chevron" aria-hidden="true" />
-                    </Button>
+                  </div>
+                  <div className="species-finder-actions" role="group" aria-label={`품목 ${index + 1} 묘목 찾는 방법`}>
+                    {([["name", "초성 ㄱㄴㄷ"], ["purpose", "용도별"], ["planting", "심는 시기"]] as const).map(([mode, text]) =>
+                      <Button key={mode} id={mode === "name" ? "choose-species-" + line.id : undefined} type="button" variant="outline" aria-haspopup="dialog"
+                        aria-label={`품목 ${index + 1} ${text}로 묘목 찾기`} onClick={event => openSpeciesPicker(line.id, mode, event.currentTarget)}>{text}</Button>)}
                   </div>
                   {fieldError("species-" + line.id)}
                 </div>
@@ -506,15 +525,14 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
           <div className="hero-resource-actions"><Button type="button" variant="outline" className="hero-videos" aria-haspopup="dialog" onClick={openVideos}><Play aria-hidden="true" />묘목 재배 영상 보기</Button><Button type="button" variant="outline" className="hero-videos" aria-haspopup="dialog" onClick={openBlog}><FileText aria-hidden="true" />묘목 정보·블로그 보기</Button><Button asChild variant="outline" className="hero-videos"><a href={naverStoreUrl} target="_blank" rel="noopener noreferrer" aria-label="네이버 스토어 바로가기 · 새 창"><ShoppingBag aria-hidden="true" />네이버 스토어<ExternalLink aria-hidden="true" /></a></Button></div>
         </div>
       </section>
-      <SpeciesBrowser key={catalogRevision} lines={lines} onSelect={selectSpecies} onRemove={removeLine} notice={notice} locked={locked} />
       <section id="quote" className="quote-section" aria-labelledby="quote-title quote-mobile-title"><div className="quote-layout wrap">
         <div className="quote-mobile-intro">
           <h2 id="quote-mobile-title">묘목 견적 상담</h2>
           <p>묘목과 수량을 알려주세요.</p><button type="button" className="inquiry-text-button" onClick={openInquiry} aria-haspopup="dialog">궁금한 점 문의 남기기 <ChevronRight aria-hidden="true" /></button>
-          <details className="quote-writing-guide"><summary>작성 안내 보기 <ChevronDown aria-hidden="true" /></summary><div><p>수량은 주 단위로 적어주세요.</p><p>규격을 모르면 비워두세요. 상담하면서 확인합니다.</p><a href="#trees">묘목 더 찾아보기</a></div></details>
+          <details className="quote-writing-guide"><summary>작성 안내 보기 <ChevronDown aria-hidden="true" /></summary><div><p>수량은 주 단위로 적어주세요.</p><p>규격을 모르면 비워두세요. 상담하면서 확인합니다.</p><p>각 품목의 초성·용도별·심는 시기 버튼으로 묘목을 찾아보세요.</p></div></details>
           <div className="quote-mobile-promise"><ShieldCheck aria-hidden="true" /><p>견적 요청만으로 <strong>주문이 확정되지 않아요.</strong></p></div>
         </div>
-        <aside className="quote-intro"><span className="overline">묘목 견적 상담</span><h2 id="quote-title">필요한 만큼,<br />함께 알아볼게요.</h2><p>수량은 <strong>주 단위</strong>로 적어주세요.<br />규격을 몰라도 괜찮습니다.</p><div className="intro-promise"><ShieldCheck /><p>견적 요청만으로<br /><strong>주문이나 결제가 확정되지 않아요.</strong></p></div><a href="#trees" className="back-to-trees">묘목 더 찾아보기</a></aside>
+        <aside className="quote-intro"><span className="overline">묘목 견적 상담</span><h2 id="quote-title">필요한 만큼,<br />함께 알아볼게요.</h2><p>수량은 <strong>주 단위</strong>로 적어주세요.<br />규격을 몰라도 괜찮습니다.</p><div className="intro-promise"><ShieldCheck /><p>견적 요청만으로<br /><strong>주문이나 결제가 확정되지 않아요.</strong></p></div><p className="back-to-trees">품목 입력칸 아래에서 묘목을 찾아보세요.</p></aside>
         {videoQuoteOpen ? <p className="quote-popup-placeholder">견적 팝업에서 작성 중입니다. 입력 내용은 함께 유지됩니다.</p> : quoteForm}
       </div></section>
       <section id="guide" className="guide-section wrap" aria-labelledby="guide-title"><div className="section-heading"><div><span className="overline">이용 안내</span><h2 id="guide-title">나무를 만나는 세 단계</h2></div><p>회원가입 없이 편하게 문의하세요.</p></div><div className="steps">{[{ icon: Sprout, title: "묘목과 수량 선택", text: "여러 묘목을 함께 담고, 필요한 수량을 주 단위로 적어주세요." }, { icon: FileText, title: "견적 상담 요청", text: "연락처와 배송 지역을 남기면 접수 완료 화면에서 번호를 안내해요." }, { icon: MessageCircle, title: "상담 후 주문 결정", text: "여러 농원의 재고와 규격, 배송비를 안내받고 상담한 뒤 결정하세요." }].map((step, i) => <article className="step" key={step.title}><div className="step-top"><step.icon /><span>0{i + 1}</span></div><h3>{step.title}</h3><p>{step.text}</p></article>)}</div></section>
@@ -547,7 +565,8 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
       </DialogContent>
     </Dialog>
     <BlogLibraryDialog open={blogOpen} onOpenChange={setBlogOpen} opener={blogOpener} />
-    <SpeciesPickerDialog open={pickerLineId !== null && !locked} onOpenChange={open => { if (!open) setPickerLineId(null); }} onChoose={choosePickedSpecies} selectedName={lines.find(line => line.id === pickerLineId)?.species ?? ""} lines={lines} onRemove={id => { removeLine(id); if (id === pickerLineId) setPickerLineId(null); }} />
+    <SpeciesPickerDialog open={pickerLineId !== null && !locked} onOpenChange={open => { if (!open) setPickerLineId(null); }} onChoose={choosePickedSpecies}
+      onAddMany={selectSpecies} initialMode={pickerMode} locked={locked} opener={pickerOpener} selectedName={lines.find(line => line.id === pickerLineId)?.species ?? ""} lines={lines} />
     <Dialog open={resetOpen} onOpenChange={open => { setResetOpen(open); if (!open) setConfirmedNotReceived(false); }}>
       <DialogContent className="quote-reset-dialog" showCloseButton={false} onCloseAutoFocus={event => {
         if (!returnHomeAfterReset.current) return;

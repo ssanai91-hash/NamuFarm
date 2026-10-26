@@ -3077,3 +3077,46 @@ h1,h2,h3,legend { color: var(--ink); }
   .hero .hero-resource-actions { margin: .25rem 1.25rem 0; padding-top: 1rem; gap: .5rem; }
   .hero-resource-actions .hero-videos { flex: 1 1 8.5rem; font-size: .9375rem; }
 }
+
+/* C안 4단계: 찾기 기능을 품목 안의 하나의 선택창으로 통합. */
+.species-select-row { display: block; }
+.species-finder-actions { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: .5rem; margin-top: .6rem; }
+.species-finder-actions [data-slot=button] { min-width: 0; min-height: 50px; padding: .6rem .3rem; background: var(--surface); border: 2px solid var(--forest); color: var(--forest); font-size: 1.125rem; font-weight: 750; }
+.integrated-species-picker[data-slot=dialog-content] { width: min(52rem,calc(100vw - 2rem)); max-width: 52rem; height: min(54rem,calc(100dvh - 2rem)); max-height: calc(100dvh - 2rem); display: flex; flex-direction: column; padding: 1.5rem; gap: .85rem; border: 1px solid var(--forest-border); border-radius: 20px; background: #fff; color: var(--body-text); }
+.integrated-species-picker [data-slot=dialog-title] { font-size: 1.75rem; padding-right: 2.5rem; }
+.integrated-species-picker [data-slot=dialog-description] { font-size: 1.125rem; color: var(--body-text); }
+.picker-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: .85rem; padding: .25rem; }
+.picker-tabs { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: .5rem; }
+.picker-tabs>button { min-width: 0; min-height: 52px; border: 2px solid var(--forest-border); color: var(--forest); font-size: 1.125rem; font-weight: 750; }
+.picker-tabs>button[aria-pressed=true] { color: #fff; background: var(--forest); border-color: var(--forest); }
+.picker-selection-mode { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: .5rem; }
+.picker-selection-mode>button { min-height: 48px; border-color: var(--forest); color: var(--forest); font-size: 1.0625rem; }
+.picker-selection-mode>button>svg { visibility: hidden; }
+.picker-selection-mode>button[aria-pressed=true] { background: var(--surface); border: 2px solid var(--forest); }
+.picker-selection-mode>button[aria-pressed=true]>svg { visibility: visible; }
+.picker-selection-mode>span { color: var(--body-text); font-size: 1rem; }
+.integrated-species-picker .purpose-options { grid-template-columns: repeat(3,minmax(0,1fr)); }
+.integrated-species-picker .purpose-option { min-height: 60px; font-size: 1.125rem; }
+.integrated-species-picker .planting-month-grid { flex: none; grid-template-columns: repeat(6,minmax(0,1fr)); gap: .4rem; }
+.integrated-species-picker .planting-month-grid>button { min-height: 48px; font-size: 1.125rem; }
+.integrated-species-picker .catalog-grid.species-picker-choices { display: grid; flex: none; max-height: none; min-height: 0; overflow: visible; grid-template-columns: repeat(2,minmax(0,1fr)); padding: .2rem; }
+.integrated-species-picker .catalog-card { display: flex; align-items: center; justify-content: space-between; gap: .4rem; min-height: 60px; border: 2px solid var(--forest-border); border-radius: 12px; padding: .75rem; background: #fff; box-shadow: none; }
+.integrated-species-picker .catalog-card.selected { border-color: var(--forest); background: var(--surface); }
+.integrated-species-picker .catalog-card-name { color: var(--ink); font-size: 1.25rem; line-height: 1.4; }
+.integrated-species-picker .catalog-card-name small { color: var(--body-text); font-size: .9375rem; }
+.integrated-species-picker .catalog-card-choice { flex: none; }
+.integrated-species-picker .species-picker-search input { min-height: 56px; border: 2px solid var(--forest-border); font-size: 1.1875rem; }
+.picker-footer { flex: none; border-top: 1px solid var(--forest-border); padding-top: .75rem; display: grid; gap: .5rem; }
+.picker-footer>p[role=status] { max-height: 4.5rem; overflow-y: auto; font-size: 1.0625rem; color: var(--forest); }
+.picker-footer>button { width: 100%; min-height: 56px; background: var(--forest-action); color: #fff; font-size: 1.25rem; }
+@media(max-width:48rem) {
+  .integrated-species-picker[data-slot=dialog-content] { top: auto; bottom: 0; left: 0; right: 0; transform: none; translate: none; width: 100%; max-width: 100%; height: min(90dvh,54rem); max-height: 94dvh; padding: 1rem 1rem max(1rem,env(safe-area-inset-bottom)); border-radius: 20px 20px 0 0; }
+  .integrated-species-picker[data-state=open] { animation: picker-sheet-in .2s ease-out; }
+  .integrated-species-picker[data-state=closed] { animation: picker-sheet-out .15s ease-in; }
+  .integrated-species-picker .planting-month-grid { grid-template-columns: repeat(4,minmax(0,1fr)); }
+  .integrated-species-picker .catalog-card { padding: .65rem; }
+  .picker-tabs>button { padding-inline: .25rem; font-size: 1.0625rem; }
+}
+@keyframes picker-sheet-in { from { translate: 0 100%; } to { translate: 0 0; } }
+@keyframes picker-sheet-out { from { translate: 0 0; } to { translate: 0 100%; } }
+@media(prefers-reduced-motion:reduce) { .integrated-species-picker[data-state] { animation: none; } }
