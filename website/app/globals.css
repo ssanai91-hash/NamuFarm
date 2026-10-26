@@ -3018,7 +3018,7 @@ body { background:#ffffff; }
   padding: .65rem .5rem;
   border: 1px solid transparent;
   border-radius: .65rem;
-  background: #94611b;
+  background: #d5eca8;
   color: #ffffff;
   font-size: 1rem;
   font-weight: 700;
@@ -3031,7 +3031,7 @@ body { background:#ffffff; }
 .desktop-nav .nav-action::after { content: none; }
 .site-header .nav-action:hover,
 .menu-dialog nav .nav-action:hover,
-.hero-inquiry.nav-action:hover { background: #94611b; color: #ffffff; filter: brightness(.93); }
+.hero-inquiry.nav-action:hover { background: #d5eca8; color: #ffffff; filter: brightness(.93); }
 .nav-action:focus-visible { outline: 3px solid #174e36; outline-offset: 3px; }
 .nav-action svg { width: 1.1rem; height: 1.1rem; flex-shrink: 0; }
 .menu-dialog nav { gap: .6rem; }
@@ -3062,3 +3062,8 @@ body { background:#ffffff; }
 .menu-dialog nav .nav-quote { background: #236a46; color: #ffffff; border-color: #236a46; }
 .site-header .nav-quote:hover,
 .menu-dialog nav .nav-quote:hover { background: #236a46; color: #ffffff; filter: brightness(.93); }
+
+/* Button design 3 — step 2: hero inquiry, independent of menu inquiry. */
+.hero-inquiry.nav-action { background: #d5eca8; color: #102a1c; border-color: #d5eca8; }
+.hero-inquiry.nav-action:hover { background: #c6e293; color: #102a1c; border-color: #d5eca8; filter: none; }
+@media(max-width:48rem) { .hero-inquiry.nav-action { width: 100%; } }
