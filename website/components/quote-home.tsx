@@ -471,7 +471,7 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
         <a href="#guide" className="nav-action nav-guide">이용 안내</a>
         <a href="#questions" className="nav-action nav-faq">자주 묻는 질문</a>
         <button type="button" className="nav-action nav-inquiry" onClick={openInquiry} aria-haspopup="dialog">문의글 보내기</button>
-        <a href={`tel:${businessInfo.mobile.replaceAll("-", "")}`} className="nav-action nav-call" aria-label={`전화 상담 ${businessInfo.mobile}`}><Phone aria-hidden="true" />전화 상담</a>
+        <a href={`tel:${businessInfo.mobile.replaceAll("-", "")}`} className="nav-action nav-call" aria-label={`전화 상담 ${businessInfo.mobile}`}><Phone aria-hidden="true" />전화 상담 {businessInfo.mobile}</a>
         <a href="#quote" className="nav-action nav-quote">묘목 견적요청</a>
       </nav>
       <Dialog open={menuOpen} onOpenChange={setMenuOpen}>
@@ -483,7 +483,7 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
             <a href="#guide" className="nav-action nav-guide" onClick={() => setMenuOpen(false)}>이용 안내</a>
             <a href="#questions" className="nav-action nav-faq" onClick={() => setMenuOpen(false)}>자주 묻는 질문</a>
             <button type="button" className="nav-action nav-inquiry" onClick={() => { inquiryOpener.current = document.querySelector<HTMLButtonElement>(".menu-button"); setMenuOpen(false); requestAnimationFrame(() => setInquiryOpen(true)); }} aria-haspopup="dialog">문의글 보내기</button>
-            <a href={`tel:${businessInfo.mobile.replaceAll("-", "")}`} className="nav-action nav-call" aria-label={`전화 상담 ${businessInfo.mobile}`} onClick={() => setMenuOpen(false)}><Phone aria-hidden="true" />전화 상담</a>
+            <a href={`tel:${businessInfo.mobile.replaceAll("-", "")}`} className="nav-action nav-call" aria-label={`전화 상담 ${businessInfo.mobile}`} onClick={() => setMenuOpen(false)}><Phone aria-hidden="true" />전화 상담 {businessInfo.mobile}</a>
             <a href="#quote" className="nav-action nav-quote" onClick={() => setMenuOpen(false)}>묘목 견적요청</a>
           </nav>
         </DialogContent>
