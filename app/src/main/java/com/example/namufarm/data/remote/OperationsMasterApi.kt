@@ -38,7 +38,7 @@ object OperationsMasterTransport {
 }
 
 /** Device token survives retries; it is never stored or backed up in plaintext. */
-class MasterDeviceCredentials(context: Context) {
+class MasterDeviceCredentials(context: Context) : com.example.namufarm.data.InventoryLinkSettings {
     private val prefs = context.applicationContext.getSharedPreferences("operations_master_device", Context.MODE_PRIVATE)
     private fun key(): SecretKey {
         val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
@@ -69,6 +69,9 @@ class MasterDeviceCredentials(context: Context) {
             .putBoolean("paired", false).commit()) { "기기 연결 정보를 저장하지 못했습니다." }
         return token
     }
+    override var inventoryLinked: Boolean
+        get() = prefs.getBoolean("inventoryLinked", false)
+        set(value) { check(prefs.edit().putBoolean("inventoryLinked", value).commit()) { "재고 연결 상태 저장 실패" } }
     var downloaded: Boolean
         get() = prefs.getBoolean("downloaded", false)
         set(value) { check(prefs.edit().putBoolean("downloaded", value).commit()) }

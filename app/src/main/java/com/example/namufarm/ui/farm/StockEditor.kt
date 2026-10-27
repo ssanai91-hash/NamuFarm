@@ -71,6 +71,8 @@ internal fun StockEditor(viewModel: ManagementViewModel, original: InventoryDisp
             NamuCard {
                 Column(Modifier.padding(horizontal = 14.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text("규격", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    if (state.inputAgeReadOnly) Text("${state.inputAge} · PC 입력 규격", fontSize = 15.sp)
+                    else {
                     SpecInputRow("년생") {
                         SmallAdjust("−", { viewModel.updateAge(if (age > 1) "${age - 1}년생" else "") }, circle = true)
                         Surface(Modifier.weight(1f).heightIn(min = 44.dp), shape = RoundedCornerShape(10.dp),
@@ -81,6 +83,9 @@ internal fun StockEditor(viewModel: ManagementViewModel, original: InventoryDisp
                         SmallAdjust("+", { viewModel.updateAge("${age.coerceAtMost(Int.MAX_VALUE - 1) + 1}년생") }, circle = true)
                         SmallAdjust("없음", { viewModel.updateAge("") })
                     }
+                    }
+                    if (state.inputSizeRaw != null) Text("${state.inputSizeRaw.orEmpty().ifBlank { "없음" }} · PC 입력 규격", fontSize = 15.sp)
+                    else {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("크기", Modifier.width(58.dp), fontSize = 15.sp, fontWeight = FontWeight.Medium, color = Color(0xFF33423A))
                         Spacer(Modifier.width(8.dp))
@@ -88,12 +93,13 @@ internal fun StockEditor(viewModel: ManagementViewModel, original: InventoryDisp
                             SmallAdjust("−10cm", { changeSize(-0.1f) })
                             Surface(shape = RoundedCornerShape(10.dp), color = Color.White, border = BorderStroke(1.5.dp, NamuColors.input)) {
                                 Box(Modifier.heightIn(min = 44.dp).padding(horizontal = 6.dp), contentAlignment = Alignment.Center) {
-                                    Text(String.format(Locale.KOREA, "%.1fm", state.inputSizeMeters), fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                                    Text((state.inputSizeRaw ?: String.format(Locale.KOREA, "%.1fm", state.inputSizeMeters)), fontSize = 18.sp, fontWeight = FontWeight.Bold)
                                 }
                             }
                             SmallAdjust("+10cm", { changeSize(0.1f) })
                             SmallAdjust("+1m", { changeSize(1f) })
                         }
+                    }
                     }
                     SpecChoice("타입", listOf("", "실생", "접목", "삽목", "근삽"), state.inputPlantType, viewModel::updatePlantType)
                     SpecChoice("품질", listOf("", "특묘", "상묘", "중묘", "하묘"), state.inputQuality, viewModel::updateQuality)
@@ -109,7 +115,7 @@ internal fun StockEditor(viewModel: ManagementViewModel, original: InventoryDisp
             }
         }
         FarmFooter {
-            val spec = listOf(stockSpec(state.inputAge, String.format(Locale.KOREA, "%.1fm", state.inputSizeMeters)),
+            val spec = listOf(stockSpec(state.inputAge, (state.inputSizeRaw ?: String.format(Locale.KOREA, "%.1fm", state.inputSizeMeters))),
                 state.inputPlantType, state.inputQuality).filter { it.isNotBlank() }.joinToString(" · ")
             Text(buildAnnotatedString {
                 if (spec.isNotBlank()) append("$spec · ")
@@ -154,7 +160,7 @@ internal fun StockEditor(viewModel: ManagementViewModel, original: InventoryDisp
         val isDelete = state.inputQuantity == 0
         AlertDialog(onDismissRequest = ::cancelSave, title = { Text(if (isDelete) "해당 재고 삭제" else "재고 저장 확인") },
             text = { Text("${state.selectedFarm?.farmName} · ${state.selectedSpecies?.speciesName}\n" +
-                "${state.inputAge} · ${String.format(Locale.KOREA, "%.1fm", state.inputSizeMeters)} · ${state.inputPlantType} · ${state.inputQuality}\n" +
+                "${state.inputAge} · ${(state.inputSizeRaw ?: String.format(Locale.KOREA, "%.1fm", state.inputSizeMeters))} · ${state.inputPlantType} · ${state.inputQuality}\n" +
                 "수량 ${farmNumber(state.inputQuantity)}주\n도매 ${farmNumber(state.inputWholesale)}원 · 소매 ${farmNumber(state.inputRetail)}원\n" +
                 if (isDelete) "이 재고를 삭제할까요?" else "이 정보로 저장할까요?") },
             confirmButton = { TextButton(onClick = { beforeDelete = null; confirmSave = false; viewModel.saveInventory(); onSaved() }) {

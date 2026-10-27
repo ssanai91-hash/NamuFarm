@@ -17,7 +17,9 @@ data class SyncResult(
 )
 
 /** Inventory/order transport will be adapted separately; never post legacy bodies to a placeholder. */
-class SyncManager(private val dao: ManagementDao, val masters: OperationsMasterSync) {
+class SyncManager(private val dao: ManagementDao, val masters: OperationsMasterSync,
+    val inventory: InventorySync = InventorySync(masters.database, masters.client, masters,
+        object : InventoryLinkSettings { override var inventoryLinked = false })) {
     suspend fun processPendingSync(item: PendingSyncEntity) = PendingSyncProcessResult(false,
         "농원·묘목 외 전송은 아직 연결되지 않았습니다. 기기 데이터와 대기 기록을 유지합니다.")
     suspend fun syncFarmsWithGoogleSheet(): Int =

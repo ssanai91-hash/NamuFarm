@@ -66,10 +66,11 @@ class MainActivity : ComponentActivity() {
         val dao = database.managementDao()
 
         // 2. 동기화 엔진(API 통신망) 생성 및 조립
-        val masterClient = com.example.namufarm.data.remote.OperationsMasterClient(
-            com.example.namufarm.data.remote.MasterDeviceCredentials(this))
+        val credentials = com.example.namufarm.data.remote.MasterDeviceCredentials(this)
+        val masterClient = com.example.namufarm.data.remote.OperationsMasterClient(credentials)
         val masterSync = com.example.namufarm.data.OperationsMasterSync(database, masterClient)
-        val syncManager = SyncManager(dao, masterSync)
+        val stockSync = com.example.namufarm.data.InventorySync(database, masterClient, masterSync, credentials, filesDir)
+        val syncManager = SyncManager(dao, masterSync, stockSync)
 
         // 3. 공장에 dao와 syncManager 둘 다 넘겨주기!
         val factory = ManagementViewModelFactory(dao, syncManager)

@@ -11,7 +11,7 @@ import java.util.UUID
 data class MasterSyncOutcome(val success: Boolean, val message: String, val localId: Int? = null)
 
 /** Only farm/species masters use this connection. Legacy stock/orders are never cleared. */
-class OperationsMasterSync(private val database: AppDatabase, private val client: OperationsMasterGateway) {
+class OperationsMasterSync(internal val database: AppDatabase, internal val client: OperationsMasterGateway) {
     private val dao = database.managementDao()
     private val gson = Gson()
     private val mutex = Mutex()

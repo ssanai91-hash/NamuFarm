@@ -2,6 +2,7 @@ package com.example.namufarm.viewmodel
 
 import android.content.Context
 import com.example.namufarm.ui.theme.NamuMessage
+import androidx.room.withTransaction
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -61,7 +62,9 @@ data class ManagementUiState(
 
     // 🚨 V2 규격: 묘목 크기와 재배 타입 상태 추가!
     val inputAge: String = "1년생",
-    val inputSizeMeters: Float = 0f,     // 🚨 추가
+    val inputSizeMeters: Float = 0f,
+    val inputSizeRaw: String? = null,
+    val inputAgeReadOnly: Boolean = false,     // 🚨 추가
     val inputPlantType: String = "실생",  // 🚨 추가
 
     val inputQuality: String = "상묘",
@@ -217,7 +220,7 @@ class ManagementViewModel(
         }
     }
 
-    private fun deductLocalInventoryFromSummary(summary: String) {
+    private suspend fun deductLocalInventoryFromSummary(summary: String) {
         val lines = summary.split("\n").filter { it.isNotBlank() }
 
         lines.forEach { line ->
@@ -240,20 +243,7 @@ class ManagementViewModel(
 
             val newQty = current.quantity - item.orderQty
 
-            if (newQty <= 0) {
-                dao.deleteInventory(
-                    farmId = farmId,
-                    speciesId = speciesId,
-                    quality = item.quality,
-                    age = item.age,
-                    size = item.size,
-                    plantType = item.plantType
-                )
-            } else {
-                dao.upsertInventory(
-                    current.copy(quantity = newQty)
-                )
-            }
+            syncManager.inventory.recordInventoryChange(current, newQty.coerceAtLeast(0))
         }
     }
 
@@ -577,9 +567,12 @@ class ManagementViewModel(
             }
 
             // 1) 로컬 DB 먼저 주문 확정
-            dao.insertOrder(newOrder)
-            dao.deleteQuote(quote)
-            deductLocalInventoryFromSummary(quote.itemSummary)
+            syncManager.masters.database.withTransaction {
+                dao.insertOrder(newOrder)
+                dao.deleteQuote(quote)
+                deductLocalInventoryFromSummary(quote.itemSummary)
+            }
+            attemptInventorySync()
 
             val quotes = dao.getTodayQuotes()
             val orders = dao.getTodayOrders()
@@ -770,7 +763,7 @@ class ManagementViewModel(
     fun activateNewInput() {
         _uiState.update {
             if (it.selectedSpecies == null || !it.isInputEnabled) it
-            else it.copy(inputQuantity = 0, inputWholesale = 0, inputRetail = 0, isInputActive = true)
+            else it.copy(inputQuantity = 0, inputWholesale = 0, inputRetail = 0, isInputActive = true, inputSizeRaw = null, inputAgeReadOnly = false)
         }
     }
 
@@ -802,6 +795,8 @@ class ManagementViewModel(
         _uiState.update { it.copy(
             selectedSpecies = spec,
             inputAge = row.age,
+            inputSizeRaw = row.size.takeUnless { Regex("^\\d+(\\.\\d)?m$").matches(it) },
+            inputAgeReadOnly = row.age.isNotEmpty() && !Regex("^\\d+년생$").matches(row.age),
             inputSizeMeters = sizeVal,      // 🚨 추가
             inputPlantType = row.plantType, // 🚨 추가
             inputQuality = row.quality,
@@ -812,101 +807,35 @@ class ManagementViewModel(
         ) }
     }
 
+    private fun attemptInventorySync() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val result = syncManager.inventory.sync()
+            refreshLocalState()
+            _uiState.update { it.copy(message = result.message, lastSyncError = if (result.success) null else result.message) }
+        }
+    }
+
     fun saveInventory() {
         val state = _uiState.value
-        val farmId = state.selectedFarm?.farmId
-        val farmName = state.selectedFarm?.farmName
-        val speciesId = state.selectedSpecies?.speciesId
-        val speciesName = state.selectedSpecies?.speciesName
-
-        if (farmId == null || speciesId == null || farmName == null || speciesName == null) return
-
+        val farmId = state.selectedFarm?.farmId ?: return
+        val speciesId = state.selectedSpecies?.speciesId ?: return
         viewModelScope.launch(Dispatchers.IO) {
-            val sizeStr = "${String.format("%.1f", state.inputSizeMeters)}m"
-            val isDelete = state.inputQuantity <= 0
-            val action = if (isDelete) "delete" else "save"
-
-            val targetEntity = FarmInventoryEntity(
-                farmId = farmId,
-                speciesId = speciesId,
-                quality = state.inputQuality,
-                age = state.inputAge,
-                size = sizeStr,
-                plantType = state.inputPlantType,
-                quantity = state.inputQuantity,
-                wholesalePrice = state.inputWholesale,
-                retailPrice = state.inputRetail
-            )
-
-            // 1) 로컬 먼저 저장
-            if (isDelete) {
-                dao.deleteInventory(
-                    farmId = farmId,
-                    speciesId = speciesId,
-                    quality = state.inputQuality,
-                    age = state.inputAge,
-                    size = sizeStr,
-                    plantType = state.inputPlantType
-                )
-            } else {
-                dao.upsertInventory(targetEntity)
-            }
-
-            val newInventoryList = dao.getInventoryRows(farmId, speciesId)
-            val newAllSellingInventory = dao.getAllSellingInventory()
-            val selectedChosung = _uiState.value.selectedChosung
-            val newFilteredSellingInventory = buildFilteredSellingInventory(
-                allSellingInventory = newAllSellingInventory,
-                chosung = selectedChosung
-            )
-
-            _uiState.update {
-                it.copy(
-                    inputQuantity = 0,
-                    inputWholesale = 0,
-                    inputRetail = 0,
-                    inventoryList = newInventoryList,
-                    allSellingInventory = newAllSellingInventory,
-                    filteredSellingInventory = newFilteredSellingInventory,
-                    message = if (isDelete) "💾 로컬 삭제 완료" else "💾 로컬 저장 완료"
-                )
-            }
-
-            // 2) pending 큐 적재
-            val pendingId = enqueuePendingSync(
-                PendingSyncType.INVENTORY,
-                PendingInventorySyncPayload(
-                    action = action,
-                    entity = targetEntity,
-                    farmName = farmName,
-                    speciesName = speciesName
-                )
-            )
-
-            // 3) 시트 업로드는 1번만
-            val isCloudSuccess = syncManager.uploadToSheet(
-                action = action,
-                entity = targetEntity,
-                farmName = farmName,
-                speciesName = speciesName
-            )
-
-            recordImmediateSyncFailure(isCloudSuccess)
-            if (isCloudSuccess) {
-                dao.deletePendingSync(pendingId)
-            }
-
-            _uiState.update {
-                it.copy(
-                    message = if (isCloudSuccess) {
-                        if (isDelete) "✅ 로컬 삭제 + 시트 동기화 완료"
-                        else "✅ 로컬 저장 + 시트 동기화 완료"
-                    } else {
-                        if (isDelete) "⚠️ 로컬 삭제 완료, 시트 동기화 실패"
-                        else "⚠️ 로컬 저장 완료, 시트 동기화 실패"
-                    }
-                )
-            }
+            try {
+                val size = state.inputSizeRaw ?: "${String.format(java.util.Locale.KOREA, "%.1f", state.inputSizeMeters)}m"
+                val target = FarmInventoryEntity(farmId, speciesId, state.inputQuality, state.inputAge, size,
+                    state.inputPlantType, state.inputQuantity.coerceAtLeast(0), state.inputWholesale, state.inputRetail)
+                syncManager.inventory.recordInventoryChange(target, target.quantity)
+                val rows = dao.getInventoryRows(farmId, speciesId)
+                refreshLocalState()
+                _uiState.update { it.copy(inputQuantity = 0, inputWholesale = 0, inputRetail = 0,
+                    inventoryList = rows, message = "휴대폰 저장 완료 · 서버 반영 대기 ${syncManager.inventory.pendingCount()}건") }
+                val result = syncManager.inventory.sync()
+                refreshLocalState()
+                _uiState.update { it.copy(message = if (result.success) "휴대폰 저장 완료 · 서버 반영 완료"
+                    else "휴대폰 저장 완료 · 서버 반영 대기 ${syncManager.inventory.pendingCount()}건",
+                    lastSyncError = if (result.success) null else result.message) }
+            } catch (e: CancellationException) { throw e }
+            catch (e: Exception) { _uiState.update { it.copy(message = "재고 처리 확인이 필요합니다. 기존 자료와 대기를 유지합니다: ${e.message}") } }
         }
     }
 
@@ -1185,6 +1114,10 @@ class ManagementViewModel(
 
     fun deleteSpecies(speciesId: Int) {
         viewModelScope.launch(Dispatchers.IO) {
+            if (syncManager.inventory.hasStockOrPending(speciesId)) {
+                _uiState.update { it.copy(message = "이 묘목의 재고를 먼저 삭제하고 동기화해주세요.") }
+                return@launch
+            }
             val result = syncManager.masters.deleteSpecies(speciesId)
             recordSyncOutcome(result)
             refreshLocalState()

@@ -44,7 +44,8 @@ data class InventoryOutcome(val success: Boolean, val message: String, val sent:
 
 /** A single master/inventory sequence owns mapping and versions. No network call runs in a Room transaction. */
 class InventorySync(private val database: AppDatabase, private val client: OperationsMasterGateway,
-    private val masters: OperationsMasterSync, private val settings: InventoryLinkSettings) {
+    private val masters: OperationsMasterSync, private val settings: InventoryLinkSettings,
+    private val filesDir: java.io.File? = null) {
     private val dao = database.managementDao()
     private val gson = Gson()
     private val mutableReview = MutableStateFlow(InventoryReviewState())
@@ -69,6 +70,31 @@ class InventorySync(private val database: AppDatabase, private val client: Opera
         val value = InventoryMutation.from(entity)
         dao.insertPendingSync(PendingSyncEntity(syncType = PendingSyncType.INVENTORY_SAVE, payloadJson = gson.toJson(value)))
     }
+    /** This is also safe when nested in the order-creation Room transaction. */
+    suspend fun recordInventoryChange(entity: FarmInventoryEntity, quantityAfter: Int) = database.withTransaction {
+        val changed = entity.copy(quantity = quantityAfter.coerceAtLeast(0))
+        require(changed.wholesalePrice >= 0 && changed.retailPrice >= 0)
+        if (changed.quantity == 0) deleteLocal(changed.stockKey()) else dao.upsertInventory(changed)
+        val unattempted = pending().lastOrNull { row ->
+            row.retryCount == 0 && row.lastError.isBlank() && mutation(row).key() == changed.stockKey()
+        }
+        if (unattempted == null) enqueue(changed)
+        else {
+            val old = mutation(unattempted)
+            dao.updatePendingPayload(requireNotNull(unattempted.syncId), gson.toJson(InventoryMutation.from(changed).copy(operationId = old.operationId)))
+        }
+    }
+    fun hasStockOrPending(speciesId: Int): Boolean = dao.getAllInventoryEntities().any { it.speciesId == speciesId && it.quantity > 0 } ||
+        dao.getAllPendingSync().any { row ->
+            when (row.syncType) {
+                PendingSyncType.INVENTORY_SAVE -> runCatching { mutation(row).speciesId == speciesId }.getOrDefault(true)
+                PendingSyncType.INVENTORY -> runCatching {
+                    gson.fromJson(row.payloadJson, PendingInventorySyncPayload::class.java).entity.speciesId == speciesId
+                }.getOrDefault(true)
+                else -> false
+            }
+        }
+
     private fun integer(obj: JsonObject, field: String, minimum: Int = 0): Int {
         val value = requireNotNull(obj.get(field)) { "재고 응답 필드 없음: $field" }
         require(value.isJsonPrimitive && value.asJsonPrimitive.isNumber) { "재고 숫자 형식 오류: $field" }
