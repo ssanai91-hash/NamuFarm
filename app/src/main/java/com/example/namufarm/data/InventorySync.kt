@@ -115,7 +115,7 @@ class InventorySync(private val database: AppDatabase, private val client: Opera
     }
     private suspend fun fetch(): List<InventoryRecord> {
         val response = client.request("list_inventory")
-        require(response.get("inventoryVersioning")?.let { it.isJsonPrimitive && it.asJsonPrimitive.isNumber && it.asInt == 1 } == true) {
+        require(response.get("inventoryVersioning")?.let { it.isJsonPrimitive && it.asJsonPrimitive.isNumber && it.asBigDecimal.compareTo(java.math.BigDecimal.ONE) == 0 } == true) {
             "운영 서버의 재고 기능이 최신이 아닙니다. 휴대폰 재고는 그대로 보관됩니다."
         }
         val rows = response.getAsJsonArray("inventory") ?: error("서버 재고 목록을 확인할 수 없습니다.")
@@ -211,7 +211,7 @@ class InventorySync(private val database: AppDatabase, private val client: Opera
         }
         val response = client.request("save_inventory", mapOf("operationId" to value.operationId,
             "inventory" to value.body(farm.remoteId, species.remoteId), "expectedVersion" to expected))
-        check(response.get("saved")?.asBoolean == true && response.get("operationId")?.asString == value.operationId) {
+        check(response.get("saved")?.let { it.isJsonPrimitive && it.asJsonPrimitive.isBoolean && it.asBoolean } == true && response.get("operationId")?.asString == value.operationId) {
             "서버 재고 저장 확인이 일치하지 않습니다."
         }
         val saved = record(response.getAsJsonObject("inventoryRecord") ?: error("서버 재고 저장 결과가 없습니다."))

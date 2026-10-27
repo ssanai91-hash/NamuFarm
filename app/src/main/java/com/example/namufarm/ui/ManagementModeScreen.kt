@@ -78,9 +78,8 @@ fun ManagementModeScreen(viewModel: ManagementViewModel, onBack: () -> Unit,
                 })
                 else -> {
                     NamuTopBar("농원·묘목", masterSyncLabel(state.lastMasterSyncAt), onSync = {
-                        viewModel.syncFarmMasterFromGoogleSheet()
-                        viewModel.syncSpeciesMasterFromGoogleSheet()
-                    })
+                        viewModel.syncInventoryWithMasters()
+                    }, actions = { backupController?.let { BackupMenu(it) } })
                     FarmTopArea(state, view, onView = { view = it }) {
                         if (view != 2) FarmPicker(state, viewModel::selectFarmForStock)
                         if (view != 1) {
