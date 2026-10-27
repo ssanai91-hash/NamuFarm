@@ -78,7 +78,10 @@ data class ManagementUiState(
     val inputRetail: Int = 0
 ) {
     // Adapt legacy feedback at the presentation boundary without changing save/sync outcomes.
-    val feedback: NamuMessage? get() = message?.let { NamuMessage.fromLegacy(it) }
+    val feedback: NamuMessage? get() = message?.let {
+        val feedback = NamuMessage.fromLegacy(it)
+        feedback.copy(isError = feedback.isError || it == lastSyncError)
+    }
 }
 
 class ManagementViewModel(
