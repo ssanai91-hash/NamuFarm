@@ -187,3 +187,23 @@ class UiTest(QtTestCase):
 if __name__ == '__main__':
     unittest.main()
 
+
+
+class RequestDetailLayoutTest(QtTestCase):
+    def test_request_actions_are_retained_and_receipt_never_falls_back_to_uuid(self):
+        from namufarm_desktop.workspace import SellerWindow
+        from namufarm_desktop.demo import demo_data
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as folder:
+            window = SellerWindow(Path(folder) / 'unused.db')
+            window.timer.stop()
+            data = demo_data()
+            data['requests'][0]['receiptNumber'] = ''
+            window.apply_view(data)
+            self.assertEqual('접수번호 없음', window.request_table.item(0, 0).text())
+            self.assertTrue(window.request_actions_box.isHidden())
+            self.assertTrue(hasattr(window, 'request_quote_button'))
+            self.assertEqual(340, window.request_search.width())
+            self.assertIsNotNone(window.request_detail)
+            window.close()

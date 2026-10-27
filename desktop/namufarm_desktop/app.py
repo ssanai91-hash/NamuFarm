@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 
 from .api import DEFAULT_URL
 from .commerce import sale_number
+from .presentation import phone_text, date_text
 from .crypto import SellerKey
 from .domain import EDITABLE, NEXT, SEOUL, STATES, MAX_SAFE, profit, require
 from .errors import ConflictError, UserError
@@ -462,13 +463,17 @@ class MainWindow(QMainWindow):
 
     def refresh_requests(self):
         query = self.request_search.text().casefold()
+        quick = getattr(self, "request_quick_filter", "all")
+        today = datetime.now(SEOUL).date()
         self.request_rows = [r for r in self.data["requests"] if r.get("status", "신규") == "신규"
-                             and query in (r["requestId"] + r.get("receiptNumber", "") + str(r["personal"])).casefold()]
+                            and query in (r["requestId"] + r.get("receiptNumber", "") + str(r["personal"])).casefold()
+                            and (quick != "formal" or r["personal"].get("formalQuoteRequested"))
+                            and (quick != "today" or datetime.fromtimestamp(r["createdAt"] / 1000, SEOUL).date() == today)]
         self.request_table.set_empty_message(
             "검색 조건에 맞는 견적요청이 없습니다.\n검색어를 지우거나 가져오기를 확인하세요." if query else
             "표시할 견적요청이 없습니다.\n가져오기로 최신 요청을 확인하세요.")
         self.request_table.blockSignals(True)
-        fill_table(self.request_table, [(r.get("receiptNumber") or r["requestId"], timestamp(r["createdAt"]), r.get("status", "신규"), r["personal"]["customerName"], r["personal"]["customerPhone"],
+        fill_table(self.request_table, [(r.get("receiptNumber") or "접수번호 없음", timestamp(r["createdAt"]), r.get("status", "신규"), r["personal"]["customerName"], r["personal"]["customerPhone"],
                    r["personal"].get("customerEmail") or "—", r["personal"]["region"],
                    "요청" if r["personal"].get("formalQuoteRequested") else "—",
                    ", ".join(f"{i['species']} {i['quantity']}주" for i in r["personal"]["items"]),

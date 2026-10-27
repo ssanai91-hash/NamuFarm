@@ -36,6 +36,7 @@ from .inquiry_ui import InquiryPage
 from .nursery import NurseryStore
 from .quote_species import SpeciesNameEditor, QuoteSpeciesPicker
 from .list_filters import ListPeriodFilter, first_date
+from .presentation import DetailPanel, phone_text, date_text
 
 STYLE = workspace_style()
 
@@ -3894,11 +3895,12 @@ class SellerWindow(MainWindow):
         self.request_table.setTextElideMode(Qt.TextElideMode.ElideRight)
         self.request_table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Fixed)
         self.configure_request_columns()
-        self.request_table.setItemDelegateForColumn(3, CustomerDelegate(self.request_table))
+        self.request_table.setItemDelegateForColumn(0, CustomerDelegate(self.request_table))
         request_layout = old_pages[0].layout()
         request_layout.setContentsMargins(0, 0, 0, 0)
         request_layout.setSpacing(8)
         self.request_table.setItemDelegateForColumn(1, CompactDateDelegate(self.request_table))
+        self.build_request_detail(old_pages[0])
         self.request_table.horizontalHeaderItem(1).setToolTip("접수일 · 전체 날짜와 시간은 셀 도움말에서 확인합니다.")
         set_button_icon(self.request_quote_button, "document", "#23593a")
         self.ui_settings = QSettings("NamuFarm", "NamuFarmDesktop")
@@ -4016,14 +4018,73 @@ class SellerWindow(MainWindow):
         self.server_log_frame.update()
 
     def configure_request_columns(self):
-        large = bool(QApplication.instance().property("namufarmLargeFont"))
-        if QApplication.instance().property("namufarmCompactLayout"):
-            minimum = (180, 124, 166, 116, 88, 158) if large else (174, 116, 156, 106, 74, 152)
-        else:
-            minimum = (205, 140, 190, 128, 100, 205) if not large else (210, 150, 195, 144, 112, 220)
-        self.request_table.set_column_layout(tuple(
-            (column, weight, width) for (column, weight), width in zip(
-                ((3, 2), (4, .5), (8, 3), (1, .5), (7, .3), (5, 3)), minimum)))
+        self.request_table.set_column_layout(((0, 1, 160), (3, .6, 88), (4, .7, 112), (8, 1.2, 120), (7, .3, 60)))
+        self.request_table.horizontalHeaderItem(0).setText("접수번호 · 시각")
+        self.request_table.horizontalHeaderItem(3).setText("고객")
+        self.request_table.horizontalHeaderItem(8).setText("희망 묘목")
+        self.request_table.horizontalHeaderItem(7).setText("견적서")
+
+    def build_request_detail(self, page):
+        layout = page.layout()
+        self.request_quick_filter = "all"
+        quick, self.request_quick_buttons = self.filter_buttons(
+            (("전체", "all"), ("공식견적서 요청", "formal"), ("오늘 접수", "today")), self.set_request_quick_filter)
+        layout.insertLayout(1, quick)
+        position = layout.indexOf(self.request_table)
+        layout.removeWidget(self.request_table)
+        self.request_splitter = QSplitter(Qt.Orientation.Horizontal)
+        self.request_splitter.setChildrenCollapsible(False)
+        self.request_detail = DetailPanel()
+        self.request_splitter.addWidget(self.request_table)
+        self.request_splitter.addWidget(self.request_detail)
+        self.request_splitter.setStretchFactor(0, 1)
+        self.request_splitter.setSizes([700, 400])
+        layout.insertWidget(position, self.request_splitter, 1)
+        layout.removeItem(self.request_actions)
+        self.request_actions_box = QWidget(self)
+        self.request_actions_box.setLayout(self.request_actions)
+        self.request_actions_box.hide()
+        self.request_actions.removeWidget(self.manual_quote_button)
+        self.manual_quote_button.setText("+ 직접 견적 작성")
+        self.manual_quote_button.setObjectName("primary")
+        self.header_actions.addWidget(self.manual_quote_button)
+        self.request_detail_primary = button("견적 작성하기 →", self.request_quote_button.click, True)
+        self.request_detail_delete = button("요청 삭제", self.delete_button.click)
+        self.request_detail_delete.setProperty("role", "danger")
+        self.request_detail.footer.addWidget(self.request_detail_primary)
+        self.request_detail.footer.addWidget(label("더블클릭 · Enter로도 열 수 있어요", "muted", True))
+        self.request_detail.footer.addWidget(self.request_detail_delete)
+        self.request_table.itemSelectionChanged.connect(self.refresh_request_detail)
+        self.request_search.setFixedWidth(340)
+        self.refresh_request_detail()
+
+    def set_request_quick_filter(self, value):
+        self.request_quick_filter = value
+        for key, item in self.request_quick_buttons.items():
+            item.setChecked(key == value)
+        self.refresh_requests()
+
+    def refresh_request_detail(self):
+        if not hasattr(self, "request_detail"):
+            return
+        index = self.request_table.currentRow()
+        selected = 0 <= index < len(self.request_rows)
+        self.request_detail_primary.setEnabled(selected and self.request_quote_button.isEnabled())
+        self.request_detail_delete.setEnabled(selected and self.delete_button.isEnabled())
+        if not selected:
+            self.request_detail.reset("목록에서 선택해주세요.")
+            return
+        row = self.request_rows[index]
+        personal = row["personal"]
+        self.request_detail.reset(personal["customerName"],
+            (row.get("receiptNumber") or "접수번호 없음") + " · " + date_text(row["createdAt"]), "신규")
+        self.request_detail.info("연락처", phone_text(personal.get("customerPhone")), copy=True)
+        self.request_detail.info("지역", personal.get("region"))
+        self.request_detail.info("이메일", personal.get("customerEmail"))
+        self.request_detail.info("받는 방법", personal.get("replyChannel"))
+        self.request_detail.info("공식견적서", "요청" if personal.get("formalQuoteRequested") else "요청 없음")
+        self.request_detail.items(personal.get("items", []))
+        self.request_detail.note(personal.get("message") or "고객 요청사항 없음")
 
     def set_page_count(self, index, count):
         self.page_counts[index] = count
@@ -4046,7 +4107,19 @@ class SellerWindow(MainWindow):
         super().refresh_requests()
         if hasattr(self, "page_title"):
             self.set_page_count(self.PAGE_REQUESTS, len(self.request_rows))
-            customer_reference(self.request_table, 3, 0)
+            for i, row in enumerate(self.request_rows):
+                self.request_table.item(i, 0).setData(Qt.ItemDataRole.UserRole, date_text(row["createdAt"]))
+                self.request_table.item(i, 0).setToolTip((row.get("receiptNumber") or "접수번호 없음") + "\n" + timestamp(row["createdAt"]))
+                self.request_table.item(i, 4).setText(phone_text(row["personal"]["customerPhone"]))
+            if hasattr(self, "request_quick_buttons"):
+                rows = [r for r in self.data["requests"] if r.get("status", "신규") == "신규"]
+                today = datetime.now(SEOUL).date()
+                counts = {"all": len(rows), "formal": sum(bool(r["personal"].get("formalQuoteRequested")) for r in rows),
+                          "today": sum(datetime.fromtimestamp(r["createdAt"] / 1000, SEOUL).date() == today for r in rows)}
+                for key, item in self.request_quick_buttons.items():
+                    title = {"all": "전체", "formal": "공식견적서 요청", "today": "오늘 접수"}[key]
+                    item.setText(f"{title} {counts[key]:,}")
+            self.refresh_request_detail()
 
     def filter_buttons(self, choices, callback):
         row = QHBoxLayout()
@@ -4349,6 +4422,8 @@ class SellerWindow(MainWindow):
             page.refresh_local()
             self.set_page_count(index, len(page.rows))
         self.update_page_title(index)
+        if hasattr(self, "manual_quote_button"):
+            self.manual_quote_button.setVisible(index == self.PAGE_REQUESTS)
         for i, widget in enumerate(self.nav):
             widget.setChecked(i == index)
         if index == self.PAGE_REQUESTS and self.workspace_ready:
@@ -4537,6 +4612,7 @@ class SellerWindow(MainWindow):
         self.inquiries_page.update_controls()
         self.manual_quote_button.setEnabled(ready)
         self.request_quote_button.setEnabled(ready and self.request_table.currentRow() >= 0)
+        self.refresh_request_detail()
         selected_draft = self.draft_table.currentRow()
         self.draft_open.setEnabled(ready and 0 <= selected_draft < len(self.draft_rows))
         self.draft_delete.setEnabled(ready and 0 <= selected_draft < len(self.draft_rows))
