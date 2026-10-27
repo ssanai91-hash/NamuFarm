@@ -354,6 +354,12 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
     } catch (e) { setError(e instanceof Error && e.name !== "TimeoutError" && e.name !== "TypeError" && e.name !== "SyntaxError" ? e.message : "접수 결과를 확인하지 못했어요. 창을 닫아도 입력 내용은 유지됩니다. 잠시 후 같은 요청으로 확인해주세요."); }
     finally { setBusy(false); inFlight.current = false; }
   }
+  // Leave the popup's back entry first, then scroll; a hash jump would strand that entry.
+  function goToSectionFromMenu(event: MouseEvent<HTMLAnchorElement>, id: string) {
+    event.preventDefault();
+    setMenuOpen(false);
+    window.setTimeout(() => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" }), 350);
+  }
   function closeReview() {
     setReviewOpen(false);
     if (!locked) setReview(null);
@@ -486,10 +492,10 @@ export default function QuoteHome({ initialTestMode = false, initialConfigured =
           <DialogClose asChild><Button className="dialog-dismiss" variant="ghost" aria-label="메뉴 닫기"><X aria-hidden="true" /><span>닫기</span></Button></DialogClose>
           <DialogHeader><DialogTitle>나무팜</DialogTitle><DialogDescription>자주 묻는 질문 · 문의 · 전화 상담</DialogDescription></DialogHeader>
           <nav aria-label="모바일 메뉴">
-            <a href="#questions" className="nav-action nav-faq" onClick={() => setMenuOpen(false)}>자주 묻는 질문</a>
+            <a href="#questions" className="nav-action nav-faq" onClick={event => goToSectionFromMenu(event, "questions")}>자주 묻는 질문</a>
             <button type="button" className="nav-action nav-inquiry" onClick={() => { inquiryOpener.current = document.querySelector<HTMLButtonElement>(".menu-button"); setMenuOpen(false); requestAnimationFrame(() => setInquiryOpen(true)); }} aria-haspopup="dialog">문의글 보내기</button>
             <a href={`tel:${businessInfo.mobile.replaceAll("-", "")}`} className="nav-action nav-call" aria-label={`전화 상담 ${businessInfo.mobile}`} onClick={() => setMenuOpen(false)}><Phone aria-hidden="true" />전화 상담</a>
-            <a href="#quote" className="nav-action nav-quote" onClick={() => setMenuOpen(false)}>묘목 견적요청</a>
+            <a href="#quote" className="nav-action nav-quote" onClick={event => goToSectionFromMenu(event, "quote")}>묘목 견적요청</a>
           </nav>
         </DialogContent>
       </Dialog>
