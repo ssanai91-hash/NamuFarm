@@ -51,30 +51,39 @@ class OperationsMasterSync(internal val database: AppDatabase, internal val clie
         }
         syncLocked(SPECIES).copy(localId = id)
     }
-    suspend fun deleteFarm(id: Int): MasterSyncOutcome = mutex.withLock {
-        if (dao.getFarmInventoryCount(id) > 0)
-            return@withLock MasterSyncOutcome(false, "⚠️ 재고가 있는 농원입니다. 재고를 먼저 정리해주세요.")
-        database.withTransaction {
-            dao.deleteFarmById(id)
-            queue(PendingSyncType.FARM_DELETE, PendingDeleteFarmSyncPayload(id))
-        }
-        syncLocked(FARM)
-    }
-    suspend fun deleteSpecies(id: Int): MasterSyncOutcome = mutex.withLock {
-        if (dao.getAllInventoryEntities().any { it.speciesId == id && it.quantity > 0 } ||
+    private fun hasInventoryWork(id: Int, farm: Boolean): Boolean =
+        dao.getAllInventoryEntities().any { (if (farm) it.farmId else it.speciesId) == id && it.quantity > 0 } ||
             dao.getAllPendingSync().any { row -> when (row.syncType) {
-                PendingSyncType.INVENTORY_SAVE -> runCatching { gson.fromJson(row.payloadJson, InventoryMutation::class.java).speciesId == id }.getOrDefault(true)
-                PendingSyncType.INVENTORY -> runCatching { gson.fromJson(row.payloadJson, PendingInventorySyncPayload::class.java).entity.speciesId == id }.getOrDefault(true)
+                PendingSyncType.INVENTORY_SAVE -> runCatching {
+                    val mutation = gson.fromJson(row.payloadJson, InventoryMutation::class.java)
+                    (if (farm) mutation.farmId else mutation.speciesId) == id
+                }.getOrDefault(true)
+                PendingSyncType.INVENTORY -> runCatching {
+                    val entity = gson.fromJson(row.payloadJson, PendingInventorySyncPayload::class.java).entity
+                    (if (farm) entity.farmId else entity.speciesId) == id
+                }.getOrDefault(true)
                 else -> false
-            } }) return@withLock MasterSyncOutcome(false, "이 묘목의 재고를 먼저 삭제하고 동기화해주세요.")
-        database.withTransaction {
-            dao.deactivateSpecies(id)
-            // Freeze the disabled record, so retries cannot change a later edit.
-            dao.getSpeciesById(id)?.let {
-                queue(PendingSyncType.SPECIES_SAVE, PendingSpeciesSyncPayload(it))
+            } }
+
+    suspend fun deleteFarm(id: Int): MasterSyncOutcome = mutex.withLock {
+        val deleted = database.withTransaction {
+            if (hasInventoryWork(id, true)) false else {
+                dao.deleteFarmById(id)
+                queue(PendingSyncType.FARM_DELETE, PendingDeleteFarmSyncPayload(id))
+                true
             }
         }
-        syncLocked(SPECIES)
+        if (!deleted) MasterSyncOutcome(false, "이 농원의 재고를 먼저 삭제하고 동기화해주세요.") else syncLocked(FARM)
+    }
+    suspend fun deleteSpecies(id: Int): MasterSyncOutcome = mutex.withLock {
+        val hidden = database.withTransaction {
+            if (hasInventoryWork(id, false)) false else {
+                dao.deactivateSpecies(id)
+                dao.getSpeciesById(id)?.let { queue(PendingSyncType.SPECIES_SAVE, PendingSpeciesSyncPayload(it)) }
+                true
+            }
+        }
+        if (!hidden) MasterSyncOutcome(false, "이 묘목의 재고를 먼저 삭제하고 동기화해주세요.") else syncLocked(SPECIES)
     }
     suspend fun sync(onlyKind: String? = null): MasterSyncOutcome = mutex.withLock { syncLocked(onlyKind) }
 

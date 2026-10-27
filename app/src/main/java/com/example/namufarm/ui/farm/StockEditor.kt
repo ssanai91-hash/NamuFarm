@@ -163,7 +163,7 @@ internal fun StockEditor(viewModel: ManagementViewModel, original: InventoryDisp
                 "${state.inputAge} · ${(state.inputSizeRaw ?: String.format(Locale.KOREA, "%.1fm", state.inputSizeMeters))} · ${state.inputPlantType} · ${state.inputQuality}\n" +
                 "수량 ${farmNumber(state.inputQuantity)}주\n도매 ${farmNumber(state.inputWholesale)}원 · 소매 ${farmNumber(state.inputRetail)}원\n" +
                 if (isDelete) "이 재고를 삭제할까요?" else "이 정보로 저장할까요?") },
-            confirmButton = { TextButton(onClick = { beforeDelete = null; confirmSave = false; viewModel.saveInventory(); onSaved() }) {
+            confirmButton = { TextButton(onClick = { beforeDelete = null; confirmSave = false; viewModel.saveInventory(onLocalSaved = onSaved) }) {
                 Text(if (isDelete) "삭제 진행" else "저장 진행", color = if (isDelete) NamuColors.danger else NamuColors.primary)
             } }, dismissButton = { TextButton(onClick = ::cancelSave) { Text("취소") } })
     }

@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.update // 🚨 핵심 방패 추가!
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import com.example.namufarm.data.SyncManager
 import com.example.namufarm.data.remote.JusoItem
 import com.example.namufarm.data.remote.RetrofitClient
@@ -541,6 +542,7 @@ class ManagementViewModel(
     // 🚨 주문 확정 로직 업데이트 (context 파라미터 추가!)
     fun convertQuoteToOrder(quote: QuoteEntity, context: Context) {
         viewModelScope.launch(Dispatchers.IO) {
+            try {
             val now = java.util.Date()
             val datePart = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.KOREA).format(now)
             val displayDate = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.KOREA).format(now)
@@ -642,6 +644,8 @@ class ManagementViewModel(
                     }
                 )
             }
+            } catch (e: CancellationException) { throw e }
+            catch (e: Exception) { _uiState.update { it.copy(message = "주문 전환을 완료하지 못했습니다. 기존 자료와 전송 대기를 유지합니다: ${e.message}") } }
         }
     }
 
@@ -835,7 +839,7 @@ class ManagementViewModel(
         }
     }
 
-    fun saveInventory() {
+    fun saveInventory(onLocalSaved: (() -> Unit)? = null) {
         val state = _uiState.value
         val farmId = state.selectedFarm?.farmId ?: return
         val speciesId = state.selectedSpecies?.speciesId ?: return
@@ -849,6 +853,7 @@ class ManagementViewModel(
                 refreshLocalState()
                 _uiState.update { it.copy(inputQuantity = 0, inputWholesale = 0, inputRetail = 0,
                     inventoryList = rows, message = "휴대폰 저장 완료 · 서버 반영 대기 ${syncManager.inventory.pendingCount()}건") }
+                withContext(Dispatchers.Main) { onLocalSaved?.invoke() }
                 val result = syncManager.inventory.sync()
                 refreshLocalState()
                 recordInventoryOutcome(result.copy(message = if (result.success) "휴대폰 저장 완료 · 서버 반영 완료"

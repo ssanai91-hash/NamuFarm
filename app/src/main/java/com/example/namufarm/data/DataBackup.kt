@@ -173,7 +173,18 @@ class DataBackupController(private val context: Context, private val quiesce: su
                 while (event != org.xmlpull.v1.XmlPullParser.END_DOCUMENT) {
                     if (event == org.xmlpull.v1.XmlPullParser.START_TAG) {
                         if (!rootSeen) { check(parser.name == "map"); rootSeen = true }
-                        else check(parser.name in setOf("string", "set", "int", "long", "float", "boolean"))
+                        else {
+                            check(parser.name in setOf("string", "set", "int", "long", "float", "boolean"))
+                            if (parser.depth == 2) check(!parser.getAttributeValue(null, "name").isNullOrEmpty())
+                            else check(parser.depth == 3 && parser.name == "string")
+                            val value = parser.getAttributeValue(null, "value")
+                            when (parser.name) {
+                                "int" -> check(value?.toIntOrNull() != null)
+                                "long" -> check(value?.toLongOrNull() != null)
+                                "float" -> check(value?.toFloatOrNull() != null)
+                                "boolean" -> check(value in setOf("true", "false"))
+                            }
+                        }
                     }; event = parser.next()
                 }; check(rootSeen)
             }

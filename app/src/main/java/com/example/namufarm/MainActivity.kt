@@ -14,6 +14,10 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Text
+import androidx.compose.material3.Icon
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Park
+import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -205,7 +209,7 @@ fun SplashScreen(onTimeout: () -> Unit) {
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("🌲", fontSize = 100.sp)
+            Icon(Icons.Outlined.Park, null, Modifier.size(96.dp), tint = com.example.namufarm.ui.theme.NamuColors.primary)
             Text("나무팜 NamuFarm", fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF2E7D32))
             Text("재고 및 견적 관리 시스템", fontSize = 14.sp, color = Color(0xFF388E3C))
         }
