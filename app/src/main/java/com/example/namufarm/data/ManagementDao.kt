@@ -252,4 +252,28 @@ interface ManagementDao {
     @Query("UPDATE pending_sync SET payload_json = :json WHERE sync_id = :id")
     fun updatePendingPayload(id: Int, json: String)
 
+
+    @Query("SELECT * FROM inventory_links")
+    fun getInventoryLinks(): List<InventoryLinkEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun upsertInventoryLink(link: InventoryLinkEntity)
+
+    @Query("SELECT * FROM inventory_links WHERE farm_id=:farmId AND species_id=:speciesId AND quality=:quality AND age=:age AND size=:size AND plant_type=:plantType LIMIT 1")
+    fun getInventoryLink(farmId: Int, speciesId: Int, quality: String, age: String, size: String, plantType: String): InventoryLinkEntity?
+
+    @Query("DELETE FROM inventory_links WHERE farm_id=:farmId AND species_id=:speciesId AND quality=:quality AND age=:age AND size=:size AND plant_type=:plantType")
+    fun deleteInventoryLink(farmId: Int, speciesId: Int, quality: String, age: String, size: String, plantType: String)
+
+    @Query("SELECT * FROM farm_inventory")
+    fun getAllInventoryEntities(): List<FarmInventoryEntity>
+
+    @Query("SELECT * FROM farm_inventory WHERE farm_id=:farmId AND species_id=:speciesId AND quality=:quality AND age=:age AND size=:size AND plant_type=:plantType LIMIT 1")
+    fun findInventory(farmId: Int, speciesId: Int, quality: String, age: String, size: String, plantType: String): FarmInventoryEntity?
+
+    @Query("UPDATE pending_sync SET retry_count=retry_count+1 WHERE sync_id=:id")
+    fun markInventoryAttempt(id: Int)
+
+    @Query("DELETE FROM pending_sync WHERE sync_type='inventory'")
+    fun deleteLegacyInventoryPending(): Int
 } // <- 인터페이스 닫는 괄호

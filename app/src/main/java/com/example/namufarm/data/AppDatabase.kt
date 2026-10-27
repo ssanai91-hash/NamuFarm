@@ -15,9 +15,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         QuoteEntity::class,
         OrderEntity::class,
         PendingSyncEntity::class,
-        MasterLinkEntity::class
+        MasterLinkEntity::class,
+        InventoryLinkEntity::class
     ],
-    version = 13, // Preserve local IDs and add operations-sheet links.
+    version = 14, // Add inventory versions only; preserve every existing table.
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -452,6 +453,16 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_13_14 = object : Migration(13, 14) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""CREATE TABLE IF NOT EXISTS inventory_links (
+                    farm_id INTEGER NOT NULL, species_id INTEGER NOT NULL,
+                    quality TEXT NOT NULL, age TEXT NOT NULL, size TEXT NOT NULL,
+                    plant_type TEXT NOT NULL, version TEXT NOT NULL,
+                    PRIMARY KEY(farm_id, species_id, quality, age, size, plant_type))""".trimIndent())
+            }
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return instance ?: synchronized(this) {
                 val newInstance = Room.databaseBuilder(
@@ -471,7 +482,8 @@ abstract class AppDatabase : RoomDatabase() {
                         MIGRATION_9_10,
                         MIGRATION_10_12,
                         MIGRATION_11_12,
-                        MIGRATION_12_13
+                        MIGRATION_12_13,
+                        MIGRATION_13_14
                     )
                     .build()
 
