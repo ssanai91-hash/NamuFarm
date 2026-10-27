@@ -8,262 +8,159 @@ from PySide6.QtWidgets import (QApplication, QHeaderView, QLabel, QLineEdit, QSc
                                QStyledItemDelegate, QStyleOptionViewItem, QStyle, QPushButton)
 
 
+TOKENS = {
+    "sidebar": "#193C32", "primary": "#2D6A4F", "primary-hover": "#1F573B", "primary-pressed": "#16472E",
+    "accent": "#B6DF9A", "danger": "#B3261E", "text": "#1F2A26", "muted": "#5B6B63",
+    "border": "#DFE5E2", "input-border": "#B9C7C0", "page-bg": "#F4F6F5", "card": "#FFFFFF",
+    "table-head": "#F2F5F3", "row-selected": "#E8F3EC", "nav-selected": "#2A5C49", "nav-caption": "#8FB3A0",
+    "waiting": "#F2D38A", "working-bg": "#FFF7E4", "new-fg": "#1D4F91", "new-bg": "#E7F0FB",
+    "quote-fg": "#8A5300", "quote-bg": "#FDF1DC", "paid-fg": "#1E6B3F", "paid-bg": "#E3F2E8",
+    "ready-fg": "#0B5F56", "ready-bg": "#DFF1EF", "tracking-fg": "#5B3C9E", "tracking-bg": "#EFE9FB",
+    "done-fg": "#46545C", "done-bg": "#ECEFF1", "cancel-fg": "#9A2A22", "cancel-bg": "#FBE9E7",
+}
+
+
+def status_badge(stage):
+    """Single display-only vocabulary for delegates and detail panels; no status mutation."""
+    aliases = {"신규": "신규 요청", "구매확정": "입금확인", "판매완료": "배송완료", "주문취소": "구매취소"}
+    text = aliases.get(stage, stage)
+    key = {"신규 요청": "new", "견적확정": "quote", "견적발송완료": "quote", "입금확인": "paid",
+           "배송준비": "ready", "송장등록": "tracking", "배송완료": "done", "구매취소": "cancel"}.get(text, "done")
+    size = 15 if QApplication.instance() and QApplication.instance().property("namufarmLargeFont") else 13
+    fg, bg = TOKENS[key + "-fg"], TOKENS[key + "-bg"]
+    return {"text": text, "foreground": fg, "background": bg,
+            "style": f"color:{fg};background:{bg};border:0;border-radius:8px;padding:4px 10px;font-size:{size}px;font-weight:700;"}
+
+
+def stage_label(stage, parent=None):
+    badge = status_badge(stage)
+    result = QLabel(badge["text"], parent)
+    result.setObjectName("stageBadge")
+    result.setStyleSheet(badge["style"])
+    return result
+
+
+def _theme(css, large=False):
+    values = {**TOKENS, **{key: str(value + (2 if large else 0)) for key, value in
+              {"body": 15, "small": 13, "title": 22, "section": 16, "action": 17, "total": 26}.items()}}
+    for key, value in values.items():
+        css = css.replace("@" + key + "@", value)
+    return css
+
+
 def workspace_style(large=False, compact=False):
-    body, small = (18, 16) if large else (16, 14)
-    css = """
-QWidget{font-family:'Malgun Gothic','NanumGothic',sans-serif;font-size:@body@px;color:#24313a;}
-QMainWindow,#workspace,QDialog{background:#f4f6f7;}
-#sidebar{background:#193c32;border:0;}
-#sidebar QLabel{color:#c6d9cf;}
-#sidebar QFrame#brandPanel{background:#285446;border:1px solid #4a7761;border-radius:10px;}
-#sidebar #brand{font-size:30px;font-weight:700;color:#fff;background:transparent;}
-#sidebar QFrame#sidebarClock{background:#234b3c;border:1px solid #4b7760;border-radius:12px;}
-#sidebar QLabel#sidebarTree{background:transparent;border:0;}
-#sidebar QLabel#sidebarClockTitle{font-size:14px;font-weight:600;color:#b8d8c4;background:transparent;}
-#sidebar QLabel#sidebarDate{font-size:26px;font-weight:700;color:#e1eee6;background:transparent;}
-#sidebar QLabel#sidebarTime{font-family:Consolas,"Malgun Gothic";font-size:32px;letter-spacing:1px;font-weight:700;color:#f1fbf4;background:transparent;}
-#sidebar #navFoot{font-size:@small@px;color:#c6d9cf;}
-#sidebar QPushButton{background:transparent;color:#e0ebe3;border:2px solid transparent;border-radius:8px;text-align:left;padding:10px 14px;font-size:@nav@px;min-height:@navheight@px;max-height:@navheight@px;font-weight:600;}
-#sidebar QPushButton:checked{background:#2e604e;color:#fff;border-left-color:#b6df9a;}
-#sidebar QPushButton:hover{background:#285442;}
-#sidebar QPushButton[keyboardFocus="true"]{border-style:dashed;border-color:#e4d29e;}
-#sidebar QWidget#navRow{background:transparent;}
-#sidebar QLabel#navBadge{background:#c7efad;color:#173b26;border:1px solid #c7efad;border-radius:10px;min-width:24px;padding:3px 6px;font-size:@small@px;font-weight:700;}
-QFrame#pageSummary{background:#193c32;border:1px solid #193c32;border-radius:8px;}
-QLabel#summaryTitle{font-size:22px;font-weight:700;color:#fff;background:transparent;}
-QLabel#summaryCount{font-size:48px;font-weight:700;color:#fff;background:transparent;}
-QLabel#summaryCount[longCount="true"]{font-size:32px;}
-QLabel#summaryCountUnit{font-size:22px;font-weight:600;color:#d0e0d7;background:transparent;padding-bottom:6px;}
-QLabel#pageTitle,QLabel#deliveryTitle,QLabel#heroTitle{font-size:24px;font-weight:700;color:#24313a;}
-QLabel#sectionTitle,QLabel#quoteItemsTitle,QLabel#emailSectionTitle{font-size:18px;font-weight:700;}
-QLabel#metricValue,QLabel#quoteTotalValue,QLabel#customerAmountValue{font-size:28px;font-weight:700;color:#2d6a4f;}
-QLabel#muted,QLabel#eyebrow,QLabel#deliverySubtitle,QLabel#infoCaption,QLabel#customerMetricCaption,QLabel#quoteItemsHint,QLabel#emailHelp{font-size:@small@px;color:#5c6b73;}
-QLabel#infoValue,QLabel#customerMetricValue,QLabel#deliveryShippingTitle,QLabel#quoteTotalCaption{font-size:@body@px;font-weight:600;}
-QFrame#card,QFrame#hero,QFrame#deliveryInfoCard,QFrame#quoteItemsCard,QFrame#requestNoteCard,QFrame#customerSummaryCard,QFrame#customerInfoCard,QFrame#customerFinanceCard,QFrame#emailAddressCard{background:#fff;border:1px solid #ccd5d9;border-radius:12px;}
-QLabel#notice,QLabel#deliveryNotice,QLabel#emailSendStatus,QLabel#smsSendStatus{background:#eef3f1;color:#38564b;border:1px solid #ccd5d9;border-radius:8px;padding:12px;}
-QFrame#serverLogFrame{background:#fff;border:1px solid #ccd5d9;border-radius:8px;}
-QFrame#serverLogFrame[state="working"]{background:#fff7e4;border-color:#b08b3e;}
-QFrame#serverLogFrame[state="working"][pulse="true"]{background:#ffe4aa;border-color:#c18d29;}
-QFrame#serverLogFrame[state="success"]{background:#e4efff;border-color:#719bd2;}
-QFrame#serverLogFrame[state="error"]{background:#fce9e6;border-color:#bf685e;}
-QLabel#serverLogTitle{font-size:@small@px;font-weight:700;color:#38564b;}
-QLabel#serverLogText{font-size:@body@px;color:#24313a;background:transparent;}
-QFrame#serverLogFrame[state="success"] QLabel{color:#24548b;}
-QFrame#serverLogFrame[state="error"] QLabel{color:#9e3228;}
-QPushButton{background:#fff;color:#24313a;border:1px solid #7f8e95;border-radius:8px;min-height:24px;max-height:24px;padding:9px 14px;font-weight:600;}
-QPushButton:hover{background:#edf3ef;border-color:#4b805d;}
-QPushButton:pressed{background:#dcebe2;}
-QPushButton:focus{border:2px solid #986000;padding:8px 13px;}
-QPushButton:disabled{background:#eef1f2;color:#718087;border:1px solid #ccd5d9;}
-QPushButton#primary,QPushButton#syncPrimary,QPushButton#sentAction,QPushButton#emailSendPrimary,QPushButton#smsSendPrimary{background:#2d6a4f;color:#fff;border:1px solid #255a43;}
-QPushButton#primary:hover,QPushButton#syncPrimary:hover,QPushButton#sentAction:hover,QPushButton#emailSendPrimary:hover,QPushButton#smsSendPrimary:hover{background:#1f573b;}
-QPushButton#primary:pressed,QPushButton#syncPrimary:pressed,QPushButton#sentAction:pressed,QPushButton#emailSendPrimary:pressed,QPushButton#smsSendPrimary:pressed{background:#16472e;}
-QPushButton#primary:focus,QPushButton#syncPrimary:focus,QPushButton#sentAction:focus,QPushButton#emailSendPrimary:focus,QPushButton#smsSendPrimary:focus{border:2px solid #ad7400;}
-QPushButton#primary:disabled,QPushButton#syncPrimary:disabled,QPushButton#sentAction:disabled,QPushButton#emailSendPrimary:disabled,QPushButton#smsSendPrimary:disabled{background:#e1e9e4;color:#677970;border-color:#c4d2c9;}
-QPushButton#danger{background:#fff5f1;color:#a33827;border-color:#c78370;}
-QPushButton#requestDelete{background:#fcedea;color:#9b3529;border:1px solid #d7aaa2;}
-QPushButton#requestDelete:hover{background:#f2d5ce;border-color:#bd7a6e;}
-QPushButton#requestDelete:pressed{background:#eac2b8;}
-QPushButton#requestDelete:focus{border:2px solid #a33827;}
-QPushButton#requestDelete:disabled{background:#f1e7e4;color:#8a706a;border-color:#d7c3bd;}
-QPushButton#requestQuote{background:#e8f2ec;color:#23593a;border:1px solid #a8c6ab;}
-QPushButton#requestQuote:hover{background:#d3e6d4;border-color:#6b9d74;}
-QPushButton#requestQuote:pressed{background:#bdd9c0;}
-QPushButton#requestQuote:focus{border:2px solid #2d6a4f;}
-QPushButton#requestQuote:disabled{background:#f1f4f5;color:#758173;border-color:#ccd5d9;}
-QPushButton#danger:hover{background:#f8e4de;}
-QPushButton#danger:focus{border:2px solid #a33827;}
-QLineEdit,QComboBox,QDateEdit,QDoubleSpinBox,QSpinBox,QPlainTextEdit{background:#fff;border:1px solid #7f8e95;border-radius:8px;padding:9px 10px;selection-background-color:#e0eee6;selection-color:#24313a;}
-QLineEdit,QComboBox,QDateEdit,QDoubleSpinBox,QSpinBox{min-height:24px;}
-QLineEdit[readOnly="true"],QPlainTextEdit[readOnly="true"]{background:#f4f6f7;}
-QLineEdit:focus,QComboBox:focus,QDateEdit:focus,QDoubleSpinBox:focus,QSpinBox:focus,QPlainTextEdit:focus{border:2px solid #2d6a4f;padding:8px 9px;}
-QLineEdit:disabled,QComboBox:disabled,QPlainTextEdit:disabled{background:#eef1f2;color:#718087;}
-QTableWidget{background:#fff;alternate-background-color:#f7f9fa;border:1px solid #ccd5d9;border-radius:8px;gridline-color:#e2e8eb;selection-background-color:#e0eee6;selection-color:#24313a;}
-QTableWidget:focus{border-color:#2d6a4f;}
-QTableWidget::item{padding:8px;border:0;border-bottom:1px solid #e2e8eb;}
-QTableWidget::item:selected{background:#e0eee6;color:#24313a;border:0;border-bottom:1px solid #c4d8cc;}
-QHeaderView::section{background:#eef2f3;color:#34434b;border:0;border-right:1px solid #ccd5d9;border-bottom:1px solid #ccd5d9;padding:9px 8px;font-weight:700;}
-QGroupBox{background:#fff;border:1px solid #ccd5d9;border-radius:12px;margin-top:20px;padding:16px;font-weight:600;}
-QGroupBox::title{subcontrol-origin:margin;left:16px;padding:0 6px;}
+    # Compact layouts change geometry, never reduce the readable type scale.
+    return _theme("""
+QWidget{font-family:'Malgun Gothic','NanumGothic',sans-serif;font-size:@body@px;color:@text@;}
+QMainWindow,#workspace,QDialog{background:@page-bg@;}
+#sidebar{background:@sidebar@;border:0;}
+#sidebar QLabel{color:@card@;background:transparent;}
+#sidebar QLabel#brand{font-size:18px;font-weight:700;}
+#sidebar QLabel#navGroup,#sidebar QLabel#navFoot{font-size:@small@px;color:@nav-caption@;}
+#sidebar QPushButton{background:transparent;color:@card@;border:0;border-left:3px solid transparent;border-radius:8px;text-align:left;padding:0 8px;min-height:44px;max-height:44px;font-size:@body@px;font-weight:600;}
+#sidebar QPushButton:checked{background:@nav-selected@;border-left-color:@accent@;}
+#sidebar QPushButton:hover{background:@nav-selected@;}
+#sidebar QPushButton[keyboardFocus="true"]{border:2px dashed @accent@;}
+#sidebar #navRow{background:transparent;}
+#sidebar QLabel#navBadge{font-size:@small@px;font-weight:700;background:@border@;color:@text@;border-radius:8px;padding:2px 8px;}
+#sidebar QLabel#navBadge[kind="new"]{background:@accent@;}
+#sidebar QLabel#navBadge[kind="inquiry"]{background:@waiting@;}
+QFrame#pageHeader{background:@card@;border:0;border-bottom:1px solid @border@;}
+QLabel#pageTitle,QLabel#summaryTitle,QLabel#heroTitle,QLabel#deliveryTitle{font-size:@title@px;font-weight:700;}
+QLabel#sectionTitle,QLabel#quoteItemsTitle,QLabel#emailSectionTitle{font-size:@section@px;font-weight:700;}
+QLabel#summaryCount,QLabel#summaryCountUnit,QLabel#muted,QLabel#eyebrow,QLabel#selectionHint,QLabel#deliverySubtitle,QLabel#infoCaption{font-size:@small@px;color:@muted@;}
+QLabel#detailCustomer{font-size:20px;font-weight:700;}
+QLabel#metricValue,QLabel#quoteTotalValue,QLabel#workbenchTotal{font-size:@total@px;font-weight:700;color:@primary@;}
+QFrame#card,QFrame#hero,QFrame#detailPanel,QFrame#quoteItemsCard,QFrame#customerInfoCard,QFrame#emailAddressCard,QFrame#workbenchDocumentTools{background:@card@;border:1px solid @border@;border-radius:10px;}
+QFrame#statusBar{background:@card@;border:0;border-top:1px solid @border@;}
+QFrame#statusBar QLabel{font-size:@small@px;}
+QFrame#statusBar[state="working"]{background:@working-bg@;}
+QFrame#statusBar[state="success"] QLabel{color:@primary@;}
+QFrame#errorBanner{background:@cancel-bg@;border:0;border-radius:8px;}
+QFrame#errorBanner QLabel{color:@cancel-fg@;font-size:@small@px;}
+QPushButton{background:@card@;color:@text@;border:1px solid @input-border@;border-radius:8px;min-height:44px;max-height:44px;padding:0 16px;font-size:@body@px;font-weight:600;}
+QPushButton:hover{background:@row-selected@;border-color:@primary@;}
+QPushButton:pressed{background:@border@;}
+QPushButton:focus{border:2px solid @primary@;}
+QPushButton:disabled{background:@table-head@;color:@muted@;border-color:@border@;}
+QPushButton#primary,QPushButton[role="primary"]{background:@primary@;color:@card@;border-color:@primary@;font-size:@action@px;min-height:52px;max-height:52px;}
+QPushButton#primary:hover,QPushButton[role="primary"]:hover{background:@primary-hover@;}
+QPushButton#primary:pressed,QPushButton[role="primary"]:pressed{background:@primary-pressed@;}
+QPushButton#primary:disabled,QPushButton[role="primary"]:disabled{background:@border@;color:@muted@;border-color:@border@;}
+QPushButton#danger,QPushButton#requestDelete,QPushButton[role="danger"]{background:transparent;color:@danger@;border:0;}
+QPushButton[role="text"],QPushButton#textAction{background:transparent;color:@primary@;border:0;}
+QPushButton#smsAction,QPushButton#mailAction,QPushButton#pdfAction,QPushButton[role="outline"]{background:@card@;color:@primary@;border:1px solid @primary@;}
+QLineEdit,QComboBox,QDateEdit,QDoubleSpinBox,QSpinBox,QPlainTextEdit{background:@card@;border:1px solid @input-border@;border-radius:8px;padding:8px;selection-background-color:@row-selected@;selection-color:@text@;}
+QLineEdit,QComboBox,QDateEdit,QDoubleSpinBox,QSpinBox{min-height:26px;}
+QLineEdit:focus,QComboBox:focus,QPlainTextEdit:focus{border:2px solid @primary@;}
+QLineEdit[readOnly="true"],QPlainTextEdit[readOnly="true"]{background:@table-head@;}
+QLineEdit:disabled,QComboBox:disabled,QPlainTextEdit:disabled{background:@table-head@;color:@muted@;}
+QComboBox{padding-right:32px;}
+QComboBox::drop-down{subcontrol-origin:padding;subcontrol-position:top right;width:28px;border:0;background:transparent;}
+QComboBox::down-arrow{image:none;width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:6px solid @muted@;margin-right:8px;}
+QTableWidget{background:@card@;alternate-background-color:@card@;border:1px solid @border@;border-radius:10px;gridline-color:@border@;selection-background-color:@row-selected@;selection-color:@text@;font-size:@body@px;}
+QTableWidget::item{padding:8px;border:0;border-bottom:1px solid @border@;}
+QTableWidget::item:selected{background:@row-selected@;color:@text@;}
+QHeaderView::section{background:@table-head@;color:@muted@;border:0;border-bottom:1px solid @border@;padding:8px;font-size:@small@px;font-weight:700;}
+QGroupBox{background:@card@;border:1px solid @border@;border-radius:10px;margin-top:24px;padding:16px;font-size:@section@px;font-weight:700;}
+QGroupBox::title{subcontrol-origin:margin;left:16px;padding:0 8px;}
 QScrollArea{border:0;background:transparent;}
 QScrollArea>QWidget>QWidget{background:transparent;}
-QScrollBar:vertical{background:#f1f4f5;width:16px;margin:0;}
-QScrollBar::handle:vertical{background:#91a3ab;border-radius:7px;min-height:44px;}
-QScrollBar:horizontal{background:#f1f4f5;height:16px;margin:0;}
-QScrollBar::handle:horizontal{background:#91a3ab;border-radius:7px;min-width:44px;}
+QScrollBar:vertical{background:@page-bg@;width:12px;}
+QScrollBar::handle:vertical{background:@input-border@;border-radius:8px;min-height:44px;}
+QScrollBar:horizontal{background:@page-bg@;height:12px;}
+QScrollBar::handle:horizontal{background:@input-border@;border-radius:8px;min-width:44px;}
 QScrollBar::add-line,QScrollBar::sub-line{width:0;height:0;}
-QScrollBar::add-page,QScrollBar::sub-page{background:transparent;}
-QCheckBox,QRadioButton{spacing:10px;padding:6px 0;}
-QCheckBox::indicator,QRadioButton::indicator{width:22px;height:22px;}
-QTextBrowser{background:#fff;border:1px solid #ccd5d9;border-radius:8px;padding:14px;}
-QToolTip{background:#193c32;color:#fff;border:0;padding:10px;font-size:@body@px;}
-QLabel#quoteStatusBadge,QLabel#customerStatusBadge,QLabel#channelStatusBadge{background:#e8f2ec;color:#23593a;border:1px solid #c6dace;border-radius:8px;padding:5px 10px;font-size:@small@px;font-weight:600;}
-QLabel#channelStatusBadge[done="false"]{background:#f1f4f5;color:#5c6b73;}
-QLabel#channelStatusBadge[state="pending"]{background:#fff3d8;color:#78520d;border-color:#ba963d;}
-QLabel#channelStatusBadge[state="failed"]{background:#fbe5e2;color:#a13d32;border-color:#c78370;}
-QLabel#channelStatusBadge[state="success"]{background:#e8f2ec;color:#23603b;}
-QFrame#deliveryShippingCard,QFrame#quoteTotalBand{background:#f3f7f5;border:1px solid #c6dace;border-radius:12px;}
-QLabel#deliveryShippingStatus{font-size:@small@px;color:#5c6b73;}
-QLineEdit#deliveryShippingFee{min-width:100px;max-width:160px;}
-QLabel#quoteFileName{background:#f2f5f6;color:#5c6b73;border:1px solid #ccd5d9;border-radius:8px;padding:8px 10px;font-size:@small@px;}
-#unitPriceEditor QPushButton{padding:0;min-height:0;max-height:44px;}
-#unitPriceEditor QPushButton:focus{padding:0;}
-#unitPriceEditor QLineEdit{padding:2px 5px;min-height:0;max-height:44px;}
-#unitPriceEditor QLineEdit:focus{padding:1px 4px;}
-QPushButton#filterTab:checked{background:#e8f2ec;color:#2d6a4f;border-color:#2d6a4f;}
-QLabel#emptyState{color:#5c6b73;background:transparent;padding:24px;font-size:@body@px;}
-QPushButton#disclosure{text-align:left;background:#f4f6f7;border-color:#ccd5d9;}
-QDialog#quoteEditor QLineEdit[readOnly="true"]{min-height:@readonly@px;max-height:@readonly@px;}
-"""
-    if compact:
-        body, small = (16, 14) if large else (14, 12)
-        css += """
-#sidebar #brand{font-size:24px;}
-#sidebar QPushButton{font-size:@compactnav@px;min-height:20px;max-height:20px;padding:8px 10px;}
-#sidebar QLabel#sidebarDate{font-size:20px;}
-QLabel#summaryTitle{font-size:18px;}
-QLabel#summaryCount{font-size:32px;}
-QLabel#summaryCount[longCount="true"]{font-size:26px;}
-QLabel#summaryCountUnit{font-size:16px;padding-bottom:3px;}
-QLabel#pageTitle,QLabel#deliveryTitle,QLabel#heroTitle{font-size:20px;}
-QLabel#sectionTitle,QLabel#quoteItemsTitle,QLabel#emailSectionTitle{font-size:16px;}
-QLabel#metricValue,QLabel#quoteTotalValue,QLabel#customerAmountValue{font-size:24px;}
-QPushButton{min-height:22px;max-height:22px;padding:6px 10px;}
-QPushButton:focus{padding:5px 9px;}
-QLineEdit,QComboBox,QDateEdit,QDoubleSpinBox,QSpinBox{min-height:22px;padding:6px 8px;}
-QLineEdit:focus,QComboBox:focus,QDateEdit:focus,QDoubleSpinBox:focus,QSpinBox:focus{padding:5px 7px;}
-QTableWidget::item{padding:5px 6px;}
-QHeaderView::section{padding:6px;}
-QTextBrowser{padding:10px;}
-""".replace('@compactnav@', '18' if large else '16')
-    return (css.replace('@body@', str(body)).replace('@small@', str(small))
-            .replace('@nav@', '22' if large else '20').replace('@navheight@', '36' if large else '32')
-            .replace('@readonly@', '24' if large else '20'))
+QCheckBox,QRadioButton{spacing:8px;padding:8px 0;}
+QCheckBox::indicator,QRadioButton::indicator{width:20px;height:20px;}
+QTextBrowser{background:@card@;border:1px solid @border@;border-radius:8px;padding:8px;}
+QToolTip{background:@sidebar@;color:@card@;border:0;padding:8px;font-size:@small@px;}
+QPushButton#filterTab:checked{background:@row-selected@;color:@primary@;border-color:@primary@;}
+QPushButton#stageTab{border:0;border-radius:0;border-bottom:3px solid transparent;min-height:48px;max-height:48px;padding:0 8px;}
+QPushButton#stageTab:checked{border-bottom-color:@primary@;color:@primary@;}
+QTabWidget::pane{border:0;border-top:1px solid @border@;}
+QTabBar::tab{background:transparent;border:0;border-bottom:3px solid transparent;padding:8px 16px;min-height:32px;}
+QTabBar::tab:selected{color:@primary@;border-bottom-color:@primary@;}
+QLabel#channelStatusBadge{font-size:@small@px;background:@table-head@;color:@muted@;border-radius:8px;padding:4px 8px;}
+QLabel#channelStatusBadge[state="pending"]{background:@working-bg@;color:@quote-fg@;}
+QLabel#channelStatusBadge[state="failed"]{background:@cancel-bg@;color:@cancel-fg@;}
+QLabel#channelStatusBadge[state="success"]{background:@paid-bg@;color:@paid-fg@;}
+QLabel#emptyState{font-size:@body@px;color:@muted@;background:transparent;padding:24px;}
+""", large)
 
 
 def quote_workbench_style(large=False):
-    """Selected forest-green quotation workbench; scoped away from other dialogs."""
-    return """
-QDialog#quoteWorkbench{background:#ffffff;color:#24313a;}
-QDialog#quoteWorkbench QWidget#workbenchBody{background:#ffffff;}
-QDialog#quoteWorkbench QLabel{font-size:@body@px;background:transparent;border:0;padding:0;color:#24313a;}
-QDialog#quoteWorkbench QFrame#workbenchHeader{background:#193c32;border:0;}
-QDialog#quoteWorkbench QLabel#workbenchBrand{font-size:20px;font-weight:600;color:#e3eee8;}
-QDialog#quoteWorkbench QLabel#workbenchTitle{font-size:@title@px;font-weight:700;color:#ffffff;}
-QDialog#quoteWorkbench QLabel#workbenchReference{font-size:@caption@px;font-weight:700;color:#e3eee8;}
-QDialog#quoteWorkbench QFrame#workbenchBrandRule{background:#64927c;border:0;}
-QDialog#quoteWorkbench QScrollArea#workbenchCustomerScroll{border:0;border-right:1px solid #bfd5c9;background:#edf4ef;}
-QDialog#quoteWorkbench QWidget#workbenchCustomerRail{background:#edf4ef;}
-QDialog#quoteWorkbench QLabel#workbenchSectionTitle{font-size:@section@px;font-weight:700;color:#193c32;}
-QDialog#quoteWorkbench QLabel#workbenchCustomerTitle{font-size:22px;font-weight:700;color:#193c32;}
-QDialog#quoteWorkbench QLabel#workbenchCaption{font-size:@field@px;font-weight:600;color:#465a50;background:#e1eae5;border:1px solid #cbdacf;border-radius:4px;padding:4px 8px;}
-QDialog#quoteWorkbench QFrame#workbenchCustomerHeadingRule{background:#315c47;border:0;}
-QDialog#quoteWorkbench QFrame#workbenchDocumentTools{background:#ffffff;border:1px solid #d6e1da;border-radius:6px;}
-QDialog#quoteWorkbench QFrame#workbenchOriginalRequest{background:transparent;border:0;}
-QDialog#quoteWorkbench QPlainTextEdit#workbenchOriginalText{background:#f7faf8;border:1px solid #b8c9bf;border-radius:6px;padding:8px 12px;color:#465a50;}
-QDialog#quoteWorkbench QTextBrowser#workbenchCustomerName{background:transparent;border:0;padding:0;font-size:24px;font-weight:700;color:#193c32;}
-QDialog#quoteWorkbench QTextBrowser#workbenchInfo{background:transparent;border:0;padding:0;font-size:@body@px;color:#24313a;}
-QDialog#quoteWorkbench QTextBrowser#workbenchReceipt{background:transparent;border:0;padding:0;font-size:@body@px;font-weight:700;color:#24313a;}
-QDialog#quoteWorkbench QFrame#workbenchFormal{background:#e4ece7;border:0;border-radius:6px;}
-QDialog#quoteWorkbench QFrame#workbenchFormal[requested="true"]{background:#ffe2a5;}
-QDialog#quoteWorkbench QLabel#workbenchFormalText{font-size:@field@px;font-weight:600;color:#79521a;}
-QDialog#quoteWorkbench QFrame#workbenchCustomerRule{background:#c5d9ce;border:0;}
-QDialog#quoteWorkbench QTableWidget#workbenchItems{background:#ffffff;alternate-background-color:#f0f6f2;color:#24313a;font-size:@body@px;border:1px solid #cfddd4;border-radius:6px;selection-background-color:#e0eee5;selection-color:#193c32;}
-QDialog#quoteWorkbench QTableWidget#workbenchItems::item{padding:2px 8px;border-bottom:1px solid #e0e9e3;}
-QDialog#quoteWorkbench QTableWidget#workbenchItems QHeaderView::section{background:#2c6852;color:#ffffff;font-size:@body@px;font-weight:700;padding:4px 6px;border:0;border-right:1px solid #548470;}
-QDialog#quoteWorkbench QWidget#unitPriceEditor{background:transparent;}
-QDialog#quoteWorkbench QWidget#quoteSpeciesEditor{background:transparent;}
-QDialog#quoteWorkbench QWidget#quoteSpeciesEditor QLineEdit{font-family:'Malgun Gothic','NanumGothic',sans-serif;min-height:0;max-height:30px;padding:0;border:0;background:transparent;font-size:@body@px;font-weight:400;}
-QDialog#quoteWorkbench QWidget#quoteSpeciesEditor QLineEdit:focus{border:1px solid #315c47;padding:0;}
-QDialog#quoteWorkbench QWidget#quoteSpeciesEditor QPushButton{min-height:0;max-height:28px;padding:0 4px;font-size:12px;background:#e8f2ec;color:#23593a;border:1px solid #a8c6ab;border-radius:4px;}
-QDialog#quoteWorkbench QWidget#unitPriceEditor QPushButton{min-height:0;max-height:@priceheight@px;padding:0;border:1px solid #a8bcb0;border-radius:4px;background:#f7faf8;color:#193c32;font-size:18px;}
-QDialog#quoteWorkbench QWidget#unitPriceEditor QPushButton:hover{background:#dcece2;}
-QDialog#quoteWorkbench QWidget#unitPriceEditor QPushButton:focus{border:1px solid #a36d17;padding:0;}
-QDialog#quoteWorkbench QWidget#unitPriceEditor QLineEdit{min-height:0;max-height:@priceheight@px;padding:0 4px;border:1px solid #a8bcb0;border-radius:4px;background:#ffffff;font-size:@body@px;}
-QDialog#quoteWorkbench QWidget#unitPriceEditor QLineEdit:focus{border:1px solid #a36d17;padding:0 4px;}
-QDialog#quoteWorkbench QFrame#workbenchTotalRule{background:#245f46;border:0;}
-QDialog#quoteWorkbench QFrame#workbenchSummary{background:#edf4ef;border:0;border-radius:8px;}
-QDialog#quoteWorkbench QLabel#workbenchSumTitle{font-size:24px;font-weight:700;color:#193c32;}
-QDialog#quoteWorkbench QLabel#workbenchAmountDetail{font-size:@caption@px;color:#52645c;}
-QDialog#quoteWorkbench QLabel#workbenchTotal{font-size:@total@px;font-weight:700;color:#193c32;}
-QDialog#quoteWorkbench QLabel#workbenchTotal[invalid="true"]{font-size:@body@px;font-weight:600;color:#79521a;}
-QDialog#quoteWorkbench QPlainTextEdit{font-size:@body@px;background:#ffffff;border:1px solid #b8c9bf;border-radius:6px;padding:8px 12px;}
-QDialog#quoteWorkbench QFrame#workbenchFooter{background:#ffffff;border:0;border-top:1px solid #cfddd4;}
-QDialog#quoteWorkbench QPushButton{font-size:@body@px;min-height:42px;max-height:42px;padding:0 12px;border-radius:6px;}
-QDialog#quoteWorkbench QPushButton#primary{background:#25634b;color:#ffffff;border:1px solid #20553f;font-weight:700;}
-QDialog#quoteWorkbench QPushButton#primary:hover{background:#194c37;}
-QDialog#quoteWorkbench QPushButton#primary:disabled{background:#e1e9e4;color:#6a7b71;border-color:#bdcec3;}
-QDialog#quoteWorkbench QFrame#workbenchShipping{background:#f2f5f3;border:0;border-radius:6px;}
-QDialog#quoteWorkbench QLabel#deliverySectionTitle{font-size:18px;font-weight:700;color:#193c32;}
-QDialog#quoteWorkbench QLabel#deliveryCaption,QDialog#quoteWorkbench QLabel#deliveryPdfName{font-size:@field@px;color:#52645c;}
-QDialog#quoteWorkbench QRadioButton{font-size:@body@px;}
-QDialog#quoteWorkbench QLineEdit{font-size:@body@px;min-height:24px;max-height:24px;padding:6px 8px;}
-QDialog#quoteWorkbench QLineEdit#workbenchCustomerInput{font-size:@body@px;min-height:30px;max-height:30px;padding:6px 8px;}
-QDialog#quoteWorkbench QLineEdit#workbenchCustomerInput:focus{padding:5px 7px;}
-QDialog#quoteWorkbench QPushButton#smsAction{background:#25634b;color:#ffffff;}
-QDialog#quoteWorkbench QPushButton#smsAction:hover{background:#194c37;}
-QDialog#quoteWorkbench QPushButton#smsAction:disabled{background:#e1e9e4;color:#6a7b71;border-color:#bdcec3;}
-QDialog#quoteWorkbench QPushButton#pdfAction{font-size:@field@px;padding:0 6px;}
-QDialog#quoteWorkbench QPushButton#pdfAction[documentGenerate="true"]{background:#dcece2;color:#193c32;border:1px solid #8ab49b;font-weight:700;}
-QDialog#quoteWorkbench QPushButton#pdfAction[documentGenerate="true"]:hover{background:#c7e1d1;}
-QDialog#quoteWorkbench QPushButton#smsAction,QDialog#quoteWorkbench QPushButton#mailAction,QDialog#quoteWorkbench QPushButton[deliveryCompletion="true"]{font-size:@action@px;font-weight:700;min-height:@actionheight@px;max-height:@actionheight@px;padding:0 8px;}
+    return _theme("""
+QDialog#quoteWorkbench{background:@page-bg@;}
+QDialog#quoteWorkbench QFrame#workbenchHeader{background:@sidebar@;border:0;}
+QDialog#quoteWorkbench #workbenchHeader QLabel{color:@card@;background:transparent;border:0;}
+QDialog#quoteWorkbench QLabel#workbenchTitle{font-size:@title@px;font-weight:700;}
+QDialog#quoteWorkbench QLabel#workbenchBrand{font-size:@action@px;font-weight:700;}
+QDialog#quoteWorkbench QLabel#workbenchReference{font-size:@small@px;}
+QDialog#quoteWorkbench #workbenchCustomerRail{background:@page-bg@;}
+QDialog#quoteWorkbench QLabel#workbenchCaption{font-size:@small@px;color:@muted@;background:transparent;border:0;padding:0;}
+QDialog#quoteWorkbench QFrame#workbenchDocumentTools{border-radius:10px;}
+QDialog#quoteWorkbench QTableWidget#workbenchItems{font-size:@body@px;background:@card@;}
+QDialog#quoteWorkbench QTableWidget::item{padding:4px 8px;}
+QDialog#quoteWorkbench #quoteSpeciesEditor QLineEdit{border:0;background:transparent;padding:0;min-height:24px;}
+QDialog#quoteWorkbench #quoteSpeciesEditor QPushButton{background:transparent;border:0;color:@primary@;font-size:@small@px;min-height:24px;max-height:24px;padding:0;}
+QDialog#quoteWorkbench #unitPriceEditor QPushButton{min-width:40px;max-width:40px;min-height:40px;max-height:40px;padding:0;}
+QDialog#quoteWorkbench #unitPriceEditor QLineEdit{min-height:38px;max-height:38px;min-width:64px;padding:0 4px;}
+QDialog#quoteWorkbench QFrame#workbenchFooter{background:@card@;border:0;border-top:1px solid @border@;}
+QDialog#quoteWorkbench QLabel#workbenchTotal{font-size:@total@px;font-weight:700;color:@primary@;}
+QDialog#quoteWorkbench QFrame#workbenchShipping{background:@table-head@;border-radius:8px;}
+QDialog#quoteWorkbench #workbenchShipping QLineEdit{min-height:28px;max-height:28px;}
+QDialog#quoteWorkbench #workbenchOriginalText{background:@table-head@;border:1px solid @border@;border-radius:8px;font-size:@small@px;}
+QDialog#quoteWorkbench QPushButton[deliveryCompletion="true"]{min-width:160px;max-width:180px;min-height:52px;max-height:52px;}
+QDialog#quoteWorkbench QPushButton#smsAction,QDialog#quoteWorkbench QPushButton#mailAction{min-height:52px;max-height:52px;font-size:@action@px;padding:0 8px;}
 QDialog#quoteWorkbench QLabel#deliveryActionTitle{font-size:@action@px;font-weight:700;}
-QDialog#quoteWorkbench QPushButton#smsAction QLabel#deliveryActionTitle{color:#ffffff;}
-QDialog#quoteWorkbench QPushButton#smsAction QLabel#deliveryActionTitle:disabled{color:#6a7b71;}
-QDialog#quoteWorkbench QLabel#deliveryActionTitle:disabled{color:#6a7b71;}
-QDialog#quoteWorkbench QPushButton:focus{border:2px solid #b37a22;}
-QDialog#quoteWorkbench QLabel#channelStatusBadge{font-size:14px;background:#f1f4f2;border-radius:5px;padding:2px 6px;color:#52645c;}
-QDialog#quoteWorkbench QLabel#channelStatusBadge[state="success"]{background:#e2efe5;color:#23603b;}
-QDialog#quoteWorkbench QLabel#channelStatusBadge[state="failed"]{background:#fbe5e2;color:#a13d32;}
-QDialog#quoteWorkbench QLabel#channelStatusBadge[state="pending"]{background:#fff3d8;color:#78520d;}
-QDialog#quoteWorkbench QFrame#deliveryVerticalRule{background:#c5d9ce;border:0;}
-QDialog#quoteWorkbench[compactLayout="true"] QLabel{font-size:@compactbody@px;}
-QDialog#quoteWorkbench[compactLayout="true"] QLabel#workbenchTitle{font-size:24px;}
-QDialog#quoteWorkbench[compactLayout="true"] QLabel#workbenchBrand{font-size:18px;}
-QDialog#quoteWorkbench[compactLayout="true"] QLabel#workbenchSectionTitle,QDialog#quoteWorkbench[compactLayout="true"] QLabel#workbenchCustomerTitle{font-size:18px;}
-QDialog#quoteWorkbench[compactLayout="true"] QLabel#workbenchCaption{font-size:@compactcaption@px;padding:3px 6px;}
-QDialog#quoteWorkbench[compactLayout="true"] QTextBrowser#workbenchCustomerName{font-size:20px;}
-QDialog#quoteWorkbench[compactLayout="true"] QTextBrowser#workbenchInfo,QDialog#quoteWorkbench[compactLayout="true"] QTextBrowser#workbenchReceipt{font-size:@compactbody@px;}
-QDialog#quoteWorkbench[compactLayout="true"] QLabel#workbenchSumTitle{font-size:20px;}
-QDialog#quoteWorkbench[compactLayout="true"] QLabel#workbenchTotal{font-size:28px;}
-QDialog#quoteWorkbench[compactLayout="true"] QTableWidget#workbenchItems,QDialog#quoteWorkbench[compactLayout="true"] QTableWidget#workbenchItems QHeaderView::section{font-size:@compactbody@px;}
-QDialog#quoteWorkbench[compactLayout="true"] QLineEdit,QDialog#quoteWorkbench[compactLayout="true"] QPlainTextEdit,QDialog#quoteWorkbench[compactLayout="true"] QRadioButton{font-size:@compactbody@px;}
-QDialog#quoteWorkbench[compactLayout="true"] QWidget#quoteSpeciesEditor QLineEdit,QDialog#quoteWorkbench[compactLayout="true"] QWidget#unitPriceEditor QLineEdit{font-size:@compactbody@px;}
-QDialog#quoteWorkbench[compactLayout="true"] QPushButton{font-size:@compactbody@px;min-height:34px;max-height:34px;padding:0 10px;}
-QDialog#quoteWorkbench[compactLayout="true"] QPushButton#smsAction,QDialog#quoteWorkbench[compactLayout="true"] QPushButton#mailAction,QDialog#quoteWorkbench[compactLayout="true"] QPushButton[deliveryCompletion="true"]{font-size:18px;min-height:46px;max-height:46px;}
-QDialog#quoteWorkbench[compactLayout="true"] QWidget#quoteSpeciesEditor QPushButton{min-height:0;max-height:28px;padding:0 4px;font-size:12px;}
-QDialog#quoteWorkbench[compactLayout="true"] QWidget#unitPriceEditor QPushButton{min-height:0;padding:0;}
-QDialog#quoteWorkbench[compactLayout="true"] QWidget#workbenchCustomerRail QLineEdit#workbenchCustomerInput[customerName="true"]{font-size:20px;}
-""".replace('@body@', '18' if large else '16').replace('@caption@', '16' if large else '14').replace('@field@', '16' if large else '14').replace('@title@', '30' if large else '28').replace('@section@', '22' if large else '20').replace('@total@', '36' if large else '32').replace('@action@', '22' if large else '20').replace('@actionheight@', '60' if large else '56').replace('@priceheight@', '36' if large else '30').replace('@compactbody@', '16' if large else '14').replace('@compactcaption@', '14' if large else '12')
+QDialog#quoteWorkbench #workbenchCustomerInput{background:@card@;}
+""", large)
 
 
 def quote_delivery_style(large=False, compact=False):
-    """Scoped to the selected quotation dialog; other workspace screens keep their theme."""
-    body, caption = (20, 18) if large else (18, 16)
-    return """
-QDialog#quoteDeliveryDialog,QWidget#deliveryBody{background:#ffffff;}
-QDialog#quoteDeliveryDialog QLabel{font-size:@body@px;background:transparent;border:0;padding:0;}
-QDialog#quoteDeliveryDialog QFrame#deliveryHeader{border:0;border-bottom:2px solid #2d6a4f;}
-QDialog#quoteDeliveryDialog QLabel#deliveryCustomer{font-size:@customer@px;font-weight:700;color:#24313a;}
-QDialog#quoteDeliveryDialog QLabel#deliveryTotal{font-size:@total@px;font-weight:700;color:#2d6a4f;}
-QDialog#quoteDeliveryDialog QLabel#deliveryReference{font-size:@body@px;color:#5c6b73;}
-QDialog#quoteDeliveryDialog QLabel#deliveryCaption{font-size:@caption@px;color:#5c6b73;}
-QDialog#quoteDeliveryDialog QLabel#deliveryInfoValue,QDialog#quoteDeliveryDialog QTextBrowser#deliveryInfoValue{font-size:@body@px;font-weight:600;background:transparent;border:0;padding:0;}
-QDialog#quoteDeliveryDialog QLabel#deliverySectionTitle{font-size:@body@px;font-weight:700;}
-QDialog#quoteDeliveryDialog QFrame#deliveryResultCard{background:#f4f7f5;border:1px solid #d6e1da;border-radius:8px;}
-QDialog#quoteDeliveryDialog QFrame#deliveryShippingStrip{background:#f4f6f7;border:0;border-radius:6px;}
-QDialog#quoteDeliveryDialog QFrame#deliveryVerticalRule{background:#d5dee2;border:0;}
-QDialog#quoteDeliveryDialog QFrame#deliverySectionRule{background:#4d6f61;border:0;}
-QDialog#quoteDeliveryDialog QFrame#deliveryFooter{background:#fff;border:0;border-top:2px solid #4d6f61;}
-QDialog#quoteDeliveryDialog QPushButton{font-size:@body@px;min-height:46px;max-height:46px;padding:0 12px;border-radius:6px;}
-QDialog#quoteDeliveryDialog QPushButton:focus{padding:0 11px;border:2px solid #986000;}
-QDialog#quoteDeliveryDialog QLabel#channelStatusBadge{font-size:@caption@px;background:#f1f4f5;border:0;border-radius:6px;padding:2px 8px;color:#5c6b73;}
-QDialog#quoteDeliveryDialog QLabel#channelStatusBadge[state="pending"]{background:#fff3d8;color:#78520d;}
-QDialog#quoteDeliveryDialog QLabel#channelStatusBadge[state="failed"]{background:#fbe5e2;color:#a13d32;}
-QDialog#quoteDeliveryDialog QLabel#channelStatusBadge[state="success"]{background:#e8f2ec;color:#23603b;}
-QDialog#quoteDeliveryDialog QTableWidget{font-size:@body@px;border-radius:6px;}
-QDialog#quoteDeliveryDialog QTableWidget#deliveryItems QHeaderView::section{font-size:@body@px;background:#d7e5df;color:#25483b;}
-""".replace('@body@', str(body)).replace('@caption@', str(caption)).replace('@customer@', '30' if compact else '34').replace('@total@', '34' if compact else '40')
+    return workspace_style(large, compact)
+
 
 class StatusMessage(QLabel):
     """Readable status with the complete original message available as details."""
@@ -294,8 +191,8 @@ class QuoteRemarksDelegate(RowSelectionDelegate):
         if not index.data(Qt.ItemDataRole.DisplayRole):
             option.text = "입력가능"
             option.font.setItalic(True)
-            option.palette.setColor(QPalette.ColorRole.Text, QColor("#84958b"))
-            option.palette.setColor(QPalette.ColorRole.HighlightedText, QColor("#60756b"))
+            option.palette.setColor(QPalette.ColorRole.Text, QColor(TOKENS["muted"]))
+            option.palette.setColor(QPalette.ColorRole.HighlightedText, QColor(TOKENS["muted"]))
 
     def createEditor(self, parent, option, index):
         editor = super().createEditor(parent, option, index)
@@ -352,16 +249,14 @@ class CustomerDelegate(RowSelectionDelegate):
         font = option.font
         font.setBold(True)
         painter.setFont(font)
-        painter.setPen(QColor('#24313a'))
+        painter.setPen(QColor(TOKENS['text']))
         top = QRectF(rect.x(), rect.y(), rect.width(), rect.height() / 2)
         painter.drawText(top, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
                          painter.fontMetrics().elidedText(primary, Qt.TextElideMode.ElideRight, rect.width()))
         font.setBold(False)
-        font.setPixelSize((14 if QApplication.instance().property('namufarmLargeFont') else 12)
-                          if QApplication.instance().property('namufarmCompactLayout')
-                          else (16 if QApplication.instance().property('namufarmLargeFont') else 14))
+        font.setPixelSize(15 if QApplication.instance().property('namufarmLargeFont') else 13)
         painter.setFont(font)
-        painter.setPen(QColor('#5c6b73'))
+        painter.setPen(QColor(TOKENS['muted']))
         bottom = top.translated(0, rect.height() / 2)
         painter.drawText(bottom, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
                          painter.fontMetrics().elidedText(str(secondary), Qt.TextElideMode.ElideRight, rect.width()))
@@ -376,10 +271,9 @@ class StatusDelegate(RowSelectionDelegate):
         opt.text = ''
         style = opt.widget.style() if opt.widget else QApplication.style()
         style.drawControl(QStyle.ControlElement.CE_ItemViewItem, opt, painter, opt.widget)
-        pending = text in ('견적확정', '입금확인', '신규')
-        canceled = text == '구매취소'
-        background, foreground = (('#fff3da', '#805a17') if pending else
-                                  ('#fcedea', '#9c3c2e') if canceled else ('#e8f2ec', '#23593a'))
+        badge = status_badge(text)
+        text = badge["text"]
+        background, foreground = badge["background"], badge["foreground"]
         painter.save()
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         painter.setPen(Qt.PenStyle.NoPen)
@@ -387,7 +281,7 @@ class StatusDelegate(RowSelectionDelegate):
         width = min(option.rect.width() - 12, option.fontMetrics.horizontalAdvance(text) + 24)
         rect = QRectF(0, 0, max(1, width), 30)
         rect.moveCenter(QRectF(option.rect).center())
-        painter.drawRoundedRect(rect, 6, 6)
+        painter.drawRoundedRect(rect, 8, 8)
         painter.setPen(QColor(foreground))
         painter.setFont(option.font)
         painter.drawText(rect, Qt.AlignmentFlag.AlignCenter,
@@ -418,9 +312,10 @@ class DataTable(QTableWidget):
         self._weights = ()
         self._fitting = False
         self.viewport().installEventFilter(self)
-        row_height = 64 if QApplication.instance().property("namufarmLargeFont") else 56
+        row_height = 64 if QApplication.instance().property("namufarmLargeFont") else 60
         self.verticalHeader().setMinimumSectionSize(row_height)
         self.verticalHeader().setDefaultSectionSize(row_height)
+        self.horizontalHeader().setFixedHeight(44)
         self.model().rowsInserted.connect(self.update_empty_state)
         self.model().rowsRemoved.connect(self.update_empty_state)
         self.model().modelReset.connect(self.update_empty_state)
@@ -571,5 +466,6 @@ def collapsible(title, content, expanded=False):
     layout.addWidget(toggle)
     layout.addWidget(content)
     return section
+
 
 
