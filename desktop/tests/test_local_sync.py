@@ -138,3 +138,24 @@ class LocalSyncTest(unittest.TestCase):
         self.assertEqual(2, sync.call_count)
         self.assertEqual(1, self.api.calls.count('connect_app'))
 
+
+
+    def test_unsynced_new_sale_cannot_be_hidden_but_uploaded_sale_is_local_only(self):
+        import copy
+        self.bridge.send(control='seed')
+        self.manager.sync(sales_only=True)
+        row = copy.deepcopy(self.vault.rows('sales')[0])
+        number = row['metadata']['orderNumber']
+        operation = {'id': row['eventId'], 'action': 'save_sale', 'payload': row, 'baseFingerprint': None}
+        self.vault.save_local_sales([row], [operation], [])
+        before = self.vault.pending()
+        with self.assertRaisesRegex(UserError, '아직 서버에 올리지 않은 신규 판매'):
+            self.manager.delete_sale(number, row['metadata']['revision'])
+        self.assertEqual(before, self.vault.pending())
+        self.assertEqual([row], self.vault.rows('sales'))
+        self.vault.save_local_sales([row], [], [])
+        self.manager.delete_sale(number, row['metadata']['revision'])
+        self.assertEqual([], self.vault.rows('sales'))
+        self.assertIn(number, self.vault.preference('hidden_sales'))
+        self.assertNotIn('delete_sale', self.api.calls)
+        self.assertTrue(self.api.call('list_sales', afterSequence=0)['sales'])

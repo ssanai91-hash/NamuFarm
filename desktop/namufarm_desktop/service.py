@@ -1138,6 +1138,10 @@ class Manager(SoldNumbers, SalesWorkspace):
         row = next((r for r in self.vault.rows("sales") if r["metadata"]["orderNumber"] == number), None)
         require(row is not None and row["metadata"]["revision"] == expected_revision,
                 "선택한 판매 기록을 다시 조회해주세요.")
+        require(not any(op["action"] == "save_sale" and self._operation_number(op) == number
+                        and op.get("baseFingerprint") is None for op in self.vault.pending()),
+                "아직 서버에 올리지 않은 신규 판매입니다. 판매관리에서 ‘서버에 올리기’ 후 삭제하거나, "
+                "주문을 취소하려면 ‘구매 취소’로 처리해주세요.")
         self.vault.backup("delete_sale")
         remaining = [r for r in self.vault.rows("sales") if r["metadata"]["orderNumber"] != number]
         operations = [op for op in self.vault.pending() if self._operation_number(op) != number]
