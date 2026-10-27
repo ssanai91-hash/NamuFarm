@@ -8,6 +8,4 @@ import com.example.namufarm.viewmodel.ManagementUiState
 import com.example.namufarm.viewmodel.ManagementViewModel
 
 @Composable
-internal fun FarmList(viewModel: ManagementViewModel) { Text("농원") }
-@Composable
 internal fun SpeciesList(viewModel: ManagementViewModel, initial: String, search: String) { Text("묘목") }

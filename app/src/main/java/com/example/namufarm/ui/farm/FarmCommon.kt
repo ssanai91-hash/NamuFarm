@@ -1,5 +1,18 @@
 package com.example.namufarm.ui.farm
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.runtime.*
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
@@ -104,3 +117,47 @@ internal fun FarmFooter(content: @Composable ColumnScope.() -> Unit) {
 
 @Composable
 internal fun FarmChevron() { Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null, Modifier.size(20.dp), tint = Color(0xFF9AA59F)) }
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun FarmSheet(title: String, onClose: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
+    ModalBottomSheet(onDismissRequest = onClose, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = Color.White, shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp),
+        dragHandle = { Box(Modifier.padding(top = 10.dp, bottom = 12.dp).size(width = 40.dp, height = 4.dp)
+            .background(Color(0xFFCDD6D1), RoundedCornerShape(2.dp))) }) {
+        Column(Modifier.fillMaxWidth().imePadding().verticalScroll(rememberScrollState())
+            .padding(start = 20.dp, end = 20.dp, bottom = 18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(title, fontSize = 21.sp, fontWeight = FontWeight.Bold)
+            content()
+        }
+    }
+}
+
+@Composable
+internal fun FarmField(label: String, value: String, onChange: (String) -> Unit, required: Boolean = false,
+    keyboard: KeyboardType = KeyboardType.Text, memo: Boolean = false, trailing: @Composable (() -> Unit)? = null) {
+    val interaction = remember { MutableInteractionSource() }
+    val focused by interaction.collectIsFocusedAsState()
+    Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        Text(buildAnnotatedString {
+            append(label)
+            if (required) withStyle(SpanStyle(color = NamuColors.danger)) { append(" *") }
+        }, fontSize = 14.sp, color = Color(0xFF4A5A52), fontWeight = FontWeight.Medium)
+        OutlinedTextField(value, onChange, modifier = Modifier.fillMaxWidth().heightIn(min = if (memo) 76.dp else 52.dp)
+            .border(if (focused) 2.dp else 1.5.dp, if (focused) NamuColors.primary else NamuColors.input, RoundedCornerShape(12.dp)),
+            singleLine = !memo, minLines = if (memo) 2 else 1, shape = RoundedCornerShape(12.dp),
+            interactionSource = interaction, keyboardOptions = KeyboardOptions(keyboardType = keyboard),
+            textStyle = LocalTextStyle.current.copy(fontSize = if (memo) 16.sp else 17.sp), trailingIcon = trailing,
+            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Color.Transparent, unfocusedBorderColor = Color.Transparent))
+    }
+}
+
+@Composable
+internal fun FarmInfo(text: String) {
+    Surface(color = Color(0xFFEEF5F0), shape = RoundedCornerShape(12.dp)) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Icon(Icons.Outlined.Info, null, Modifier.size(20.dp), tint = Color(0xFF1F573B))
+            Text(text, fontSize = 14.sp, lineHeight = 20.3.sp, color = Color(0xFF1F573B))
+        }
+    }
+}
