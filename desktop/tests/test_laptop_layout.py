@@ -116,3 +116,21 @@ class LaptopLayoutTest(QtTestCase):
                 # All source paths leave clear space at the right/bottom edges.
                 self.assertLess(max(x for x, _ in painted), image.width() - 1)
                 self.assertLess(max(y for _, y in painted), image.height() - 1)
+
+
+class UnifiedChromeTest(QtTestCase):
+    def test_header_status_and_error_objects_preserve_existing_controls(self):
+        with tempfile.TemporaryDirectory() as folder:
+            window = SellerWindow(Path(folder) / 'unused.db')
+            window.timer.stop()
+            self.assertEqual(68, window.page_header.height())
+            self.assertEqual(34, window.server_log_frame.height())
+            self.assertTrue(window.page_summary.isHidden())
+            self.assertIsNotNone(window.sync_button)
+            window.message.setText('합성 오류 안내')
+            window.set_status_state('error', '실패')
+            self.assertFalse(window.error_banner.isHidden())
+            self.assertIn('합성 오류', window.error_text.text())
+            window.set_status_state('success', '완료')
+            self.assertTrue(window.error_banner.isHidden())
+            window.close()
