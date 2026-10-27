@@ -122,3 +122,39 @@ class NurseryUiTest(QtTestCase):
             return dialog.result()
         with patch.object(QDialog, 'exec', inspect):
             self.window.species_page.edit(row)
+
+    def test_purpose_filter_combines_with_search_and_initial_and_displays_saved_category(self):
+        for name, category in [('철쭉', '울타리, 꽃, 정원'), ('측백나무', '울타리'), ('체리', '')]:
+            self.fixture.store.save('species', {'speciesName': name, 'category': category})
+        self.window.refresh_nursery()
+        page = self.window.species_page
+        page.choose_initial('ㅊ')
+        page.purpose_filter.setCurrentIndex(page.purpose_filter.findData('울타리'))
+        self.assertEqual({'철쭉', '측백나무'}, {r['speciesName'] for r in page.rows})
+        page.search.setText('철')
+        self.assertEqual(['철쭉'], [r['speciesName'] for r in page.rows])
+        self.assertEqual('울타리, 꽃, 정원', page.table.item(0, 4).text())
+        page.choose_initial('ㄱ')
+        self.assertEqual([], page.rows)
+        page.choose_initial('ㅊ')
+        page.search.clear()
+        page.purpose_filter.setCurrentIndex(page.purpose_filter.findData('열매'))
+        self.assertEqual([], page.rows)  # 체리 has not saved a category yet.
+        page.purpose_filter.setCurrentIndex(0)
+        self.assertEqual(3, len(page.rows))
+        self.assertEqual([], self.fixture.api.calls)
+
+    def test_purpose_filter_does_not_rebuild_inventory_or_change_stock_selection(self):
+        farm, species = self.fixture.parents()
+        self.fixture.store.save('inventory', self.fixture.inventory(farm, species))
+        self.window.refresh_nursery()
+        page = self.window.species_page
+        page.farm_picker.setCurrentIndex(page.farm_picker.findData(farm))
+        page.species_picker.setCurrentIndex(page.species_picker.findData(species))
+        page.stock_table.selectRow(0)
+        with patch.object(page, 'refresh_stock') as rebuild:
+            page.purpose_filter.setCurrentIndex(page.purpose_filter.findData('꽃'))
+            rebuild.assert_not_called()
+        self.assertEqual((farm, species, 0),
+                         (page.farm_picker.currentData(), page.species_picker.currentData(), page.stock_table.currentRow()))
+        self.assertEqual([], self.fixture.api.calls)

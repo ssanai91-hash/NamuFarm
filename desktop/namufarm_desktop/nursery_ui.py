@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (QButtonGroup, QCheckBox, QComboBox, QDialog, QDia
 from .app import table, fill_table
 from .errors import UserError
 from .nursery import INITIALS, NurseryStore, initial
-from .species_purposes import (PURPOSES, category_error, format_category, parse_category,
+from .species_purposes import (PURPOSES, category_error, format_category, matches_purpose, parse_category,
                                suggest_purpose_labels)
 from .ui_theme import TOKENS
 
@@ -180,7 +180,22 @@ class NurseryPage(QWidget):
         self.table.itemDoubleClicked.connect(lambda _: self.edit(self.selected()))
         if kind == 'species':
             self.tabs = QTabWidget()
-            self.tabs.addTab(self.table, '묘목 목록')
+            species_list = QWidget()
+            species_layout = QVBoxLayout(species_list)
+            species_layout.setContentsMargins(0, 0, 0, 0)
+            purposes = QHBoxLayout()
+            purposes.addWidget(QLabel('용도'))
+            self.purpose_filter = QComboBox()
+            self.purpose_filter.setAccessibleName('묘목 용도 필터')
+            self.purpose_filter.addItem('전체', '')
+            for purpose in PURPOSES:
+                self.purpose_filter.addItem(purpose.label, purpose.label)
+            self.purpose_filter.currentIndexChanged.connect(self.refresh_local)
+            purposes.addWidget(self.purpose_filter)
+            purposes.addStretch()
+            species_layout.addLayout(purposes)
+            species_layout.addWidget(self.table, 1)
+            self.tabs.addTab(species_list, '묘목 목록')
             self.tabs.addTab(self.build_stock(), '농원별 재고')
             layout.addWidget(self.tabs, 1)
         else:
@@ -214,8 +229,10 @@ class NurseryPage(QWidget):
         if not hasattr(self, 'table'):
             return
         query = self.search.text().strip().casefold()
-        rendered = (self.state, query, self.selected_initial)
-        if getattr(self, '_rendered', None) == rendered:
+        purpose = self.purpose_filter.currentData() if self.kind == 'species' else ''
+        rendered = (self.state, query, self.selected_initial, purpose)
+        previous_rendered = getattr(self, '_rendered', None)
+        if previous_rendered == rendered:
             # Navigation and unrelated jobs must preserve the existing table/selection.
             self.update_controls()
             return
@@ -223,7 +240,8 @@ class NurseryPage(QWidget):
         self.rows = sorted([r for r in values if not r.get('_deleted') and
             (not query or query in ' '.join(str(v) for k, v in r.items() if not k.startswith('_')).casefold()) and
             (self.kind != 'species' or not self.selected_initial or
-             initial(r['speciesName']) == self.selected_initial)],
+             initial(r['speciesName']) == self.selected_initial) and
+            (self.kind != 'species' or matches_purpose(r.get('category', ''), purpose))],
             key=lambda r: r.get('farmName' if self.kind == 'farms' else 'speciesName', ''))
         pending = {op['key'] for op in (self.state or {}).get('pending', [])}
         display = []
@@ -250,7 +268,9 @@ class NurseryPage(QWidget):
         if hasattr(self, 'initial_buttons'):
             for title, btn in self.initial_buttons.items():
                 btn.setChecked(title == self.selected_initial)
-            self.refresh_stock()
+            # Purpose choices affect this table only; preserve inventory selection.
+            if previous_rendered is None or previous_rendered[:3] != rendered[:3]:
+                self.refresh_stock()
         self._rendered = rendered
         self.update_controls()
 
