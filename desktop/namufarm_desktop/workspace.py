@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (QApplication, QBoxLayout, QButtonGroup, QCheckBox
 from . import __version__
 from .ui_theme import (align_table, fit_window, scroll_dialog, scroll_page, workspace_style,
                        CustomerDelegate, StatusDelegate, customer_reference, CompactDateDelegate,
-                       NavigationButton, QuoteRemarksDelegate, TOKENS, status_badge, stage_label, size_table_to_rows, collapsible, quote_workbench_style)
+                       NavigationButton, QuoteRemarksDelegate, SequenceDelegate, TOKENS, status_badge, stage_label, size_table_to_rows, collapsible, quote_workbench_style)
 from .ui_icons import set_button_icon, ui_icon
 from .app import MainWindow, Task, table, fill_table, money, timestamp
 from .commerce import (ISSUER, new_draft, new_manual_draft, draft_amounts, validate_draft, quote_html, quote_document_html, shipping_html,
@@ -167,8 +167,8 @@ class UnitPriceEditor(QWidget):
         super().__init__(parent)
         self.setObjectName("unitPriceEditor")
         large = bool(QApplication.instance().property("namufarmLargeFont"))
-        control_height = (38 if large else 32) if compact else 44
-        control_width = 32 if compact else 44
+        control_height = 40 if compact else 44
+        control_width = 40 if compact else 44
         row = QHBoxLayout(self)
         row.setContentsMargins(2 if compact else 3, 0, 2 if compact else 3, 0)
         row.setSpacing(6 if compact else 4)
@@ -187,7 +187,7 @@ class UnitPriceEditor(QWidget):
         self.input.setAccessibleName(caption + " (원)")
         if compact:
             self.input.setFixedHeight(control_height)
-            self.input.setMinimumWidth(120 if large else 104)
+            self.input.setFixedWidth(100)
         self.input.textChanged.connect(lambda _text: self.changed.emit())
         row.addWidget(self.input, 1)
 
@@ -782,7 +782,7 @@ class DeliveryActionButton(QPushButton):
         self.symbol = symbol
         self.symbol_name = icon
         symbol.setFixedSize(18, 18)
-        symbol.setPixmap(ui_icon(icon, "#ffffff" if name == "smsAction" else "#24313a").pixmap(18, 18))
+        symbol.setPixmap(ui_icon(icon, TOKENS["primary"]).pixmap(18, 18))
         row.addWidget(symbol)
         self.title_label = label(title, "deliveryActionTitle")
         row.addWidget(self.title_label)
@@ -792,7 +792,7 @@ class DeliveryActionButton(QPushButton):
         self.setMinimumWidth(0)
 
     def refresh_symbol(self):
-        color = "#6a7b71" if not self.isEnabled() else "#ffffff" if self.objectName() == "smsAction" else "#24313a"
+        color = TOKENS["muted"] if not self.isEnabled() else TOKENS["primary"]
         self.symbol.setPixmap(ui_icon(self.symbol_name, color).pixmap(18, 18))
 
     def changeEvent(self, event):
@@ -955,6 +955,8 @@ class QuoteDeliveryTools:
         for action, text in ((self.sms_button, sms_text), (self.email_button, email_text)):
             action.setAccessibleName(action.title_label.text() + ", " + text if isinstance(action, DeliveryActionButton) else action.text())
             action.setToolTip(text)
+        if hasattr(self, "update_completion_availability"):
+            self.update_completion_availability()
 
 
 
@@ -1222,23 +1224,17 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         header.setObjectName("workbenchHeader")
         header.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         heading = QHBoxLayout(header)
-        heading.setContentsMargins(24, 14, 24, 14)
-        heading.setSpacing(20)
-        heading.addWidget(workbench_icon("leaf", 40, "#91d39d"))
-        heading.addWidget(label("나무팜(주)", "workbenchBrand"))
-        brand_rule = QFrame()
-        brand_rule.setObjectName("workbenchBrandRule")
-        brand_rule.setFixedSize(1, 30)
-        heading.addWidget(brand_rule)
+        header.setFixedHeight(60)
+        heading.setContentsMargins(16, 8, 16, 8)
+        heading.setSpacing(16)
         heading.addWidget(label("견적 작업대", "workbenchTitle"))
-        heading.addStretch(1)
-        reference = label("견적번호  " + str(self.draft.get("requestReceiptNumber") or self.draft.get("sourceRequestId", "")),
-                          "workbenchReference", True)
+        heading.addWidget(label(self.draft.get("customerName") or "고객 입력", "workbenchBrand"))
+        reference = label(str(self.draft.get("requestReceiptNumber") or "접수번호 없음"), "workbenchReference")
         reference.setMinimumWidth(0)
         reference.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
-        reference.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        reference.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         heading.addWidget(reference, 1)
+        heading.addWidget(stage_label(self.request_status or "작성중"))
+        heading.addWidget(button("✕", self.reject))
         root.addWidget(header)
 
         body = QHBoxLayout()
@@ -1248,8 +1244,7 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         self.customer_scroll.setObjectName("workbenchCustomerScroll")
         self.customer_scroll.setWidgetResizable(True)
         self.customer_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.customer_scroll.setMinimumWidth(320 if large else 300)
-        self.customer_scroll.setMaximumWidth(480 if large else 440)
+        self.customer_scroll.setFixedWidth(330)
         rail = QWidget()
         rail.setObjectName("workbenchCustomerRail")
         customer = QVBoxLayout(rail)
@@ -1373,7 +1368,7 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         item_content.addLayout(item_tools)
         item_content.addWidget(self.workbench_items_hint)
         # Logical indices stay stable for collection; visual order puts price before amount.
-        self.items = table(["묘목명", "수량", "판매 금액", "판매 단가", "순번", "규격"])
+        self.items = table(["묘목명", "수량", "판매 금액", "판매 단가", "순번", "규격", "빼기"])
         self.items.setEditTriggers(self.items.EditTrigger.DoubleClicked | self.items.EditTrigger.EditKeyPressed | self.items.EditTrigger.AnyKeyPressed)
         self.items.setObjectName("workbenchItems")
         polish_table(self.items)
@@ -1381,11 +1376,11 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         self.items.verticalHeader().setMinimumSectionSize(48 if large else 40)
         self.items.verticalHeader().setDefaultSectionSize(48 if large else 40)
         # Specification is between seedling name and quantity, including on reopening.
-        self.items.set_column_layout(((4, 0, 48 if large else 44), (0, 3, 172), (5, 2.5, 120),
-                                      (1, 0, 108 if large else 96),
-                                      (3, 0, 232 if large else 212), (2, .5, 96)))
+        self.items.set_column_layout(((4, 0, 40), (0, 2, 156), (5, 1, 92), (1, .4, 64),
+                                      (3, 0, 196), (2, .5, 88), (6, 0, 44)))
         self.items.horizontalHeader().setMinimumSectionSize(32)
         self.items.setItemDelegateForColumn(5, QuoteRemarksDelegate(self.items))
+        self.items.setItemDelegateForColumn(4, SequenceDelegate(self.items))
         self.items.fit_columns()
         self.items.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Ignored)
         self.items.itemChanged.connect(self.recalculate)
@@ -1408,7 +1403,7 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         choices = QHBoxLayout(shipping_choices)
         choices.setContentsMargins(6, 0, 6, 0)
         choices.setSpacing(18)
-        self.shipping_cod = QRadioButton("후불")
+        self.shipping_cod = QRadioButton("후불(착불)")
         self.shipping_prepaid = QRadioButton("선불")
         self.shipping_prepaid.setChecked(bool(self.draft.get("isPrepaid")))
         self.shipping_cod.setChecked(not self.shipping_prepaid.isChecked())
@@ -1419,7 +1414,7 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         shipping_row.addWidget(shipping_choices)
         self.shipping_fee_editor = UnitPriceEditor(int(self.draft.get("shippingFee") or 6000),
                                                    compact=True, caption="선불 택배비")
-        self.shipping_fee_editor.setFixedWidth(232 if large else 212)
+        self.shipping_fee_editor.setFixedWidth(196)
         self.shipping_fee = self.shipping_fee_editor.input
         self.shipping_fee.setAccessibleName("선불 택배비 금액")
         shipping_row.addWidget(self.shipping_fee_editor)
@@ -1508,11 +1503,11 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         set_button_icon(self.save_working_button, "save", "#193c32")
         footer.addWidget(self.save_working_button)
         self.close_button = button("닫기", self.reject)
-        self.close_button.setMinimumWidth(120)
+        self.close_button.setMinimumWidth(64)
         footer.addWidget(self.close_button)
         self.confirm_button = button("견적완료",
                                      lambda: self.finish("save_manual" if self.manual_quote else "finalize"), True)
-        self.confirm_button.setFixedWidth(198)
+        self.confirm_button.setFixedWidth(180)
         self.confirm_button.setProperty("deliveryCompletion", True)
         self.confirm_button.setEnabled(self.request_status in ("", "신규"))
         set_button_icon(self.confirm_button, "check", "#ffffff")
@@ -1528,10 +1523,105 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         self.shipping_cod.toggled.connect(self.recalculate)
         self.shipping_prepaid.toggled.connect(self.recalculate)
         self.shipping_fee.textChanged.connect(self.recalculate)
+        self.apply_workbench_presentation()
         self._workbench_ready = True
         self.finished.connect(self.finish_workbench)
         self.recalculate()
         self.initial = self.raw_state()
+
+    def apply_workbench_presentation(self):
+        """Reparent existing editors/actions; all signals and collection indices stay intact."""
+        customer = self.customer_scroll.widget().layout()
+        customer.setSpacing(8)
+        customer.removeWidget(self.workbench_customer_heading)
+        customer.removeItem(self.workbench_identity)
+        info_card = QFrame()
+        info_card.setObjectName("card")
+        info_layout = QVBoxLayout(info_card)
+        info_layout.setContentsMargins(16, 16, 16, 16)
+        info_layout.addWidget(self.workbench_customer_heading)
+        info_layout.addLayout(self.workbench_identity)
+        customer.insertWidget(0, info_card)
+        self.workbench_document_area.layout().removeWidget(self.workbench_note_area)
+        note_card = QFrame()
+        note_card.setObjectName("card")
+        note_layout = QVBoxLayout(note_card)
+        note_layout.setContentsMargins(16, 16, 16, 16)
+        note_layout.addWidget(self.workbench_note_area)
+        note_layout.addWidget(label("견적서·문자·메일에 함께 들어가요", "muted", True))
+        customer.insertWidget(customer.count() - 1, note_card)
+        self.workbench_note_area.findChild(QLabel).setText("판매자 요청사항")
+        self.generate_quote_button.setText("견적서 PDF 생성")
+        self.generate_quote_button.setProperty("role", "outline")
+        self.workbench_items_panel.setObjectName("card")
+        self.workbench_items_panel.layout().setContentsMargins(8, 8, 8, 8)
+        self.workbench_items_hint.setText("묘목명·규격·수량을 확인해주세요")
+        self.remove_item_button.hide()
+        self.workbench_total_rule.hide()
+        self.workbench_delivery_rule.hide()
+        self.workbench_original_area.setMaximumHeight(84)
+        self.request_note_view.setFixedHeight(36)
+        self.workbench_footer.setFixedHeight(84)
+        footer = self.workbench_footer.layout()
+        footer.setContentsMargins(16, 8, 16, 8)
+        footer.setSpacing(8)
+        footer.removeWidget(self.working_save_status)
+        self.working_save_status.setWordWrap(True)
+        note_layout.addWidget(self.working_save_status)
+        footer.removeWidget(self.save_working_button)
+        footer.removeWidget(self.close_button)
+        footer.addWidget(self.save_working_button)
+        footer.addWidget(self.close_button)
+        self.close_button.setProperty("role", "text")
+        self.workbench_summary.layout().removeWidget(self.amount_detail)
+        self.workbench_summary.layout().removeWidget(self.total)
+        self.workbench_summary.hide()
+        summary = QWidget()
+        amounts = QVBoxLayout(summary)
+        amounts.setContentsMargins(0, 0, 0, 0)
+        amounts.setSpacing(0)
+        self.amount_detail.setObjectName("muted")
+        self.amount_detail.setWordWrap(True)
+        amounts.addWidget(self.amount_detail)
+        amounts.addWidget(self.total)
+        summary.setMinimumWidth(160)
+        summary.setMaximumWidth(240)
+        footer.addWidget(summary, 1)
+        divider = QFrame()
+        divider.setFixedWidth(1)
+        divider.setStyleSheet(f"background:{TOKENS['border']};")
+        footer.addWidget(divider)
+        delivery = self.delivery_send_layout.parent()
+        if isinstance(delivery, QVBoxLayout):
+            delivery.removeItem(self.delivery_send_layout)
+        self.workbench_content_layout.removeItem(self.delivery_tools_layout)
+        self.delivery_send_layout.setSpacing(8)
+        self.delivery_send_layout.removeWidget(self.confirm_button)
+        footer.addLayout(self.delivery_send_layout)
+        completion = QVBoxLayout()
+        completion.setContentsMargins(0, 0, 0, 0)
+        completion.setSpacing(0)
+        completion.addWidget(self.confirm_button)
+        self.completion_hint = label("전송 확인 후 누를 수 있어요", "muted")
+        completion.addWidget(self.completion_hint)
+        footer.addLayout(completion)
+        self.shipping_status.setToolTip("후불이면 합계에 포함하지 않아요")
+
+    def update_completion_availability(self):
+        if not hasattr(self, "completion_hint") or getattr(self, "confirmed_result", False):
+            return
+        state = self.delivery_state
+        try:
+            fingerprint = quote_delivery_fingerprint(self.collect())
+            delivered = ((state.get("smsState") == "success" and state.get("smsQuoteFingerprint") == fingerprint)
+                         or (bool(state.get("emailSentAt")) and state.get("emailQuoteFingerprint") == fingerprint))
+        except UserError:
+            delivered = False
+        allowed = bool(delivered and not state.get("pendingDelivery") and not self.items_only
+                       and self.request_status in ("", "신규"))
+        self.confirm_button.setEnabled(allowed)
+        self.completion_hint.setVisible(not allowed)
+        self.confirm_button.setToolTip("현재 견적 전송이 확인되어야 완료할 수 있습니다." if not allowed else "견적완료")
 
     def save_working_draft(self):
         if not self.manager or self.working_save_task is not None:
@@ -1580,8 +1670,7 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         fit_quote_density(self)
         large = bool(QApplication.instance().property("namufarmLargeFont"))
         # Leave room for the table plus both scrollbars in short, narrow windows.
-        self.customer_scroll.setMaximumWidth(min(480 if large else 440,
-                                                  max(320 if large else 300, self.width() - 900)))
+        self.customer_scroll.setFixedWidth(330)
         self._workbench_fit_timer.start(0)
         compact = self.height() < 900
         if compact == getattr(self, "_workbench_compact", None):
@@ -1598,80 +1687,25 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         if not getattr(self, "_workbench_ready", False) or self._workbench_closed or not self.isVisible():
             return
         large = bool(QApplication.instance().property("namufarmLargeFont"))
-        # Bound long e-mail/receipt values to the rail and wrap without altering copied text.
-        # A shared caption width keeps both groups on the same value-column axis.
-        caption_width = max(caption.sizeHint().width() for caption in self.customer_captions.values())
+        self.customer_scroll.setFixedWidth(330)
+        self.document_buttons_layout.setDirection(QBoxLayout.Direction.TopToBottom)
         for caption in self.customer_captions.values():
-            caption.setFixedWidth(caption_width)
-        margins = self.customer_scroll.widget().layout().contentsMargins()
-        document_width = self.customer_scroll.viewport().width() - margins.left() - margins.right() - 26
-        self.document_buttons_layout.setSpacing(8)
-        self.document_buttons_layout.setDirection(QBoxLayout.Direction.TopToBottom if document_width < (280 if large else 250)
-                                                 else QBoxLayout.Direction.LeftToRight)
-        value_width = max(60, self.customer_scroll.viewport().width() - margins.left() - margins.right()
-                          - caption_width - self.workbench_identity.horizontalSpacing())
+            caption.setFixedWidth(76)
         for value in self.customer_values.values():
-            value.setMaximumWidth(value_width)
-            value.setFixedHeight(value.heightForWidth(value_width))
-        narrow = self.workbench_scroll.viewport().width() < 700
+            value.setMaximumWidth(198)
+            value.setFixedHeight(value.heightForWidth(198))
         for action in (self.sms_button, self.email_button):
+            action.setFixedWidth(220 if large else 200)
+            action.title_label.setStyleSheet(f"font-size:{19 if large else 17}px;font-weight:700;")
+            action.status_badge.setStyleSheet(f"font-size:{15 if large else 13}px;padding:2px 4px;")
             action.refresh_symbol()
-            size = (20 if large else 18) if narrow else (22 if large else 20)
-            action.title_label.setStyleSheet(f"font-size:{size}px;font-weight:700;")
-            action.status_badge.setStyleSheet("font-size:12px;padding:2px 4px;" if narrow else "")
-        available = max(1, self.workbench_scroll.viewport().width() - 32)
-        # Two thirds of the former equal-width channel buttons; completion is 1.5x.
-        channel_width = max(160, (available - 132 - 24) // 3)
-        if available < 700:
-            channel_width = max(120, (available - 198 - 24) // 2)
-        for action in (self.sms_button, self.email_button):
-            action.setFixedWidth(channel_width)
-        dense = bool(self.property("compactLayout"))
-        row_height = (42 if large else 36) if dense else (48 if large else 40)
-        self.items.verticalHeader().setMinimumSectionSize(row_height)
-        self.items.verticalHeader().setDefaultSectionSize(row_height)
-        self.items.horizontalHeader().setFixedHeight((36 if large else 32) if dense else (40 if large else 36))
-        for row in range(self.items.rowCount()):
-            self.items.setRowHeight(row, row_height)
-        header = self.items.horizontalHeader().height()
-        # Reserve a separate 5–8-row workspace even when the quote has only one item.
-        # Totals and delivery actions stay outside that workspace.
-        layout = self.workbench_content_layout
-        margins = layout.contentsMargins()
-        if self.sms_button.isVisible():
-            # Leave the same bottom inset as the left editor and its enclosing card.
-            bottom = (self.customer_scroll.widget().layout().contentsMargins().bottom()
-                      + self.workbench_document_area.layout().contentsMargins().bottom() + 2)
-            if margins.bottom() != bottom:
-                layout.setContentsMargins(margins.left(), margins.top(), margins.right(), bottom)
-                margins = layout.contentsMargins()
-        other_height, visible_parts = margins.top() + margins.bottom(), 0
-        for index in range(layout.count()):
-            part = layout.itemAt(index)
-            widget = part.widget()
-            if widget is self.workbench_items_panel or (widget is not None and widget.isHidden()):
-                continue
-            other_height += max(0, part.sizeHint().height())
-            visible_parts += 1
-        other_height += visible_parts * layout.spacing()
-        item_layout = self.workbench_items_panel.layout()
-        item_parts = 0
-        for index in range(item_layout.count()):
-            part = item_layout.itemAt(index)
-            widget = part.widget()
-            if widget is self.items or (widget is not None and widget.isHidden()):
-                continue
-            other_height += max(0, part.sizeHint().height())
-            item_parts += 1
-        other_height += item_parts * item_layout.spacing()
-        scrollbar = self.items.horizontalScrollBar()
-        extra = scrollbar.sizeHint().height() if scrollbar.maximum() > 0 else 0
-        room = self.workbench_scroll.viewport().height() - other_height - header - extra - 4
-        rows = min(8, max(5, room // row_height))
-        height = header + rows * row_height + extra + 4
-        self.items.setMinimumHeight(height)
+        height = 68 if large else 64
+        self.items.verticalHeader().setMinimumSectionSize(height)
+        self.items.verticalHeader().setDefaultSectionSize(height)
+        self.items.horizontalHeader().setFixedHeight(44)
+        self.items.setMinimumHeight(44 + 3 * height)
         self.items.setMaximumHeight(16777215)
-        self._workbench_notes_timer.start(0)
+        self.align_workbench_notes()
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -1703,36 +1737,10 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         return super().eventFilter(watched, event)
 
     def align_workbench_notes(self):
-        if not getattr(self, "_workbench_ready", False) or self._workbench_closed or not self.isVisible():
+        if not getattr(self, "_workbench_ready", False) or self._workbench_closed:
             return
-        large = bool(QApplication.instance().property("namufarmLargeFont"))
-        measure = QTextDocument()
-        measure.setDefaultFont(_quote_font(16 if large else 14))
-        measure.setDocumentMargin(0)
-        measure.setPlainText(self.note.toPlainText())
-        measure.setTextWidth(max(1, self.note.viewport().width() - 12))
-        note_height = max(76 if large else 64,
-                          min(132 if large else 112, int(measure.size().height()) + 12))
-        if self.sms_button.isVisible():
-            # Compare unscrolled content positions so scrolling cannot grow the editor.
-            rail = self.customer_scroll.widget()
-            left_viewport = self.customer_scroll.viewport()
-            right_viewport = self.workbench_scroll.viewport()
-            note_top = self.note.mapTo(rail, QPoint(0, 0)).y()
-            button_bottom = (self.sms_button.mapTo(self.workbench_scroll.widget(), QPoint(0, 0)).y()
-                             + self.sms_button.height())
-            aligned_height = (right_viewport.mapTo(self, QPoint(0, 0)).y() + button_bottom
-                              - left_viewport.mapTo(self, QPoint(0, 0)).y() - note_top)
-            bottom_padding = (rail.layout().contentsMargins().bottom()
-                              + self.workbench_document_area.layout().contentsMargins().bottom()
-                              + self.workbench_note_area.layout().contentsMargins().bottom() + 2)
-            available_height = left_viewport.height() - note_top - bottom_padding
-            note_height = max(76 if large else 64, min(available_height, aligned_height))
-        if self.note.height() != note_height:
-            self.note.setFixedHeight(note_height)
-        height = 64 if large else 52
-        if self.request_note_view.height() != height:
-            self.request_note_view.setFixedHeight(height)
+        self.note.setFixedHeight(96 if QApplication.instance().property("namufarmLargeFont") else 80)
+        self.request_note_view.setFixedHeight(36)
 
     def edit_specification_cell(self, row, column):
         if column == 5:
@@ -1769,6 +1777,10 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
                     font.setBold(False)
                     cell.setFont(font)
                 elif column == 1:
+                    font = cell.font()
+                    font.setPixelSize(19 if QApplication.instance().property("namufarmLargeFont") else 17)
+                    font.setBold(True)
+                    cell.setFont(font)
                     cell.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
                 self.items.setItem(index, column, cell)
                 if column == 0:
@@ -1783,6 +1795,19 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
             specification = QTableWidgetItem(item_specification(item))
             specification.setToolTip("홈페이지 희망 규격입니다. 클릭해서 입력하거나 수정할 수 있습니다.")
             self.items.setItem(index, 5, specification)
+            if self.items.columnCount() > 6:
+                remove = button("")
+                remove.setProperty("role", "danger")
+                remove.setToolTip("이 묘목 빼기")
+                remove.setAccessibleName("이 묘목 빼기")
+                set_button_icon(remove, "trash", TOKENS["danger"], 18)
+                def remove_current(checked=False, target=number):
+                    row = self.items.row(target)
+                    if row >= 0:
+                        self.items.setCurrentCell(row, 0)
+                        self.remove_item()
+                remove.clicked.connect(remove_current)
+                self.items.setCellWidget(index, 6, remove)
             self.items.setRowHeight(index, self.items.verticalHeader().defaultSectionSize())
         else:
             for column, key in enumerate(("species", "specification", "quantity", "unitPrice", "unitCost")):
@@ -1932,6 +1957,7 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         if self.workbench:
             prepaid = self.shipping_prepaid.isChecked()
             self.shipping_fee_editor.setEnabled(prepaid)
+            self.shipping_fee_editor.setVisible(prepaid)
             self.shipping_fee.setEnabled(prepaid)
             self.shipping_status.setText("선불 · 합계 포함" if prepaid else "후불 · 별도")
         elif hasattr(self, "shipping_fee_editor"):
@@ -1981,6 +2007,7 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
                 self.sms_button.setEnabled(bool(self.fields["customerPhone"].text().strip()))
                 self.email_button.setEnabled(bool(self.fields["customerEmail"].text().strip()))
             self.update_delivery_badges()
+            self.update_completion_availability()
             if self.items_only:
                 for control in (self.sms_button, self.email_button):
                     control.setEnabled(False)

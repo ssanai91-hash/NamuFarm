@@ -134,3 +134,18 @@ class UnifiedChromeTest(QtTestCase):
             window.set_status_state('success', '완료')
             self.assertTrue(window.error_banner.isHidden())
             window.close()
+
+class QuotePresentationContractTest(QtTestCase):
+    def test_workbench_reuses_editors_and_has_single_footer(self):
+        draft = demo_data()['confirmedQuotes'][0]
+        dialog = QuoteDialog(draft)
+        self.assertEqual(330, dialog.customer_scroll.width())
+        self.assertEqual(84, dialog.workbench_footer.height())
+        self.assertEqual(180, dialog.confirm_button.width())
+        self.assertEqual(7, dialog.items.columnCount())
+        self.assertTrue(hasattr(dialog, 'delivery_send_layout'))
+        self.assertTrue(hasattr(dialog, 'note'))
+        self.assertTrue(hasattr(dialog, 'request_note_view'))
+        self.assertFalse(dialog.confirm_button.isEnabled())
+        dialog.cleanup_generated_quote()
+        dialog.close()

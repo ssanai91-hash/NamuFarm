@@ -263,6 +263,29 @@ class CustomerDelegate(RowSelectionDelegate):
         painter.restore()
 
 
+class SequenceDelegate(RowSelectionDelegate):
+    def paint(self, painter, option, index):
+        opt = QStyleOptionViewItem(option)
+        self.initStyleOption(opt, index)
+        text, opt.text = opt.text, ''
+        style = opt.widget.style() if opt.widget else QApplication.style()
+        style.drawControl(QStyle.ControlElement.CE_ItemViewItem, opt, painter, opt.widget)
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        rect = QRectF(0, 0, 28, 28)
+        rect.moveCenter(QRectF(option.rect).center())
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(TOKENS['sidebar']))
+        painter.drawEllipse(rect)
+        painter.setPen(QColor(TOKENS['card']))
+        font = option.font
+        font.setPixelSize(15 if QApplication.instance().property('namufarmLargeFont') else 13)
+        font.setBold(True)
+        painter.setFont(font)
+        painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, text)
+        painter.restore()
+
+
 class StatusDelegate(RowSelectionDelegate):
     def paint(self, painter, option, index):
         opt = QStyleOptionViewItem(option)

@@ -47,7 +47,7 @@ class SpeciesNameEditor(QWidget):
     def __init__(self, text="", parent=None):
         super().__init__(parent)
         self.setObjectName("quoteSpeciesEditor")
-        row = QHBoxLayout(self)
+        row = QVBoxLayout(self)
         row.setContentsMargins(0, 0, 0, 0)
         row.setSpacing(6)
         self.input = QLineEdit(text)
@@ -59,8 +59,9 @@ class SpeciesNameEditor(QWidget):
         self.input.installEventFilter(self)
         self.input.textChanged.connect(self.changed.emit)
         row.addWidget(self.input, 1)
-        self.search_button = QPushButton("초성검색")
-        self.search_button.setFixedWidth(76)
+        self.search_button = QPushButton("다른 묘목으로 바꾸기")
+        self.search_button.setProperty("role", "text")
+        self.search_button.setMinimumWidth(0)
         self.search_button.setAccessibleName("이 품목의 묘목 초성검색")
         self.search_button.installEventFilter(self)
         self.search_button.clicked.connect(lambda _checked=False: self.pick_requested.emit())
@@ -150,4 +151,5 @@ class QuoteSpeciesPicker(QDialog):
         if item is not None:
             self.selected_name = item.text()
             self.accept()
+
 
