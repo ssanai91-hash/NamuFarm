@@ -199,6 +199,7 @@ function inquirySmsStatus_(body) {
 }
 /** Pending questions remain available across years; completed personal data expires in 30 days. */
 function purgeExpiredInquiries() {
+  purgeQuoteDeliveries_();
   if(PropertiesService.getScriptProperties().getProperty('INQUIRY_SETUP')!=='1')return;
   lock_(()=>inquiryRecords_().forEach(record=>{
     const row=record.row;if(inquiryStatus_(row)!=='closed' || !row[IC.answered] || Date.parse(String(row[IC.answered]))+30*86400000>Date.now())return;
@@ -231,3 +232,4 @@ function setInquiryStatus_(body) {
     inquiryChange_(record,raw,body.eventId);return {inquiry:inquiryResponse_(record.row),duplicate:false};
   });
 }
+

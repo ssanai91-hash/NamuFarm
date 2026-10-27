@@ -35,7 +35,7 @@ function secureServiceInfo_() {
     encryptionReady:false,customerDataStorage:'plain',sellerKey:key,retentionDays:30,requestDeletionSync:true,saleDeletionSync:true,
     receiptFormat:'NAMU-YYYYMMDD-NNNN',receiptTimeZone:'Asia/Seoul',connectionFile:true,requestSnapshot:true,
     connectionAuth:'auto-v1',quoteReadMode:twoBookActive_()?'annual-two-tabs':'legacy-storage',legacyDeviceAuth:true,
-    quoteEmail:true,quoteEmailSender:QUOTE_SENDER_EMAIL,salesReportEmail:true,
+    quoteDeliveryIdempotency:1,quoteEmail:true,quoteEmailSender:QUOTE_SENDER_EMAIL,salesReportEmail:true,
     customerInquiry:1,customerInquiryWorkflow:2,customerInquiryReady:typeof customerInquiryReady_==='function' && customerInquiryReady_(),
     quoteSms:true,quoteSmsProvider:'SOLAPI',soldNumberReservation:1,soldDisplayNumbers:1,
     commerceStates:['입금확인','배송완료','구매취소']};
@@ -454,7 +454,7 @@ function authorizeQuoteMail() {
   console.log('Quote mail ready: '+profile.senderEmail+' / quota '+profile.remainingDailyQuota);
   return profile;
 }
-function sendQuoteEmail_(body) {
+function sendQuoteEmail_Legacy_(body) {
   assert_(body && typeof body==='object');
   const requestId=String(body.requestId||'');
   if(requestId)assert_(['신규','견적확정','견적발송완료'].includes(quoteRequestStatus_(requestId)),'CONFLICT');
@@ -486,7 +486,7 @@ function sendQuoteEmail_(body) {
     remainingDailyQuota:MailApp.getRemainingDailyQuota()};
 }
 
-function sendSalesReportEmail_(body) {
+function sendSalesReportEmail_Legacy_(body) {
   const recipient=text_(body.recipientEmail,254,3);
   assert_(/^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/.test(recipient),'INVALID');
   const subject=text_(body.subject,160,1);
@@ -543,7 +543,7 @@ function quoteSmsReason_(code) {
   };
   return reasons[code] || (code ? '문자 전송에 실패했습니다.' : '문자 발송 결과를 확인하고 있습니다.');
 }
-function sendQuoteSms_(body) {
+function sendQuoteSms_Legacy_(body) {
   assert_(body && typeof body==='object');
   const requestId=String(body.requestId||'');
   if(requestId)assert_(['신규','견적확정','견적발송완료'].includes(quoteRequestStatus_(requestId)),'CONFLICT');
@@ -562,12 +562,14 @@ function sendQuoteSms_(body) {
     muteHttpExceptions:true
   });
   const httpCode=response.getResponseCode();
+  if(httpCode>=400 && httpCode<500)quoteDeliveryRejected_();
   let result;
   try { result=JSON.parse(response.getContentText()); } catch (_) { fail_('UNAVAILABLE'); }
   assert_(httpCode>=200 && httpCode<300,'UNAVAILABLE');
   const failed=Array.isArray(result.failedMessageList)?result.failedMessageList:[];
   const list=Array.isArray(result.messageList)?result.messageList:[];
-  assert_(failed.length===0 && list.length===1 && String(list[0].statusCode)==='2000','UNAVAILABLE');
+  if(failed.length && !list.some(row=>String(row.statusCode)==='2000'))quoteDeliveryRejected_();
+  assert_(failed.length===0 && list.length===1 && String(list[0].statusCode)==='2000' && /^M[A-Za-z0-9_-]+$/.test(String(list[0].messageId||'')),'UNAVAILABLE');
   const accepted=list[0];
   return {sent:true,accepted:true,recipientPhone:recipientPhone,senderPhone:settings.senderPhone,
     messageId:String(accepted.messageId||''),state:'pending',statusCode:'2000',
@@ -752,3 +754,104 @@ function purgeExpiredCustomerData() {
 
 
 
+
+
+/** Optional delivery IDs fence external side effects. No body/full contacts in this journal. */
+const QUOTE_DELIVERY_SHEET = '견적발송기록';
+const QUOTE_DELIVERY_HEADERS = ['발송번호','종류','요청번호','상태','메시지ID','수신끝4자리','내용지문','시작(UTC)','완료(UTC)','결과JSON'];
+const QUOTE_DELIVERY_ID = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
+function quoteDeliveryRejected_() {
+  const error=new Error('UNAVAILABLE');error.code='UNAVAILABLE';error.deliveryRejected=true;throw error;
+}
+function quoteDeliveryFingerprint_(body,channel) {
+  const recipient=channel==='sms'?String(body.recipientPhone||'').replace(/\D/g,''):String(body.recipientEmail||'').trim();
+  // Include attachments and all message-affecting fields, not just the plain text.
+  return hash_(canonical_({channel:channel,recipient:recipient,requestId:String(body.requestId||''),
+    text:body.text||'',subject:body.subject||'',bodyText:body.bodyText||'',bodyHtml:body.bodyHtml||'',
+    senderName:body.senderName||'',quoteNumber:body.quoteNumber||'',
+    attachmentName:body.attachmentName||'',attachmentBase64:body.attachmentBase64||''}));
+}
+function quoteDeliveryResult_(saved,body,channel) {
+  const result=Object.assign({},saved);
+  if(result.sent){
+    if(channel==='sms'){
+      result.recipientPhone=String(body.recipientPhone||'').replace(/\D/g,'');
+      result.senderPhone=quoteSmsSettings_().senderPhone;
+    }else{
+      result.recipientEmail=String(body.recipientEmail||'').trim();result.senderEmail=QUOTE_SENDER_EMAIL;
+      result.attachmentName=body.attachmentName||'';
+      if(channel==='email')result.quoteNumber=body.quoteNumber||'';
+    }
+  }
+  return result;
+}
+function quoteDelivery_(body,channel,send) {
+  assert_(body && typeof body==='object','INVALID');
+  if(body.deliveryId===undefined || body.deliveryId==='')return send(); // Android/legacy contract.
+  assert_(typeof body.deliveryId==='string' && QUOTE_DELIVERY_ID.test(body.deliveryId),'INVALID');
+  assert_(!body.requestId || UUID_PATTERN.test(body.requestId),'INVALID');
+  const recipient=channel==='sms'?String(body.recipientPhone||'').replace(/\D/g,''):String(body.recipientEmail||'').trim();
+  assert_(channel==='sms'?/^0\d{8,10}$/.test(recipient):/^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/.test(recipient),'INVALID');
+  const id=body.deliveryId,fingerprint=quoteDeliveryFingerprint_(body,channel);
+  const previous=lock_(()=>{
+    const sheet=namedSheet_(QUOTE_DELIVERY_SHEET,QUOTE_DELIVERY_HEADERS,true);
+    const rows=namedRows_(sheet,10),index=rows.findIndex(row=>row[0]===id);
+    if(index>=0){
+      const row=rows[index];assert_(row[6]===fingerprint,'CONFLICT');
+      if(row[3]==='SENT')return Object.assign(quoteDeliveryResult_(JSON.parse(row[9]),body,channel),{duplicate:true});
+      return {ok:true,sent:false,state:row[3]==='REJECTED'?'rejected':'unknown',deliveryId:id};
+    }
+    const recipient=channel==='sms'?String(body.recipientPhone||'').replace(/\D/g,''):String(body.recipientEmail||'');
+    sheet.getRange(sheet.getLastRow()+1,1,1,10).setValues([[id,channel,String(body.requestId||''),'SENDING','',recipient.slice(-4),fingerprint,new Date().toISOString(),'','']]);
+    SpreadsheetApp.flush(); // Durable fence BEFORE any network or MailApp call.
+    return null;
+  });
+  if(previous)return previous;
+  let result;
+  try {result=send();}
+  catch(error){
+    if(error.deliveryRejected || ['INVALID','NOT_READY','CONFLICT','UNAUTHORIZED','UPGRADE_REQUIRED','INVALID_ACTION'].includes(error.code)){
+      lock_(()=>quoteDeliveryFinish_(id,'REJECTED',{sent:false,state:'rejected',deliveryId:id}));
+      if(!error.deliveryRejected)throw error;
+      return {ok:true,sent:false,state:'rejected',deliveryId:id};
+    }
+    // A timeout, malformed response, or MailApp exception cannot prove non-delivery.
+    return {ok:true,sent:false,state:'unknown',deliveryId:id};
+  }
+  // Persist only non-personal result fields. Reconstruct contacts from the matching caller payload.
+  const stored={sent:true,deliveryId:id,sentAt:result.sentAt||new Date().toISOString()};
+  ['accepted','messageId','state','statusCode','statusMessage','groupId','remainingDailyQuota'].forEach(key=>{
+    if(result[key]!==undefined)stored[key]=result[key];
+  });
+  lock_(()=>quoteDeliveryFinish_(id,'SENT',stored));
+  return Object.assign({},result,{deliveryId:id});
+}
+function quoteDeliveryFinish_(id,state,result) {
+  const sheet=namedSheet_(QUOTE_DELIVERY_SHEET,QUOTE_DELIVERY_HEADERS,true);
+  const rows=namedRows_(sheet,10),index=rows.findIndex(row=>row[0]===id);
+  assert_(index>=0,'NOT_READY');const row=rows[index];
+  row[3]=state;row[4]=result.messageId||'';row[8]=result.sentAt||new Date().toISOString();row[9]=JSON.stringify(result);
+  sheet.getRange(index+2,1,1,10).setValues([row]);SpreadsheetApp.flush();
+}
+function sendQuoteSms_(body) {return quoteDelivery_(body,'sms',()=>sendQuoteSms_Legacy_(body));}
+function sendQuoteEmail_(body) {return quoteDelivery_(body,'email',()=>sendQuoteEmail_Legacy_(body));}
+function sendSalesReportEmail_(body) {return quoteDelivery_(body,'report_email',()=>sendSalesReportEmail_Legacy_(body));}
+function quoteDeliveryStatus_(body) {
+  assert_(QUOTE_DELIVERY_ID.test(String(body.deliveryId||'')),'INVALID');
+  return lock_(()=>{
+    const row=namedRows_(namedSheet_(QUOTE_DELIVERY_SHEET,QUOTE_DELIVERY_HEADERS,true),10).find(row=>row[0]===body.deliveryId);
+    if(!row)return {found:false};
+    return {found:true,state:String(row[3]).toLowerCase(),channel:row[1],messageId:row[4]||'',sentAt:row[3]==='SENT'?row[8]:''};
+  });
+}
+function purgeQuoteDeliveries_() {
+  return lock_(()=>{
+    // Do not create a journal during a cleanup-only invocation.
+    const props=PropertiesService.getScriptProperties(),id=twoBookActive_()?props.getProperty('LEGACY_SPREADSHEET_ID')||props.getProperty('SPREADSHEET_ID'):props.getProperty('SPREADSHEET_ID');
+    if(!id || !SpreadsheetApp.openById(id).getSheetByName(QUOTE_DELIVERY_SHEET))return;
+    const sheet=namedSheet_(QUOTE_DELIVERY_SHEET,QUOTE_DELIVERY_HEADERS,false);
+    const rows=namedRows_(sheet,10);
+    for(let i=rows.length-1;i>=0;i--)if(Date.parse(String(rows[i][7]))+30*86400000<=Date.now())sheet.deleteRow(i+2);
+    SpreadsheetApp.flush();
+  });
+}

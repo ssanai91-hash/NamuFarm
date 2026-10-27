@@ -45,6 +45,7 @@ function doPost(e) {
       else if (body.action === 'send_sales_report_email') value = sendSalesReportEmail_(body);
       else if (body.action === 'sms_profile') value = quoteSmsProfile_();
       else if (body.action === 'send_quote_sms') value = sendQuoteSms_(body);
+      else if (body.action === 'quote_delivery_status') value = quoteDeliveryStatus_(body);
       else if (body.action === 'quote_sms_status') value = quoteSmsStatus_(body);
       else if (body.action === 'register_push') value = registerPush_(body, device);
       else if (body.action === 'save_sale') value = saveSale_(body);
@@ -463,6 +464,7 @@ function revokeAllAutoDevices() {
   lock_(() => PropertiesService.getScriptProperties().setProperty('AUTO_DEVICES', '{}'));
   console.log('자동등록 기기 권한을 모두 해제했습니다. 고객자료는 유지됩니다.');
 }
+
 
 
 
