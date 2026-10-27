@@ -195,7 +195,10 @@ class WorkspaceServiceTest(unittest.TestCase):
         expired = copy.deepcopy(draft)
         expired['createdAt'] = now_ms() - 31 * 86400000
         self.manager.vault.save_preference('drafts', [expired])
+        self.assertEqual([expired], self.manager.view()['drafts'])
+        self.assertEqual(1, self.manager.purge_expired_drafts())
         self.assertEqual([], self.manager.view()['drafts'])
+        self.assertIn('30일 지난 작성중 견적 1건 정리', self.manager.view()['transferNotice'])
         self.assertEqual([], self.manager.vault.preference('drafts'))
 
     def test_quote_confirmation_updates_server_state_and_keeps_local_quote(self):

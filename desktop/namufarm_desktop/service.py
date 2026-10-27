@@ -39,6 +39,7 @@ class Manager(SoldNumbers, SalesWorkspace):
         self.progress_callback = None
         self.sales_snapshot_verified = False
         self.inbox_requests = [r for r in vault.rows("requests") if r.get("status", "신규") == "신규"]
+        self.purge_expired_drafts()
 
     @property
     def using_default_server(self):
@@ -349,23 +350,37 @@ class Manager(SoldNumbers, SalesWorkspace):
                    "PC_" + d["id"] not in registered and d.get("sourceRequestId") not in registered_sources and
                    d["id"] not in registered_drafts]
         drafts = self.vault.preference("drafts", [])
-        active_drafts = [d for d in drafts if d["createdAt"] > now_ms() - 30 * 86400000
-                         and d["id"] not in registered_drafts
-                         and not any(r["metadata"]["orderNumber"] == "PC_" + d["id"] for r in sales)]
-        if active_drafts != drafts:
-            self.vault.save_preference("drafts", active_drafts)
-        drafts = active_drafts
+        drafts = [d for d in drafts if d["id"] not in registered_drafts
+                  and not any(r["metadata"]["orderNumber"] == "PC_" + d["id"] for r in sales)]
+        expiry_days = {d["id"]: max(0, (d["createdAt"] + 30 * 86400000 - now_ms() + 86400000 - 1) // 86400000)
+                       for d in drafts}
         pending = self.vault.pending()
         recovery = self.vault.preference("quote_write_pending")
         if recovery:
             pending = [*pending, {"id": recovery["draft"]["id"], "action": "quote_write"}]
         return {"requests": sorted(decoded_requests, key=lambda r: r["sequence"], reverse=True),
                 "sales": sorted(decoded_sales, key=lambda r: r["sequence"], reverse=True),
-                "drafts": drafts, "confirmedQuotes": active, "quoteRecovery": recovery,
+                "drafts": drafts, "draftExpiryDays": expiry_days, "confirmedQuotes": active, "quoteRecovery": recovery,
                 "copyError": " · ".join(filter(None, (quote_error, sale_error))), "pending": pending,
                 "paired": self.credentials.get("paired") is True,
-                "transferNotice": getattr(self, "transfer_notice", ""),
+                "transferNotice": " · ".join(filter(None, (getattr(self, "_draft_purge_notice", ""), getattr(self, "transfer_notice", "")))),
                 "salesSyncConflict": bool(getattr(self, "sales_conflict_number", None))}
+
+    def purge_expired_drafts(self):
+        """Run only on startup or an explicit/automatic download, never on repaint."""
+        drafts = self.vault.preference("drafts", [])
+        confirmed = {d["id"] for d in self.vault.preference("confirmed_quotes", [])}
+        # Protect legacy confirmed drafts until their one-time Excel migration completes.
+        statuses = {r["requestId"]: r.get("status") for r in self.vault.rows("requests")}
+        keep = [d for d in drafts if d.get("id") in confirmed or
+                d.get("manualStatus") in ("견적확정", "견적발송완료", "입금확인") or
+                statuses.get(d.get("sourceRequestId")) in ("견적확정", "견적발송완료", "입금확인") or
+                d.get("createdAt", now_ms()) > now_ms() - 30 * 86400000]
+        count = len(drafts) - len(keep)
+        if count:
+            self.vault.save_preference("drafts", keep)
+            self._draft_purge_notice = f"30일 지난 작성중 견적 {count:,}건 정리"
+        return count
 
     def save_draft(self, draft):
         try:
@@ -1079,6 +1094,7 @@ class Manager(SoldNumbers, SalesWorkspace):
         self.vault.replace_requests(requests, cursor, deleted,
                                     quote_read_mode=self.quote_read_mode, authoritative=True)
         self.inbox_requests = [r for r in requests if r.get("status", "신규") == "신규"]
+        self.purge_expired_drafts()
         # Sale numbering is prepared by sales/payment actions, not inbox reads.
         value = self.local_copy_view()
         value["copyError"] = " · ".join(filter(None, (value.get("copyError"), recovery_error)))

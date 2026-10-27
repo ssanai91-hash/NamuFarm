@@ -4634,7 +4634,8 @@ class SellerWindow(MainWindow):
         self.draft_table.blockSignals(True)
         fill_table(self.draft_table, [(
             draft_quote_number(d),
-            status,
+            (status + f" · {self.data['draftExpiryDays'][d['id']]}일 후 정리"
+             if status == "작성중" and self.data.get("draftExpiryDays", {}).get(d["id"], 31) <= 3 else status),
             timestamp(d["createdAt"]),
             d["customerName"],
             d["customerPhone"],

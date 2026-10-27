@@ -114,6 +114,7 @@ class SalesWorkspace:
         # Missing or remotely deleted rows never erase a local order during a union download.
         marker = {**self.vault.snapshot_marker(), "sales": cursor, "deletedSales": sorted(deleted)}
         self._merge_sales(rows, server=True, marker=marker)
+        self.purge_expired_drafts()
         self._prefetch_sold_numbers()
         return self.local_copy_view()
 
