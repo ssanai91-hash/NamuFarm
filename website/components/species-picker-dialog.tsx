@@ -37,14 +37,27 @@ export default function SpeciesPickerDialog({ open, onOpenChange, onChoose, sele
       <DialogContent className="species-picker-dialog" showCloseButton={false}>
         <DialogClose asChild>
           <Button type="button" variant="ghost" className="dialog-dismiss" aria-label="묘목 선택 창 닫기">
-            <X aria-hidden="true" />
+            <X aria-hidden="true" /><span>닫기</span>
           </Button>
         </DialogClose>
         <DialogHeader>
           <DialogTitle>묘목 선택</DialogTitle>
-          <DialogDescription>초성을 누른 다음 묘목 이름을 선택하세요.</DialogDescription>
+          <DialogDescription>검색하거나 초성을 누른 다음 묘목을 고르세요.</DialogDescription>
         </DialogHeader>
 
+        <div className="species-picker-search">
+          <Search aria-hidden="true" />
+          <label className="sr-only" htmlFor="species-picker-search">묘목 이름 검색</label>
+          <Input
+            id="species-picker-search"
+            type="search"
+            autoComplete="off"
+            maxLength={80}
+            placeholder="묘목 이름이나 초성으로 검색"
+            value={query}
+            onChange={event => { setQuery(event.target.value); if (event.target.value.trim()) setInitial("all"); }}
+          />
+        </div>
         <div className="species-picker-initials" role="group" aria-label="첫 글자 선택">
           {catalogInitials.map(value => (
             <Button
@@ -60,7 +73,7 @@ export default function SpeciesPickerDialog({ open, onOpenChange, onChoose, sele
           ))}
         </div>
 
-        <SelectedSpeciesSummary lines={lines} onRemove={onRemove} />
+        {lines.some(line => line.species.trim()) && <SelectedSpeciesSummary lines={lines} onRemove={onRemove} />}
 
         <div className="species-picker-results-heading">
           <strong>{query ? "검색 결과" : initial === "all" ? "전체 묘목" : initial + " 묘목"}</strong>
@@ -82,19 +95,6 @@ export default function SpeciesPickerDialog({ open, onOpenChange, onChoose, sele
           {matches.length === 0 && <p className="species-picker-empty">찾는 묘목이 없어요. 이름을 직접 입력할 수 있어요.</p>}
         </div>
 
-        <div className="species-picker-search">
-          <Search aria-hidden="true" />
-          <label className="sr-only" htmlFor="species-picker-search">묘목 이름 검색</label>
-          <Input
-            id="species-picker-search"
-            type="search"
-            autoComplete="off"
-            maxLength={80}
-            placeholder="묘목 이름이나 초성 검색 (선택)"
-            value={query}
-            onChange={event => { setQuery(event.target.value); if (event.target.value.trim()) setInitial("all"); }}
-          />
-        </div>
         <p className="species-picker-help">목록에 없는 묘목은 창을 닫고 직접 입력하세요.</p>
       </DialogContent>
     </Dialog>

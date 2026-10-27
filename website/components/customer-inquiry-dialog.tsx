@@ -93,7 +93,7 @@ export default function CustomerInquiryDialog({ open, onOpenChange, opener }: { 
   function problem(key: keyof Fields) { return problems[key] && <p className="inquiry-field-error" id={`inquiry-${key}-error`}>{problems[key]}</p>; }
   return <Dialog open={open} onOpenChange={changeOpen}>
     <DialogContent className="customer-inquiry-dialog" showCloseButton={false} onOpenAutoFocus={event => { event.preventDefault(); title.current?.focus({ preventScroll: true }); }} onCloseAutoFocus={event => { if (opener.current?.isConnected) { event.preventDefault(); opener.current.focus({ preventScroll: true }); } }}>
-      <button type="button" className="inquiry-close" aria-label="문의 창 닫기" onClick={() => changeOpen(false)}><X aria-hidden="true" /></button>
+      <button type="button" className="inquiry-close" aria-label="문의 창 닫기" onClick={() => changeOpen(false)}><X aria-hidden="true" /><span>닫기</span></button>
       <DialogHeader><DialogTitle ref={title} tabIndex={-1}>{receipt ? "문의가 접수됐어요" : "문의 남기기"}</DialogTitle><DialogDescription className={receipt ? undefined : "sr-only"}>{receipt ? "판매자가 확인한 뒤 남겨주신 연락처로 답변드려요." : "문의 종류와 연락처, 궁금한 내용을 입력해주세요."}</DialogDescription></DialogHeader>
       <div className="inquiry-scroll">
         {receipt ? <div className="inquiry-success"><CircleCheck aria-hidden="true" /><p>문의 접수번호</p><strong>{receipt.inquiryNumber}</strong><p>질문 내용은 판매자만 확인할 수 있어요.</p></div> : <form id="customer-inquiry" onSubmit={submit} noValidate>

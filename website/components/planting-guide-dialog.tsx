@@ -21,7 +21,7 @@ export default function PlantingGuideDialog({ guide, month, added, locked, canAd
   const preparing = !!guide && !guide.plantingMonths.includes(month);
   return <Dialog open={guide !== null} onOpenChange={open => { if (!open) onClose(); }}>
     <DialogContent placement="responsive-sheet" className="planting-guide-dialog" showCloseButton={false} onCloseAutoFocus={event => { event.preventDefault(); opener.current?.focus({ preventScroll: true }); }}>
-      <DialogClose asChild><Button type="button" variant="ghost" className="dialog-dismiss" aria-label="묘목 안내 닫기"><X aria-hidden="true" /></Button></DialogClose>
+      <DialogClose asChild><Button type="button" variant="ghost" className="dialog-dismiss" aria-label="묘목 안내 닫기"><X aria-hidden="true" /><span>닫기</span></Button></DialogClose>
       <DialogHeader><DialogTitle>{guide?.name} 알아보기</DialogTitle><DialogDescription>{month}월 안내 · {preparing ? "다음 식재 준비" : "식재 조건 확인"}</DialogDescription></DialogHeader>
       {guide && <><div className="planting-guide-body">
         <section><h3>심는 시기</h3><p>{guide.timing}</p></section>

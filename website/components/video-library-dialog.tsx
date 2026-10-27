@@ -5,7 +5,7 @@ import { ArrowLeft, ExternalLink, FileText, LoaderCircle, Play, RotateCcw, Searc
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { filterVideos, initialVideos, readVideoCatalog, youtubeEmbedUrl, type VideoFormat, type VideoResource } from "@/lib/content-library";
+import { filterVideos, initialVideos, libraryVideos, readVideoCatalog, youtubeEmbedUrl, type VideoFormat, type VideoResource } from "@/lib/content-library";
 import { createVideoLibraryState, videoLibraryReducer, VIDEO_PAGE_SIZE } from "@/lib/video-library-state";
 import { videoQuoteSpecies } from "@/lib/video-quote";
 
@@ -14,7 +14,8 @@ export default function VideoLibraryDialog({ open, onOpenChange, opener, onReque
   onRequestQuote: (video: VideoResource, opener: HTMLButtonElement) => void;
   quoteOpen: boolean; quoteLocked: boolean;
 }) {
-  const [videos, setVideos] = useState<VideoResource[]>(initialVideos);
+  const [catalog, setVideos] = useState<VideoResource[]>(initialVideos);
+  const videos = libraryVideos(catalog);
   const [view, dispatch] = useReducer(videoLibraryReducer, undefined, createVideoLibraryState);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -108,9 +109,9 @@ export default function VideoLibraryDialog({ open, onOpenChange, opener, onReque
           {quoteLocked && videoQuoteSpecies(selected).length > 0 && <p className="video-play-help" role="status">진행 중인 견적 접수 확인을 마친 뒤 새 묘목을 추가할 수 있어요.</p>}
         </div> : <>
           <div className="video-format-buttons" role="group" aria-label="영상 종류">
-            {([["video", "일반 영상"], ["short", "짧은 영상(쇼츠)"]] as const).map(([value, label]) =>
+            {([["video", "일반 영상"], ["short", "쇼츠"]] as const).map(([value, label]) =>
               <Button key={value} type="button" variant="outline" aria-pressed={format === value} onClick={() => changeFormat(value)}>
-                <span>{label}</span><small>{videos.filter(video => video.format === value).length}편</small>
+                <span>{label}</span><small>{videos.filter(video => video.format === value).length}</small>
               </Button>)}
           </div>
           <div className="video-search"><Search aria-hidden="true" /><Input type="search" aria-label="영상 제목·묘목·주제 검색" placeholder="영상 제목·묘목·주제 검색" value={list.query} onChange={e => changeControls({ query: e.target.value })} maxLength={100} /></div>
@@ -126,7 +127,7 @@ export default function VideoLibraryDialog({ open, onOpenChange, opener, onReque
               if (video.format === "short" && !img.dataset.fallback) { img.dataset.fallback = "true"; img.src = "https://i.ytimg.com/vi/" + video.videoId + "/hqdefault.jpg"; }
               else img.style.visibility = "hidden";
             }} /><span className="video-play-mark"><Play fill="currentColor" aria-hidden="true" /></span></span>
-            <span className="video-card-copy"><strong>{video.title}</strong>{video.source && <span className="video-source">{video.source}</span>}<span className="video-tags">{[...video.species, ...video.topics].map((tag, i) => <span key={tag + "-" + i}>{tag}</span>)}</span></span>
+            <span className="video-card-copy"><strong>{video.title}</strong>{video.source && <span className="video-source">{video.source}</span>}<span className="video-tags">{[...video.species, ...video.topics].slice(0, 2).map((tag, i) => <span key={tag + "-" + i}>{tag}</span>)}</span></span>
           </button>)}</div>
           {displayed.length < visible.length && <div className="video-load-more"><p>{visible.length}개 중 {displayed.length}개 표시</p><Button type="button" variant="outline" onClick={() => dispatch({ type: "more" })}>더 보기 ({Math.min(VIDEO_PAGE_SIZE, visible.length - displayed.length)}개)</Button></div>}
           {!visible.length && <div className="video-empty"><p>{formatVideos.length ? "조건에 맞는 영상이 없어요." : "등록된 영상을 준비하고 있어요."}</p>{formatVideos.length > 0 && <Button type="button" variant="outline" onClick={() => changeControls({ query: "", species: "전체", topic: "전체" })}>검색 조건 초기화</Button>}</div>}

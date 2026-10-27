@@ -81,6 +81,12 @@ export function readVideoCatalog(value: unknown): VideoResource[] | null {
   return videos.sort((a, b) => a.order - b.order || a.title.localeCompare(b.title, "ko"));
 }
 
+// Off-topic records stay in the catalog data but are not shown in the nursery video library.
+export const HIDDEN_VIDEO_TOPICS = ["부동산"];
+export function libraryVideos(items: VideoResource[]) {
+  return items.filter(item => !item.topics.some(topic => HIDDEN_VIDEO_TOPICS.includes(topic)));
+}
+
 export function filterVideos(items: VideoResource[], query: string, species: string, topic: string, format?: VideoFormat) {
   const needle = query.trim().normalize("NFKC").toLocaleLowerCase("ko").replace(/\s+/g, "");
   return items.filter(item => (!format || item.format === format) && (species === "전체" || item.species.includes(species)) &&

@@ -3094,3 +3094,39 @@ body { background:#ffffff; }
 h1,h2,h3 { text-wrap: balance; }
 button,[data-slot=button],.nav-action { word-break: keep-all; overflow-wrap: anywhere; white-space: normal; }
 .site-header .nav-action,.menu-dialog nav .nav-action,.hero-inquiry.nav-action { white-space: normal; }
+
+/* 2026-10-27 popup tidy: one labelled close button, compact library controls. */
+.dialog-dismiss, .inquiry-close {
+  position: absolute; top: .75rem !important; right: .75rem !important; z-index: 2;
+  display: inline-flex; align-items: center; justify-content: center; gap: .3rem;
+  width: auto !important; height: 2.75rem; min-height: 2.75rem !important; padding: 0 .8rem !important;
+  border: 1px solid #b9c9bb !important; border-radius: .6rem; background: #fff !important;
+  color: #24372e !important; font-size: 1rem; font-weight: 500; line-height: 1;
+}
+.dialog-dismiss svg, .inquiry-close svg { width: 1.15rem !important; height: 1.15rem !important; }
+[data-slot=dialog-content]:has(> .dialog-dismiss) > [data-slot=dialog-header],
+.customer-inquiry-dialog [data-slot=dialog-header] { padding-right: 0 !important; }
+[data-slot=dialog-content]:has(> .dialog-dismiss) [data-slot=dialog-title],
+.customer-inquiry-dialog [data-slot=dialog-title] { padding-right: 6rem !important; }
+
+.video-format-buttons { gap: .25rem; padding: .25rem; margin-bottom: .6rem; border-radius: .75rem; background: #eef2ef; }
+.video-format-buttons button { min-height: 2.75rem; padding: .35rem .6rem; border: 0; flex-wrap: nowrap; gap: .35rem; background: transparent; }
+.video-format-buttons button small { font-size: .9rem; }
+.video-filters { margin-top: .5rem; }
+.video-tags { flex-wrap: nowrap; overflow: hidden; }
+.video-tags > span { white-space: nowrap; }
+
+.blog-categories { display: flex; gap: .5rem; overflow-x: auto; margin-bottom: .75rem; padding-bottom: .15rem; scrollbar-width: none; }
+.blog-categories::-webkit-scrollbar { display: none; }
+.blog-categories button { flex: 0 0 auto; min-height: 2.75rem; height: 2.75rem; padding: 0 .95rem; border-radius: 999px; white-space: nowrap; flex-wrap: nowrap; gap: .3rem; font-size: 1rem; }
+.blog-categories small { font-size: .85rem; }
+.blog-result-count { margin: .6rem 0 .4rem; }
+.blog-source-note { margin: 1rem 0 0; padding: .75rem 0 0; border-top: 1px solid #dfe7de; border-radius: 0; background: transparent; font-size: .85rem; line-height: 1.6; color: #607265; }
+
+@media (max-width: 640px) {
+  .blog-categories { display: flex; }
+  .video-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem; }
+  .video-filters label { grid-template-columns: auto minmax(0, 1fr); gap: .35rem; font-size: .95rem; }
+  .video-filters select { min-height: 2.75rem; }
+}
+.review-dialog [data-slot=dialog-description] { padding-right: 5.5rem; }

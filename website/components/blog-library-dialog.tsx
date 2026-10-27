@@ -48,13 +48,12 @@ export default function BlogLibraryDialog({ open, onOpenChange, opener }: {
       </div>
       <div className="video-library-body" ref={bodyRef}>
         <div className="blog-categories" role="group" aria-label="블로그 카테고리">
-          {[{ id: 0, label: "전체" }, ...BLOG_CATEGORIES].map(item => <Button type="button" key={item.id} variant="outline" aria-pressed={category === item.id} onClick={() => changeControls(query, item.id)}>
+          {[{ id: 0, label: "전체" }, ...BLOG_CATEGORIES.filter(item => initialBlogPosts.filter(post => post.categoryNo === item.id).length >= 2)].map(item => <Button type="button" key={item.id} variant="outline" aria-pressed={category === item.id} onClick={() => changeControls(query, item.id)}>
             <span>{item.label}</span><small>{item.id === 0 ? initialBlogPosts.length : initialBlogPosts.filter(post => post.categoryNo === item.id).length}개</small>
           </Button>)}
         </div>
         <div className="video-search"><Search aria-hidden="true" /><Input type="search" aria-label="블로그 제목·요약 검색" placeholder="글 제목·묘목 이름 검색" maxLength={100} value={query} onChange={event => changeControls(event.target.value, category)} /></div>
         <p className="blog-result-count" role="status" aria-live="polite">글 {visible.length}개 · {displayed.length}개 표시</p>
-        <p className="blog-source-note">출처 · {BLOG_SOURCE}<br />목록 확인일 · {blogCatalogUpdatedAt.replaceAll("-", ".")}<br />글은 작성 당시 정보입니다. 현재 가격과 재고는 견적 상담으로 확인해주세요.</p>
         <div className="blog-post-list">{displayed.map(post => <article key={post.id} className="blog-post-card" aria-labelledby={`blog-post-${post.id}`}>
           <div className="blog-post-meta"><span>{BLOG_CATEGORIES.find(category => category.id === post.categoryNo)?.label}</span><time dateTime={post.publishedAt}>{post.publishedAt.replaceAll("-", ".")}</time></div>
           <h3 id={`blog-post-${post.id}`} tabIndex={-1} ref={element => { if (element) articleTitles.current.set(post.id, element); else articleTitles.current.delete(post.id); }}>{post.title}</h3>
@@ -63,6 +62,7 @@ export default function BlogLibraryDialog({ open, onOpenChange, opener }: {
         </article>)}</div>
         {displayed.length < visible.length && <div className="video-load-more"><Button type="button" variant="outline" onClick={loadMore}>더 보기 ({Math.min(BLOG_PAGE_SIZE, visible.length - displayed.length)}개)</Button></div>}
         {!visible.length && <div className="video-empty"><p>조건에 맞는 글이 없어요.</p><Button type="button" variant="outline" onClick={() => changeControls("", 0)}>전체 글 보기</Button></div>}
+        <p className="blog-source-note">출처 · {BLOG_SOURCE} · 목록 확인일 {blogCatalogUpdatedAt.replaceAll("-", ".")}<br />글은 작성 당시 정보입니다. 현재 가격과 재고는 견적 상담으로 확인해주세요.</p>
       </div>
     </DialogContent>
   </Dialog>;
