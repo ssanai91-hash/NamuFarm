@@ -72,6 +72,15 @@ class OperationsMasterSync(private val database: AppDatabase, private val client
     }
     suspend fun sync(onlyKind: String? = null): MasterSyncOutcome = mutex.withLock { syncLocked(onlyKind) }
 
+    /** Master edits and stock transfers share this mutex for the complete sequence. */
+    suspend fun <T> inventorySequence(block: suspend (MasterSyncOutcome) -> T): T = mutex.withLock {
+        val farm = syncLocked(FARM)
+        if (!farm.success) block(farm) else {
+            val species = syncLocked(SPECIES)
+            block(species)
+        }
+    }
+
     private fun pendingId(item: PendingSyncEntity): Int {
         val value = gson.fromJson(item.payloadJson, JsonObject::class.java)
         return when (item.syncType) {
