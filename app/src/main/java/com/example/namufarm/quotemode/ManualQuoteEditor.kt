@@ -247,10 +247,8 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
                         when (draft.recipient.replyChannel) { "email" -> "메일로 받기"; "both" -> "문자·메일로 받기"; else -> "문자로 받기" })
                         .filter { it.isNotBlank() }.joinToString(" · "), fontSize = 15.sp)
                     if (confirmedEdit && draft.recipient.customerEmail.isNotBlank()) Text(draft.recipient.customerEmail, fontSize = 15.sp)
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        if (draft.recipient.formalQuoteRequested) NamuStatusBadge("공식견적서 요청")
-                        request?.receiptNumber?.takeIf { it.isNotBlank() }?.let { Text(it, fontSize = 13.sp, color = NamuColors.muted) }
-                    }
+                    // The receipt number is already the header subtitle; show only the request badge here.
+                    if (draft.recipient.formalQuoteRequested) NamuStatusBadge("공식견적서 요청")
                     Surface(color = NamuColors.background, shape = RoundedCornerShape(10.dp)) {
                         Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Text("고객 요청사항", fontSize = 13.sp, color = NamuColors.muted)
