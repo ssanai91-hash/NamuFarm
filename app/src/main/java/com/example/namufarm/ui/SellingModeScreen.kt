@@ -21,7 +21,6 @@ import androidx.compose.material.icons.outlined.*
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -35,17 +34,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import com.example.namufarm.quotemode.ModeDesign
 import androidx.compose.runtime.saveable.rememberSaveable
 import com.example.namufarm.data.SellingDisplayRow
 import com.example.namufarm.domain.order.ShippingCharge
 import com.example.namufarm.viewmodel.ManagementViewModel
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Check // 혹시 Check로 쓰일 경우 대비
 import com.example.namufarm.data.QuoteEntity
 import com.example.namufarm.data.OrderEntity
-import androidx.compose.foundation.layout.offset
 import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -53,11 +48,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.core.content.ContextCompat
-import androidx.compose.material.icons.filled.Refresh //  동기화 아이콘용
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.compose.material.icons.filled.Sync
-import androidx.compose.material.icons.filled.CloudSync
-import androidx.compose.material.icons.filled.Cached
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import com.example.namufarm.viewmodel.ManagementUiState
@@ -77,16 +68,6 @@ data class ParsedSummaryItem(
     val farmName: String,
     val wholesalePrice: Int
 )
-
-/** A plain title: no click modifier, callbacks, or ViewModel access. */
-@Composable
-internal fun SellingModeTitle() {
-    Text(
-        text = "나무팜 매매모드",
-        fontWeight = FontWeight.ExtraBold,
-        color = Color.White
-    )
-}
 
 @Composable
 private fun PendingSyncDialog(
@@ -277,14 +258,13 @@ private fun buildSpecText(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: () -> Unit) {
+fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: () -> Unit, isActive: Boolean = true) {
     val uiState by viewModel.uiState.collectAsState()
     var showAllStock by rememberSaveable { mutableStateOf(true) }
     var stockSearch by rememberSaveable { mutableStateOf("") }
     val displayedStock = (if (showAllStock) uiState.allSellingInventory else uiState.filteredSellingInventory)
         .filter { namuSearchMatches(it.speciesName, stockSearch, it.farmName) }
 
-    val scrollState = rememberScrollState()
     val context = LocalContext.current
 
     var showAddressSearch by remember { mutableStateOf(false) }
@@ -304,7 +284,6 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
     var showQuickQuoteDialog by remember { mutableStateOf(false) }
 
     var showOrderDetailDialog by remember { mutableStateOf(false) }
-    var showMoveToManagementConfirm by remember { mutableStateOf(false) }
     var showClearCartConfirm by remember { mutableStateOf(false) }
 
     var selectedQuote by remember { mutableStateOf<QuoteEntity?>(null) }
@@ -330,8 +309,8 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
     }
 
     //  3. 이제 원래 있던 LaunchedEffect들이 이어지면 됨
-    LaunchedEffect(uiState.message) {
-        uiState.message?.let {
+    LaunchedEffect(uiState.message, isActive) {
+        if (isActive) uiState.message?.let {
             Toast.makeText(context, NamuMessage.fromLegacy(it).text, Toast.LENGTH_SHORT).show()
             viewModel.clearMessage()
         }
@@ -1770,44 +1749,6 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
         )
     }
 
-    if (showMoveToManagementConfirm) {
-        AlertDialog(
-            onDismissRequest = { showMoveToManagementConfirm = false },
-            title = {
-                Text(
-                    "견적 진행 중",
-                    fontWeight = FontWeight.ExtraBold
-                )
-            },
-            text = {
-                Text(
-                    "현재 장바구니에 담긴 견적 내용이 있습니다.\n견적서를 취소하고 관리모드로 이동할까요?"
-                )
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        viewModel.resetEstimateSession()
-                        showCartDialog = false
-                        showMoveToManagementConfirm = false
-                        onNavigateToManagement()
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = NamuColors.danger)
-                ) {
-                    Text("취소 후 이동", color = Color.White, fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = {
-                OutlinedButton(
-                    onClick = { showMoveToManagementConfirm = false }
-                ) {
-                    Text("계속 견적", fontWeight = FontWeight.Bold)
-                }
-            }
-        )
-    }
-
-    //  기존 showDeleteOrderConfirm 블록을 이걸로 교체!
     if (showDeleteOrderConfirm && orderToDelete != null) {
         AlertDialog(
             onDismissRequest = { showDeleteOrderConfirm = false },

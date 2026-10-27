@@ -13,8 +13,8 @@ import androidx.compose.material.icons.outlined.Park
 import androidx.compose.material.icons.outlined.ReceiptLong
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -57,10 +57,10 @@ fun InitialAppModes(management: ManagementViewModel, quote: InitialQuoteViewMode
         Scaffold(containerColor = NamuColors.background,
             contentWindowInsets = WindowInsets(0, 0, 0, 0), bottomBar = {
                 if (bottomBarVisible) Surface(color = Color.White, shadowElevation = 2.dp) {
-                    Column {
+                    Column(Modifier.navigationBarsPadding()) {
                         HorizontalDivider(color = NamuColors.border)
                         NavigationBar(containerColor = Color.White, tonalElevation = 0.dp,
-                            modifier = Modifier.heightIn(min = 72.dp), windowInsets = WindowInsets.navigationBars) {
+                            modifier = Modifier.height(if (LocalDensity.current.fontScale > 1.15f) 92.dp else 72.dp), windowInsets = WindowInsets(0, 0, 0, 0)) {
                             labels.forEachIndexed { index, label ->
                                 val count = when (index) {
                                     0 -> inbox.requests.count { it.status == "신규" }
@@ -91,8 +91,8 @@ fun InitialAppModes(management: ManagementViewModel, quote: InitialQuoteViewMode
                     0 -> InitialQuoteScreen(quote, quote.connection, inbox,
                         onSync = quote::refresh, onRead = quote::read, onDelete = quote::close)
                     1 -> CustomerInquiryScreen(inquiry)
-                    2 -> SellingModeScreen(management, onNavigateToManagement = { requestMove(3) })
-                    3 -> ManagementModeScreen(management, onBack = { move(2) }, onBottomBarVisibleChange = { bottomBarVisible = it })
+                    2 -> SellingModeScreen(management, onNavigateToManagement = { requestMove(3) }, isActive = pager.currentPage == 2)
+                    3 -> ManagementModeScreen(management, onBack = { move(2) }, onBottomBarVisibleChange = { bottomBarVisible = it }, isActive = pager.currentPage == 3)
                 }
             }
         }

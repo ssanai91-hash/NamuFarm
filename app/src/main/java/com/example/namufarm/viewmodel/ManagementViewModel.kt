@@ -1,6 +1,7 @@
 package com.example.namufarm.viewmodel
 
 import android.content.Context
+import com.example.namufarm.ui.theme.NamuMessage
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -67,7 +68,10 @@ data class ManagementUiState(
     val inputQuantity: Int = 0,
     val inputWholesale: Int = 0,
     val inputRetail: Int = 0
-)
+) {
+    // Adapt legacy feedback at the presentation boundary without changing save/sync outcomes.
+    val feedback: NamuMessage? get() = message?.let { NamuMessage.fromLegacy(it) }
+}
 
 class ManagementViewModel(
     private val dao: ManagementDao,

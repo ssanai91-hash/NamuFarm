@@ -132,13 +132,11 @@ class ManagementPendingSyncTest {
             File("src/main/java/com/example/namufarm/ui/SellingModeScreen.kt"),
             File("app/src/main/java/com/example/namufarm/ui/SellingModeScreen.kt")
         ).first { it.isFile }.readText()
-        val title = source.substringAfter("internal fun SellingModeTitle() {").substringBefore("\n}")
-        assertTrue(title.contains("text = \"나무팜 매매모드\""))
-        assertFalse(title.contains("clickable"))
-        assertFalse(title.contains("onClick"))
-        assertFalse(title.contains("viewModel"))
+        val header = source.substringAfter("NamuTopBar(\"매매\"").substringBefore("bottomBar =")
+        assertTrue(source.contains("NamuTopBar(\"매매\""))
+        assertFalse(header.contains("backupAndClearConfirmedPendingSync"))
+        assertFalse(header.contains("clearAllPendingSync"))
         assertFalse(source.contains("forceResetSyncQueue"))
-        assertTrue(source.contains("SellingModeTitle()"))
         viewModel.backupAndClearConfirmedPendingSync(context); awaitWork() // No confirmation => no deletion.
         assertEquals(0, backupCalls)
         assertEquals(original, dao.getAllPendingSync())

@@ -103,7 +103,7 @@ internal fun InquiryListCard(row: CustomerInquiryRemote, pending: Boolean, hasDr
                 horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 NamuStatusBadge(category)
                 val channel = if (row.delivery?.channel == "email") "메일" else "문자"
-                Text("$customer · " + if (row.delivery?.state == "sent") "${channel}로 답변 완료" else "처리 완료",
+                Text("$customer · " + if (row.delivery?.state in setOf("sent", "success")) "${channel}로 답변 완료" else "처리 완료",
                     Modifier.weight(1f), fontSize = 15.sp)
                 Text(shortNamuTime(runCatching { com.example.namufarm.data.remote.inquiryTimestamp(row.answeredAt ?: row.updatedAt) }
                     .getOrDefault(at)), fontSize = 13.sp, color = NamuColors.muted)

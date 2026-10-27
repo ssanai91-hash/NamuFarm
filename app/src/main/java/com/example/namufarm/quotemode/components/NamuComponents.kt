@@ -282,7 +282,7 @@ internal fun NamuSegmented(options: List<NamuSegment>, selected: Int, onSelect: 
                     Text(option.label, fontSize = 15.sp, color = if (active) NamuColors.text else Color(0xFF4A5A52),
                         fontWeight = if (active) FontWeight.Bold else FontWeight.Normal, textAlign = TextAlign.Center,
                         modifier = Modifier.weight(1f, fill = false))
-                    option.count?.let { Text("$it", Modifier.padding(start = 3.dp), fontSize = 15.sp,
+                    option.count?.let { Text(String.format(Locale.KOREA, "%,d", it), Modifier.padding(start = 3.dp), fontSize = 15.sp,
                         fontWeight = FontWeight.Bold, color = option.countColor) }
                 }
             }
@@ -290,18 +290,24 @@ internal fun NamuSegmented(options: List<NamuSegment>, selected: Int, onSelect: 
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun NamuTopBar(title: String, syncText: String? = null, onSync: (() -> Unit)? = null,
     actions: @Composable RowScope.() -> Unit = {}) {
     Surface(color = Color.White) {
-        Row(Modifier.fillMaxWidth().heightIn(min = 60.dp).padding(start = 20.dp, end = 8.dp),
-            verticalAlignment = Alignment.CenterVertically) {
-            Text(title, Modifier.weight(1f), fontSize = 22.sp, fontWeight = FontWeight.Bold, color = NamuColors.text)
-            actions()
-            syncText?.let { Text(it, fontSize = 13.sp, color = NamuColors.muted) }
-            onSync?.let { sync -> IconButton(onClick = sync, modifier = Modifier.size(48.dp)) {
-                Icon(Icons.Outlined.CloudSync, "동기화", Modifier.size(24.dp), tint = NamuColors.primary)
-            } }
+        BoxWithConstraints(Modifier.fillMaxWidth().heightIn(min = 60.dp).padding(start = 20.dp, end = 8.dp)) {
+            val actionWidth = maxWidth * 0.76f
+            Row(Modifier.fillMaxWidth().heightIn(min = 60.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(title, Modifier.weight(1f), fontSize = 22.sp, fontWeight = FontWeight.Bold, color = NamuColors.text)
+                FlowRow(Modifier.widthIn(max = actionWidth), verticalArrangement = Arrangement.Center,
+                    horizontalArrangement = Arrangement.End) {
+                    Row(verticalAlignment = Alignment.CenterVertically, content = actions)
+                    syncText?.let { Text(it, Modifier.padding(vertical = 14.dp), fontSize = 13.sp, color = NamuColors.muted) }
+                    onSync?.let { sync -> IconButton(onClick = sync, modifier = Modifier.size(48.dp)) {
+                        Icon(Icons.Outlined.CloudSync, "동기화", Modifier.size(24.dp), tint = NamuColors.primary)
+                    } }
+                }
+            }
         }
     }
 }
@@ -395,7 +401,7 @@ internal fun NamuChosungRow(selected: String, total: Int, onSelect: (String) -> 
                 color = if (!enabled) Color(0xFFF6F7F6) else if (active) NamuColors.primary else Color.White) {
                 Box(Modifier.then(if (initial == "전체") Modifier.padding(horizontal = 14.dp, vertical = 8.dp) else Modifier),
                     contentAlignment = Alignment.Center) {
-                    Text(if (initial == "전체") "전체 $total" else initial, fontSize = 15.sp, fontWeight = FontWeight.Bold,
+                    Text(if (initial == "전체") "전체 ${String.format(Locale.KOREA, "%,d", total)}" else initial, fontSize = 15.sp, fontWeight = FontWeight.Bold,
                         color = if (!enabled) Color(0xFF9AA59F) else if (active) Color.White else Color(0xFF1F573B))
                 }
             }

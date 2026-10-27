@@ -5,8 +5,8 @@
 > 홈페이지 최신 반영: **버전 70의 기존 화면 구성에 버튼 3안·줄바꿈 보완을 반영하여 Sites 버전 73 게시 완료 (2026-10-26 KST). 기존 namufarm.co.kr·서버 환경 revision 8 유지. 원복 기준은 Sites 버전 70.**
 > 홈페이지 운영 소스: **Sites 버전 73 · `80b5e5977264040f9480105a7900c73a13790e62`, main 코드 `f18c2112ecb4cc063786f4cfb6c9255990eff7ed`. C안 이력과 Sites 버전 72는 보관.**
 > PC 최신 코드: **0.5.5 · 서버/PC 발송 ID 중복 방지·결과 불명 복구, 백업 30개/60분 간격, 미업로드 신규 판매 삭제 차단, 판매자료 자동 반영, 초안 만료 안내, 새 PC 등록 허용창 안내. 이번 전체 작업에서 버전은 한 번만 올림. 시험/컴파일/Actions/실제 발송 미실행. Apps Script 재배포는 미진행이며 서버 먼저 새 버전 배포 후 PC 설치 필요.**
-> Android 최신 소스: **1.1.18(21) · 화면 개편 1~7단계. 1.1.17 대기 보존과 1.1.19 0단계 버그 수정 유지. 빌드·시험·서명·Actions 미실행.**
-> Android 다음 작업: **1.1.18 1~7단계 반영 후 1.1.19 농원·묘목 전용 개편 진행. 1.1.18의 8단계는 적용하지 않음.**
+> Android 최신 소스: **1.1.19(22) · 1.1.18 공통/견적/매매/문의 개편 1~7단계와 1.1.19 농원·묘목 개편 1~7단계 구현. 묘목 정보 보존·가격 경고 버그 수정 포함. 컴파일·APK·서명·자동시험·Actions·실기기 검증 미실행.**
+> Android 다음 작업: **사용자 로컬 빌드·기존 키 서명·앱 삭제 없이 업데이트 설치 및 실기기 확인. 화면 개편 구현과 실제 정상 동작 확인을 구분한다.**
 > 목적: 이전 채팅을 정리하거나 새 대화로 옮겨도 **확정 규칙·구현 범위·미완료 작업**을 구분하여 이어서 작업하기 위한 기록.
 
 > **현재 작업 기준 · main 통합 (2026-10-24):** 사용자가 홈페이지·나피·Android·스크립트를 한 프로젝트 폴더와 main에서 관리하도록 요청했다. 기존 main의 `desktop/`, `website/`, `server/`는 그대로 보존하고, Android는 초기버전 최신 `ad0074f`의 `app/` 전체와 서명 도구를 통합한다. 초기 패키지 `com.example.namufarm.original`, 기존 인증서·DB·운영 URL을 유지한다. `restore/android-initial-20260927`는 기록용으로 남기며 이후 작업 기준은 main이다. 아래 별도 브랜치 지침은 통합 전 이력이다. 이번 통합은 컴파일·자동시험·Actions·운영 발송·홈페이지 게시·서버 재배포를 수행하지 않았다.
@@ -497,3 +497,47 @@
 - 문서형 확정견적은 배치를 유지하고 색상·최소 보조 글자 크기를 맞췄다. 저장/동기화/확정/문의 발송·조회/금액·재고 검증의 기존 업무 로직은 유지하며 매매 카드용 절대 수량 설정 함수와 화면용 동기화 시각만 추가했다.
 - **미실행:** 컴파일·APK 빌드·기존 키 서명·자동시험·Actions·실기기 검증. 홈페이지 게시·서버 재배포도 하지 않았다. fontScale 1.3에서의 실제 배치/클리핑은 사용자 확인 대상이다.
 - 사용자 확인: 아래 탭 4개/배지, 견적 카드/전화, 펼친 품목과 묘목 설명 입력, 견적완료 시트 미리 선택, 매매 검색/초성/수량/장바구니 바, 전화번호 유지, 문의 카드/답변/50건 더 보기, 큰 글씨, 기존 자료 유지·앱 삭제 없이 업데이트 설치.
+
+## 2026-10-27 Android 1.1.19 농원·묘목 개편 + 묘목 정보 지워짐·가격 경고 버그 수정
+
+- 최종 버전 **1.1.19(versionCode 22)**. 1.1.18의 1~7단계를 main에 반영한 뒤 1.1.19의 1~7단계를 이어서 구현했다. 1.1.18의 8단계는 적용하지 않았다. 0단계 버그 수정 커밋은 `0b2d42f84634a6cd478fe8963774ee29badfef12`다.
+- 농원 탭의 보기/하위 화면/검색/초성/원래 재고 행은 탭 안 상태로 관리한다. 안쪽 뒤로가기가 우선하며, 입력값을 바꿨으면 나가기 확인을 표시한다. 재고 입력 중 아래 탭을 숨기고 가로 페이지 넘기기를 막는다. 비활성 페이지가 뒤로가기/메시지/아래 탭 표시를 가로채지 않도록 현재 페이지에서만 처리한다.
+- 재고: 농원별 행 수 버튼, 활성 묘목 이름순 목록, 초성/이름 검색, 선택 농원의 규격 수/합계 수량, 20주 이하 부족 표시, 농원 미선택 시 이동 차단. 이 탭에서 `selectChosung`을 호출하지 않아 매매 초성 필터를 보존한다.
+- 규격 재고: 기존 inventoryList 순서, 규격·수량/타입·품질/도매·소매의 세 줄 카드와 새 규격 입력 버튼. 원래 재고 행을 보관한 뒤 기존 입력 불러오기 함수를 호출한다.
+- 입력: 년생 없음/증감, 크기 반올림·0 미만 차단, 타입·품질 5칸, 숫자 직접 입력(최대 9자리)과 해당 값만 지우기. 새 입력 수량 0은 저장 비활성이다. 수정 중 규격 변경 안내, 기존 가격 검증/저장 확인을 유지한다. 삭제는 편집 시작 당시 원래 규격·가격을 다시 불러온 뒤 수량만 0으로 설정하고 기존 saveInventory를 호출한다. 삭제 확인을 취소하면 그 직전 편집값을 복구한다.
+- 농원: 카드·전화·메모·재고 요약, 추가/수정 시트, 중복 이름 차단, 재고 있을 때 삭제 비활성·설명. 재고 삭제를 약속하던 잘못된 문구를 없앴다. 기존 saveFarm/deleteFarm과 결과 메시지를 사용한다.
+- 묘목: 전 농원의 재고 요약, 추가/수정 시트의 이름·자동 초성·분류·메모·농원별 재고 정보, 이름 중복 차단. 기존 nameFarm/isActive를 보존하고 신규는 빈 농원명·활성 1을 사용한다. 숨기기는 기존 비활성 처리 함수로 연결한다. 중복 후보는 지시문에서 허용한 allSpeciesList를 사용하며 비활성 묘목을 추가 조회하는 DAO는 만들지 않았다.
+- 공통: NamuTheme/TopBar/Segmented/Card/버튼 재사용, 공유 `NamuColors.LOW_STOCK = 20`, 성공한 MasterSyncOutcome에서만 화면용 lastMasterSyncAt 갱신. 화면 메시지는 `NamuMessage(text, isError)`로 변환해 이모지를 표시하지 않으며 기존 오류 분류를 유지한다. 저장/동기화의 기존 문자열 결과는 표시 경계에서만 변환한다.
+- 보존: 패키지 `com.example.namufarm.original`, 기존 서명 인증서, `NamuFarm.db` v13 / Quotes v1 / Inquiries v1, DB 스키마/마이그레이션/DAO/OperationsMasterSync/pending 큐. ViewModel은 화면용 시간/피드백·농원 선택·수량 지정·매매 절대 수량 설정만 추가했으며 저장·동기화·금액·검증 업무 로직은 그대로다.
+- 정리: 이전 SelectionSection/GridSelectionMenu/InventoryListSection/InventoryInputPane/FarmManageDialog/SpeciesManageDialog/SelectionButton/ValueAdjuster와 중간 구조 파일을 제거했다. getChosungFromText는 유지한다. 제목 회귀 검사 소스는 공통 NamuTopBar에 맞췄으며 실행하지 않았다.
+- **미실행:** 컴파일, APK 빌드, 서명, 자동시험, Actions, 실기기/큰 글씨/시안 캔버스 대비 검증, 운영 발송. 실제 정상 동작을 검증한 것으로 간주하지 않는다. 홈페이지 게시·Apps Script 재배포는 하지 않았다. 사용자가 로컬 assembleRelease 후 scripts/sign_initial_apk.py로 기존 키 서명하고 앱 삭제 없이 업데이트한다.
+
+### 단계별 커밋과 변경 파일
+
+| 단계 | 커밋 | 변경 파일 |
+| --- | --- | --- |
+| 1.1.18 1단계 | `6fdb0c3ad169c4337e562cf8651ceb12eb27be76` | `app/build.gradle.kts`, `app/src/main/java/com/example/namufarm/quotemode/InitialAppModes.kt`, `app/src/main/java/com/example/namufarm/quotemode/InitialQuoteScreen.kt`, `app/src/main/java/com/example/namufarm/quotemode/InitialQuoteViewModel.kt`, `app/src/main/java/com/example/namufarm/quotemode/ModeDesign.kt`, `app/src/main/java/com/example/namufarm/quotemode/components/NamuComponents.kt`, `app/src/main/java/com/example/namufarm/ui/theme/NamuTheme.kt` |
+| 1.1.18 2단계 | `95aff64bc3009274a4cb26f88daa2c5c79cb4e20` | `app/src/main/java/com/example/namufarm/quotemode/CustomerInquiryScreen.kt`, `app/src/main/java/com/example/namufarm/quotemode/InitialAppModes.kt`, `app/src/main/java/com/example/namufarm/quotemode/InitialQuoteScreen.kt`, `app/src/main/java/com/example/namufarm/quotemode/InitialQuoteViewModel.kt`, `app/src/main/java/com/example/namufarm/ui/SellingModeScreen.kt`, `app/src/main/java/com/example/namufarm/viewmodel/CustomerInquiryViewModel.kt`, `app/src/main/java/com/example/namufarm/viewmodel/ManagementViewModel.kt` |
+| 1.1.18 3단계 | `41add7ab7cd47d1a3df1957b7d07288fc1fe2668` | `app/src/main/java/com/example/namufarm/quotemode/InitialQuoteScreen.kt`, `app/src/main/java/com/example/namufarm/quotemode/components/NamuComponents.kt` |
+| 1.1.18 4단계 | `4d587c4f47a08ca9ba675608cb4c3ce8bfef4140` | `app/src/main/java/com/example/namufarm/quotemode/InitialQuoteScreen.kt`, `app/src/main/java/com/example/namufarm/quotemode/ManualQuoteEditor.kt` |
+| 1.1.18 5단계 | `184349ff666b84062ffdda0b0087d2437a649067` | `app/src/main/java/com/example/namufarm/quotemode/InitialQuoteScreen.kt`, `app/src/main/java/com/example/namufarm/quotemode/ManualQuoteEditor.kt` |
+| 1.1.18 6단계 | `f59923ba9293082225e9cb86916738ad0e5ce52d` | `app/src/main/java/com/example/namufarm/quotemode/components/NamuComponents.kt`, `app/src/main/java/com/example/namufarm/ui/SellingModeScreen.kt`, `app/src/main/java/com/example/namufarm/viewmodel/ManagementViewModel.kt` |
+| 1.1.18 7단계 | `c80b544db617795b311f9e3755b2e7a13bf5ea30` | `NAMUFARM_PROJECT_STATUS.md`, `app/src/main/java/com/example/namufarm/quotemode/CustomerInquiryScreen.kt`, `app/src/main/java/com/example/namufarm/quotemode/InitialConfirmedQuoteDialog.kt`, `app/src/main/java/com/example/namufarm/quotemode/InitialFormalQuoteDialog.kt`, `app/src/main/java/com/example/namufarm/quotemode/InquiryDesign3.kt`, `app/src/main/java/com/example/namufarm/quotemode/InquiryReplyDialog.kt` |
+| 1.1.19 1단계 | `b3e75824bc85cffa0b850a4fbf6731d7136a479e` | `app/build.gradle.kts`, `app/src/main/java/com/example/namufarm/quotemode/InitialAppModes.kt`, `app/src/main/java/com/example/namufarm/ui/ManagementModeScreen.kt`, `app/src/main/java/com/example/namufarm/ui/farm/FarmCommon.kt`, `app/src/main/java/com/example/namufarm/ui/farm/FarmScreens.kt`, `app/src/main/java/com/example/namufarm/viewmodel/ManagementViewModel.kt` |
+| 1.1.19 2단계 | `b17de76397cd54beb3c16766f32188db0cbad5fc` | `app/src/main/java/com/example/namufarm/ui/farm/FarmScreens.kt`, `app/src/main/java/com/example/namufarm/ui/farm/StockSpeciesList.kt` |
+| 1.1.19 3단계 | `058832063c977a148d93f5b8bc78b6435c0041e5` | `app/src/main/java/com/example/namufarm/ui/farm/FarmScreens.kt`, `app/src/main/java/com/example/namufarm/ui/farm/StockSpecificationList.kt` |
+| 1.1.19 4단계 | `b06b0044d5710a50886949a09cd4cceaccce62fa` | `app/src/main/java/com/example/namufarm/ui/farm/FarmScreens.kt`, `app/src/main/java/com/example/namufarm/ui/farm/StockEditor.kt` |
+| 1.1.19 5단계 | `455b3f62c617d6efd8723c172ac1c77d779b5a49` | `app/src/main/java/com/example/namufarm/ui/farm/FarmCommon.kt`, `app/src/main/java/com/example/namufarm/ui/farm/FarmList.kt`, `app/src/main/java/com/example/namufarm/ui/farm/FarmScreens.kt` |
+| 1.1.19 6단계 | `516eabc9e5b97bc9a4042fec1145d64511f13af5` | `app/src/main/java/com/example/namufarm/ui/farm/FarmScreens.kt`, `app/src/main/java/com/example/namufarm/ui/farm/SpeciesList.kt` |
+| 1.1.19 7단계 | 이 기록을 포함한 커밋 | `NAMUFARM_PROJECT_STATUS.md`, `ui/ManagementModeScreen.kt`, `ui/SellingModeScreen.kt`, `ui/farm/FarmScreens.kt` 삭제, `viewmodel/ManagementViewModel.kt`, `quotemode/InitialAppModes.kt`, `InitialQuoteScreen.kt`, `ManualQuoteEditor.kt`, `InquiryDesign3.kt`, `components/NamuComponents.kt`, `ManagementPendingSyncTest.kt` |
+
+### 사용자 직접 확인 항목
+
+- 공통: 아래 탭 4개/배지, 큰 글씨 1.3에서 줄바꿈과 버튼/머리줄, 기존 자료 유지, 앱 삭제 없이 업데이트 설치, 동기화 성공 후 시각 표시.
+- 견적: 카드 세 줄/전화/짧은 접수번호, 작성 품목 모두 펼침/묘목 설명 500자/희망규격 읽기 전용/고객 요청사항 전체 표시, 택배비 위치 고정, 공식견적서·발행정보, 견적완료 시트의 문자/메일/모두 미리 선택과 실제 발송 확인.
+- 매매: 이름/초성/농원 검색, 초성 한 줄/재고 없는 초성 비활성, 카드 내 수량/재고 초과 차단/0 제거, 장바구니 바/창 안 비우기, 창 재열기 시 전화번호 유지와 새 장바구니 첫 품목에서 초기화, 농원 이동 확인. 제목에 삭제 동작 없음과 전송 대기 확인/두 단계 비우기/백업도 유지 확인.
+- 재고 목록: 농원 건수, 초성/검색, 묘목별 규격/수량 요약과 부족 빨강, 농원 미선택 이동 차단, 매매 초성 필터 유지.
+- 규격 재고: 세 줄 카드·합계·원래 순서·빈 상태·새 규격 입력 버튼.
+- 재고 입력: 아래 탭 숨김/가로 넘김 차단, 년생·크기 증감/없음, 숫자 직접 입력과 해당 값만 지우기, 가격 0 경고, 규격 변경 저장 시 새 재고 추가 및 기존 유지, 편집한 규격과 무관하게 원래 재고 삭제, 삭제 취소 시 편집값 복구, 뒤로가기 확인.
+- 농원: 카드·전화, 추가/수정/메모, 중복 이름 차단, 재고 있는 농원 삭제 비활성, 거부/오류 결과 안내.
+- 묘목: 분류·메모 수정 후 유지, 이름만 수정해도 농원명·분류·메모·활성 상태 유지, 같은 이름 차단, 농원별 재고 정보, 숨기기.

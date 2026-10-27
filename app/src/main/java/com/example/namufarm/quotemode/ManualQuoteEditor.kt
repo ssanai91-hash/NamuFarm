@@ -7,15 +7,12 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.selection.SelectionContainer
 import com.example.namufarm.data.WebQuoteItem
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.Color
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -32,7 +29,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -59,40 +55,6 @@ private fun displayEditorPhone(raw: String): String {
         digits.length == 10 && digits.startsWith("01") ->
             digits.substring(0, 3) + "-" + digits.substring(3, 6) + "-" + digits.substring(6)
         else -> raw.ifBlank { "전화번호 필요" }
-    }
-}
-
-@Composable
-private fun EditorInfoRow(label: String, content: @Composable RowScope.() -> Unit) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(label, modifier = Modifier.width(68.dp), color = editorMuted, fontSize = 13.sp)
-        Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp), content = content)
-    }
-}
-
-@Composable
-private fun EditorChannelChip(label: String, selectedColor: Color, textColor: Color) {
-    Surface(shape = RoundedCornerShape(50), color = selectedColor) {
-        Text(label, Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-            color = textColor, fontSize = 13.sp, fontWeight = FontWeight.Medium)
-    }
-}
-
-
-/** Labelled rows in the selected quotation-table layout. */
-@Composable
-private fun QuoteItemField(label: String, content: @Composable RowScope.() -> Unit) {
-    HorizontalDivider(color = editorBorder, thickness = 0.5.dp)
-    Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), verticalAlignment = Alignment.CenterVertically) {
-        Text(label, Modifier.width(76.dp).padding(vertical = 10.dp, horizontal = 2.dp),
-            fontSize = 14.sp, color = if (label == "묘목 설명") editorGreen else editorMuted,
-            fontWeight = if (label == "묘목 설명") FontWeight.SemiBold else FontWeight.Normal)
-        VerticalDivider(Modifier.fillMaxHeight(), color = editorBorder, thickness = 0.5.dp)
-        Row(Modifier.weight(1f).padding(start = 10.dp, top = 6.dp, bottom = 6.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically,
-            content = content)
     }
 }
 
@@ -175,7 +137,7 @@ private fun EditorDialog(
                     }
                 }
                 Column(Modifier.weight(1f).fillMaxWidth(), content = content)
-                Surface(color = Color.White,
+                Surface(color = Color.White, shadowElevation = 4.dp,
                     shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)) {
                     Column(Modifier.fillMaxWidth().navigationBarsPadding()
                         .padding(horizontal = 12.dp, vertical = 6.dp),
@@ -196,7 +158,6 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
     onConfirmSent: ((SellerQuoteDraft, String) -> Unit)? = null,
     onPrepareDocument: suspend (SellerQuoteDraft) -> Unit = {}, messageIsError: Boolean = false, openedChannels: Set<String> = emptySet()) {
     val context = LocalContext.current
-    val firstRequest = request != null && initialDraft == null
     val manualEntry = request == null
     val requestedItems = remember(request?.itemsJson) {
         runCatching { Gson().fromJson(request?.itemsJson, Array<WebQuoteItem>::class.java)?.toList().orEmpty() }
@@ -207,14 +168,9 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
     }
     // Homepage requests are immutable except their selling prices and delivery fee.
     // Keep manual-entry contact/plant fields available for quotes created locally.
-    var manualContactExpanded by rememberSaveable(draftKey) { mutableStateOf(manualEntry) }
-    var expandedRow by rememberSaveable(draftKey) { mutableIntStateOf(-1) }
-    var specDetails by remember { mutableStateOf<SellerQuoteRow?>(null) }
-    var messageExpanded by remember { mutableStateOf(false) }
     var formalDraft by remember { mutableStateOf<SellerQuoteDraft?>(null) }
     var formalExpanded by rememberSaveable(draftKey) { mutableStateOf(false) }
     var issueDetails by rememberSaveable(draftKey) { mutableStateOf(false) }
-    var step by rememberSaveable { mutableIntStateOf(1000) }
     var error by rememberSaveable { mutableStateOf<String?>(null) }
     var discard by remember { mutableStateOf(false) }
     var deleteConfirm by remember { mutableStateOf(false) }
@@ -406,7 +362,7 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
                 OutlinedTextField(draft.options.notes, { value -> draft = draft.copy(options = draft.options.copy(notes = value.take(500))) },
                     label = { Text("요청사항 · 판매자 입력") }, placeholder = { Text("공식견적서 중요사항에 넣을 내용") },
                     enabled = !saving, minLines = 2, modifier = Modifier.fillMaxWidth())
-                NamuPrimaryButton("공식견적서 생성", {
+                NamuSecondaryButton("공식견적서 생성", {
                     try {
                         val current = draft.copy(recipient = draft.recipient.copy(formalQuoteRequested = true))
                         current.validate(QuoteDelivery.COMPLETE)
@@ -426,16 +382,6 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
                 onPrepare = { onPrepareDocument(snapshot); initial = snapshot })
         }
     }
-    specDetails?.let { item ->
-        AlertDialog(onDismissRequest = { specDetails = null },
-            title = { Text("${item.name} · ${item.quantity}주") },
-            text = { Text("희망규격: ${item.spec}") },
-            confirmButton = { TextButton(onClick = { specDetails = null }) { Text("닫기") } })
-    }
-    if (messageExpanded) AlertDialog(onDismissRequest = { messageExpanded = false },
-        title = { Text("고객 요청사항") },
-        text = { Text(request?.message.orEmpty()) },
-        confirmButton = { TextButton(onClick = { messageExpanded = false }) { Text("닫기") } })
     if (deliveryRequired) AlertDialog(onDismissRequest = { deliveryRequired = false },
         title = { Text("고객 전달 확인") },
         text = { Text("문자 또는 메일을 먼저 보내 주세요. 현재 견적의 전송이 완료되어야 견적완료할 수 있습니다. 문자 결과확인 중이면 문자 버튼을 눌러 최종 결과를 확인해주세요.") },
