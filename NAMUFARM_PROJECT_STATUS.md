@@ -5,8 +5,8 @@
 > 홈페이지 최신 반영: **버전 70의 기존 화면 구성에 버튼 3안·줄바꿈 보완을 반영하여 Sites 버전 73 게시 완료 (2026-10-26 KST). 기존 namufarm.co.kr·서버 환경 revision 8 유지. 원복 기준은 Sites 버전 70.**
 > 홈페이지 운영 소스: **Sites 버전 73 · `80b5e5977264040f9480105a7900c73a13790e62`, main 코드 `f18c2112ecb4cc063786f4cfb6c9255990eff7ed`. C안 이력과 Sites 버전 72는 보관.**
 > PC 최신 코드·배포본: **0.5.8 · 홈페이지 용도 6개 선택·기존 분류 보존·용도 필터. Windows x64 EXE·실행환경 ZIP 빌드 완료(2026-10-27 사용자 추가 요청). Windows 실제 실행·자동시험·Actions·서버 검증 미실행. 기존 자료 폴더는 유지한다.**
-> Android 최신 소스·APK: **1.1.22(25) · 묘목 용도 선택·용도 필터와 재고 입력 간격/없음 버튼 수정 포함. 릴리스 빌드·기존 인증서 서명 및 패키지/버전 검증 완료(2026-10-27 사용자 추가 요청). DB14·스키마·패키지·서명 유지. 자동시험·Actions·실기기/서버 검증 미실행. Apps Script는 사용자가 직접 재배포 완료를 알림(배포 버전·응답 별도 미검증).**
-> 다음 확인 — **Android 1.1.22(25)는 앱 삭제 없이 업데이트하고 나피 0.5.8은 EXE와 _runtime만 함께 교체하여 기존 자료 폴더를 보존한다. 빌드 완료·실사용은 미검증. 용도 제안/취소/기존 값 보존/필터·기기 간 동기화, 기본 글자 390×844 재고 입력 스크롤·없음 0.0m 같은 키·큰 글씨 두 줄을 확인한다. 이번 코드 변경에 서버·홈페이지 재배포는 필요 없다. 기존 운영 서버 프로토콜·기기 등록 상태 확인과 Android 매매 견적/주문의 외부 ZIP 백업 원칙은 유지한다.**
+> Android 최신 소스: **1.1.23(26) · 나피 공식견적서 양식/도장/페이지 규칙 이식 + 확정견적 로컬 수정·원본 보존·재발행·판매자 발송 확인. 코드만 반영했고 컴파일·APK·자동시험·Actions·실제 서버/문자/메일 시험은 미실행. 마지막 빌드·서명 APK는 1.1.22(25)이다. DB14·스키마·패키지·기존 서명 유지.**
+> 다음 확인 — **Android 1.1.23을 로컬 빌드한 뒤 나피 PDF와 도장/표/중요사항/페이지를 나란히 비교한다. 확정견적 수정 저장→새 문서번호 재발행→문자·메일 앱→‘고객에게 보냈나요?’ 확인, 입금확인 후 수정 차단·처음 견적·재시작 보존을 확인한다. 수정본은 휴대폰에만 있어 PC에서 입금확인할 때 PC 내용도 맞춰야 한다. 서버 견적 수정본 공유는 미구현이며 이번에 서버·나피·홈페이지 재배포는 필요 없다. 앱 삭제 없이 업데이트·기존 자료와 미전송 대기 보존 원칙을 유지한다.**
 > 목적: 이전 채팅을 정리하거나 새 대화로 옮겨도 **확정 규칙·구현 범위·미완료 작업**을 구분하여 이어서 작업하기 위한 기록.
 
 > **현재 작업 기준 · main 통합 (2026-10-24):** 사용자가 홈페이지·나피·Android·스크립트를 한 프로젝트 폴더와 main에서 관리하도록 요청했다. 기존 main의 `desktop/`, `website/`, `server/`는 그대로 보존하고, Android는 초기버전 최신 `ad0074f`의 `app/` 전체와 서명 도구를 통합한다. 초기 패키지 `com.example.namufarm.original`, 기존 인증서·DB·운영 URL을 유지한다. `restore/android-initial-20260927`는 기록용으로 남기며 이후 작업 기준은 main이다. 아래 별도 브랜치 지침은 통합 전 이력이다. 이번 통합은 컴파일·자동시험·Actions·운영 발송·홈페이지 게시·서버 재배포를 수행하지 않았다.
@@ -827,3 +827,64 @@ Room 엔티티의 NOT NULL·열 이름·복합 기본키 순서를 위 SQL과 �
 - Windows ZIP: **`Napi-0.5.8-Windows-x64.zip`**, **268,106,235바이트**, SHA-256 **`dae3f1c9c66e1f8d2519e2a156894f66241767a9b8404e8cdf787aec8fe70d5e`**. `NamuFarm-PC.exe`와 `_runtime`을 함께 교체하며, **기존 자료 폴더를 삭제·덮어쓰기하지 않는다.** 고객 자료·개인 인증/서명 키는 두 배포본에 넣지 않았다.
 - **미실행:** 작성한 22개 자동시험, 기타 단위/계측 시험, GitHub Actions, Windows 실제 앱 실행, Android 실기기 설치/화면, 실제 서버 동기화·고객 접수·문자/메일. 빌드 성공이 390×844 무스크롤·큰 글씨·0.0m 재고 합침·실제 기기 간 동기화 검증을 뜻하지 않는다. 앞 절의 사용자 확인 목록을 그대로 확인한다.
 - Apps Script·홈페이지·DB 버전/스키마·업무/저장/동기화 로직은 이번 빌드에서 변경하지 않았다. 이번 기록은 배포본 생성 결과만 갱신한다.
+
+
+## 2026-10-27 Android 1.1.23 — 공식견적서 나피 양식 통일 · 확정견적 수정·재발행
+
+- Android만 **versionName 1.1.23 / versionCode 26**으로 올렸다. 나피 **0.5.8**, Apps Script, 홈페이지, DB 버전/스키마(NamuFarm.db v14·Quotes v1·Inquiries v1), 패키지 `com.example.namufarm.original`, 기존 서명·서버 주소·인증은 변경하지 않았다. 이번 작업은 소스 반영만 수행했으며 새 APK가 아니다.
+- 금액 계산 원본 **`OrderAmounts`·`SellerQuoteDraft` 및 기존 `quoteWorkflowText` 계산/문구 생성 함수는 변경하지 않았다.** 기존 신규 견적의 전송·견적완료 검사도 유지한다. 확정견적용 경로를 별도로 추가했다.
+
+### 1단계 · 공식견적서
+
+- **Android가 `desktop/namufarm_desktop/workspace.py`의 `render_official_quote_image()`, `official_quote_page_plan()`, `OFFICIAL_QUOTE_COLUMN_WIDTHS`를 Kotlin Canvas로 이식했다(도장 포함). 양식을 바꾸면 두 곳을 함께 수정한다.** 원본 나피 코드는 수정하지 않았다. Renderer 첫 줄에도 동기 유지 주석을 넣었다.
+- 기준 좌표 **955×1342**, 7열 폭 **207.5 / 207.5 / 64 / 78 / 151 / 52 / 124**, 행 32·본문 행 합계 743, 긴 이름/규격/비고 줄바꿈·다음 쪽 요청사항·쪽 번호를 같은 규칙으로 처리한다. 공급자 표·합계 칸·계·중요사항의 선·문구·정렬과 날짜/고객/전화/접수번호 위치를 옮겼다. 글꼴은 휴대폰 기본 한글 글꼴이며 넘치면 1씩 줄이는 fitted_text 규칙을 사용한다. **폰트 차이와 실물 PDF 비교는 실기기 확인 대상**이다.
+- 도장 원본 `desktop/namufarm_desktop/assets/quote_stamp.png`를 **바이트 변경 없이** `app/src/main/assets/quote_stamp.png`로 복사했다(316,341바이트, Git blob `1c1173f3e666f855da71608b0fee5279fdf26cde`). **(850,82,60,56)**에 출력하고 읽기 실패 시 빨간 원과 오/진/웅을 표시한다. 도장을 생략하지 않는다.
+- 이미지에는 접수번호 **NAMU-…**를 쓰고 NQ 번호·유효기간은 표시하지 않는다. NQ 번호·유효기간은 기존 파일명·문서 JSON에 유지한다. 공급자 기본 업태 ‘농업,도소매’·종목 ‘묘목,화훼’·고정 T/F 연락처, 운반비/선불/택배비 행, 중요사항 1~4와 판매자 요청사항을 나피 형식으로 표시한다.
+- 합계는 발행 문서의 supply/tax/total 값을 읽으며 Renderer에서 금액을 새로 산정하지 않는다. 문서 JSON에 선택적 `shippingPrepaid`·`quotedShippingFee`만 추가해 후불일 때도 안내용 선불 금액을 보존한다. 과거 문서를 재사용할 때는 같은 발행번호를 유지한 채 누락된 배송 안내 메타데이터만 보충한다. Room 변경은 없다.
+- `QuotePdfWriter`를 유지하면서 A4 **595×842pt** 안에 원본 비율로 가운데 배치한다. PDF용 3배·문자 이미지용 2배, 문자 JPEG는 장당 **650,000바이트 이하**로 확인한다. 기존 미리보기·문자 이미지·메일 PDF·PDF 보기/공유 기능을 유지한다.
+
+### 2단계 · 확정견적 로컬 수정
+
+- 확정견적 확인 창에 **내용 수정**을 추가하고, 편집 진입 전에 최신 서버 상태를 다시 확인한다. ‘견적확정’·‘견적발송완료’만 허용한다. 입금확인·배송완료·구매취소 계열은 비활성/안내하며, 견적완료 확인 대기·문자 결과 대기/불명·확정견적 재발송 확인 대기가 있어도 막는다.
+- `ManualQuoteEditor`의 **확정견적 수정** 모드는 품목 이름/규격/수량/단가/묘목 설명·택배비·판매자 요청사항·발행정보를 편집한다. 고객명·전화·이메일·접수정보는 읽기 전용이고 **취소 / 수정 저장**만 표시한다. 이 모드에서 문자/메일·견적완료·공식견적서 생성 버튼을 숨겨 저장과 발송을 분리한다.
+- **수정 저장 자체에는 서버 호출이 없다.** `QuoteWorkflow.reviseConfirmed(record, newDraft, latest)`는 진입 시 확인한 서버 스냅샷과 로컬 기록을 검사한 뒤 기존 SharedPreferences JSON에 저장한다. 원본 고객 `request`를 변경하지 않으며 `confirmedAt`도 유지한다.
+- `originalDraft`는 처음 수정할 때 한 번만 저장하고 `revisedAt`·`revision`(1부터 증가)·`revisionSentAt`을 보관한다. 최초 발송 상태도 `originalDelivery`로 보존한다. 새 필드가 없는 기존 JSON은 0/null 기본값으로 읽는다. DB/마이그레이션 변경은 없다.
+- 수정 후 **수정 후 미발송**, 수정 회차·시각, 휴대폰에만 저장된다는 경고와 **처음 견적 보기**를 표시한다. 품목/금액은 현재 draft, 처음 견적은 originalDraft의 읽기 전용 화면을 사용한다. 서버 결과에서 열어도 같은 요청의 로컬 확정일이 있으면 찾아 표시하고, 없는 확정일은 접수일로 만들어내지 않는다.
+
+### 3단계 · 재발행과 실제 발송 확인
+
+- `InitialFormalQuoteStore`의 **요청 ID + draft 지문** 키를 유지한다. 내용이 바뀌면 새 NQ 문서, 같은 내용은 기존 문서번호를 재사용한다. 수정한 draft로 PDF/문자 이미지·문자 문구·메일 본문을 만든다.
+- 문자 발송/문자 이미지/메일 PDF는 외부 앱을 연 뒤 기존 **‘고객에게 보냈나요?’** 시트를 사용한다. 이 화면에서 연 문자/메일에 따라 문자·메일·둘 다를 미리 선택하며, **외부 앱 실행만으로는 발송 이력이나 완료 상태를 만들지 않는다.**
+- 사용자가 실제 발송을 확인하면 `ConfirmedQuoteDelivery`에 수정 회차·NQ 문서번호·방법·시각·지문·당시 draft·이전 delivery를 보관한다. 기존 이력을 유지하고 새 기록을 누적한다. 확인 완료 시에만 ‘수정 후 미발송’을 해제한다.
+- 최신 서버 상태가 ‘견적확정’이면 **기존 `update_request_status`로 ‘견적발송완료’만 요청**하고 ID/상태/updated 응답을 확인한다. 이미 ‘견적발송완료’이면 상태 변경 호출을 하지 않는다(최신 상태 확인 조회는 수행). **확정 가격 저장 `save_quote_pricing`을 재호출하지 않는다.**
+- 발송 확인 증거를 `pendingConfirmedDelivery`에 먼저 저장한다. 상태 응답 유실·기기 최종 저장 실패 시 원래 증거를 유지하고 **발송완료 결과 확인**으로 같은 기록을 마무리한다. 이 확인은 문자/메일을 다시 보내지 않는다. 완료/결과 확인 원칙을 우회하지 않는다.
+
+| 단계 | main 커밋 | 변경 파일 |
+| --- | --- | --- |
+| 1단계 | [`eabbb27`](https://github.com/ssanai91-hash/NamuFarm/commit/eabbb27ee62278c1f85e08dd69d404a72da1bc7a) | `app/build.gradle.kts` · `app/src/main/assets/quote_stamp.png` · `app/src/main/java/com/example/namufarm/quotation/InitialFormalQuote.kt` · `app/src/main/java/com/example/namufarm/quotation/QuoteDocument.kt` · `app/src/main/java/com/example/namufarm/quotation/QuoteDocumentRenderer.kt` · `app/src/main/java/com/example/namufarm/quotation/QuotePdfWriter.kt` · `app/src/main/java/com/example/namufarm/quotemode/InitialFormalQuoteDialog.kt` · `app/src/test/java/com/example/namufarm/quotation/QuoteDocumentRendererTest.kt` |
+| 2단계 | [`058b8b4`](https://github.com/ssanai91-hash/NamuFarm/commit/058b8b4bd8d5ba0abc543d5780341aeb30856c6d) | `app/src/main/java/com/example/namufarm/quotation/ConfirmedQuoteRevision.kt` · `app/src/main/java/com/example/namufarm/quotation/QuoteWorkflow.kt` · `app/src/main/java/com/example/namufarm/quotemode/ConfirmedQuoteSessionDialog.kt` · `app/src/main/java/com/example/namufarm/quotemode/InitialConfirmedQuoteDialog.kt` · `app/src/main/java/com/example/namufarm/quotemode/InitialQuoteScreen.kt` · `app/src/main/java/com/example/namufarm/quotemode/ManualQuoteEditor.kt` · `app/src/test/java/com/example/namufarm/quotation/ConfirmedQuoteRevisionTest.kt` |
+| 3단계 | [`f38446c`](https://github.com/ssanai91-hash/NamuFarm/commit/f38446c8fb99075ef632c98327d09e7bb4ef93ef) | `app/src/main/java/com/example/namufarm/quotation/ConfirmedQuoteRevision.kt` · `app/src/main/java/com/example/namufarm/quotation/QuoteReply.kt` · `app/src/main/java/com/example/namufarm/quotation/QuoteWorkflow.kt` · `app/src/main/java/com/example/namufarm/quotemode/ConfirmedQuoteSessionDialog.kt` · `app/src/main/java/com/example/namufarm/quotemode/InitialConfirmedQuoteDialog.kt` · `app/src/main/java/com/example/namufarm/quotemode/InitialFormalQuoteDialog.kt` · `app/src/main/java/com/example/namufarm/quotemode/InitialQuoteConnection.kt` · `app/src/main/java/com/example/namufarm/quotemode/InitialQuoteScreen.kt` · `app/src/main/java/com/example/namufarm/quotemode/ManualQuoteEditor.kt` · `app/src/test/java/com/example/namufarm/quotation/ConfirmedQuoteDeliveryTest.kt` |
+
+### 기기별 수정본 경계 · 후속 과제
+
+**확정견적 수정은 나피와 같이 기기별 로컬 저장이다. PC·휴대폰 간 수정본을 공유하지 않는다.** 수정 후 PC 나피에서 입금확인하면 서버의 처음 확정 금액/PC의 값과 휴대폰 금액이 다를 수 있으므로 PC에서도 같은 내용으로 수정해야 한다. 화면에도 이 경고를 표시한다.
+
+후속 과제 **“서버 견적 수정본 공유(save_quote_revision, 수정 이력, 입금확인 시 최신 수정본 사용)”는 미구현**이다. 이번에 서버 API나 PC 동기화 계약을 추가하지 않았다.
+
+### 작성만 하고 실행하지 않은 시험
+
+- `QuoteDocumentRendererTest.kt` **5개**: 50개 품목/묘목 설명의 페이지 보존·운반비 7칸, 긴 요청사항 이어짐, 수정 시 새 문서/동일 내용 재사용, 후불 안내 금액과 합계 분리, A4 비율/가운데 배치.
+- `ConfirmedQuoteRevisionTest.kt` **8개**: 로컬 수정과 원문/확정일/발송 유지, 최초 draft 보존·회차, 구 JSON 호환, 입금/배송/취소 차단, 대기/불명 차단, 고객 정보 불변, 오래된 로컬 스냅샷 덮어쓰기 차단, 서버 전용 기록의 날짜 미생성.
+- `ConfirmedQuoteDeliveryTest.kt` **8개**: 외부 앱 준비만으로 미발송 유지, 명시 확인과 회차/문서/이전 기록, 이미 발송완료일 때 상태 쓰기 없음, 응답 유실/최종 로컬 저장 실패 복구, 입금/미선택 차단, 누적 이력, 수정 draft 문자/메일 본문.
+- **신규 시험 21개 작성, 전부 미실행.** 기존 `QuoteWorkflowTest` 등도 실행하지 않았다. 컴파일·APK·자동시험·Actions·실제 서버 호출·문자/메일·PDF 생성/시각 비교를 수행하지 않았다. 정적 코드/diff/원본 도장 바이트 비교만 확인했다.
+
+### 사용자 확인 목록
+
+- [ ] 휴대폰 PDF와 나피 PDF를 나란히 비교: 도장 위치·공급자 표·7열·합계·중요사항 1~4·긴 요청사항 다음 쪽·쪽 번호
+- [ ] 문자 이미지 선명도와 장당 650KB 이하, 문자 이미지/메일 PDF/PDF 보기/PDF 공유
+- [ ] 확정견적 **내용 수정 → 수정 저장 → PDF 재생성(새 NQ 번호) → 문자/메일 앱 → 보냈나요 확인**
+- [ ] 외부 앱만 열거나 ‘아직 안 보냈어요’를 누르면 수정 후 미발송 유지, 실제 확인한 방법만 기록
+- [ ] 입금확인/배송완료/구매취소된 견적은 수정 차단, 결과 확인 대기 중에도 수정 차단
+- [ ] 처음 견적 보기, 확정일 유지, 고객 원문·고객 연락처 불변, 수정 후 앱 재시작해도 유지
+- [ ] 통신 중단/응답 유실 후 다시 보내지 않고 **발송완료 결과 확인**으로 같은 회차·문서 기록 복구
+- [ ] PC에서 입금확인하기 전 PC와 휴대폰 수정 내용을 직접 일치시킴
