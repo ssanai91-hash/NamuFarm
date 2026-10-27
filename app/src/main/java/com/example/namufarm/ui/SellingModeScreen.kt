@@ -17,6 +17,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Settings
@@ -51,7 +53,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.core.content.ContextCompat
-import androidx.compose.material.icons.filled.Refresh // 🚨 동기화 아이콘용
+import androidx.compose.material.icons.filled.Refresh //  동기화 아이콘용
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.CloudSync
@@ -118,7 +120,7 @@ private fun PendingSyncDialog(
                         Button(onClick = onSync) { Text("다시 동기화") }
                     }
                     TextButton(onClick = onRequestClear, enabled = state.pendingSyncCount > 0) {
-                        Text("문제 해결: 전송 대기 비우기", color = Color.Gray, fontSize = 12.sp)
+                        Text("문제 해결: 전송 대기 비우기", color = Color.Gray, fontSize = 13.sp)
                     }
                 }
             }
@@ -278,7 +280,9 @@ private fun buildSpecText(
 fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: () -> Unit) {
     val uiState by viewModel.uiState.collectAsState()
     var showAllStock by rememberSaveable { mutableStateOf(true) }
-    val displayedStock = if (showAllStock) uiState.allSellingInventory else uiState.filteredSellingInventory
+    var stockSearch by rememberSaveable { mutableStateOf("") }
+    val displayedStock = (if (showAllStock) uiState.allSellingInventory else uiState.filteredSellingInventory)
+        .filter { namuSearchMatches(it.speciesName, stockSearch, it.farmName) }
 
     val scrollState = rememberScrollState()
     val context = LocalContext.current
@@ -286,9 +290,9 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
     var showAddressSearch by remember { mutableStateOf(false) }
     var showPendingSyncDialog by remember { mutableStateOf(false) }
 
-    // 🚨 1. 상태 변수들을 [무조건] 먼저 선언해야 해! (여기가 핵심)
+    //  1. 상태 변수들을 [무조건] 먼저 선언해야 해! (여기가 핵심)
     var showCartDialog by remember { mutableStateOf(false) }
-    var showCallLogDialog by remember { mutableStateOf(false) } // 🔥 런처보다 무조건 위에 있어야 함!
+    var showCallLogDialog by remember { mutableStateOf(false) } //  런처보다 무조건 위에 있어야 함!
 
     var shippingCharge by remember { mutableStateOf(ShippingCharge()) }
     val shippingFee = shippingCharge.fee
@@ -312,9 +316,8 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
     var orderToDelete by remember { mutableStateOf<OrderEntity?>(null) }
     var showRealDeleteOrderConfirm by remember { mutableStateOf(false) }
 
-    var showNegotiationDialog by remember { mutableStateOf(false) } // 🚨 결재(협상) 창 띄우기용 ㅋㅋㅋ
 
-    // 🚨 2. 변수들이 다 만들어진 [그 다음에] 런처를 달아야 에러가 안 나!
+    //  2. 변수들이 다 만들어진 [그 다음에] 런처를 달아야 에러가 안 나!
     val callLogPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted: Boolean ->
@@ -326,10 +329,10 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
         }
     }
 
-    // 🚨 3. 이제 원래 있던 LaunchedEffect들이 이어지면 됨
+    //  3. 이제 원래 있던 LaunchedEffect들이 이어지면 됨
     LaunchedEffect(uiState.message) {
         uiState.message?.let {
-            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, NamuMessage.fromLegacy(it).text, Toast.LENGTH_SHORT).show()
             viewModel.clearMessage()
         }
     }
@@ -382,334 +385,70 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
             }
         },
         bottomBar = {
-            Column(modifier = Modifier.navigationBarsPadding()) {
-                // 장바구니 있을 때만 표시
-                // 🚨 [수정] 콤팩트 장바구니: 리스트를 숨기고 숫자 카운트로 변경
-                if (uiState.estimateCart.isNotEmpty()) {
-                    val totalRetail =
-                        uiState.estimateCart.sumOf { it.item.retailPrice * it.orderQuantity }
-
-                    Surface(
-                        color = Color(0xFF1976D2),
-                        shadowElevation = 16.dp
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 14.dp, vertical = 12.dp)
-                        ) {
-                            // ✅ 타이틀에 주문량 숫자 표시: 장바구니 (N)
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = "장바구니 (${uiState.estimateCart.size})",
-                                    color = Color.White,
-                                    fontSize = 17.sp,
-                                    fontWeight = FontWeight.ExtraBold
-                                )
-
-                                Text(
-                                    text = "${String.format("%,d", totalRetail)}원",
-                                    color = Color.White,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    fontSize = 20.sp
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.height(12.dp))
-
-                            // 하단 버튼 2개 - 이름 변경 및 레이아웃 유지
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                // 기존 "주문내역 보기 📝" 버튼 찾아서 onClick 수정!
-                                Button(
-                                    onClick = {
-                                        viewModel.updateCustomerPhone("") // 🚨 1. 전화번호 초기화
-                                        shippingCharge = ShippingCharge()
-                                        showCartDialog = true
-                                    },
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .height(44.dp),
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color.White),
-                                    shape = RoundedCornerShape(8.dp),
-                                    contentPadding = PaddingValues(0.dp)
-                                ) {
-                                    Text(
-                                        "주문내역 보기 📝",
-                                        color = Color(0xFF1976D2),
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 14.sp
-                                    )
-                                }
-
-                                Button(
-                                    onClick = { showClearCartConfirm = true },
-                                    modifier = Modifier
-                                        .weight(0.7f) // 비우기 버튼은 살짝 작게
-                                        .height(44.dp),
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = Color(
-                                            0xFFD32F2F
-                                        )
-                                    ),
-                                    shape = RoundedCornerShape(8.dp),
-                                    contentPadding = PaddingValues(0.dp)
-                                ) {
-                                    Text(
-                                        "비우기 🗑️", // 🚨 이름 변경
-                                        color = Color.White,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 14.sp
-                                    )
-                                }
-                            }
+            if (uiState.estimateCart.isNotEmpty()) {
+                val totalRetail = uiState.estimateCart.sumOf { it.item.retailPrice.toLong() * it.orderQuantity }
+                Surface(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
+                    color = NamuColors.dark, shape = RoundedCornerShape(16.dp), shadowElevation = 10.dp) {
+                    Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Column(Modifier.weight(1f)) {
+                            Text("장바구니 ${uiState.estimateCart.size}종 · ${String.format("%,d", uiState.estimateCart.sumOf { it.orderQuantity.toLong() })}주",
+                                fontSize = 13.sp, color = NamuColors.navPill)
+                            Text("${String.format("%,d", totalRetail)}원", fontSize = 19.sp, fontWeight = FontWeight.Bold, color = Color.White)
                         }
-                    }
-                }
-
-                // 항상 고정 하단 버튼
-                // 🚨 [수정] 항상 고정 하단 버튼 구역 (테두리 박스 컨테이너 + 2줄 레이아웃으로 변경!)
-                Surface(
-                    color = Color.White,
-                    shadowElevation = 10.dp,
-                    border = BorderStroke(1.dp, Color(0xFFE0E0E0)) // 하단 바 전체 구분선
-                ) {
-                    // 초성 영역과 통일감을 주는 둥근 테두리 박스 추가
-                    Surface(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 10.dp),
-                        shape = RoundedCornerShape(12.dp),
-                        color = Color(0xFFF8F9FA), // 박스 내부 연회색 배경
-                        border = BorderStroke(1.dp, Color(0xFFEEEEEE))
-                    ) {
-                        // 🚨 Row에서 Column으로 변경하여 2줄로 배치!
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            // 🚨 [1열 - 새로 추가된 상단 버튼 2개]
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                // ✉️ 견적문자 발송 버튼
-                                Button(
-                                    onClick = {
-                                        // 🚨 2. 입력창 싹 초기화하고 빠른 견적창 띄우기!
-                                        viewModel.resetInput()
-                                        showQuickQuoteDialog = true
-                                    },
-                                    modifier = Modifier.weight(1f).height(48.dp),
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = ModeDesign.quote,
-                                        contentColor = Color.White
-                                    ),
-                                    shape = RoundedCornerShape(8.dp)
-                                ) {
-                                    Text(
-                                        text = "✉️ 견적문자 발송",
-                                        fontWeight = FontWeight.ExtraBold,
-                                        fontSize = 13.sp
-                                    )
-                                }
-
-                                // 🧾 거래명세서 발송 버튼
-                                // 🧾 거래명세서 발송 버튼
-                                Button(
-                                    onClick = {
-                                        // 🚨 누르는 순간 협상창 팝업 온!
-                                        showNegotiationDialog = true
-                                    },
-                                    modifier = Modifier.weight(1f).height(48.dp),
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = ModeDesign.quote,
-                                        contentColor = Color.White
-                                    ),
-                                    shape = RoundedCornerShape(8.dp)
-                                ) {
-                                    Text(
-                                        text = "🧾 거래명세서 발송",
-                                        fontWeight = FontWeight.ExtraBold,
-                                        fontSize = 13.sp
-                                    )
-                                }
-                            }
-
-                            // 🚨 [2열 - 기존 하단 버튼 2개]
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                // 📄 오늘 견적서 버튼
-                                Button(
-                                    onClick = {
-                                        viewModel.loadTodayData()
-                                        if (uiState.todayQuotes.isEmpty()) {
-                                            viewModel.showMessage("📄 오늘 저장된 견적서가 없습니다.")
-                                        } else {
-                                            showTodayQuotesDialog = true
-                                        }
-                                    },
-                                    modifier = Modifier.weight(1f).height(48.dp),
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = ModeDesign.neutral,
-                                        contentColor = Color.White
-                                    ),
-                                    shape = RoundedCornerShape(8.dp)
-                                ) {
-                                    Text(
-                                        text = "📄 오늘 견적서 (${uiState.todayQuotes.size})",
-                                        fontWeight = FontWeight.ExtraBold,
-                                        fontSize = 13.sp
-                                    )
-                                }
-
-                                // 📦 오늘 주문내역 버튼
-                                Button(
-                                    onClick = {
-                                        viewModel.loadTodayData()
-                                        if (uiState.todayOrders.isEmpty()) {
-                                            viewModel.showMessage("📦 오늘 확정된 주문내역이 없습니다.")
-                                        } else {
-                                            showTodayOrdersDialog = true
-                                        }
-                                    },
-                                    modifier = Modifier.weight(1f).height(48.dp),
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = ModeDesign.neutral,
-                                        contentColor = Color.White
-                                    ),
-                                    shape = RoundedCornerShape(8.dp)
-                                ) {
-                                    Text(
-                                        text = "📦 오늘 주문내역 (${uiState.todayOrders.size})",
-                                        fontWeight = FontWeight.ExtraBold,
-                                        fontSize = 13.sp
-                                    )
-                                }
-                            }
+                        Button(onClick = { shippingCharge = ShippingCharge(); showCartDialog = true },
+                            modifier = Modifier.heightIn(min = 48.dp), shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = NamuColors.accent, contentColor = NamuColors.dark)) {
+                            Text("견적 보내기", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                            Icon(Icons.AutoMirrored.Filled.ArrowForward, null, Modifier.size(20.dp))
                         }
                     }
                 }
             }
         },
-        contentWindowInsets = WindowInsets(0, 0, 0, 0)
+        contentWindowInsets = WindowInsets(0, 0, 0, 0), containerColor = NamuColors.background
     ) { padding ->
-        Column(
-            modifier = Modifier.fillMaxSize().padding(padding).background(Color(0xFFF2F4F7))
-                .verticalScroll(scrollState)
-        ) {
-            FilterChip(selected = showAllStock, onClick = { showAllStock = true },
-                label = { Text("전체 재고 (${uiState.allSellingInventory.size})") },
-                modifier = Modifier.padding(horizontal = 8.dp))
-            val chosungRows = listOf(
-                listOf("ㄱ", "ㄴ", "ㄷ", "ㄹ", "ㅁ", "ㅂ", "ㅅ"),
-                listOf("ㅇ", "ㅈ", "ㅊ", "ㅋ", "ㅌ", "ㅍ", "ㅎ")
-            )
-
-            // 🚨 여기서부터 교체! 기존 Column을 Surface 컨테이너로 변경
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(8.dp), // 바깥쪽 배경과 분리되는 여백
-                shape = RoundedCornerShape(12.dp), // 둥근 모서리
-                color = Color.White,
-                border = BorderStroke(1.dp, Color(0xFFE0E0E0)) // 깔끔한 연회색 테두리
-            ) {
-                Column(
-                    modifier = Modifier.padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    chosungRows.forEach { rowItems ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            rowItems.forEach { chosung ->
-                                val isSelected = !showAllStock && uiState.selectedChosung == chosung
-                                val hasItems = hasSellingItemsForChosung(uiState.allSellingInventory, chosung)
-
-                                Button(
-                                    onClick = {
-                                        if (hasItems) {
-                                            showAllStock = false
-                                            viewModel.selectChosung(chosung)
-                                        }
-                                    },
-                                    enabled = hasItems,
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .height(42.dp),
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = when {
-                                            isSelected -> Color(0xFF2E7D32)
-                                            else -> Color.White
-                                        },
-                                        contentColor = when {
-                                            isSelected -> Color.White
-                                            hasItems -> Color(0xFF2E7D32)
-                                            else -> Color(0xFFBDBDBD)
-                                        },
-                                        disabledContainerColor = Color(0xFFF5F5F5),
-                                        disabledContentColor = Color(0xFFBDBDBD)
-                                    ),
-                                    border = BorderStroke(
-                                        width = if (hasItems) 1.5.dp else 1.dp,
-                                        color = when {
-                                            isSelected -> Color(0xFF2E7D32)
-                                            hasItems -> Color(0xFF2E7D32)
-                                            else -> Color(0xFFE0E0E0)
-                                        }
-                                    ),
-                                    shape = RoundedCornerShape(20.dp),
-                                    contentPadding = PaddingValues(0.dp)
-                                ) {
-                                    Text(
-                                        text = chosung,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 15.sp
-                                    )
-                                }
+        Column(Modifier.fillMaxSize().padding(padding)) {
+            Surface(color = Color.White) {
+                Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        listOf("오늘 견적 ${uiState.todayQuotes.size}" to {
+                            viewModel.loadTodayData(); showTodayQuotesDialog = true
+                        }, "오늘 주문 ${uiState.todayOrders.size}" to {
+                            viewModel.loadTodayData(); showTodayOrdersDialog = true
+                        }, "수기 견적" to { viewModel.resetInput(); showQuickQuoteDialog = true },
+                            "거래명세서" to { viewModel.showMessage("거래명세서 발송은 준비 중인 기능입니다.") }).forEach { (label, action) ->
+                            OutlinedButton(onClick = action, modifier = Modifier.heightIn(min = 36.dp),
+                                shape = RoundedCornerShape(20.dp), contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)) {
+                                Text(label, fontSize = 13.sp)
                             }
                         }
                     }
+                    TextField(value = stockSearch, onValueChange = { stockSearch = it }, singleLine = true,
+                        placeholder = { Text("묘목 이름 · 초성 · 농원", fontSize = 16.sp) },
+                        leadingIcon = { Icon(Icons.Outlined.Search, null, Modifier.size(20.dp)) },
+                        colors = TextFieldDefaults.colors(focusedContainerColor = Color(0xFFF1F4F2), unfocusedContainerColor = Color(0xFFF1F4F2),
+                            focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent),
+                        shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp))
+                    NamuChosungRow(if (showAllStock) "전체" else uiState.selectedChosung, uiState.allSellingInventory.size,
+                        onSelect = { initial ->
+                            showAllStock = initial == "전체"
+                            if (!showAllStock) viewModel.selectChosung(initial)
+                        }, available = { hasSellingItemsForChosung(uiState.allSellingInventory, it) })
                 }
             }
-            // 🚨 여기까지 교체!
-
-            Spacer(modifier = Modifier.height(8.dp))
-            // ... (이후 if (uiState.filteredSellingInventory.isEmpty()) 부분은 그대로 유지)
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            if (displayedStock.isEmpty()) {
-                Text(
-                    if (showAllStock) "등록된 재고가 없습니다. 동기화하거나 농원·묘목에서 재고를 등록해주세요."
-                    else "선택한 초성의 재고가 없습니다. 전체 재고를 눌러 확인해주세요.",
-                    modifier = Modifier.fillMaxWidth().padding(30.dp),
-                    textAlign = TextAlign.Center,
-                    color = Color.Gray
-                )
-            } else {
-                displayedStock.forEach { item ->
-                    SellingItemRow(item) { qtyToAdd ->
-                        viewModel.addToCart(
-                            item,
-                            qtyToAdd
-                        )
+            LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (displayedStock.isEmpty()) item { NamuEmptyState("조건에 맞는 재고가 없어요") }
+                items(displayedStock) { item ->
+                    val cart = uiState.estimateCart.firstOrNull { it.item.farmId == item.farmId && it.item.speciesId == item.speciesId &&
+                        it.item.age == item.age && it.item.quality == item.quality && it.item.size == item.size && it.item.plantType == item.plantType }
+                    SellingItemRow(item, cart?.orderQuantity ?: 0) { quantity ->
+                        if (uiState.estimateCart.isEmpty() && quantity > 0) viewModel.updateCustomerPhone("")
+                        viewModel.updateCartQuantity(item, quantity)
                     }
                 }
             }
-            Spacer(modifier = Modifier.height(100.dp))
         }
     }
 
@@ -725,7 +464,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
         )
     }
 
-    // 🚨 1. 견적서 다이얼로그 (문자 전송 및 전화번호 입력 포함)
+    //  1. 견적서 다이얼로그 (문자 전송 및 전화번호 입력 포함)
     if (showCartDialog) {
         Dialog(
             onDismissRequest = { showCartDialog = false },
@@ -745,11 +484,12 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            "📝 나무팜 견적서",
+                            " 나무팜 견적서",
                             fontSize = 20.sp,
                             fontWeight = FontWeight.ExtraBold,
-                            color = Color(0xFF1B5E20)
+                            color = NamuColors.primary
                         )
+                        TextButton(onClick = { showClearCartConfirm = true }) { Text("비우기", color = NamuColors.danger) }
                         IconButton(onClick = { showCartDialog = false }) {
                             Icon(
                                 Icons.Default.Close,
@@ -778,13 +518,13 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                                 Column(
                                     modifier = Modifier.fillMaxWidth().padding(14.dp)
                                 ) {
-                                    // 🚨 1줄: [묘목명] [품종뱃지] [년생뱃지] [주문량]
+                                    //  1줄: [묘목명] [품종뱃지] [년생뱃지] [주문량]
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
                                         Text(
-                                            text = "🌱 ${cartItem.item.speciesName}",
+                                            text = " ${cartItem.item.speciesName}",
                                             fontWeight = FontWeight.ExtraBold,
                                             fontSize = 16.sp,
                                             color = Color.Black
@@ -794,8 +534,8 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                                         // 품종 뱃지 (년생과 동일한 14sp 적용)
                                         Text(
                                             text = cartItem.item.quality,
-                                            fontSize = 11.sp,
-                                            color = Color(0xFFE65100),
+                                            fontSize = 13.sp,
+                                            color = NamuColors.primary,
                                             fontWeight = FontWeight.Bold,
                                             modifier = Modifier
                                                 .background(Color(0xFFFFF3E0), RoundedCornerShape(4.dp))
@@ -806,8 +546,8 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                                             Spacer(modifier = Modifier.width(6.dp))
                                             Text(
                                                 text = cartItem.item.age,
-                                                fontSize = 11.sp,
-                                                color = Color(0xFF2E7D32),
+                                                fontSize = 13.sp,
+                                                color = NamuColors.primary,
                                                 fontWeight = FontWeight.Bold,
                                                 modifier = Modifier
                                                     .background(Color(0xFFE8F5E9), RoundedCornerShape(4.dp))
@@ -819,8 +559,8 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                                             Spacer(modifier = Modifier.width(6.dp))
                                             Text(
                                                 text = cartItem.item.size,
-                                                fontSize = 11.sp,
-                                                color = Color(0xFF1565C0),
+                                                fontSize = 13.sp,
+                                                color = NamuColors.primary,
                                                 fontWeight = FontWeight.Bold,
                                                 modifier = Modifier
                                                     .background(Color(0xFFE3F2FD), RoundedCornerShape(4.dp))
@@ -832,8 +572,8 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
 
                                         Text(
                                             text = cartItem.item.plantType,
-                                            fontSize = 11.sp,
-                                            color = Color(0xFF6A1B9A),
+                                            fontSize = 13.sp,
+                                            color = NamuColors.primary,
                                             fontWeight = FontWeight.Bold,
                                             modifier = Modifier
                                                 .background(Color(0xFFF3E5F5), RoundedCornerShape(4.dp))
@@ -845,7 +585,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                                         // 주문 수량
                                         Text(
                                             text = "${cartItem.orderQuantity}주",
-                                            color = Color(0xFF1976D2),
+                                            color = NamuColors.primary,
                                             fontWeight = FontWeight.ExtraBold,
                                             fontSize = 17.sp
                                         )
@@ -853,19 +593,19 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
 
                                     Spacer(modifier = Modifier.height(10.dp))
 
-                                    // 🚨 2줄: [농원명 블루뱃지] 단가: 00원
+                                    //  2줄: [농원명 블루뱃지] 단가: 00원
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
                                         Text(
                                             text = cartItem.item.farmName,
-                                            fontSize = 11.sp,
+                                            fontSize = 13.sp,
                                             color = Color.White,
                                             fontWeight = FontWeight.Bold,
                                             modifier = Modifier
                                                 .background(
-                                                    Color(0xFF1976D2),
+                                                    NamuColors.primary,
                                                     RoundedCornerShape(4.dp)
                                                 )
                                                 .padding(horizontal = 6.dp, vertical = 2.dp)
@@ -886,7 +626,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
 
                                     Spacer(modifier = Modifier.height(12.dp))
 
-                                    // 🚨 3줄: 금액: 000원 (왼쪽)  ---------------->  [휴지통 버튼] (오른쪽)
+                                    //  3줄: 금액: 000원 (왼쪽)  ---------------->  [휴지통 버튼] (오른쪽)
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
                                         modifier = Modifier.fillMaxWidth()
@@ -913,7 +653,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                                                 Icon(
                                                     Icons.Default.Delete,
                                                     contentDescription = "삭제",
-                                                    tint = Color(0xFFD32F2F),
+                                                    tint = NamuColors.danger,
                                                     modifier = Modifier.size(22.dp)
                                                 )
                                             }
@@ -936,7 +676,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                             modifier = Modifier.padding(bottom = 12.dp)
                         )
 
-                        // 🚨 [수정] 선불일 때만 총 견적 금액에 택배비 합산!
+                        //  [수정] 선불일 때만 총 견적 금액에 택배비 합산!
                         val finalRetail = uiState.estimateCart.sumOf { it.item.retailPrice * it.orderQuantity } + (if(isPrepaid) shippingFee else 0)
 
                         // 파란 박스: 총액 + 전화번호 입력칸
@@ -1009,13 +749,13 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            // 🚨 1. 견적서 문자발송 버튼 (스마트 분기 처리)
+                            //  1. 견적서 문자발송 버튼 (스마트 분기 처리)
                             Button(
                                 onClick = {
                                     val phoneNum = uiState.customerPhone
 
                                     if (phoneNum.isNotBlank()) {
-                                        // 🚨 괄호 안에 택배비 상태 변수를 쏙 넣어줘!!!
+                                        //  괄호 안에 택배비 상태 변수를 쏙 넣어줘!!!
                                         val smsText = viewModel.generateQuoteText(isPrepaid, shippingFee)
 
                                         val smsIntent = Intent(Intent.ACTION_SENDTO).apply {
@@ -1063,7 +803,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                                 )
                             }
 
-                            // 🚨 2. 견적서 저장 버튼 (번호 필수 검증)
+                            //  2. 견적서 저장 버튼 (번호 필수 검증)
                             Button(
                                 onClick = {
                                     val phoneNum = uiState.customerPhone
@@ -1075,7 +815,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                                     }
                                     // 번호가 없으면 경고 메시지 띄우고 빠꾸!
                                     else {
-                                        viewModel.showMessage("⚠️ 견적서를 저장하려면 전화번호를 입력해주세요.")
+                                        viewModel.showMessage(" 견적서를 저장하려면 전화번호를 입력해주세요.")
                                     }
                                 },
                                 modifier = Modifier.weight(1f).height(56.dp),
@@ -1100,7 +840,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
         }
     }
 
-    // 🚨 2. 최근 20개 전화번호 목록 선택 다이얼로그 (이름 + 번호 UI 적용!)
+    //  2. 최근 20개 전화번호 목록 선택 다이얼로그 (이름 + 번호 UI 적용!)
     if (showCallLogDialog && uiState.recentCallList.isNotEmpty()) {
         Dialog(onDismissRequest = { showCallLogDialog = false }) {
             Surface(
@@ -1113,7 +853,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                         "최근 통화 기록",
                         fontWeight = FontWeight.ExtraBold,
                         fontSize = 18.sp,
-                        color = Color(0xFF1B5E20)
+                        color = NamuColors.primary
                     )
                     Divider(
                         modifier = Modifier.padding(vertical = 12.dp),
@@ -1131,7 +871,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                                     }
                                     .padding(vertical = 12.dp, horizontal = 8.dp)
                             ) {
-                                // 🚨 폰에 이름이 저장되어 있는 경우
+                                //  폰에 이름이 저장되어 있는 경우
                                 if (!callItem.name.isNullOrBlank()) {
                                     Text(
                                         text = callItem.name,
@@ -1146,7 +886,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                                         color = Color.DarkGray
                                     )
                                 }
-                                // 🚨 저장되지 않은 모르는 번호인 경우
+                                //  저장되지 않은 모르는 번호인 경우
                                 else {
                                     Text(
                                         text = callItem.number,
@@ -1157,7 +897,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                                     Spacer(modifier = Modifier.height(2.dp))
                                     Text(
                                         text = "저장되지 않은 번호",
-                                        fontSize = 12.sp,
+                                        fontSize = 13.sp,
                                         color = Color(0xFF9E9E9E)
                                     )
                                 }
@@ -1177,7 +917,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
         }
     }
 
-    // 🚨 [수정] 오늘 저장된 견적서 목록 팝업 (초경량 1줄 리스트)
+    //  [수정] 오늘 저장된 견적서 목록 팝업 (초경량 1줄 리스트)
     if (showTodayQuotesDialog) {
         val todayDate = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.KOREA)
             .format(java.util.Date())
@@ -1196,7 +936,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                         text = "${todayDate}_총 견적서",
                         fontSize = 18.sp,
                         fontWeight = FontWeight.ExtraBold,
-                        color = Color(0xFF1B5E20),
+                        color = NamuColors.primary,
                         modifier = Modifier.fillMaxWidth(),
                         textAlign = TextAlign.Center
                     )
@@ -1210,13 +950,13 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                             Card(
                                 modifier = Modifier.fillMaxWidth().clickable {
                                     selectedQuote = quote
-                                    // 🚨 상세창 열기 전에 기존 저장된 번호를 ViewModel에 동기화!
+                                    //  상세창 열기 전에 기존 저장된 번호를 ViewModel에 동기화!
                                     viewModel.updateCustomerPhone(quote.customerPhone)
                                     showQuoteDetailDialog = true
                                 }
                             ) {
                                 Column(modifier = Modifier.padding(14.dp)) {
-                                    // 🚨 1열: 견적서 번호 (구역 구분용 배경)
+                                    //  1열: 견적서 번호 (구역 구분용 배경)
                                     Surface(
                                         color = Color(0xFFF5F5F5),
                                         shape = RoundedCornerShape(4.dp),
@@ -1236,10 +976,10 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
 
                                     Spacer(modifier = Modifier.height(8.dp))
 
-                                    // 🚨 2열: 전화번호 (있을 때만 렌더링)
+                                    //  2열: 전화번호 (있을 때만 렌더링)
                                     if (quote.customerPhone.isNotBlank()) {
                                         Text(
-                                            text = "📱 ${quote.customerPhone}",
+                                            text = " ${quote.customerPhone}",
                                             fontSize = 13.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = Color.DarkGray
@@ -1247,7 +987,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                                         Spacer(modifier = Modifier.height(6.dp))
                                     }
 
-                                    // 🚨 3열: 묘목명 + 수량 (1줄씩 심플하게 쫙!)
+                                    //  3열: 묘목명 + 수량 (1줄씩 심플하게 쫙!)
                                     val summaryLines =
                                         quote.itemSummary.split("\n").filter { it.isNotBlank() }
                                     Column(modifier = Modifier.fillMaxWidth()) {
@@ -1264,7 +1004,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                                                 ) {
                                                     Column(modifier = Modifier.weight(1f)) {
                                                         Text(
-                                                            text = "🌱 ${item.species}",
+                                                            text = " ${item.species}",
                                                             fontSize = 14.sp,
                                                             fontWeight = FontWeight.Bold,
                                                             color = Color.Black
@@ -1276,7 +1016,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                                                                 size = item.size,
                                                                 plantType = item.plantType
                                                             ),
-                                                            fontSize = 11.sp,
+                                                            fontSize = 13.sp,
                                                             color = Color.Gray
                                                         )
                                                     }
@@ -1285,7 +1025,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                                                         text = "${item.qty}주",
                                                         fontSize = 14.sp,
                                                         fontWeight = FontWeight.ExtraBold,
-                                                        color = Color(0xFF1976D2)
+                                                        color = NamuColors.primary
                                                     )
                                                 }
                                             }
@@ -1297,7 +1037,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                                         color = Color(0xFFF5F5F5)
                                     )
 
-                                    // 🚨 4열: 배송비 & 최종 합계 (한 줄에 나란히 배치)
+                                    //  4열: 배송비 & 최종 합계 (한 줄에 나란히 배치)
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
                                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -1309,12 +1049,12 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                                         } else {
                                             "후불 (착불)"
                                         }
-                                        val shippingColor = if (quote.isPrepaid) Color(0xFF1976D2) else Color(0xFFD32F2F)
+                                        val shippingColor = if (quote.isPrepaid) NamuColors.primary else NamuColors.danger
 
                                         Column {
                                             Text(
                                                 text = "배송비",
-                                                fontSize = 11.sp,
+                                                fontSize = 13.sp,
                                                 color = Color.Gray,
                                                 fontWeight = FontWeight.Bold
                                             )
@@ -1349,7 +1089,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
         }
     }
 
-    // 🚨 [수정] 오늘 확정된 주문내역 목록 팝업 (1줄 압축 버전)
+    //  [수정] 오늘 확정된 주문내역 목록 팝업 (1줄 압축 버전)
     if (showTodayOrdersDialog) {
         val todayDate = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.KOREA)
             .format(java.util.Date())
@@ -1368,7 +1108,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                         text = "${todayDate}_주문내역",
                         fontSize = 18.sp,
                         fontWeight = FontWeight.ExtraBold,
-                        color = Color(0xFF2E7D32),
+                        color = NamuColors.primary,
                         modifier = Modifier.fillMaxWidth(),
                         textAlign = TextAlign.Center
                     )
@@ -1414,7 +1154,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                                             Text(
                                                 text = statusText,
                                                 fontSize = 13.sp,
-                                                color = if (order.status == "주문취소") Color(0xFFD32F2F) else Color(0xFF2E7D32),
+                                                color = if (order.status == "주문취소") NamuColors.danger else NamuColors.primary,
                                                 fontWeight = FontWeight.Bold
                                             )
                                         }
@@ -1425,19 +1165,19 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                                     // 2열: 전화번호 및 주소 (추가됨)
                                     Column {
                                         Text(
-                                            text = "📱 ${order.customerPhone}",
+                                            text = " ${order.customerPhone}",
                                             fontSize = 13.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = Color.DarkGray
                                         )
-                                        // 🚨 주소 필드 (추후 DB 연동 대비 UI 배치)
+                                        //  주소 필드 (추후 DB 연동 대비 UI 배치)
                                         Text(
                                             text = if (order.receiverName.isBlank()) {
-                                                "👤 받는사람: 미입력"
+                                                " 받는사람: 미입력"
                                             } else {
-                                                "👤 받는사람: ${order.receiverName}"
+                                                " 받는사람: ${order.receiverName}"
                                             },
-                                            fontSize = 12.sp,
+                                            fontSize = 13.sp,
                                             color = Color.DarkGray
                                         )
                                     }
@@ -1456,7 +1196,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                                                 verticalAlignment = Alignment.CenterVertically
                                             ) {
                                                 Text(
-                                                    text = "🌱 ${item.species}",
+                                                    text = " ${item.species}",
                                                     fontSize = 14.sp,
                                                     fontWeight = FontWeight.Bold,
                                                     color = Color.Black
@@ -1471,7 +1211,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                                                         plantType = item.plantType,
                                                         separator = " / "
                                                     ),
-                                                    fontSize = 11.sp,
+                                                    fontSize = 13.sp,
                                                     color = Color.Gray
                                                 )
                                                 Spacer(modifier = Modifier.weight(1f))
@@ -1479,7 +1219,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                                                     text = "${item.qty}주",
                                                     fontSize = 16.sp,
                                                     fontWeight = FontWeight.ExtraBold,
-                                                    color = Color(0xFF2E7D32)
+                                                    color = NamuColors.primary
                                                 )
                                             }
                                         }
@@ -1506,7 +1246,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                     Button(
                         onClick = { showTodayOrdersDialog = false },
                         modifier = Modifier.fillMaxWidth().height(50.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
+                        colors = ButtonDefaults.buttonColors(containerColor = NamuColors.primary),
                         shape = RoundedCornerShape(8.dp)
                     ) { Text("닫기", color = Color.White, fontWeight = FontWeight.Bold) }
                 }
@@ -1514,8 +1254,8 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
         }
     }
 
-    // 🚨 [수정] 견적서 상세 다이얼로그 (문자전송 사령실 삭제 & UI 다이어트 완료!)
-    // 🚨 [수정] 견적서 상세 다이얼로그 (배송비 표시 추가)
+    //  [수정] 견적서 상세 다이얼로그 (문자전송 사령실 삭제 & UI 다이어트 완료!)
+    //  [수정] 견적서 상세 다이얼로그 (배송비 표시 추가)
     if (showQuoteDetailDialog && selectedQuote != null) {
         val quote = selectedQuote!!
 
@@ -1543,10 +1283,10 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            "📝 견적서 상세",
+                            " 견적서 상세",
                             fontSize = 18.sp,
                             fontWeight = FontWeight.ExtraBold,
-                            color = Color(0xFF1B5E20)
+                            color = NamuColors.primary
                         )
                     }
 
@@ -1565,7 +1305,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
 
                     Column(modifier = Modifier.padding(horizontal = 4.dp)) {
                         Text(
-                            "📱 전화번호: ${quote.customerPhone}",
+                            " 전화번호: ${quote.customerPhone}",
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.DarkGray
@@ -1593,35 +1333,35 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                                         retailPrice = item.retailPrice,
                                         farmName = item.farmName,
                                         wholesalePrice = item.wholesalePrice,
-                                        qtyColor = Color(0xFF1976D2),
-                                        retailColor = Color(0xFF1976D2)
+                                        qtyColor = NamuColors.primary,
+                                        retailColor = NamuColors.primary
                                     )
                                 }
                             }
                         }
 
-                        // 🚨 [추가] 배송비 표시 구역
+                        //  [추가] 배송비 표시 구역
                         Divider(color = Color(0xFFEEEEEE), modifier = Modifier.padding(vertical = 12.dp))
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("📦 배송비", fontSize = 15.sp, color = Color.DarkGray, fontWeight = FontWeight.Bold)
+                            Text(" 배송비", fontSize = 15.sp, color = Color.DarkGray, fontWeight = FontWeight.Bold)
                             // (주의: 데이터베이스 엔티티에 isPrepaid, shippingFee 변수가 있어야 에러가 안 나!)
                             if (quote.isPrepaid) {
                                 Text(
                                     text = "선불 ${String.format("%,d", quote.shippingFee)}원",
                                     fontSize = 16.sp,
                                     fontWeight = FontWeight.ExtraBold,
-                                    color = Color(0xFF1976D2)
+                                    color = NamuColors.primary
                                 )
                             } else {
                                 Text(
                                     text = "후불 (착불)",
                                     fontSize = 16.sp,
                                     fontWeight = FontWeight.ExtraBold,
-                                    color = Color(0xFFD32F2F)
+                                    color = NamuColors.danger
                                 )
                             }
                         }
@@ -1639,7 +1379,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                             )
                             Text(
                                 "저장일시: ${quote.saveDate}",
-                                fontSize = 12.sp,
+                                fontSize = 13.sp,
                                 color = Color.Gray
                             )
                         }
@@ -1660,7 +1400,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                                 showTodayOrdersDialog = true
                             },
                             modifier = Modifier.weight(1f).height(46.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
+                            colors = ButtonDefaults.buttonColors(containerColor = NamuColors.primary),
                             shape = RoundedCornerShape(8.dp)
                         ) {
                             Text("입금확인", fontSize = 13.sp, fontWeight = FontWeight.Bold)
@@ -1672,7 +1412,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                                 showDeleteQuoteConfirm = true
                             },
                             modifier = Modifier.weight(1f).height(46.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F)),
+                            colors = ButtonDefaults.buttonColors(containerColor = NamuColors.danger),
                             shape = RoundedCornerShape(8.dp)
                         ) {
                             Text("견적삭제", fontSize = 13.sp, fontWeight = FontWeight.Bold)
@@ -1692,7 +1432,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
         }
     }
 
-    // 🚨 [수정] 주문서 상세 다이얼로그 (배송비 표시 추가)
+    //  [수정] 주문서 상세 다이얼로그 (배송비 표시 추가)
     if (showOrderDetailDialog && selectedOrder != null) {
         val order = selectedOrder!!
         Dialog(
@@ -1709,23 +1449,23 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                         modifier = Modifier.fillMaxWidth().background(Color(0xFFE3F2FD))
                             .padding(12.dp), contentAlignment = Alignment.Center
                     ) {
-                        // 🚨 [수정] 주문 상세 상단 타이틀 (높이 축소 & 휴지통 디자인 개선)
+                        //  [수정] 주문 상세 상단 타이틀 (높이 축소 & 휴지통 디자인 개선)
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .background(Color(0xFFE3F2FD), RoundedCornerShape(8.dp)) // 둥근 모서리 추가
-                                .padding(horizontal = 14.dp, vertical = 8.dp), // 🚨 위아래 여백을 8.dp로 확 줄임!
+                                .padding(horizontal = 14.dp, vertical = 8.dp), //  위아래 여백을 8.dp로 확 줄임!
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "📦 주문내역 상세",
+                                text = " 주문내역 상세",
                                 fontSize = 17.sp, // 글자 크기도 살짝 컴팩트하게
                                 fontWeight = FontWeight.ExtraBold,
-                                color = Color(0xFF1565C0)
+                                color = NamuColors.primary
                             )
 
-                            // 🚨 예쁘게 단장한 휴지통 버튼 (배경 + 테두리 추가)
+                            //  예쁘게 단장한 휴지통 버튼 (배경 + 테두리 추가)
                             Surface(
                                 modifier = Modifier
                                     .size(34.dp) // 아담한 사이즈
@@ -1741,7 +1481,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                                     Icon(
                                         Icons.Default.Delete,
                                         contentDescription = "주문 영구 삭제",
-                                        tint = Color(0xFFD32F2F),
+                                        tint = NamuColors.danger,
                                         modifier = Modifier.size(18.dp) // 아이콘 크기도 박스에 맞게 축소
                                     )
                                 }
@@ -1779,7 +1519,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                                     Text(
                                         text = statusText,
                                         fontSize = 14.sp,
-                                        color = if (order.status == "주문취소") Color(0xFFD32F2F) else Color(0xFF2E7D32),
+                                        color = if (order.status == "주문취소") NamuColors.danger else NamuColors.primary,
                                         fontWeight = FontWeight.Bold
                                     )
                                 }
@@ -1789,15 +1529,15 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                         Spacer(modifier = Modifier.height(8.dp))
 
                         Text(
-                            text = "📱 고객번호: ${order.customerPhone}",
+                            text = " 고객번호: ${order.customerPhone}",
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold
                         )
                         Text(
                             text = if (order.receiverName.isBlank()) {
-                                "👤 받는사람: 미입력"
+                                " 받는사람: 미입력"
                             } else {
-                                "👤 받는사람: ${order.receiverName}"
+                                " 받는사람: ${order.receiverName}"
                             },
                             fontSize = 14.sp,
                             color = Color.DarkGray,
@@ -1806,12 +1546,12 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
 
                         Text(
                             text = if (order.roadAddress.isBlank()) {
-                                "📍 배송주소: 미입력"
+                                " 배송주소: 미입력"
                             } else {
-                                "📍 배송주소: [${order.zipNo}] ${order.roadAddress} ${order.detailAddress}".trim()
+                                " 배송주소: [${order.zipNo}] ${order.roadAddress} ${order.detailAddress}".trim()
                             },
                             fontSize = 14.sp,
-                            color = if (order.roadAddress.isBlank()) Color(0xFFD32F2F) else Color.Black,
+                            color = if (order.roadAddress.isBlank()) NamuColors.danger else Color.Black,
                             fontWeight = FontWeight.Medium
                         )
 
@@ -1835,7 +1575,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                                         Column(modifier = Modifier.weight(1f)) {
                                             Row(verticalAlignment = Alignment.CenterVertically) {
                                                 Text(
-                                                    "🌱 ${item.species}",
+                                                    " ${item.species}",
                                                     fontWeight = FontWeight.ExtraBold,
                                                     fontSize = 15.sp
                                                 )
@@ -1848,14 +1588,14 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                                                         plantType = item.plantType,
                                                         separator = " | "
                                                     ),
-                                                    fontSize = 12.sp,
+                                                    fontSize = 13.sp,
                                                     color = Color.Gray
                                                 )
                                             }
                                             Text(
                                                 text = "농원: ${item.farmName}",
-                                                fontSize = 11.sp,
-                                                color = Color(0xFF1976D2),
+                                                fontSize = 13.sp,
+                                                color = NamuColors.primary,
                                                 fontWeight = FontWeight.Bold
                                             )
                                         }
@@ -1865,11 +1605,11 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                                                 "${item.qty}주",
                                                 fontSize = 18.sp,
                                                 fontWeight = FontWeight.ExtraBold,
-                                                color = Color(0xFF2E7D32)
+                                                color = NamuColors.primary
                                             )
                                             Text(
                                                 "${String.format("%,d", item.retailPrice)}원",
-                                                fontSize = 12.sp,
+                                                fontSize = 13.sp,
                                                 color = Color.Gray
                                             )
                                         }
@@ -1878,28 +1618,28 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                             }
                         }
 
-                        // 🚨 [추가] 배송비 표시 구역
+                        //  [추가] 배송비 표시 구역
                         Divider(color = Color(0xFFEEEEEE), modifier = Modifier.padding(vertical = 12.dp))
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("📦 배송비", fontSize = 15.sp, color = Color.DarkGray, fontWeight = FontWeight.Bold)
+                            Text(" 배송비", fontSize = 15.sp, color = Color.DarkGray, fontWeight = FontWeight.Bold)
                             // (주의: 데이터베이스 엔티티에 isPrepaid, shippingFee 변수가 있어야 에러가 안 나!)
                             if (order.isPrepaid) {
                                 Text(
                                     text = "선불 ${String.format("%,d", order.shippingFee)}원",
                                     fontSize = 16.sp,
                                     fontWeight = FontWeight.ExtraBold,
-                                    color = Color(0xFF1976D2)
+                                    color = NamuColors.primary
                                 )
                             } else {
                                 Text(
                                     text = "후불 (착불)",
                                     fontSize = 16.sp,
                                     fontWeight = FontWeight.ExtraBold,
-                                    color = Color(0xFFD32F2F)
+                                    color = NamuColors.danger
                                 )
                             }
                         }
@@ -1912,14 +1652,14 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                             Text(
                                 "총 수량: ${order.totalQty}주",
                                 fontSize = 14.sp,
-                                color = Color(0xFF1976D2),
+                                color = NamuColors.primary,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
                                 "최종 합계: ${String.format("%,d", order.totalPrice)}원",
                                 fontSize = 22.sp,
                                 fontWeight = FontWeight.ExtraBold,
-                                color = Color(0xFFD32F2F)
+                                color = NamuColors.danger
                             )
                         }
                     }
@@ -1936,7 +1676,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                                 showAddressSearch = true
                             },
                             modifier = Modifier.weight(1f).height(50.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1976D2)),
+                            colors = ButtonDefaults.buttonColors(containerColor = NamuColors.primary),
                             shape = RoundedCornerShape(8.dp)
                         ) {
                             Text("주소입력", fontSize = 14.sp, fontWeight = FontWeight.Bold)
@@ -1945,7 +1685,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                         Button(
                             onClick = { orderToDelete = order; showDeleteOrderConfirm = true },
                             modifier = Modifier.weight(1f).height(50.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F)),
+                            colors = ButtonDefaults.buttonColors(containerColor = NamuColors.danger),
                             shape = RoundedCornerShape(8.dp)
                         ) { Text("주문취소", fontSize = 14.sp, fontWeight = FontWeight.Bold) }
 
@@ -1964,7 +1704,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
     if (showDeleteQuoteConfirm && quoteToDelete != null) {
         AlertDialog(
             onDismissRequest = { showDeleteQuoteConfirm = false },
-            title = { Text("🗑️ 견적서 삭제", fontWeight = FontWeight.Bold) },
+            title = { Text(" 견적서 삭제", fontWeight = FontWeight.Bold) },
             text = {
                 Column {
                     Text("다음 견적서를 삭제하시겠습니까?")
@@ -1976,12 +1716,12 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                         if (line.contains("|")) {
                             val parts = line.split("|")
 
-                            // 🚨 여기도 직관적인 배열 체크로 교체!
+                            //  여기도 직관적인 배열 체크로 교체!
                             val species = if (parts.isNotEmpty()) parts[0] else ""
                             val qty = if (parts.size > 3) parts[3] else "0"
 
                             Text(
-                                "🌱 $species (${qty}주)",
+                                " $species (${qty}주)",
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 14.sp,
                                 color = Color.Black
@@ -2009,7 +1749,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                 Button(
                     onClick = {
                         quoteToDelete?.let { quote ->
-                            // 🚨 견적서는 브로 말대로 영구 삭제가 맞음!
+                            //  견적서는 브로 말대로 영구 삭제가 맞음!
                             viewModel.deleteQuote(quote)
                         }
 
@@ -2018,7 +1758,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                         selectedQuote = null
                         quoteToDelete = null
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
+                    colors = ButtonDefaults.buttonColors(containerColor = NamuColors.danger)
                 ) { Text("삭제", color = Color.White, fontWeight = FontWeight.Bold) }
             },
             dismissButton = {
@@ -2052,7 +1792,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                         showMoveToManagementConfirm = false
                         onNavigateToManagement()
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F))
+                    colors = ButtonDefaults.buttonColors(containerColor = NamuColors.danger)
                 ) {
                     Text("취소 후 이동", color = Color.White, fontWeight = FontWeight.Bold)
                 }
@@ -2067,11 +1807,11 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
         )
     }
 
-    // 🚨 기존 showDeleteOrderConfirm 블록을 이걸로 교체!
+    //  기존 showDeleteOrderConfirm 블록을 이걸로 교체!
     if (showDeleteOrderConfirm && orderToDelete != null) {
         AlertDialog(
             onDismissRequest = { showDeleteOrderConfirm = false },
-            title = { Text("🚫 주문 취소", fontWeight = FontWeight.Bold) },
+            title = { Text(" 주문 취소", fontWeight = FontWeight.Bold) },
             text = {
                 Column {
                     Text("다음 주문을 취소 상태로 변경하시겠습니까?")
@@ -2083,12 +1823,12 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                         if (line.contains("|")) {
                             val parts = line.split("|")
 
-                            // 🚨 [핵심 해결] 확장함수 다 빼고 직관적인 if문으로 컴파일러 뇌정지 원천 차단!
+                            //  [핵심 해결] 확장함수 다 빼고 직관적인 if문으로 컴파일러 뇌정지 원천 차단!
                             val species = if (parts.isNotEmpty()) parts[0] else ""
                             val qty = if (parts.size > 3) parts[3] else "0"
 
                             Text(
-                                "🌱 $species (${qty}주)",
+                                " $species (${qty}주)",
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 14.sp,
                                 color = Color.Black
@@ -2116,7 +1856,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                 Button(
                     onClick = {
                         orderToDelete?.let { order ->
-                            // 🚨 [핵심 변경] 삭제(deleteOrder) 대신 상태변경(updateOrderStatus) 호출!
+                            //  [핵심 변경] 삭제(deleteOrder) 대신 상태변경(updateOrderStatus) 호출!
                             viewModel.updateOrderStatus(order, "주문취소")
                         }
 
@@ -2125,7 +1865,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                         selectedOrder = null
                         orderToDelete = null
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F))
+                    colors = ButtonDefaults.buttonColors(containerColor = NamuColors.danger)
                 ) { Text("주문취소", color = Color.White, fontWeight = FontWeight.Bold) }
             },
             dismissButton = {
@@ -2137,11 +1877,11 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
         )
     }
 
-    // 🚨 [추가] 진짜 영구 삭제용 확인 팝업
+    //  [추가] 진짜 영구 삭제용 확인 팝업
     if (showRealDeleteOrderConfirm && orderToDelete != null) {
         AlertDialog(
             onDismissRequest = { showRealDeleteOrderConfirm = false },
-            title = { Text("🗑️ 주문 영구 삭제", fontWeight = FontWeight.Bold, color = Color.Red) },
+            title = { Text(" 주문 영구 삭제", fontWeight = FontWeight.Bold, color = NamuColors.danger) },
             text = {
                 Text(
                     "이 작업은 되돌릴 수 없으며,\n구글 시트와 앱에서 이 주문 번호(${orderToDelete!!.orderNumber})가 완전히 사라집니다.\n정말 삭제하시겠습니까?",
@@ -2152,7 +1892,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                 Button(
                     onClick = {
                         orderToDelete?.let { order ->
-                            // 🚨 뷰모델에 아까 만든 영구삭제 함수 호출!
+                            //  뷰모델에 아까 만든 영구삭제 함수 호출!
                             viewModel.deleteOrder(order)
                         }
                         showRealDeleteOrderConfirm = false
@@ -2160,7 +1900,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                         selectedOrder = null
                         orderToDelete = null
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
+                    colors = ButtonDefaults.buttonColors(containerColor = NamuColors.danger)
                 ) { Text("영구 삭제", color = Color.White, fontWeight = FontWeight.Bold) }
             },
             dismissButton = {
@@ -2192,7 +1932,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                         showClearCartConfirm = false
                         showCartDialog = false
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F))
+                    colors = ButtonDefaults.buttonColors(containerColor = NamuColors.danger)
                 ) {
                     Text("비우기", color = Color.White, fontWeight = FontWeight.Bold)
                 }
@@ -2241,7 +1981,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
         )
     }
 
-    // 🚨 3. 수기 견적(빠른 견적) 다이얼로그 추가!
+    //  3. 수기 견적(빠른 견적) 다이얼로그 추가!
     if (showQuickQuoteDialog) {
         val chosungRows = listOf(
             listOf("ㄱ", "ㄴ", "ㄷ", "ㄹ", "ㅁ", "ㅂ", "ㅅ"),
@@ -2263,11 +2003,11 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                 Column(modifier = Modifier.fillMaxSize()) {
                     // 상단 헤더
                     Row(
-                        modifier = Modifier.fillMaxWidth().background(Color(0xFF1976D2)).padding(16.dp),
+                        modifier = Modifier.fillMaxWidth().background(NamuColors.primary).padding(16.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("✍️ 수기 견적 작성 (문자발송용)", color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
+                        Text(" 수기 견적 작성 (문자발송용)", color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
                         IconButton(onClick = { showQuickQuoteDialog = false }) {
                             Icon(Icons.Default.Close, "닫기", tint = Color.White)
                         }
@@ -2278,7 +2018,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                         // [1] 초성 및 묘목 선택
                         Card(colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(12.dp)) {
                             Column(modifier = Modifier.padding(14.dp)) {
-                                Text("1. 묘목 선택", color = Color(0xFF388E3C), fontWeight = FontWeight.ExtraBold, fontSize = 15.sp)
+                                Text("1. 묘목 선택", color = NamuColors.primary, fontWeight = FontWeight.ExtraBold, fontSize = 15.sp)
                                 Spacer(modifier = Modifier.height(10.dp))
 
                                 // 초성 버튼들
@@ -2296,14 +2036,14 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                                                     onClick = { viewModel.selectChosung(chosung) },
                                                     modifier = Modifier.weight(1f).height(40.dp),
                                                     colors = ButtonDefaults.buttonColors(
-                                                        containerColor = if (isSelected) Color(0xFF388E3C) else Color(0xFFF1F8E9)
+                                                        containerColor = if (isSelected) NamuColors.primary else Color(0xFFF1F8E9)
                                                     ),
                                                     border = BorderStroke(
                                                         if (isSelected) 2.dp else 1.dp,
-                                                        if (isSelected) Color(0xFF2E7D32) else Color(0xFF8DB580)
+                                                        if (isSelected) NamuColors.primary else Color(0xFF8DB580)
                                                     ),
                                                     contentPadding = PaddingValues(0.dp)
-                                                ) { Text(chosung, color = if (isSelected) Color.White else Color(0xFF2E7D32), fontWeight = FontWeight.Bold) }
+                                                ) { Text(chosung, color = if (isSelected) Color.White else NamuColors.primary, fontWeight = FontWeight.Bold) }
                                             }
                                         }
                                     }
@@ -2311,7 +2051,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
 
                                 Spacer(modifier = Modifier.height(12.dp))
 
-                                // 🚨 [수기 견적창 안쪽 묘목 리스트 버튼 부분 교체]
+                                //  [수기 견적창 안쪽 묘목 리스트 버튼 부분 교체]
                                 val speciesRows = uiState.speciesList.chunked(4)
                                 speciesRows.forEach { rowItems ->
                                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -2319,7 +2059,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                                             val isSelected = uiState.selectedSpecies?.speciesId == species.speciesId
                                             val speciesName = species.speciesName
 
-                                            // 🚨 2. 여기도 똑같이 글자 수별 크기 조절!
+                                            //  2. 여기도 똑같이 글자 수별 크기 조절!
                                             val dynamicFontSize = when {
                                                 speciesName.length >= 7 -> 9.sp
                                                 speciesName.length >= 5 -> 10.sp
@@ -2330,16 +2070,16 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                                                 onClick = { viewModel.selectSpecies(species) },
                                                 modifier = Modifier.weight(1f).height(44.dp),
                                                 colors = ButtonDefaults.outlinedButtonColors(containerColor = if (isSelected) Color(0xFFE8F5E9) else Color.White),
-                                                border = BorderStroke(1.dp, if (isSelected) Color(0xFF2E7D32) else Color(0xFFE0E0E0)),
+                                                border = BorderStroke(1.dp, if (isSelected) NamuColors.primary else Color(0xFFE0E0E0)),
                                                 contentPadding = PaddingValues(0.dp)
                                             ) {
                                                 Text(
                                                     text = speciesName,
                                                     fontSize = dynamicFontSize,
-                                                    maxLines = 1,          // 🚨 강제 1줄
-                                                    softWrap = false,      // 🚨 줄바꿈 차단
-                                                    letterSpacing = (-0.5).sp, // 🚨 자간 축소
-                                                    color = if (isSelected) Color(0xFF2E7D32) else Color.DarkGray,
+                                                    maxLines = 1,          //  강제 1줄
+                                                    softWrap = false,      //  줄바꿈 차단
+                                                    letterSpacing = (-0.5).sp, //  자간 축소
+                                                    color = if (isSelected) NamuColors.primary else Color.DarkGray,
                                                     fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Normal
                                                 )
                                             }
@@ -2362,11 +2102,11 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                                     Text("2. 스펙 및 단가 입력", color = Color(0xFF0288D1), fontWeight = FontWeight.ExtraBold, fontSize = 15.sp)
                                     Spacer(modifier = Modifier.height(14.dp))
 
-                                    // 🚨 1. 년생
+                                    //  1. 년생
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Text("년생", modifier = Modifier.width(46.dp), fontWeight = FontWeight.Bold)
 
-                                        // 🚨 너비를 46.dp로 늘리고 줄바꿈 원천 차단!
+                                        //  너비를 46.dp로 늘리고 줄바꿈 원천 차단!
                                         Text(
                                             text = if (currentAgeInt > 0) "${currentAgeInt}년" else "-",
                                             modifier = Modifier.width(46.dp),
@@ -2383,7 +2123,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                                             modifier = Modifier.weight(1f).height(38.dp),
                                             contentPadding = PaddingValues(0.dp)
                                         ) {
-                                            Text("선택안함", fontSize = 11.sp, maxLines = 1, softWrap = false, letterSpacing = (-0.5).sp)
+                                            Text("선택안함", fontSize = 13.sp, maxLines = 1, softWrap = false, letterSpacing = (-0.5).sp)
                                         }
 
                                         Spacer(modifier = Modifier.width(4.dp))
@@ -2394,21 +2134,21 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                                             colors = ButtonDefaults.buttonColors(Color(0xFF4CAF50)),
                                             contentPadding = PaddingValues(0.dp)
                                         ) {
-                                            Text("${currentAgeInt + 1}년생 (+)", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false, letterSpacing = (-0.5).sp)
+                                            Text("${currentAgeInt + 1}년생 (+)", fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false, letterSpacing = (-0.5).sp)
                                         }
                                     }
 
                                     Spacer(modifier = Modifier.height(10.dp))
 
-                                    // 🚨 2. 크기 (0.0m 공간 확보 & 버튼 압축!)
+                                    //  2. 크기 (0.0m 공간 확보 & 버튼 압축!)
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Text("크기", modifier = Modifier.width(46.dp), fontWeight = FontWeight.Bold)
 
-                                        // 🚨 0.0m가 짤리지 않게 너비를 46.dp로 넉넉하게!
+                                        //  0.0m가 짤리지 않게 너비를 46.dp로 넉넉하게!
                                         Text(
                                             text = String.format("%.1fm", uiState.inputSizeMeters),
                                             modifier = Modifier.width(46.dp),
-                                            color = Color.Blue,
+                                            color = NamuColors.primary,
                                             fontWeight = FontWeight.ExtraBold,
                                             textAlign = TextAlign.Center,
                                             maxLines = 1,
@@ -2422,10 +2162,10 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                                             colors = ButtonDefaults.buttonColors(Color.Gray),
                                             contentPadding = PaddingValues(0.dp)
                                         ) {
-                                            Text("초기화", fontSize = 11.sp, maxLines = 1, softWrap = false, letterSpacing = (-0.5).sp)
+                                            Text("초기화", fontSize = 13.sp, maxLines = 1, softWrap = false, letterSpacing = (-0.5).sp)
                                         }
 
-                                        // 🚨 버튼 사이 간격을 4.dp -> 2.dp 로 줄여서 공간 확보!
+                                        //  버튼 사이 간격을 4.dp -> 2.dp 로 줄여서 공간 확보!
                                         Spacer(modifier = Modifier.width(2.dp))
 
                                         Button(
@@ -2433,7 +2173,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                                             modifier = Modifier.weight(1f).height(38.dp),
                                             contentPadding = PaddingValues(0.dp)
                                         ) {
-                                            Text("+10cm", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false, letterSpacing = (-0.5).sp)
+                                            Text("+10cm", fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false, letterSpacing = (-0.5).sp)
                                         }
 
                                         Spacer(modifier = Modifier.width(2.dp))
@@ -2444,7 +2184,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                                             colors = ButtonDefaults.buttonColors(Color(0xFF0288D1)),
                                             contentPadding = PaddingValues(0.dp)
                                         ) {
-                                            Text("+1m", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false, letterSpacing = (-0.5).sp)
+                                            Text("+1m", fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false, letterSpacing = (-0.5).sp)
                                         }
                                     }
                                     Spacer(modifier = Modifier.height(10.dp))
@@ -2460,7 +2200,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                                                 modifier = Modifier.weight(1f).height(36.dp).padding(end = 4.dp),
                                                 colors = ButtonDefaults.buttonColors(if (isSelected) Color(0xFF8D6E63) else Color.LightGray),
                                                 contentPadding = PaddingValues(0.dp)
-                                            ) { Text(label, fontSize = 11.sp) }
+                                            ) { Text(label, fontSize = 13.sp) }
                                         }
                                     }
                                     Spacer(modifier = Modifier.height(10.dp))
@@ -2476,16 +2216,16 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                                                 modifier = Modifier.weight(1f).height(36.dp).padding(end = 4.dp),
                                                 colors = ButtonDefaults.buttonColors(if (isSelected) Color(0xFF009688) else Color.LightGray),
                                                 contentPadding = PaddingValues(0.dp)
-                                            ) { Text(label, fontSize = 11.sp) }
+                                            ) { Text(label, fontSize = 13.sp) }
                                         }
                                     }
 
                                     Divider(modifier = Modifier.padding(vertical = 12.dp))
 
-                                    // 🚨 수량 (0 버튼 축소, +1, +10 추가)
+                                    //  수량 (0 버튼 축소, +1, +10 추가)
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Text("수량(주)", modifier = Modifier.width(60.dp), fontWeight = FontWeight.Bold)
-                                        Text("${uiState.inputQuantity}", fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, color = Color.Red, modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
+                                        Text("${uiState.inputQuantity}", fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, color = NamuColors.danger, modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
 
                                         Button(onClick = { viewModel.resetQuantityToSoldOut() }, modifier = Modifier.width(42.dp).height(40.dp), colors = ButtonDefaults.buttonColors(Color.Gray), contentPadding = PaddingValues(0.dp)) { Text("0", fontSize = 13.sp) }
                                         Spacer(modifier = Modifier.width(4.dp))
@@ -2495,10 +2235,10 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                                     }
                                     Spacer(modifier = Modifier.height(10.dp))
 
-                                    // 🚨 소매가/단가 (0 버튼 축소, +100, +1000 추가 & 잘림 방지용 Padding 제거)
+                                    //  소매가/단가 (0 버튼 축소, +100, +1000 추가 & 잘림 방지용 Padding 제거)
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Text("단가(원)", modifier = Modifier.width(60.dp), fontWeight = FontWeight.Bold)
-                                        Text("${String.format("%,d", uiState.inputRetail)}", fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, color = Color.Blue, modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
+                                        Text("${String.format("%,d", uiState.inputRetail)}", fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, color = NamuColors.primary, modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
 
                                         Button(onClick = { viewModel.resetRetail() }, modifier = Modifier.width(42.dp).height(40.dp), colors = ButtonDefaults.buttonColors(Color.Gray), contentPadding = PaddingValues(0.dp)) { Text("0", fontSize = 13.sp) }
                                         Spacer(modifier = Modifier.width(4.dp))
@@ -2511,7 +2251,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
 
                             Spacer(modifier = Modifier.height(16.dp))
 
-                            // 🚨 하단 2버튼 (담기 계속하기 / 장바구니 확인)
+                            //  하단 2버튼 (담기 계속하기 / 장바구니 확인)
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -2535,24 +2275,25 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                                                 chosung = uiState.selectedSpecies!!.chosung
                                             )
 
+                                            if (uiState.estimateCart.isEmpty()) viewModel.updateCustomerPhone("")
                                             viewModel.addToCart(dummyItem, uiState.inputQuantity)
 
-                                            // 🚨 입력창 싹 초기화 (창은 안 닫히고 다음 묘목 고를 수 있음!)
+                                            //  입력창 싹 초기화 (창은 안 닫히고 다음 묘목 고를 수 있음!)
                                             viewModel.resetInput()
                                             viewModel.updateAge("")
                                             viewModel.updateSize(0f)
                                             viewModel.updatePlantType("")
                                             viewModel.updateQuality("")
-                                            viewModel.showMessage("✅ 담기 완료! 다른 묘목을 선택하세요.")
+                                            viewModel.showMessage(" 담기 완료! 다른 묘목을 선택하세요.")
                                         } else {
-                                            viewModel.showMessage("⚠️ 수량과 단가를 입력해주세요.")
+                                            viewModel.showMessage(" 수량과 단가를 입력해주세요.")
                                         }
                                     },
                                     modifier = Modifier.weight(1f).height(56.dp),
-                                    colors = ButtonDefaults.buttonColors(Color(0xFFE91E63)),
+                                    colors = ButtonDefaults.buttonColors(NamuColors.primary),
                                     shape = RoundedCornerShape(12.dp)
                                 ) {
-                                    Text("🛒 담기", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
+                                    Text(" 담기", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
                                 }
 
                                 // [장바구니 확인] 버튼 (오른쪽)
@@ -2562,10 +2303,10 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                                         showCartDialog = true  // 메인 장바구니 창 띄우기
                                     },
                                     modifier = Modifier.weight(1f).height(56.dp),
-                                    colors = ButtonDefaults.buttonColors(Color(0xFF1976D2)),
+                                    colors = ButtonDefaults.buttonColors(NamuColors.primary),
                                     shape = RoundedCornerShape(12.dp)
                                 ) {
-                                    Text("📝 장바구니 확인", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
+                                    Text(" 장바구니 확인", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
                                 }
                             }
                         }
@@ -2575,347 +2316,47 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
         }
     }
 
-    // 🚨 [추가] 오현주 님과 협상 전용 팝업창 ㅋㅋㅋㅋ
-    if (showNegotiationDialog) {
-        AlertDialog(
-            onDismissRequest = { showNegotiationDialog = false },
-            title = {
-                Text("🚨 권한 부족 (접근 제한)", fontWeight = FontWeight.ExtraBold, color = Color(0xFFD32F2F))
-            },
-            text = {
-                Text(
-                    "오현주와 협상!! 💬\n\n이 기능을 사용하려면\n먼저 협상을 완료해야 합니다 ㅎㅎ",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
-                )
-            },
-            confirmButton = {
-                Button(
-                    onClick = { showNegotiationDialog = false },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1976D2))
-                ) {
-                    Text("협상하러 가기 🏃‍♂️💨", color = Color.White, fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = {
-                OutlinedButton(
-                    onClick = { showNegotiationDialog = false }
-                ) {
-                    Text("깨갱... (닫기)")
-                }
-            }
-        )
-    }
 }
 
-// 🚨 개별 묘목 전시 UI & 커스텀 수량 입력 다이얼로그 (브로의 확정 레이아웃 적용!)
+//  개별 묘목 전시 UI & 커스텀 수량 입력 다이얼로그 (브로의 확정 레이아웃 적용!)
 @Composable
-fun SellingItemRow(item: SellingDisplayRow, onAddToCart: (Int) -> Unit) {
-    var showDialog by remember { mutableStateOf(false) }
-    var inputQty by remember { mutableStateOf(0) }
-
-    val showAge = shouldShowAge(item.age)
-    val showSize = shouldShowSize(item.size)
-    val dialogSpecText = buildSpecText(
-        quality = item.quality,
-        age = item.age,
-        size = item.size,
-        plantType = item.plantType
-    )
-
-    if (showDialog) {
-        Dialog(
-            onDismissRequest = {
-                showDialog = false
-                inputQty = 0
+fun SellingItemRow(item: SellingDisplayRow, quantity: Int, onQuantity: (Int) -> Unit) {
+    val chosen = quantity > 0
+    val low = item.quantity <= NamuColors.LOW_STOCK
+    Surface(Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp),
+        color = if (chosen) NamuColors.soft else Color.White,
+        border = BorderStroke(if (chosen) 2.dp else 1.dp, if (chosen) NamuColors.primary else NamuColors.border)) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+            Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(item.speciesName, Modifier.weight(1f), fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                Text(item.farmName, fontSize = 13.sp, color = NamuColors.muted)
             }
-        ) {
-            Surface(
-                shape = RoundedCornerShape(16.dp),
-                color = Color.White,
-                shadowElevation = 8.dp
-            ) {
-                Column(
-                    modifier = Modifier.padding(20.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        text = "장바구니 담기",
-                        fontSize = 14.sp,
-                        color = Color.Gray,
-                        fontWeight = FontWeight.Bold
-                    )
-
-                    Text(
-                        text = item.speciesName,
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = Color(0xFF1B5E20)
-                    )
-
-                    Spacer(modifier = Modifier.height(6.dp))
-
-                    Text(
-                        text = dialogSpecText,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.Gray
-                    )
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Text(
-                        text = "현재 재고: ${String.format("%,d", item.quantity)}주",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = Color(0xFFD32F2F)
-                    )
-
-                    Divider(
-                        modifier = Modifier.padding(vertical = 16.dp),
-                        color = Color(0xFFEEEEEE)
-                    )
-
-                    Row(verticalAlignment = Alignment.Bottom) {
-                        Text(
-                            text = String.format("%,d", inputQty),
-                            fontSize = 40.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = Color(0xFF1976D2)
-                        )
-
-                        Text(
-                            text = " 주",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(bottom = 6.dp, start = 4.dp)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(20.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Button(
-                            onClick = { inputQty = 0 },
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(48.dp),
-                            colors = ButtonDefaults.buttonColors(Color(0xFFFFEBEE)),
-                            shape = RoundedCornerShape(8.dp),
-                            contentPadding = PaddingValues(0.dp)
-                        ) {
-                            Text(
-                                text = "초기화",
-                                color = Color(0xFFD32F2F),
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-
-                        listOf(1, 10, 100).forEach { step ->
-                            Button(
-                                onClick = {
-                                    inputQty =
-                                        if (inputQty + step <= item.quantity) {
-                                            inputQty + step
-                                        } else {
-                                            item.quantity
-                                        }
-                                },
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(48.dp),
-                                colors = ButtonDefaults.buttonColors(Color(0xFFE8F5E9)),
-                                shape = RoundedCornerShape(8.dp),
-                                contentPadding = PaddingValues(0.dp)
-                            ) {
-                                Text(
-                                    text = "+$step",
-                                    color = Color(0xFF2E7D32),
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(24.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        OutlinedButton(
-                            onClick = {
-                                showDialog = false
-                                inputQty = 0
-                            },
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(54.dp),
-                            shape = RoundedCornerShape(12.dp),
-                            border = BorderStroke(1.dp, Color(0xFFBDBDBD))
-                        ) {
-                            Text(
-                                text = "취소",
-                                fontSize = 16.sp,
-                                color = Color.DarkGray,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-
-                        Button(
-                            onClick = {
-                                if (inputQty > 0) {
-                                    onAddToCart(inputQty)
-                                    showDialog = false
-                                    inputQty = 0
-                                }
-                            },
-                            modifier = Modifier
-                                .weight(1.5f)
-                                .height(54.dp),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = Color(0xFF1976D2)
-                            )
-                        ) {
-                            Text(
-                                text = "장바구니 담기",
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.ExtraBold
-                            )
-                        }
+            Text(buildSpecText(item.quality, item.age, item.size, item.plantType), fontSize = 14.sp, color = NamuColors.muted)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(Modifier.weight(1f)) {
+                    Text("재고 ${String.format("%,d", item.quantity)}주" + if (low) " 남음" else "",
+                        fontSize = 15.sp, color = if (low) NamuColors.danger else NamuColors.muted,
+                        fontWeight = if (low) FontWeight.Bold else FontWeight.Normal)
+                    Text("단가 ${String.format("%,d", item.retailPrice)}원", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                }
+                if (!chosen) OutlinedButton(onClick = { onQuantity(1) }, enabled = item.quantity > 0,
+                    modifier = Modifier.heightIn(min = 44.dp), shape = RoundedCornerShape(22.dp)) { Text("담기") }
+            }
+            if (chosen) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                OutlinedIconButton(onClick = { onQuantity(quantity - 1) }, modifier = Modifier.size(44.dp)) {
+                    Icon(Icons.Outlined.Remove, "수량 줄이기")
+                }
+                Text(String.format("%,d", quantity), Modifier.weight(1f), textAlign = TextAlign.Center,
+                    fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                OutlinedIconButton(onClick = { onQuantity((quantity.toLong() + 1).coerceAtMost(item.quantity.toLong()).toInt()) },
+                    enabled = quantity < item.quantity, modifier = Modifier.size(44.dp)) { Icon(Icons.Outlined.Add, "수량 늘리기") }
+                listOf(10, 100).forEach { delta ->
+                    OutlinedButton(onClick = { onQuantity((quantity.toLong() + delta).coerceAtMost(item.quantity.toLong()).toInt()) },
+                        enabled = quantity < item.quantity, contentPadding = PaddingValues(horizontal = 8.dp), modifier = Modifier.heightIn(min = 44.dp)) {
+                        Text("+$delta", fontSize = 13.sp)
                     }
                 }
-            }
-        }
-    }
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 8.dp, vertical = 4.dp)
-            .clickable { showDialog = true },
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
-            // 🚨 1행: 묘목명(굵게) + 품질뱃지 + 년생뱃지(옅은녹색) / 우측: 재고량(빨강 굵게)
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // 묘목명
-                Text(
-                    text = item.speciesName,
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = Color.Black
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-
-                // 품질 뱃지
-                Text(
-                    text = item.quality,
-                    fontSize = 11.sp,
-                    color = Color(0xFFE65100),
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier
-                        .background(Color(0xFFFFF3E0), RoundedCornerShape(4.dp))
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                )
-
-                if (showAge) {
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = item.age,
-                        fontSize = 11.sp,
-                        color = Color(0xFF2E7D32),
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier
-                            .background(Color(0xFFE8F5E9), RoundedCornerShape(4.dp))
-                            .padding(horizontal = 6.dp, vertical = 2.dp)
-                    )
-                }
-
-                if (showSize) {
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = item.size,
-                        fontSize = 11.sp,
-                        color = Color(0xFF1565C0),
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier
-                            .background(Color(0xFFE3F2FD), RoundedCornerShape(4.dp))
-                            .padding(horizontal = 6.dp, vertical = 2.dp)
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(6.dp))
-
-                Text(
-                    text = item.plantType,
-                    fontSize = 11.sp,
-                    color = Color(0xFF6A1B9A),
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier
-                        .background(Color(0xFFF3E5F5), RoundedCornerShape(4.dp))
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                )
-
-                Spacer(modifier = Modifier.weight(1f))
-
-                // 재고량
-                Text(
-                    text = "재고량: ${String.format("%,d", item.quantity)}주",
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = Color(0xFFD32F2F)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // 🚨 2행: 농원뱃지 + 도매가(회색) / 우측: 판매가(검정)
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // 농원 뱃지
-                Text(
-                    text = item.farmName,
-                    fontSize = 10.sp,
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier
-                        .background(Color(0xFF1976D2), RoundedCornerShape(4.dp))
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-
-                // 🚨 도매가 (플랫폼 입장에서 눈에 덜 띄게 회색으로 처리!)
-                Text(
-                    text = "도매가: ${String.format("%,d", item.wholesalePrice)}원",
-                    color = Color.Gray, // 기존 파란색에서 회색으로 변경
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium
-                )
-
-                Spacer(modifier = Modifier.weight(1f))
-
-                // 판매가 (검정색)
-                Text(
-                    text = "판매가: ${String.format("%,d", item.retailPrice)}원",
-                    color = Color.Black,
-                    fontWeight = FontWeight.ExtraBold,
-                    fontSize = 16.sp
-                )
             }
         }
     }
@@ -2957,7 +2398,7 @@ fun QuoteOrderItemCard(
                     // 1행
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = "🌱 $species",
+                            text = " $species",
                             fontWeight = FontWeight.ExtraBold,
                             fontSize = 15.sp,
                             color = Color.Black
@@ -2965,8 +2406,8 @@ fun QuoteOrderItemCard(
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = quality,
-                            fontSize = 11.sp,
-                            color = Color(0xFFE65100),
+                            fontSize = 13.sp,
+                            color = NamuColors.primary,
                             fontWeight = FontWeight.ExtraBold,
                             modifier = Modifier
                                 .background(Color(0xFFFFF3E0), RoundedCornerShape(4.dp))
@@ -2976,7 +2417,7 @@ fun QuoteOrderItemCard(
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
                                 text = specText,
-                                fontSize = 11.sp,
+                                fontSize = 13.sp,
                                 color = Color(0xFF455A64),
                                 fontWeight = FontWeight.ExtraBold,
                                 modifier = Modifier
@@ -2992,11 +2433,11 @@ fun QuoteOrderItemCard(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             text = farmName,
-                            fontSize = 10.sp,
+                            fontSize = 13.sp,
                             color = Color.White,
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier
-                                .background(Color(0xFF1976D2), RoundedCornerShape(4.dp))
+                                .background(NamuColors.primary, RoundedCornerShape(4.dp))
                                 .padding(horizontal = 6.dp, vertical = 2.dp)
                         )
 
@@ -3004,7 +2445,7 @@ fun QuoteOrderItemCard(
 
                         Text(
                             text = "도매가: ${String.format("%,d", wholesalePrice)}원",
-                            fontSize = 12.sp,
+                            fontSize = 13.sp,
                             color = Color.Gray,
                             fontWeight = FontWeight.Medium
                         )
@@ -3014,7 +2455,7 @@ fun QuoteOrderItemCard(
                 Column(horizontalAlignment = Alignment.End) {
                     Text(
                         text = "주문수량",
-                        fontSize = 11.sp,
+                        fontSize = 13.sp,
                         color = Color.Gray
                     )
                     Text(
@@ -3101,7 +2542,7 @@ fun AddressSearchDialog(
                         text = "배송정보 입력",
                         fontSize = 18.sp,
                         fontWeight = FontWeight.ExtraBold,
-                        color = Color(0xFF1565C0)
+                        color = NamuColors.primary
                     )
                 }
 
@@ -3133,8 +2574,8 @@ fun AddressSearchDialog(
                                 Column(modifier = Modifier.padding(12.dp)) {
                                     Text(
                                         text = "[${juso.zipNo}]",
-                                        fontSize = 12.sp,
-                                        color = Color(0xFF2E7D32),
+                                        fontSize = 13.sp,
+                                        color = NamuColors.primary,
                                         fontWeight = FontWeight.Bold
                                     )
                                     Text(
@@ -3144,7 +2585,7 @@ fun AddressSearchDialog(
                                     )
                                     Text(
                                         text = "지번: ${juso.jibunAddr}",
-                                        fontSize = 12.sp,
+                                        fontSize = 13.sp,
                                         color = Color.Gray
                                     )
                                 }
@@ -3160,8 +2601,8 @@ fun AddressSearchDialog(
                         Column(modifier = Modifier.padding(12.dp)) {
                             Text(
                                 text = "[${selectedJuso!!.zipNo}]",
-                                fontSize = 12.sp,
-                                color = Color(0xFF2E7D32),
+                                fontSize = 13.sp,
+                                color = NamuColors.primary,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
@@ -3172,7 +2613,7 @@ fun AddressSearchDialog(
                             )
                             Text(
                                 text = selectedJuso!!.jibunAddr,
-                                fontSize = 12.sp,
+                                fontSize = 13.sp,
                                 color = Color.Gray
                             )
                         }
@@ -3203,7 +2644,7 @@ fun AddressSearchDialog(
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    // ✅ 비고란 2줄
+                    //  비고란 2줄
                     OutlinedTextField(
                         value = note,
                         onValueChange = { note = it },
@@ -3243,7 +2684,7 @@ fun AddressSearchDialog(
                                 )
                             },
                             modifier = Modifier.weight(1f).height(50.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1976D2))
+                            colors = ButtonDefaults.buttonColors(containerColor = NamuColors.primary)
                         ) {
                             Text("저장", color = Color.White, fontWeight = FontWeight.Bold)
                         }

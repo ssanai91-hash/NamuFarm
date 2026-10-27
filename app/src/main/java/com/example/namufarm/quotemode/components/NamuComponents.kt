@@ -366,3 +366,39 @@ internal fun shortNamuTime(at: Long): String {
     if (sameDay(now, day)) return "어제 " + format.format(day.time)
     return java.text.SimpleDateFormat("MM.dd", Locale.KOREA).apply { timeZone = zone }.format(day.time)
 }
+
+internal val NAMU_INITIALS = listOf("ㄱ", "ㄴ", "ㄷ", "ㄹ", "ㅁ", "ㅂ", "ㅅ", "ㅇ", "ㅈ", "ㅊ", "ㅋ", "ㅌ", "ㅍ", "ㅎ")
+internal fun namuInitials(text: String): String {
+    val initials = "ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ"
+    return text.map { c ->
+        val initial = if (c.code in 0xAC00..0xD7A3) initials[(c.code - 0xAC00) / 588] else c
+        when (initial) { 'ㄲ' -> 'ㄱ'; 'ㄸ' -> 'ㄷ'; 'ㅃ' -> 'ㅂ'; 'ㅆ' -> 'ㅅ'; 'ㅉ' -> 'ㅈ'; else -> initial }
+    }.joinToString("")
+}
+internal fun namuMatchesInitial(name: String, db: String?, selected: String): Boolean =
+    selected == "전체" || namuInitials(db?.takeIf { it.isNotBlank() } ?: name).firstOrNull()?.toString() == selected
+internal fun namuSearchMatches(name: String, query: String, vararg other: String): Boolean =
+    query.isBlank() || (listOf(name) + other).any {
+        it.contains(query.trim(), ignoreCase = true) || namuInitials(it).contains(query.trim(), ignoreCase = true)
+    }
+
+@Composable
+internal fun NamuChosungRow(selected: String, total: Int, onSelect: (String) -> Unit, available: (String) -> Boolean) {
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        items(listOf("전체") + NAMU_INITIALS) { initial ->
+            val active = selected == initial
+            val enabled = initial == "전체" || available(initial)
+            Surface(onClick = { onSelect(initial) }, enabled = enabled,
+                modifier = if (initial == "전체") Modifier.heightIn(min = 40.dp) else Modifier.size(40.dp),
+                shape = androidx.compose.foundation.shape.CircleShape,
+                border = BorderStroke(1.dp, if (!enabled) Color(0xFFE3E8E5) else if (active) NamuColors.primary else Color(0xFFC9D4CE)),
+                color = if (!enabled) Color(0xFFF6F7F6) else if (active) NamuColors.primary else Color.White) {
+                Box(Modifier.then(if (initial == "전체") Modifier.padding(horizontal = 14.dp, vertical = 8.dp) else Modifier),
+                    contentAlignment = Alignment.Center) {
+                    Text(if (initial == "전체") "전체 $total" else initial, fontSize = 15.sp, fontWeight = FontWeight.Bold,
+                        color = if (!enabled) Color(0xFF9AA59F) else if (active) Color.White else Color(0xFF1F573B))
+                }
+            }
+        }
+    }
+}

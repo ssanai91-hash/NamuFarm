@@ -384,6 +384,23 @@ class ManagementViewModel(
         }
     }
 
+    /** Absolute inline-card quantity; preserve the original cart identity and stock bound. */
+    fun updateCartQuantity(item: SellingDisplayRow, qty: Int) {
+        _uiState.update { state ->
+            if (qty < 0 || qty > item.quantity) return@update state.copy(message = "재고 수량(${item.quantity}주)을 초과할 수 없습니다.")
+            val cart = state.estimateCart.toMutableList()
+            val index = cart.indexOfFirst {
+                it.item.farmId == item.farmId && it.item.speciesId == item.speciesId &&
+                    it.item.age == item.age && it.item.quality == item.quality &&
+                    it.item.size == item.size && it.item.plantType == item.plantType
+            }
+            if (qty == 0) { if (index >= 0) cart.removeAt(index) }
+            else if (index >= 0) cart[index] = cart[index].copy(orderQuantity = qty)
+            else cart.add(CartItem(item, qty))
+            state.copy(estimateCart = cart)
+        }
+    }
+
     fun removeCartItem(index: Int) {
         _uiState.update { currentState ->
             val currentCart = currentState.estimateCart.toMutableList()
