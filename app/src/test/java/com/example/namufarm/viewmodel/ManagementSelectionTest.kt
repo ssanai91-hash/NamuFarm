@@ -75,7 +75,8 @@ class ManagementSelectionTest {
 
     private suspend fun awaitLoads() {
         withTimeout(5000) {
-            viewModel.viewModelScope.coroutineContext[Job]!!.children.toList().joinAll()
+            viewModel.viewModelScope.coroutineContext[Job]!!.children
+                .filterNot { it == viewModel.pendingSyncObserver }.toList().joinAll()
         }
     }
 

@@ -54,6 +54,13 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.Cached
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import com.example.namufarm.viewmodel.ManagementUiState
+import com.example.namufarm.viewmodel.PendingSyncClearStep
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 data class ParsedSummaryItem(
     val species: String,
@@ -66,6 +73,85 @@ data class ParsedSummaryItem(
     val farmName: String,
     val wholesalePrice: Int
 )
+
+/** A plain title: no click modifier, callbacks, or ViewModel access. */
+@Composable
+internal fun SellingModeTitle() {
+    Text(
+        text = "나무팜 매매모드",
+        fontWeight = FontWeight.ExtraBold,
+        color = Color.White
+    )
+}
+
+@Composable
+private fun PendingSyncDialog(
+    state: ManagementUiState,
+    onSync: () -> Unit,
+    onClose: () -> Unit,
+    onRequestClear: () -> Unit,
+    onContinue: () -> Unit,
+    onCancel: () -> Unit,
+    onDelete: () -> Unit
+) {
+    val step = state.pendingSyncClearStep
+    if (step == PendingSyncClearStep.NONE) {
+        AlertDialog(
+            onDismissRequest = onClose,
+            title = { Text("전송 대기") },
+            text = {
+                Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("전송 대기 ${state.pendingSyncCount}건")
+                    val oldest = state.oldestPendingAt?.let {
+                        SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.KOREA).format(Date(it))
+                    } ?: "없음"
+                    Text("가장 오래된 대기 시각: $oldest")
+                    state.lastSyncError?.takeIf { it.isNotBlank() }?.let { Text("마지막 동기화 오류: $it") }
+                }
+            },
+            confirmButton = {
+                Column(horizontalAlignment = Alignment.End) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        TextButton(onClick = onClose) { Text("닫기") }
+                        Button(onClick = onSync) { Text("다시 동기화") }
+                    }
+                    TextButton(onClick = onRequestClear, enabled = state.pendingSyncCount > 0) {
+                        Text("문제 해결: 전송 대기 비우기", color = Color.Gray, fontSize = 12.sp)
+                    }
+                }
+            }
+        )
+    } else {
+        val cancelFocus = remember { FocusRequester() }
+        val first = step == PendingSyncClearStep.FIRST_CONFIRMATION
+        val count = state.pendingSyncDeleteCount
+        AlertDialog(
+            onDismissRequest = { if (!state.isClearingPendingSync) onCancel() },
+            title = { Text(if (first) "전송 대기 비우기" else "전송 대기 최종 확인") },
+            text = {
+                Text(if (first)
+                    "아직 서버에 올라가지 않은 변경 ${count}건이 영구히 삭제됩니다.\n먼저 [다시 동기화]를 시도해 보세요."
+                else "전송 대기 ${count}건을 백업한 뒤 영구히 삭제합니다. 계속하시겠습니까?")
+            },
+            confirmButton = {
+                if (first) {
+                    TextButton(onClick = onContinue) { Text("계속") }
+                } else {
+                    Button(
+                        onClick = onDelete,
+                        enabled = !state.isClearingPendingSync,
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    ) { Text("${count}건 삭제") }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = onCancel, enabled = !state.isClearingPendingSync,
+                    modifier = Modifier.focusRequester(cancelFocus)) { Text("취소") }
+                LaunchedEffect(step) { cancelFocus.requestFocus() }
+            }
+        )
+    }
+}
 
 fun parseSummaryLine(line: String): ParsedSummaryItem? {
     val parts = line.split("|")
@@ -196,6 +282,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
     val context = LocalContext.current
 
     var showAddressSearch by remember { mutableStateOf(false) }
+    var showPendingSyncDialog by remember { mutableStateOf(false) }
 
     // 🚨 1. 상태 변수들을 [무조건] 먼저 선언해야 해! (여기가 핵심)
     var showCartDialog by remember { mutableStateOf(false) }
@@ -288,12 +375,18 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
         topBar = {
             TopAppBar(
                 title = {
-                    Text(
-                        text = "나무팜 매매모드",
-                        fontWeight = FontWeight.ExtraBold,
-                        color = Color.White,
-                        modifier = Modifier.clickable { viewModel.forceResetSyncQueue() } // 🚨 요 방아쇠 한 줄만 추가!
-                    )
+                    Column {
+                        SellingModeTitle()
+                        if (uiState.pendingSyncCount > 0) {
+                            TextButton(
+                                onClick = { showPendingSyncDialog = true },
+                                modifier = Modifier.height(24.dp),
+                                contentPadding = PaddingValues(0.dp)
+                            ) {
+                                Text("전송 대기 ${uiState.pendingSyncCount}건", color = Color.White, fontSize = 12.sp)
+                            }
+                        }
+                    }
                 },
                 windowInsets = WindowInsets(0, 0, 0, 0),
                 // Match the selected trading tab with a calm navy header.
@@ -670,6 +763,18 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
             }
             Spacer(modifier = Modifier.height(100.dp))
         }
+    }
+
+    if (showPendingSyncDialog) {
+        PendingSyncDialog(
+            state = uiState,
+            onSync = { viewModel.syncDataWithGoogleSheet() },
+            onClose = { viewModel.cancelPendingSyncClear(); showPendingSyncDialog = false },
+            onRequestClear = { viewModel.requestPendingSyncClear() },
+            onContinue = { viewModel.continuePendingSyncClear() },
+            onCancel = { viewModel.cancelPendingSyncClear() },
+            onDelete = { viewModel.backupAndClearConfirmedPendingSync(context) }
+        )
     }
 
     // 🚨 1. 견적서 다이얼로그 (문자 전송 및 전화번호 입력 포함)

@@ -9,6 +9,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.update // 🚨 핵심 방패 추가!
 import kotlinx.coroutines.launch
 import com.example.namufarm.data.SyncManager
@@ -16,6 +17,12 @@ import com.example.namufarm.data.remote.JusoItem
 import com.example.namufarm.data.remote.RetrofitClient
 import com.example.namufarm.data.remote.SheetOrderItemDto
 import com.google.gson.Gson
+import java.io.File
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import java.util.concurrent.atomic.AtomicBoolean
+
+enum class PendingSyncClearStep { NONE, FIRST_CONFIRMATION, FINAL_CONFIRMATION }
 
 data class CartItem(val item: SellingDisplayRow, val orderQuantity: Int)
 data class CallLogItem(val name: String?, val number: String)
@@ -25,6 +32,12 @@ data class ManagementUiState(
     val speciesList: List<SpeciesEntity> = emptyList(),
     val selectedChosung: String = "ㄱ",
     val message: String? = null,
+    val pendingSyncCount: Int = 0,
+    val oldestPendingAt: Long? = null,
+    val lastSyncError: String? = null,
+    val pendingSyncClearStep: PendingSyncClearStep = PendingSyncClearStep.NONE,
+    val pendingSyncDeleteCount: Int = 0,
+    val isClearingPendingSync: Boolean = false,
 
     val jusoResults: List<JusoItem> = emptyList(),
     val allSellingInventory: List<SellingDisplayRow> = emptyList(),
@@ -57,13 +70,29 @@ data class ManagementUiState(
 
 class ManagementViewModel(
     private val dao: ManagementDao,
-    private val syncManager: SyncManager
+    private val syncManager: SyncManager,
+    private val writePendingSyncBackup: (Context, List<PendingSyncEntity>) -> File = { context, rows ->
+        PendingSyncBackup.write(context.filesDir, rows)
+    }
 ) : ViewModel()
 {
     private val _uiState = MutableStateFlow(ManagementUiState())
     val uiState: StateFlow<ManagementUiState> = _uiState.asStateFlow()
+    private var confirmedPendingSync: List<PendingSyncEntity> = emptyList()
+    private val clearingPendingSync = AtomicBoolean(false)
+    internal val pendingSyncObserver: Job
 
     init {
+        pendingSyncObserver = viewModelScope.launch(Dispatchers.IO) {
+            dao.observePendingSync().collect { pending ->
+                _uiState.update { state -> state.copy(
+                    pendingSyncCount = pending.size,
+                    oldestPendingAt = pending.minOfOrNull { it.createdAt },
+                    lastSyncError = pending.asReversed().firstOrNull { it.lastError.isNotBlank() }
+                        ?.lastError ?: state.lastSyncError
+                ) }
+            }
+        }
         loadInitialData()
         loadTodayData()
     }
@@ -81,6 +110,7 @@ class ManagementViewModel(
 
                 // 마스터 데이터 강제 1회 다운로드
                 val initialSync = syncManager.masters.sync()
+                recordSyncOutcome(initialSync)
 
                 // 다운로드 끝났으니 DB에서 다시 읽어오기
                 allSpecies = dao.getAllSpecies()
@@ -563,6 +593,7 @@ class ManagementViewModel(
                 itemsToDeduct = itemsToDeduct
             )
 
+            recordImmediateSyncFailure(isCloudSuccess)
             if (isCloudSuccess) {
                 dao.deletePendingSync(pendingId)
             }
@@ -623,6 +654,7 @@ class ManagementViewModel(
 
                     val isCloudSuccess = syncManager.cancelOrderOnSheet(order.orderNumber)
 
+                    recordImmediateSyncFailure(isCloudSuccess)
                     if (isCloudSuccess) {
                         dao.deletePendingSync(pendingId)
                     }
@@ -829,6 +861,7 @@ class ManagementViewModel(
                 speciesName = speciesName
             )
 
+            recordImmediateSyncFailure(isCloudSuccess)
             if (isCloudSuccess) {
                 dao.deletePendingSync(pendingId)
             }
@@ -855,6 +888,7 @@ class ManagementViewModel(
         viewModelScope.launch(Dispatchers.IO) {
             _uiState.update { it.copy(message = "🔄 농원·묘목 운영 시트 동기화 중...") }
             val result = syncManager.masters.sync(kind)
+            recordSyncOutcome(result)
             refreshLocalState()
             _uiState.update { it.copy(message = result.message) }
         }
@@ -1074,6 +1108,7 @@ class ManagementViewModel(
                 note = note
             )
 
+            recordImmediateSyncFailure(isCloudSuccess)
             if (isCloudSuccess) {
                 dao.deletePendingSync(pendingId)
                 _uiState.update { it.copy(message = "✅ 로컬 배송정보 + 시트 저장 완료") }
@@ -1087,6 +1122,7 @@ class ManagementViewModel(
         viewModelScope.launch(Dispatchers.IO) {
             val result = syncManager.masters.saveFarm(FarmEntity(farmId, farmName.trim(),
                 address.trim(), phone.trim(), memo.trim()))
+            recordSyncOutcome(result)
             refreshLocalState()
             _uiState.update { state -> state.copy(
                 selectedFarm = state.farmList.find { it.farmId == result.localId },
@@ -1097,6 +1133,7 @@ class ManagementViewModel(
     fun deleteFarm(farmId: Int) {
         viewModelScope.launch(Dispatchers.IO) {
             val result = syncManager.masters.deleteFarm(farmId)
+            recordSyncOutcome(result)
             refreshLocalState()
             _uiState.update { it.copy(selectedFarm = null, selectedSpecies = null,
                 inventoryList = emptyList(), speciesList = emptyList(),
@@ -1110,6 +1147,7 @@ class ManagementViewModel(
         viewModelScope.launch(Dispatchers.IO) {
             val result = syncManager.masters.saveSpecies(SpeciesEntity(speciesId, speciesName.trim(),
                 nameFarm.trim(), chosung.trim(), category.trim(), memo.trim(), isActive))
+            recordSyncOutcome(result)
             refreshLocalState()
             _uiState.update { it.copy(message = result.message) }
         }
@@ -1118,15 +1156,86 @@ class ManagementViewModel(
     fun deleteSpecies(speciesId: Int) {
         viewModelScope.launch(Dispatchers.IO) {
             val result = syncManager.masters.deleteSpecies(speciesId)
+            recordSyncOutcome(result)
             refreshLocalState()
             _uiState.update { it.copy(message = result.message) }
         }
     }
-    // 🚨 [추가] 꽉 막힌 동기화 큐를 강제로 날려버리는 관리자 비상용 함수
-    fun forceResetSyncQueue() {
+    private fun recordImmediateSyncFailure(success: Boolean) {
+        if (!success) _uiState.update { it.copy(
+            lastSyncError = "농원·묘목 외 전송은 아직 연결되지 않았습니다. 기기 데이터와 대기 기록을 유지합니다."
+        ) }
+    }
+
+    private fun recordSyncOutcome(result: MasterSyncOutcome) {
+        val pending = dao.getAllPendingSync()
+        _uiState.update { it.copy(
+            pendingSyncCount = pending.size,
+            oldestPendingAt = pending.minOfOrNull { row -> row.createdAt },
+            lastSyncError = if (result.success) pending.asReversed()
+                .firstOrNull { row -> row.lastError.isNotBlank() }?.lastError else result.message
+        ) }
+    }
+
+    fun requestPendingSyncClear() {
+        if (clearingPendingSync.get()) return
         viewModelScope.launch(Dispatchers.IO) {
-            dao.clearAllPendingSync()
-            _uiState.update { it.copy(message = "🗑️ 동기화 큐가 강제 초기화되었습니다. 이제 동기화가 가능합니다.") }
+            confirmedPendingSync = dao.getAllPendingSync()
+            if (confirmedPendingSync.isEmpty()) {
+                _uiState.update { it.copy(message = "전송 대기가 없습니다.") }
+                return@launch
+            }
+            _uiState.update { it.copy(
+                pendingSyncClearStep = PendingSyncClearStep.FIRST_CONFIRMATION,
+                pendingSyncDeleteCount = confirmedPendingSync.size
+            ) }
+        }
+    }
+
+    fun continuePendingSyncClear() {
+        _uiState.update {
+            if (it.pendingSyncClearStep == PendingSyncClearStep.FIRST_CONFIRMATION)
+                it.copy(pendingSyncClearStep = PendingSyncClearStep.FINAL_CONFIRMATION) else it
+        }
+    }
+
+    fun cancelPendingSyncClear() {
+        if (clearingPendingSync.get()) return
+        confirmedPendingSync = emptyList()
+        _uiState.update { it.copy(pendingSyncClearStep = PendingSyncClearStep.NONE, pendingSyncDeleteCount = 0) }
+    }
+
+    fun backupAndClearConfirmedPendingSync(context: Context) {
+        if (_uiState.value.pendingSyncClearStep != PendingSyncClearStep.FINAL_CONFIRMATION ||
+            !clearingPendingSync.compareAndSet(false, true)) return
+        val confirmed = confirmedPendingSync.toList()
+        _uiState.update { it.copy(isClearingPendingSync = true) }
+        viewModelScope.launch(Dispatchers.IO) {
+            var backup: File? = null
+            try {
+                val deleted = dao.backupAndClearPendingSync(confirmed) { rows ->
+                    backup = writePendingSyncBackup(context.applicationContext, rows)
+                }
+                _uiState.update { it.copy(message = when {
+                    deleted == null -> "전송 대기 내용이 변경되어 삭제하지 않았습니다. 다시 확인해주세요."
+                    deleted == 0 -> "전송 대기가 없습니다."
+                    else -> "전송 대기 ${deleted}건 삭제 · 백업: ${backup!!.name}"
+                }) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _uiState.update { it.copy(message = if (backup == null)
+                    "백업 저장에 실패해 삭제하지 않았습니다"
+                else "전송 대기 삭제에 실패했습니다 · 백업: ${backup!!.name}") }
+            } finally {
+                confirmedPendingSync = emptyList()
+                _uiState.update { it.copy(
+                    pendingSyncClearStep = PendingSyncClearStep.NONE,
+                    pendingSyncDeleteCount = 0,
+                    isClearingPendingSync = false
+                ) }
+                clearingPendingSync.set(false)
+            }
         }
     }
 }
