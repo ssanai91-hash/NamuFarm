@@ -110,7 +110,7 @@ class SalesWorkspace:
         if not connected:
             self._sales_connection()
         rows, cursor, deleted = self._pages("list_sales", "sales")
-        self.vault.backup()
+        self.vault.backup("download_sales", min_interval=60 * 60)
         # Missing or remotely deleted rows never erase a local order during a union download.
         marker = {**self.vault.snapshot_marker(), "sales": cursor, "deletedSales": sorted(deleted)}
         self._merge_sales(rows, server=True, marker=marker)
@@ -202,7 +202,7 @@ class SalesWorkspace:
         folder = Path(folder)
         folder.mkdir(parents=True, exist_ok=True)
         view = self.view()
-        self.vault.backup()
+        self.vault.backup("export_local")
         write_confirmed_quotes(folder / "나무팜-확정견적.xlsx", self._local_quotes())
         write_sales(folder / "나무팜-판매관리.xlsx", self.vault.rows("sales"), self.vault.pending(), self.api.url, view["sales"])
         self.transfer_notice = f"로컬 내보내기 완료 · {folder}"
@@ -268,8 +268,9 @@ class SalesWorkspace:
                     conflicts.append(quote.get("requestReceiptNumber") or quote["id"])
             else:
                 local_quotes.append(quote)
-        self.vault.backup()
+        self.vault.backup("import_local")
         self._merge_sales(sales, imported_operations=operations, quotes=local_quotes, sold_labels=sold_labels)
         if conflicts:
             self.transfer_notice += " · 견적 충돌로 기존 자료 유지: " + ", ".join(conflicts[:10])
         return self.local_copy_view()
+

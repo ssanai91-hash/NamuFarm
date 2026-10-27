@@ -2,6 +2,8 @@ import hashlib
 import hmac
 import json
 import os
+import re
+import time
 import sqlite3
 import threading
 from datetime import datetime
@@ -234,14 +236,42 @@ class Vault:
                 index = self._index("sales", optimistic["metadata"]["orderNumber"])
                 db.execute("INSERT OR REPLACE INTO cache VALUES ('sales',?,?)", (index, self._seal(optimistic, "sales:" + index)))
 
-    def backup(self):
-        """SQLite's backup API also captures committed journal/WAL data."""
+    def backup(self, reason, min_interval=None):
+        """Keep 30 generated snapshots; only routine downloads may be throttled (seconds)."""
         folder = self.path.parent / "백업"
-        folder.mkdir(parents=True, exist_ok=True)
-        target = folder / (datetime.now().strftime("namufarm-%Y%m%d-%H%M%S-%f") + ".db")
-        with self.mutex, closing(sqlite3.connect(self.path)) as source, closing(sqlite3.connect(target)) as destination:
-            source.backup(destination)
-        return target
+        with self.mutex:
+            folder.mkdir(parents=True, exist_ok=True)
+            candidates = []
+            for path in folder.glob("namufarm-*.db"):
+                # Protect unrelated files, even if their name has the same prefix.
+                if not re.fullmatch(r"namufarm-\d{8}-\d{6}-\d{6}\.db", path.name) or path.is_symlink():
+                    continue
+                try:
+                    if path.is_file():
+                        candidates.append((path.stat().st_mtime, path))
+                except OSError:
+                    continue
+            if min_interval is not None and candidates and time.time() - max(t for t, _ in candidates) < min_interval:
+                return None
+            target = folder / (datetime.now().strftime("namufarm-%Y%m%d-%H%M%S-%f") + ".db")
+            try:
+                with closing(sqlite3.connect(self.path)) as source, closing(sqlite3.connect(target)) as destination:
+                    source.backup(destination)
+            except Exception:
+                try:
+                    target.unlink()
+                except OSError:
+                    pass
+                raise
+            # Pin this snapshot even if system clock/old mtimes are ahead of it.
+            keep = {target, *(path for _, path in sorted(candidates, key=lambda item: (item[0], item[1].name), reverse=True)[:29])}
+            for _, path in candidates:
+                if path not in keep:
+                    try:
+                        path.unlink()
+                    except OSError:
+                        pass
+            return target
 
     def save_local_sales(self, sales, operations, hidden, *, quotes=None, marker=None, sold_labels=None):
         """Commit a merge/delete, its upload journal and local deletion markers together."""
@@ -307,4 +337,5 @@ class Vault:
                 # Server retention must never silently delete this PC's sales history.
                 if expired:
                     db.execute("DELETE FROM cache WHERE kind=? AND id=?", (kind, index))
+
 

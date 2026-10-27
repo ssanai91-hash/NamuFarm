@@ -75,7 +75,7 @@ class Manager(SoldNumbers, SalesWorkspace):
         saved = self.vault.preference("confirmed_quotes")
         if saved is not None:
             return [seller_note_draft(draft) for draft in saved]
-        self.vault.backup()
+        self.vault.backup("confirmed_excel_conversion")
         if not self.confirmed_quotes_path.exists():
             require(not self.vault.preference("confirmed_excel_initialized", False),
                     "확정 견적 엑셀을 찾을 수 없습니다. 기존 파일을 원래 위치로 복원해주세요.")
@@ -1138,7 +1138,7 @@ class Manager(SoldNumbers, SalesWorkspace):
         row = next((r for r in self.vault.rows("sales") if r["metadata"]["orderNumber"] == number), None)
         require(row is not None and row["metadata"]["revision"] == expected_revision,
                 "선택한 판매 기록을 다시 조회해주세요.")
-        self.vault.backup()
+        self.vault.backup("delete_sale")
         remaining = [r for r in self.vault.rows("sales") if r["metadata"]["orderNumber"] != number]
         operations = [op for op in self.vault.pending() if self._operation_number(op) != number]
         quotes = self._local_quotes()
@@ -1172,7 +1172,7 @@ class Manager(SoldNumbers, SalesWorkspace):
         # Re-read before discarding so another device's newer change is not replaced by an old preview.
         fresh = self.conflict_preview()
         require(fresh["remote"]["fingerprint"] == preview["remote"]["fingerprint"], "서버 기록이 다시 변경되었습니다. 충돌 내용을 새로 확인해주세요.")
-        self.vault.backup()
+        self.vault.backup("resolve_conflict")
         sales = [r for r in self.vault.rows("sales") if r["metadata"]["orderNumber"] != number]
         self.vault.save_local_sales([*sales, fresh["remote"]],
                                    [op for op in pending if self._operation_number(op) != number],
