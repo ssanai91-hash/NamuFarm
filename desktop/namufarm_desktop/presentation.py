@@ -126,3 +126,19 @@ class DetailPanel(QFrame):
             qty.setStyleSheet('font-size:17px;font-weight:700;')
             layout.addWidget(qty)
             self.body.addWidget(row)
+
+
+def order_stage(row):
+    """Classify existing records for display only; never introduce persisted states."""
+    from .commerce import tracking_number, shipping_prepared
+    status = row['metadata']['status']
+    order = row['private']['order']
+    if status in ('구매취소', '주문취소'):
+        return '구매취소'
+    if status in ('배송완료', '판매완료'):
+        return '배송완료'
+    if status not in ('입금확인', '구매확정'):
+        return status
+    if tracking_number(order):
+        return '송장등록'
+    return '배송준비' if shipping_prepared(order) else '입금확인'

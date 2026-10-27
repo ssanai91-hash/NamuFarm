@@ -14,7 +14,7 @@ from PySide6.QtGui import (QColor, QDesktopServices, QFont, QFontMetricsF, QImag
 from PySide6.QtPrintSupport import QPrinter, QPrintDialog
 from PySide6.QtWidgets import (QApplication, QBoxLayout, QButtonGroup, QCheckBox, QComboBox, QDialog, QDoubleSpinBox, QFileDialog, QFormLayout,
     QFrame, QGridLayout, QGroupBox, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QListWidget,
-    QMessageBox, QPlainTextEdit, QPushButton, QRadioButton, QScrollArea, QSplitter, QStackedWidget,
+    QMessageBox, QMenu, QPlainTextEdit, QPushButton, QRadioButton, QScrollArea, QSplitter, QStackedWidget,
     QSizePolicy, QStyle, QSystemTrayIcon, QTableWidget, QTableWidgetItem, QTextBrowser, QVBoxLayout, QWidget, QSpinBox)
 
 from . import __version__
@@ -36,7 +36,7 @@ from .inquiry_ui import InquiryPage
 from .nursery import NurseryStore
 from .quote_species import SpeciesNameEditor, QuoteSpeciesPicker
 from .list_filters import ListPeriodFilter, first_date
-from .presentation import DetailPanel, phone_text, date_text
+from .presentation import DetailPanel, phone_text, date_text, order_stage
 
 STYLE = workspace_style()
 
@@ -3981,9 +3981,11 @@ class SellerWindow(MainWindow):
         self.draft_table.set_column_layout(
             ((3, 2, 174), (1, .5, 112), (7, 3, 150), (8, 1, 108), (9, .5, 76)) if compact else
             ((3, 2, 215), (1, .5, 140), (7, 3, 235), (8, 1, 155), (9, .5, 100)))
-        self.sale_table.set_column_layout(
-            ((3, 2, 174), (4, .6, 116), (8, 3, 144), (9, 1, 112), (1, .5, 92), (2, .5, 106)) if compact else
-            ((3, 2, 200), (4, .6, 140), (8, 3, 210), (9, 1, 145), (1, .5, 125), (2, .5, 144)))
+        self.sale_table.set_column_layout(((0, 1, 152), (3, .8, 112), (8, 1.2, 100), (9, .6, 92), (1, .6, 88), (2, .5, 72)))
+        for panel_name in ("request_detail", "sale_detail"):
+            panel = getattr(self, panel_name, None)
+            if panel:
+                panel.setFixedWidth(360 if self.width() < 1500 else 400)
 
     def run_job(self, title, work, on_success=None, refresh_on_error=True):
         starting = self.task is None
@@ -4264,7 +4266,7 @@ class SellerWindow(MainWindow):
         self.sale_search.textChanged.connect(lambda: self.refresh_filtered_list("sale"))
         self.state_filter = QComboBox()
         self.state_filter.setParent(page)
-        self.state_filter.addItems(["전체 상태", "입금확인", "배송완료", "구매취소"])
+        self.state_filter.addItems(["전체 상태", "입금확인", "배송준비", "송장등록", "배송완료"])
         self.state_filter.setCurrentText("입금확인")
         self.state_filter.currentIndexChanged.connect(lambda: self.refresh_filtered_list("sale"))
         self.sale_period = ListPeriodFilter("all")
@@ -4289,11 +4291,32 @@ class SellerWindow(MainWindow):
                        self.sales_export_button, self.sales_import_button):
             tools.addWidget(widget)
         layout.addLayout(bar)
-        self.sales_filters = {}
+        self.state_filter.hide()
+        self.sale_search.setFixedWidth(340)
+        tabs, self.sales_filters = self.filter_buttons(
+            (("입金확인".replace("金", "금"), "입금확인"), ("배송준비", "배송준비"), ("송장등록", "송장등록"),
+             ("배송완료", "배송완료"), ("전체", "전체 상태")), self.set_sales_filter)
+        for tab in self.sales_filters.values():
+            tab.setObjectName("stageTab")
+        layout.insertLayout(0, tabs)
+        self.sales_data_button = button("자료 관리 ▾")
+        self.sales_data_menu = QMenu(self)
+        self.sales_data_actions = []
+        for old_button in (self.sales_upload_button, self.sales_download_button, self.sales_export_button, self.sales_import_button):
+            old_button.hide()
+            action = self.sales_data_menu.addAction(old_button.text())
+            action.triggered.connect(old_button.click)
+            self.sales_data_actions.append((action, old_button))
+        self.sales_data_button.setMenu(self.sales_data_menu)
+        self.sales_data_menu.aboutToShow.connect(self.update_sales_menu)
+        self.header_actions.addWidget(self.sales_data_button)
+        self.sales_data_button.hide()
         self.sale_filter_summary = label("", "muted", True)
         layout.addWidget(self.sale_filter_summary)
         tools.addStretch(1)
-        layout.addLayout(tools)
+        self.sales_tools_box = QWidget(page)
+        self.sales_tools_box.setLayout(tools)
+        self.sales_tools_box.hide()
 
         self.sale_table = table([
             "주문번호", "상태", "주문일", "고객명", "연락처", "이메일",
@@ -4309,13 +4332,20 @@ class SellerWindow(MainWindow):
         self.sale_table.setWordWrap(False)
         self.sale_table.setTextElideMode(Qt.TextElideMode.ElideRight)
         self.sale_table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Fixed)
-        self.sale_table.set_column_layout(((3, 2, 200), (4, .6, 140), (8, 3, 210), (9, 1, 145), (1, .5, 125), (2, .5, 144)))
+        self.sale_table.set_column_layout(((0, 1, 152), (3, .8, 112), (8, 1.2, 100), (9, .6, 92), (1, .6, 88), (2, .5, 72)))
         self.sale_table.setItemDelegateForColumn(2, CompactDateDelegate(self.sale_table))
         self.sale_table.setItemDelegateForColumn(3, CustomerDelegate(self.sale_table))
         self.sale_table.setItemDelegateForColumn(1, StatusDelegate(self.sale_table))
         self.sale_table.itemSelectionChanged.connect(self.select_sale)
         self.sale_table.itemDoubleClicked.connect(self.open_customer_order)
-        layout.addWidget(self.sale_table, 1)
+        self.sale_splitter = QSplitter(Qt.Orientation.Horizontal)
+        self.sale_splitter.setChildrenCollapsible(False)
+        self.sale_detail = DetailPanel()
+        self.sale_splitter.addWidget(self.sale_table)
+        self.sale_splitter.addWidget(self.sale_detail)
+        self.sale_splitter.setSizes([700, 400])
+        self.sale_splitter.setStretchFactor(0, 1)
+        layout.addWidget(self.sale_splitter, 1)
         self.sale_more = button("50건 더 보기", lambda: self.more_list_rows("sale"))
         self.sale_more.hide()
         layout.addWidget(self.sale_more)
@@ -4327,10 +4357,23 @@ class SellerWindow(MainWindow):
         self.sale_delete_button = button("삭제", self.delete_selected_sale)
         self.sale_delete_button.setObjectName("danger")
         set_button_icon(self.sale_delete_button, "trash", "#a33827")
-        bottom.addWidget(self.sale_delete_button)
+        self.sale_delete_button.hide()
+        self.sale_delete_action = self.sales_data_menu.addAction("이 PC에서 삭제")
+        self.sale_delete_action.triggered.connect(self.sale_delete_button.click)
+        self.sales_data_actions.append((self.sale_delete_action, self.sale_delete_button))
         set_button_icon(self.customer_open_button, "orders", "#ffffff")
-        bottom.addWidget(self.customer_open_button)
-        layout.addLayout(bottom)
+        self.customer_open_button.setText("고객 · 배송정보 수정")
+        self.customer_open_button.setObjectName("secondary")
+        self.sale_detail_primary = button("배송 준비 완료", self.sale_next_action, True)
+        self.sale_detail.footer.addWidget(self.sale_detail_primary)
+        self.sale_detail.footer.addWidget(self.customer_open_button)
+        self.sale_quote_button = button("공식견적서 보기", self.print_saved_quote)
+        self.sale_detail.footer.addWidget(self.sale_quote_button)
+        self.sale_cancel_button = button("구매 취소", lambda: self.open_sale_action("cancel"))
+        self.sale_cancel_button.setProperty("role", "danger")
+        self.sale_detail.footer.addWidget(self.sale_cancel_button)
+        self.customer_list_status.hide()
+        self.refresh_sale_detail()
         return page
 
     def build_shipping(self):
@@ -4424,6 +4467,8 @@ class SellerWindow(MainWindow):
         self.update_page_title(index)
         if hasattr(self, "manual_quote_button"):
             self.manual_quote_button.setVisible(index == self.PAGE_REQUESTS)
+        if hasattr(self, "sales_data_button"):
+            self.sales_data_button.setVisible(index == self.PAGE_SALES)
         for i, widget in enumerate(self.nav):
             widget.setChecked(i == index)
         if index == self.PAGE_REQUESTS and self.workspace_ready:
@@ -4643,6 +4688,7 @@ class SellerWindow(MainWindow):
                                           and selected_shipping[0]["metadata"]["status"] == "입금확인"
                                           and shipping_ready(selected_shipping[0]["private"]["order"]))
         self.customer_open_button.setEnabled(ready and self.selected_sale is not None)
+        self.refresh_sale_detail()
         self.sale_delete_button.setEnabled(ready and self.selected_sale is not None)
         self.sale_delete_button.setToolTip(
             "이 PC의 DB에서만 삭제 · 서버 원본 유지" if self.selected_sale is not None
@@ -4756,7 +4802,7 @@ class SellerWindow(MainWindow):
         phone_query = query.replace("-", "").replace(" ", "")
         wanted = self.state_filter.currentText()
         for value, widget in self.sales_filters.items():
-            count = sum(value == "전체 상태" or customer_status_text(row["metadata"]["status"]) == value
+            count = sum(value == "전체 상태" or order_stage(row) == value
                         for row in self.data.get("sales", []))
             widget.setText(f"{'전체' if value == '전체 상태' else value} {count:,}")
             widget.setChecked(value == wanted)
@@ -4766,7 +4812,7 @@ class SellerWindow(MainWindow):
         for row in self.data.get("sales", []):
             meta = row["metadata"]
             order = row["private"]["order"]
-            display_status = customer_status_text(meta["status"])
+            display_status = order_stage(row)
             if wanted != "전체 상태" and display_status != wanted:
                 continue
             if not self.sale_period.matches(first_date(meta.get("paidAt"), meta.get("purchasedAt"), meta.get("orderDate"))):
@@ -4818,9 +4864,9 @@ class SellerWindow(MainWindow):
                 for item in meta.get("items", [])
             ) or "—"
             table_rows.append((
-                sale_number(row),
-                customer_status_text(meta["status"]),
-                timestamp(meta["orderDate"]),
+                sale_number(row) if sale_number(row).startswith("SOLD-") else "번호 발급 대기",
+                order_stage(row),
+                date_text(first_date(meta.get("paidAt"), meta.get("purchasedAt"), meta.get("orderDate"))),
                 order.get("customerName", ""),
                 order.get("customerPhone", ""),
                 order.get("customerEmail") or "—",
@@ -4833,14 +4879,12 @@ class SellerWindow(MainWindow):
         self.sale_table.blockSignals(True)
         self.sale_table.set_empty_message("조건에 맞는 판매 기록이 없습니다.\n검색 조건이나 상태를 바꿔 확인하세요.")
         fill_table(self.sale_table, table_rows)
-        center_table_columns(self.sale_table, (0, 1, 2, 3, 4, 6, 9))
-        customer_reference(self.sale_table, 3, 0)
         for index, row in enumerate(self.sale_rows):
-            if row["metadata"]["orderNumber"].startswith("PC_"):
-                # Keep the internal key for API calls, without drawing it under the name.
-                cell = self.sale_table.item(index, 3)
-                cell.setData(Qt.ItemDataRole.UserRole, None)
-                cell.setToolTip(row["private"]["order"].get("customerName", ""))
+            cell = self.sale_table.item(index, 3)
+            cell.setData(Qt.ItemDataRole.UserRole, phone_text(row["private"]["order"].get("customerPhone", "")))
+            cell.setToolTip(cell.text() + "\n" + phone_text(row["private"]["order"].get("customerPhone", "")))
+            self.sale_table.item(index, 9).setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            self.sale_table.item(index, 2).setToolTip(timestamp(first_date(row["metadata"].get("paidAt"), row["metadata"].get("purchasedAt"), row["metadata"].get("orderDate"))))
         self.sale_table.clearSelection()
         self.sale_table.setCurrentCell(-1, -1)
         self.sale_table.blockSignals(False)
@@ -4860,9 +4904,10 @@ class SellerWindow(MainWindow):
             f"목록 {len(self.sale_rows):,}건 · 입금확인 주문을 우선 표시합니다."
             if self.sale_rows else "조건에 맞는 판매·고객 기록이 없습니다."
         )
-        self.set_page_count(self.PAGE_SALES, matched_count)
+        self.set_page_count(self.PAGE_SALES, sum(order_stage(row) not in ("배송완료", "구매취소") for row in self.data.get("sales", [])))
         if self.selected_sale:
             self.select_sale()
+        self.refresh_sale_detail()
         self.update_controls()
 
     def select_sale(self):
@@ -4884,6 +4929,74 @@ class SellerWindow(MainWindow):
         else:
             self.customer_list_status.setText("주문을 선택하세요.")
         self.update_controls()
+
+    def update_sales_menu(self):
+        for action, original in self.sales_data_actions:
+            action.setEnabled(original.isEnabled())
+
+    def refresh_sale_detail(self):
+        if not hasattr(self, "sale_detail_primary"):
+            return
+        row = self.selected_sale
+        ready = bool(row and self.manager and not self.task and not getattr(self, "demo_mode", False))
+        self.sale_detail_primary.setEnabled(False)
+        self.sale_quote_button.setEnabled(ready and bool(row["private"].get("quoteDocumentJson")))
+        self.sale_cancel_button.setEnabled(ready and row["metadata"]["status"] in ("입금확인", "구매확정"))
+        if not row:
+            self.sale_detail.reset("목록에서 선택해주세요.")
+            self.sale_detail_primary.setText("주문을 선택해주세요")
+            return
+        order, meta = row["private"]["order"], row["metadata"]
+        stage = order_stage(row)
+        number = sale_number(row) if sale_number(row).startswith("SOLD-") else "번호 발급 대기"
+        self.sale_detail.reset(order.get("customerName", ""), number + " · " + date_text(first_date(meta.get("paidAt"), meta.get("purchasedAt"))), stage)
+        steps = ("입금확인", "배송준비", "송장등록", "배송완료")
+        current = steps.index(stage) if stage in steps else -1
+        progress = self.sale_detail.note(" → ".join(("✓ " if i < current else "◉ " if i == current else "○ ") + value for i, value in enumerate(steps)))
+        progress.setStyleSheet(f"color:{TOKENS['primary']};font-size:13px;")
+        self.sale_detail.items(meta.get("items", []))
+        # Display the existing stored components; do not recompute the business total.
+        self.sale_detail.info("묘목 금액", money(meta["totalPrice"] - (meta.get("shippingFee", 0) if meta.get("isPrepaid") else 0)))
+        self.sale_detail.info("택배비", f"선불 {meta.get('shippingFee', 0):,}원" if meta.get("isPrepaid") else "후불")
+        self.sale_detail.info("수령인", order.get("receiverName"))
+        address = " ".join(filter(None, (order.get("roadAddress"), order.get("detailAddress"))))
+        self.sale_detail.info("배송지", address or "입력 필요")
+        if not address:
+            warning = self.sale_detail.note("배송지를 입력해야 배송 준비를 할 수 있어요")
+            warning.setStyleSheet(f"background:{TOKENS['working-bg']};color:{TOKENS['quote-fg']};padding:8px;border-radius:8px;")
+        self.sale_detail_primary.setText({"입금확인": "배송 준비 완료", "배송준비": "송장번호 등록", "송장등록": "배송완료 처리", "배송완료": "완료된 주문입니다"}.get(stage, "완료된 주문입니다" if stage == "구매취소" else "고객 · 배송정보 확인"))
+        self.sale_detail_primary.setEnabled(ready and stage in ("입금확인", "배송준비", "송장등록"))
+
+    def open_sale_action(self, action):
+        self._customer_initial_action = action
+        self.open_customer_order()
+
+    def select_sale_shipping(self):
+        if not self.selected_sale:
+            return False
+        number = self.selected_sale["metadata"]["orderNumber"]
+        self.shipping_period.set_key("all")
+        self.shipping_filter.setCurrentIndex(0)
+        self.shipping_search.setText(number)
+        self.refresh_shipping()
+        for index, row in enumerate(self.shipping_rows):
+            if row["metadata"]["orderNumber"] == number:
+                self.shipping_table.selectRow(index)
+                self.navigate(self.PAGE_SHIPPING)
+                self.tracking_input.setFocus()
+                return True
+        return False
+
+    def sale_next_action(self):
+        if not self.selected_sale:
+            return
+        stage = order_stage(self.selected_sale)
+        if stage == "입금확인":
+            self.open_sale_action("prepare")
+        elif stage == "배송준비":
+            self.select_sale_shipping()
+        elif stage == "송장등록" and self.select_sale_shipping():
+            self.complete_shipping()
 
     def delete_selected_sale(self):
         if getattr(self, "demo_mode", False) or not self.manager or self.task or not self.selected_sale:
@@ -4949,6 +5062,11 @@ class SellerWindow(MainWindow):
             return
         row = self.sale_rows[index]
         dialog = CustomerOrderDialog(row, self)
+        initial_action = getattr(self, "_customer_initial_action", None)
+        self._customer_initial_action = None
+        if initial_action:
+            target_button = dialog.preparation_button if initial_action == "prepare" else dialog.cancel_order_button
+            QTimer.singleShot(0, target_button.click)
         self.timer.stop()
         result = dialog.exec()
         self.timer.start()
