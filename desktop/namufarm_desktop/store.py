@@ -111,7 +111,43 @@ class Vault:
             vault.purge()
             return vault
         except Exception:
-            raise UserError("이 Windows 계정에서 PC 보관함을 열 수 없습니다. 기존 파일은 보존했습니다.") from None
+            raise UserError("이 Windows 계정에서 열 수 없는 자료입니다. 기존 자료는 지우지 않았습니다.") from None
+
+    @classmethod
+    def archive_and_create_device(cls, path, protector=None):
+        """Archive the entire portable workspace. Never delete or overwrite an old directory."""
+        path = Path(path)
+        folder = path.parent
+        require(folder.name == "자료" and folder.is_dir() and not folder.is_symlink(),
+                "표준 자료 폴더에서만 새 자료로 시작할 수 있습니다. 기존 경로는 그대로 보존했습니다.")
+        stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        archived = folder.with_name("자료_보관_" + stamp)
+        suffix = 0
+        while True:
+            candidate = archived if not suffix else archived.with_name(archived.name + f"_{suffix}")
+            if candidate.exists():
+                suffix += 1
+                continue
+            try:
+                folder.rename(candidate)
+                archived = candidate
+                break
+            except FileExistsError:
+                suffix += 1
+        try:
+            vault = cls.create_device(path, protector)
+            return vault, archived
+        except Exception:
+            # Keep even a failed new folder; do not recursively delete any user file.
+            if folder.exists():
+                failed = folder.with_name("자료_새자료실패_" + stamp)
+                count = 0
+                while failed.exists():
+                    count += 1
+                    failed = folder.with_name("자료_새자료실패_" + stamp + f"_{count}")
+                folder.rename(failed)
+            archived.rename(folder)
+            raise
 
     def use_device_protection(self, protector=None):
         from . import device_protection

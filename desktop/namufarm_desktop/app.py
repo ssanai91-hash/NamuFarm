@@ -289,7 +289,7 @@ class MainWindow(QMainWindow):
         self.timer.start()
         self.update_controls()
 
-    def run_job(self, title, work, on_success=None, refresh_on_error=True):
+    def run_job(self, title, work, on_success=None, refresh_on_error=True, on_failure=None):
         if self.task:
             return
         self.message.setStyleSheet("")
@@ -297,6 +297,7 @@ class MainWindow(QMainWindow):
         refresh = refresh_on_error if callable(refresh_on_error) else (self.manager.view if self.manager and refresh_on_error else None)
         task = Task(work, refresh, self, progress_source=self.manager)
         task.operation_title = title
+        task.failure_callback = on_failure
         self.task = task
         task.progress.connect(lambda message: self.message.setText(message) if self.task is task else None)
         task.completed.connect(lambda value, error, conflict: self.job_finished(task, value, error, conflict, on_success))
@@ -326,6 +327,9 @@ class MainWindow(QMainWindow):
         if isinstance(value, dict) and value.get("copyError"):
             self.message.setText(value["copyError"])
         self.update_controls()
+        callback = getattr(task, "failure_callback", None)
+        if error and callback:
+            QTimer.singleShot(0, lambda: callback(error))
 
     def open_vault(self):
         if self.manager or self.task:
@@ -334,7 +338,7 @@ class MainWindow(QMainWindow):
             if not self.vault_path.exists():
                 self.run_job("PC 연결 준비 중…", lambda: self.unlocked(Vault.create_device(self.vault_path)), self.accept_manager, False)
             elif Vault.device_managed(self.vault_path):
-                self.run_job("PC 자료 여는 중…", lambda: self.unlocked(Vault.open_device(self.vault_path)), self.accept_manager, False)
+                self.run_job("PC 자료 여는 중…", lambda: self.unlocked(Vault.open_device(self.vault_path)), self.accept_manager, False, self.vault_open_failed)
             else:
                 dialog = UnlockDialog(self.vault_path, self)
                 if dialog.exec() != QDialog.DialogCode.Accepted:
@@ -347,7 +351,45 @@ class MainWindow(QMainWindow):
                     return self.unlocked(vault)
                 self.run_job("기존 자료를 자동 연결 방식으로 전환 중…", migrate, self.accept_manager, False)
         except Exception:
-            QMessageBox.warning(self, "PC 자료 확인", "기존 보관함을 열지 못했습니다. 파일과 Windows 계정을 확인해주세요.")
+            self.vault_open_failed()
+
+    def vault_open_failed(self, error=""):
+        if self.manager or self.task:
+            return
+        box = QMessageBox(self)
+        box.setWindowTitle("PC 자료 확인")
+        box.setIcon(QMessageBox.Icon.Warning)
+        box.setText("이 Windows 계정에서 열 수 없는 자료입니다. 기존 자료는 지우지 않았습니다.")
+        if error:
+            box.setDetailedText(str(error))
+        retry = box.addButton("다시 시도", QMessageBox.ButtonRole.AcceptRole)
+        fresh = box.addButton("새 자료로 시작", QMessageBox.ButtonRole.ActionRole)
+        close = box.addButton("닫기", QMessageBox.ButtonRole.RejectRole)
+        box.setDefaultButton(retry)
+        box.setEscapeButton(close)
+        box.exec()
+        if box.clickedButton() is retry:
+            self.open_vault()
+        elif box.clickedButton() is fresh:
+            answer = QMessageBox.question(self, "새 자료로 시작",
+                "기존 '자료' 폴더 전체를 '자료_보관_날짜-시각'으로 보관한 뒤 새 자료를 만듭니다.\n"
+                "삭제하거나 덮어쓰지 않습니다. 서버 미전송 기록은 보관 폴더에만 남습니다. 계속할까요?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
+            if answer == QMessageBox.StandardButton.Yes:
+                def create():
+                    vault, archived = Vault.archive_and_create_device(self.vault_path)
+                    manager, data = self.unlocked(vault)
+                    return manager, data, archived
+                self.run_job("기존 자료 보관 후 새 자료 만드는 중…", create, self.accept_new_workspace, False)
+
+    def accept_new_workspace(self, result):
+        manager, data, archived = result
+        self.accept_manager((manager, data))
+        message = ("서버 연결 후 농원·묘목·재고·견적·판매 자료를 서버에서 다시 받아옵니다.\n"
+                   f"서버로 보내지 못했던 기록은 '{archived.name}' 폴더에만 남아 있습니다.\n"
+                   "원래 Windows 계정에서는 보관 폴더를 '자료'로 되돌려 다시 열 수 있습니다.")
+        self.message.setText(message)
+        QMessageBox.information(self, "기존 자료 보관 완료", message)
 
     def restore_legacy(self):
         if not self.manager or self.task:
