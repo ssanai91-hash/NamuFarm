@@ -583,7 +583,15 @@ Room 엔티티의 NOT NULL·열 이름·복합 기본키 순서를 위 SQL과 �
 - 복원 확정 전 현재 자료를 `filesDir/restore_backup/before_restore_*.zip`으로 먼저 저장한다. 이 자동 백업은 최근 3개만 보관하며 다른 파일은 건드리지 않는다. 저장 실패 시 복원을 중단한다.
 - 쓰기 작업을 멈추고 세 Room 인스턴스를 닫은 뒤 임시 파일을 rename으로 교체한다. WAL/SHM과 이전 설정 보조 파일을 정리한다. 여러 파일 교체 도중 중단되면 다음 시작에서 복구 기록을 읽어 원래 파일로 되돌린다. 성공 시 프로세스를 다시 시작한다. 재고 연결 상태를 false로 되돌려 서버와 ‘재고 맞추기’를 다시 거친다.
 - 복원 ZIP은 고객 전화번호·주소가 포함된 민감한 자료다. 타인에게 공유하지 않는다. 복원 전 자동 ZIP과 sync_backup은 앱 전용 경로이므로 **앱 삭제 자체를 견디는 외부 수동 백업의 대체물이 아니다**.
-- 자동 백업 규칙은 API 30 이하, cloud-backup, device-transfer 모두 세 DB·관련 WAL/SHM·sharedpref·sync_backup을 포함하고 기기 인증 설정과 캐시를 제외한다. `allowBackup=true`를 유지한다. Android 자동 백업은 계정·OS·기기 설정에 따른 **보조 수단이며 실행/복원을 보장하지 않는다**.
+- 자동 백업 규칙(1.1.21 안정화 반영)은 API 30 이하, cloud-backup, device-transfer 모두 `NamuFarm.db`·`NamuFarmQuotes.db`와 관련 WAL/SHM·sharedpref·sync_backup을 포함하고 기기 인증 설정과 캐시를 제외한다. **문의 DB·WAL·SHM은 자동 백업/기기 전송에서 제외한다.** 문의는 서버에서 다시 받아올 수 있고 30일 개인정보 정리 원칙을 따른다. 수동 ZIP에는 사용자가 직접 보관하는 자료로 계속 포함한다. `allowBackup=true`를 유지한다. Android 자동 백업은 계정·OS·기기 설정에 따른 **보조 수단이며 실행/복원을 보장하지 않는다**.
+
+| 자료 | 자동 백업·기기 전송 | 수동 ZIP |
+| --- | --- | --- |
+| NamuFarm.db / NamuFarmQuotes.db | 포함 | 포함 |
+| NamuFarmInquiries.db | 제외 — 서버 재수신·30일 개인정보 정리 원칙 | 포함 — 사용자 직접 보관 |
+| 업무 설정 / sync_backup | 포함(기기 인증 설정 제외) | 명시한 업무 설정만 포함 |
+| 기기 인증·Keystore·서명 키 | 제외 | 제외 |
+
 - **Android 매매 탭의 견적/주문(`quote_list`, `order_list`)은 아직 서버 주문 장부로 보내지 않는다. 이번 범위에서는 외부에 만든 수동 ZIP 백업이 이 자료를 명시적으로 보호하는 유일한 수단이다.** 주문·배송 대기는 서버 미연결로 표시하고 확인되지 않은 전송을 성공 처리하지 않는다.
 
 ### 나피 자료 보호
