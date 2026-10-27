@@ -146,8 +146,37 @@ class InventoryBlockedSyncTest {
         assertEquals(40, saved.getAsJsonArray("farm_inventory")[0].asJsonObject["quantity"].asInt)
     }
 
+    @Test fun saveWithoutMasterRefreshUsesOnlyFetchSaveAndFetch() = runBlocking {
+        queue(stock())
+        assertTrue(sync.sync(refreshMasters = false).success)
+        assertEquals(listOf("list_inventory", "save_inventory", "list_inventory"), gateway.actions)
+    }
+
+    @Test fun missingInitialDownloadStillRefreshesMastersAndRecordsCompletion() = runBlocking {
+        gateway.downloaded = false
+        assertTrue(sync.sync(refreshMasters = false).success)
+        assertEquals(4, gateway.actions.count { it == "list_farms" || it == "list_species" })
+        assertTrue(gateway.downloaded)
+    }
+
+    @Test fun masterPendingPreventsTheFastPathAndIsRetainedOnFailure() = runBlocking {
+        dao.insertPendingSync(PendingSyncEntity(syncType = PendingSyncType.FARM_SAVE,
+            payloadJson = gson.toJson(mapOf("farm" to FarmEntity(2, "연결 농원"),
+                "operationId" to java.util.UUID.randomUUID().toString()))))
+        assertFalse(sync.sync(refreshMasters = false).success)
+        assertTrue("list_farms" in gateway.actions)
+        assertFalse("list_inventory" in gateway.actions)
+        assertEquals(PendingSyncType.FARM_SAVE, dao.getAllPendingSync().single().syncType)
+    }
+
+    @Test fun manualRefreshAlwaysRefreshesMastersEvenWhenFastPathIsEligible() = runBlocking {
+        assertTrue(sync.sync(refreshMasters = true).success)
+        assertEquals(4, gateway.actions.count { it == "list_farms" || it == "list_species" })
+    }
+
     private class FakeGateway : OperationsMasterGateway {
         override var downloaded = true
+        val actions = mutableListOf<String>()
         val sent = mutableListOf<JsonObject>()
         val invalidSizes = mutableSetOf<String>()
         val busySizes = mutableSetOf<String>()
@@ -161,7 +190,9 @@ class InventoryBlockedSyncTest {
         fun put(stock: FarmInventoryEntity) {
             val row = record(InventoryMutation.from(stock).body(22, 11)); rows[key(row)] = row
         }
-        override suspend fun request(action: String, fields: Map<String, Any>): JsonObject = when (action) {
+        override suspend fun request(action: String, fields: Map<String, Any>): JsonObject {
+            actions += action
+            return when (action) {
             "list_farms" -> gson.toJsonTree(mapOf("farms" to listOf(mapOf("farmId" to 22,
                 "farmName" to "연결 농원", "version" to "a".repeat(64))))).asJsonObject
             "list_species" -> gson.toJsonTree(mapOf("species" to listOf(mapOf("speciesId" to 11,
@@ -176,6 +207,7 @@ class InventoryBlockedSyncTest {
                 JsonObject().apply { addProperty("saved", true); add("operationId", body["operationId"]); add("inventoryRecord", saved) }
             }
             else -> error("Unexpected fake action: $action")
+            }
         }
     }
 }

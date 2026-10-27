@@ -170,7 +170,7 @@ class InventorySync(private val database: AppDatabase, private val client: Opera
             putLink(key, remote.version)
         }
     }
-    suspend fun sync(): InventoryOutcome = masters.inventorySequence { master ->
+    suspend fun sync(refreshMasters: Boolean = true): InventoryOutcome = masters.inventorySequence(refreshMasters) { master ->
         if (!master.success) return@inventorySequence InventoryOutcome(false, master.message)
         if (dao.getAllPendingSync().any { OperationsMasterSync.kind(it.syncType) != null })
             return@inventorySequence InventoryOutcome(false, "농원·묘목 등록이 서버에서 확인된 뒤 재고를 보냅니다.")
@@ -311,7 +311,7 @@ class InventorySync(private val database: AppDatabase, private val client: Opera
         val sameLocal = current == item.local || (current == null && item.local?.quantity == 0)
         return sameLocal && pending().filter { mutation(it).key() == item.key } == item.pending
     }
-    suspend fun resolveInitialReview(useServer: Boolean): InventoryOutcome = masters.inventorySequence { master ->
+    suspend fun resolveInitialReview(useServer: Boolean): InventoryOutcome = masters.inventorySequence(refreshMasters = true) { master ->
         if (!master.success) return@inventorySequence InventoryOutcome(false, master.message)
         val review = mutableReview.value
         if (!review.firstLink || review.differences.isEmpty()) return@inventorySequence InventoryOutcome(false, "먼저 재고 맞추기 목록을 확인해주세요.")
@@ -337,7 +337,7 @@ class InventorySync(private val database: AppDatabase, private val client: Opera
         } catch (e: CancellationException) { throw e }
         catch (e: Exception) { InventoryOutcome(false, e.message ?: "재고 맞추기를 완료하지 못했습니다. 휴대폰 자료를 유지합니다.") }
     }
-    suspend fun resolveConflict(useServer: Boolean): InventoryOutcome = masters.inventorySequence { master ->
+    suspend fun resolveConflict(useServer: Boolean): InventoryOutcome = masters.inventorySequence(refreshMasters = true) { master ->
         if (!master.success) return@inventorySequence InventoryOutcome(false, master.message)
         val review = mutableReview.value
         val item = review.differences.singleOrNull()?.takeIf { !review.firstLink }

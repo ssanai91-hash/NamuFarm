@@ -88,10 +88,14 @@ class OperationsMasterSync(internal val database: AppDatabase, internal val clie
     suspend fun sync(onlyKind: String? = null): MasterSyncOutcome = mutex.withLock { syncLocked(onlyKind) }
 
     /** Master edits and stock transfers share this mutex for the complete sequence. */
-    suspend fun <T> inventorySequence(block: suspend (MasterSyncOutcome) -> T): T = mutex.withLock {
+    suspend fun <T> inventorySequence(refreshMasters: Boolean = true, block: suspend (MasterSyncOutcome) -> T): T = mutex.withLock {
+        if (!refreshMasters && client.downloaded && dao.getAllPendingSync().none { kind(it.syncType) != null }) {
+            return@withLock block(MasterSyncOutcome(true, ""))
+        }
         val farm = syncLocked(FARM)
         if (!farm.success) block(farm) else {
             val species = syncLocked(SPECIES)
+            if (species.success) client.downloaded = true
             block(species)
         }
     }

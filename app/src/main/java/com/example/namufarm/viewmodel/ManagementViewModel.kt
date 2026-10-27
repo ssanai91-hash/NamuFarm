@@ -102,21 +102,21 @@ class ManagementViewModel(
             val result = if (syncManager.inventory.review.value.firstLink) syncManager.inventory.resolveInitialReview(useServer)
                 else syncManager.inventory.resolveConflict(useServer)
             refreshLocalState()
-            recordInventoryOutcome(result)
+            recordInventoryOutcome(result, refreshMasters = true)
         }
     }
     fun retryRejectedInventory(item: BlockedInventoryWork) {
         viewModelScope.launch(Dispatchers.IO) {
             val result = syncManager.inventory.retryRejected(item)
             refreshLocalState()
-            recordInventoryOutcome(result)
+            recordInventoryOutcome(result, refreshMasters = true)
         }
     }
     fun useServerForRejectedInventory(item: BlockedInventoryWork) {
         viewModelScope.launch(Dispatchers.IO) {
             val result = syncManager.inventory.useServerForRejected(item)
             refreshLocalState()
-            recordInventoryOutcome(result)
+            recordInventoryOutcome(result, refreshMasters = false)
         }
     }
     fun resaveBlockedFarm(item: BlockedInventoryWork) {
@@ -196,9 +196,9 @@ class ManagementViewModel(
             }
 
             selectChosung(firstChosung)
-            val stockResult = syncManager.inventory.sync()
+            val stockResult = syncManager.inventory.sync(refreshMasters = false)
             refreshLocalState()
-            recordInventoryOutcome(stockResult)
+            recordInventoryOutcome(stockResult, refreshMasters = false)
         }
     }
 
@@ -870,9 +870,9 @@ class ManagementViewModel(
 
     private fun attemptInventorySync() {
         viewModelScope.launch(Dispatchers.IO) {
-            val result = syncManager.inventory.sync()
+            val result = syncManager.inventory.sync(refreshMasters = false)
             refreshLocalState()
-            recordInventoryOutcome(result)
+            recordInventoryOutcome(result, refreshMasters = false)
         }
     }
 
@@ -891,10 +891,10 @@ class ManagementViewModel(
                 _uiState.update { it.copy(inputQuantity = 0, inputWholesale = 0, inputRetail = 0,
                     inventoryList = rows, message = "휴대폰 저장 완료 · 서버 반영 대기 ${syncManager.inventory.pendingCount()}건") }
                 withContext(Dispatchers.Main) { onLocalSaved?.invoke() }
-                val result = syncManager.inventory.sync()
+                val result = syncManager.inventory.sync(refreshMasters = false)
                 refreshLocalState()
                 recordInventoryOutcome(result.copy(message = if (result.success) "휴대폰 저장 완료 · 서버 반영 완료"
-                    else "휴대폰 저장 완료 · 서버 반영 대기 ${syncManager.inventory.pendingCount()}건 · ${result.message}"))
+                    else "휴대폰 저장 완료 · 서버 반영 대기 ${syncManager.inventory.pendingCount()}건 · ${result.message}"), refreshMasters = false)
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) { _uiState.update { it.copy(message = "재고 처리 확인이 필요합니다. 기존 자료와 대기를 유지합니다: ${e.message}") } }
         }
@@ -904,15 +904,15 @@ class ManagementViewModel(
     fun syncInventoryWithMasters() {
         viewModelScope.launch(Dispatchers.IO) {
             _uiState.update { it.copy(message = "농원·묘목·재고를 순서대로 동기화하는 중입니다.") }
-            val result = syncManager.inventory.sync()
+            val result = syncManager.inventory.sync(refreshMasters = true)
             refreshLocalState()
-            recordInventoryOutcome(result)
+            recordInventoryOutcome(result, refreshMasters = true)
         }
     }
-    private fun recordInventoryOutcome(result: InventoryOutcome) {
+    private fun recordInventoryOutcome(result: InventoryOutcome, refreshMasters: Boolean) {
         _uiState.update { it.copy(message = result.message,
             lastSyncError = if (result.success) null else result.message,
-            lastMasterSyncAt = if (result.success) System.currentTimeMillis() else it.lastMasterSyncAt) }
+            lastMasterSyncAt = if (refreshMasters && result.success) System.currentTimeMillis() else it.lastMasterSyncAt) }
     }
     fun syncFarmMasterFromGoogleSheet() = syncMasterDirectory(OperationsMasterSync.FARM)
     fun syncSpeciesMasterFromGoogleSheet() = syncMasterDirectory(OperationsMasterSync.SPECIES)
