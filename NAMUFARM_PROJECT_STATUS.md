@@ -4,9 +4,9 @@
 > 저장소: `ssanai91-hash/NamuFarm` · **홈페이지/PC/Android/서버 모두 `main`** (2026-10-24 사용자 요청으로 통합)  
 > 홈페이지 최신 반영: **버전 70의 기존 화면 구성에 버튼 3안·줄바꿈 보완을 반영하여 Sites 버전 73 게시 완료 (2026-10-26 KST). 기존 namufarm.co.kr·서버 환경 revision 8 유지. 원복 기준은 Sites 버전 70.**
 > 홈페이지 운영 소스: **Sites 버전 73 · `80b5e5977264040f9480105a7900c73a13790e62`, main 코드 `f18c2112ecb4cc063786f4cfb6c9255990eff7ed`. C안 이력과 Sites 버전 72는 보관.**
-> PC 최신 코드: **0.5.7 · Windows 계정 자료 열기 실패 시 원본 폴더 보관 후 새 시작, 자료 보관 상태·종류별 대기·백업 시각, 종료 시 대기 안내 구현. 컴파일·실행·자동시험·Actions·실제 서버 시험 미실행.**
-> Android 최신 소스: **1.1.21(24) 안정화 + 실제 릴리스 APK 빌드·기존 인증서 서명 완료(2026-10-27 추가 요청). DAO 콜백 KSP 오류·백업 XML 릴리스 검사 오류 보완. DB14·스키마·패키지·서명 유지. 자동시험·Actions·실기기/실제 서버 검증 미실행. Apps Script 재배포는 원격 로그인 연결 문제로 미완료.**
-> 다음 확인 — 운영 반영 순서: **① main 최신 Apps Script 파일 반영 → 기존 배포의 새 버전 → 공개 정보 quoteDeliveryIdempotency:1·list_inventory inventoryVersioning:1 확인 ② closeAppEnrollment / listAppDevices 확인 ③ 나피 0.5.7 설치(서버보다 먼저면 PC 견적 발송 중단이 정상) ④ Android 1.1.21 업데이트 설치(앱 삭제 금지). 실제 운영 배포는 미확인. Android 매매 견적·주문은 여전히 외부 ZIP 백업 필수. 실기기 확인 전 기능 동결.**
+> PC 최신 코드·배포본: **0.5.7 · main `d0f0fd7` 기준 Windows x64 EXE·실행환경 ZIP 빌드 완료(2026-10-27 사용자 요청). Windows 실제 실행·자동시험·Actions·실제 서버 검증 미실행. 업데이트는 EXE와 `_runtime`만 교체하고 기존 `자료` 폴더 유지.**
+> Android 최신 소스: **1.1.21(24) 안정화 + 실제 릴리스 APK 빌드·기존 인증서 서명 완료(2026-10-27 추가 요청). DAO 콜백 KSP 오류·백업 XML 릴리스 검사 오류 보완. DB14·스키마·패키지·서명 유지. 자동시험·Actions·실기기/실제 서버 검증 미실행. Apps Script는 2026-10-27 사용자가 직접 재배포 완료를 알림(배포 버전·응답은 별도 미검증).**
+> 다음 확인 — 운영 반영 순서: **① main 최신 Apps Script 파일 반영 → 기존 배포의 새 버전 → 공개 정보 quoteDeliveryIdempotency:1·list_inventory inventoryVersioning:1 확인 ② closeAppEnrollment / listAppDevices 확인 ③ 나피 0.5.7 설치(서버보다 먼저면 PC 견적 발송 중단이 정상) ④ Android 1.1.21 업데이트 설치(앱 삭제 금지). 2026-10-27 사용자가 직접 Apps Script 재배포 완료를 알림. 실제 반영 파일·배포 버전·기능 응답과 기기 등록 상태는 별도 미검증. Android 매매 견적·주문은 여전히 외부 ZIP 백업 필수. 실기기 확인 전 기능 동결.**
 > 목적: 이전 채팅을 정리하거나 새 대화로 옮겨도 **확정 규칙·구현 범위·미완료 작업**을 구분하여 이어서 작업하기 위한 기록.
 
 > **현재 작업 기준 · main 통합 (2026-10-24):** 사용자가 홈페이지·나피·Android·스크립트를 한 프로젝트 폴더와 main에서 관리하도록 요청했다. 기존 main의 `desktop/`, `website/`, `server/`는 그대로 보존하고, Android는 초기버전 최신 `ad0074f`의 `app/` 전체와 서명 도구를 통합한다. 초기 패키지 `com.example.namufarm.original`, 기존 인증서·DB·운영 URL을 유지한다. `restore/android-initial-20260927`는 기록용으로 남기며 이후 작업 기준은 main이다. 아래 별도 브랜치 지침은 통합 전 이력이다. 이번 통합은 컴파일·자동시험·Actions·운영 발송·홈페이지 게시·서버 재배포를 수행하지 않았다.
@@ -754,3 +754,13 @@ Room 엔티티의 NOT NULL·열 이름·복합 기본키 순서를 위 SQL과 �
 - APK: `NamuFarm-initial-1.1.21-update.apk` · **13,595,579바이트** · SHA-256 `d636872cd6c320089146693eb1f2a3160a7c81bb4801640a233c8b0b7b03c04f`.
 - 빌드 기준은 main `9876a37bea056b999322ed29dd116138a1fa5515`에 위 두 컴파일 수정 사항을 반영한 이 기록의 커밋이다. 사용 도구: JDK21·Gradle9.3.1·SDK36.1·Build Tools36.0.0. 일부 기존 API 사용 중단 경고·Java nullable 경고는 남아 있으며 빌드 성공을 실기기 기능 검증으로 확대 해석하지 않는다.
 - **설치는 운영 서버 반영 확인 후 앱 삭제 없이 업데이트로 진행한다.** 최신 Apps Script를 기존 배포의 새 버전으로 반영하고 프로토콜 준비 상태를 확인하는 운영 순서는 여전히 미완료다. Android APK 파일 준비만으로 이 단계가 완료되지는 않는다.
+
+
+## 2026-10-27 나피 0.5.7 Windows 실행파일 빌드 · Apps Script 사용자 재배포 보고
+
+- 사용자가 Apps Script를 직접 재배포했다고 알렸다. 어시스턴트의 원격 재배포는 보안문자·수동 인계 제한으로 완료하지 못했으며, 이후 사용자 완료 보고를 기록한다. 반영 파일·실제 배포 버전·`quoteDeliveryIdempotency:1`·`inventoryVersioning:1`·등록 기기 상태는 이번 빌드 작업에서 조회하거나 검증하지 않았다. 서버 코드는 수정하지 않았다.
+- 사용자 요청에 따라 나피 **0.5.7 Windows x64** 배포본을 빌드했다. 소스 기준은 main `d0f0fd7ef811d832997109e95b5327cf59162fe5`; 프로그램 소스·버전·업무 로직 변경 없이 저장소의 `desktop/build_windows_portable.py`를 사용했다. 빌드 입력 40개와 포함된 애플리케이션 파일 35개의 Git blob 일치를 확인했다.
+- 공식 CPython 3.12.10 x64 임베디드 런타임, PyPI Windows wheel 11개(PySide6 6.12.0 계열·cryptography 50.0.2 등), Ubuntu 아카이브의 MinGW-w64 GCC 13-posix로 EXE를 생성했다. CPython 공식 릴리스 체크섬·PyPI SHA-256과 패키지 저장소 검증을 거쳤으며 실행환경 버전·해시는 ZIP의 `BUILD-INFO.json`에 기록된다.
+- 배포 파일: `Napi-0.5.7-Windows-x64.zip` (**268,102,911바이트**), SHA-256 **`6996bf68931cfb229c1cd660e5b0a1ad543f3e588bf5d78241ff97b91fcda3a0`**. Windows GUI x64 PE 생성과 ZIP 무결성·필수 실행환경·기존 코드 일치를 확인했다. 고객 자료·개인 인증/서명 키는 넣지 않았으며 `자료` 폴더는 배포본에 포함하지 않는다.
+- 사용법: 앱을 종료하고 ZIP을 전부 푼 뒤 `NamuFarm-PC.exe`와 `_runtime`을 함께 교체한다. 기존 **`자료` 폴더는 삭제·덮어쓰기하지 않는다.** Python 별도 설치는 필요 없다. EXE만 단독 전달하거나 교체하면 실행환경이 누락된다.
+- 미실행: Windows 실제 앱 실행·화면·기존 자료 열기·다른 Windows 계정 복구·서버 동기화·견적 발송·문자/메일·자동시험·GitHub Actions. 이번 요청으로 컴파일·배포본 생성만 수행했으며 실제 사용 검증은 사용자가 진행한다. 기존 기능 동결·미전송 자료 보존 원칙은 유지한다.
