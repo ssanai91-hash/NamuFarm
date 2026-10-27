@@ -3130,3 +3130,8 @@ button,[data-slot=button],.nav-action { word-break: keep-all; overflow-wrap: any
   .video-filters select { min-height: 2.75rem; }
 }
 .review-dialog [data-slot=dialog-description] { padding-right: 5.5rem; }
+@media (max-width: 640px) {
+  .footer-phone-row { flex-direction: column; align-items: flex-start; }
+  .footer-phone-row > span[aria-hidden=true] { display: none; }
+  .footer-phone-row a { min-height: 2.75rem; }
+}
