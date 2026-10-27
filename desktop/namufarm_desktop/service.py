@@ -364,7 +364,8 @@ class Manager(SoldNumbers, SalesWorkspace):
                 "drafts": drafts, "confirmedQuotes": active, "quoteRecovery": recovery,
                 "copyError": " · ".join(filter(None, (quote_error, sale_error))), "pending": pending,
                 "paired": self.credentials.get("paired") is True,
-                "transferNotice": getattr(self, "transfer_notice", "")}
+                "transferNotice": getattr(self, "transfer_notice", ""),
+                "salesSyncConflict": bool(getattr(self, "sales_conflict_number", None))}
 
     def save_draft(self, draft):
         try:
@@ -1083,6 +1084,30 @@ class Manager(SoldNumbers, SalesWorkspace):
         value["copyError"] = " · ".join(filter(None, (value.get("copyError"), recovery_error)))
         return value
 
+    def auto_sync(self):
+        """Timer work is serialized by the UI; never drops local outbox entries."""
+        self.sync_requests()
+        return self._auto_upload_sales(raise_conflict=True)
+
+    def _auto_upload_sales(self, *, raise_conflict=False):
+        pending = [op for op in self.vault.pending() if op["action"] == "save_sale"]
+        if not pending:
+            return self.local_copy_view()
+        if getattr(self, "sales_conflict_number", None):
+            self.transfer_notice = "판매자료 충돌 해결 필요 · 자동 업로드 중단 · 양쪽 자료 유지"
+            return self.local_copy_view()
+        try:
+            return self.upload_sales()
+        except ConflictError:
+            self.transfer_notice = "판매자료 충돌 해결 필요 · 자동 업로드 중단 · 양쪽 자료 유지"
+            if raise_conflict:
+                raise
+        except (UserError, OSError):
+            # Local payment/save is committed. Retain each event ID for safe later retry.
+            count = sum(op["action"] == "save_sale" for op in self.vault.pending())
+            self.transfer_notice = f"판매자료 서버 반영 대기 {count:,}건"
+        return self.local_copy_view()
+
     def sync(self, *, sales_only=False):
         require(self.credentials.get("paired") is True, "PC를 먼저 연결해주세요.")
         self.verify_server()
@@ -1181,6 +1206,7 @@ class Manager(SoldNumbers, SalesWorkspace):
         self.vault.save_local_sales([*sales, fresh["remote"]],
                                    [op for op in pending if self._operation_number(op) != number],
                                    self.vault.preference("hidden_sales", []))
+        self.sales_conflict_number = None
         return self.local_copy_view()
 
     def report(self, unit, start, end):

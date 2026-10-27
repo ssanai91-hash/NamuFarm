@@ -4481,6 +4481,10 @@ class SellerWindow(MainWindow):
                 self._request_arrival_notice + ("  |  " + current if current else "")
             )
             self._request_arrival_notice = ""
+        if isinstance(value, dict) and value.get("transferNotice"):
+            self.message.setText(value["transferNotice"])
+            if value.get("salesSyncConflict") or "서버 반영 대기" in value["transferNotice"]:
+                self.set_status_state("error", "서버 반영 대기")
         self.refresh_storage_status()
 
     def refresh_storage_status(self):
@@ -5251,11 +5255,10 @@ class SellerWindow(MainWindow):
                      lambda: self.manager.connect(include_sales=include_sales))
 
     def auto_sync(self):
-        if self.stack.currentIndex() in (self.PAGE_FARMS, self.PAGE_SPECIES, self.PAGE_INQUIRIES, self.PAGE_SALES, self.PAGE_SHIPPING, self.PAGE_REPORTS):
+        if self.stack.currentIndex() in (self.PAGE_FARMS, self.PAGE_SPECIES, self.PAGE_INQUIRIES):
             return
         if self.manager and self.data["paired"] and self.auto_check.isChecked() and not self.task and not self.dirty and not self.conflict:
-            pull = self.manager.sync if self.stack.currentIndex() in (self.PAGE_SALES, self.PAGE_SHIPPING, self.PAGE_REPORTS) else self.manager.sync_requests
-            self.run_job("AUTO SYNC  >  서버 동기화 중…", pull)
+            self.run_job("AUTO SYNC  >  서버 동기화 중…", self.manager.auto_sync)
 
 
 

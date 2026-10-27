@@ -313,8 +313,8 @@ class MainWindow(QMainWindow):
                 on_success(value)
             elif isinstance(value, dict) and "requests" in value:
                 self.apply_view(value)
-                self.conflict = False
-                self.message.setText("SYNC OK  >  서버 동기화 완료 · " + timestamp(datetime.now(SEOUL).timestamp() * 1000))
+                self.conflict = bool(value.get("salesSyncConflict"))
+                self.message.setText(value.get("transferNotice") or "SYNC OK  >  서버 동기화 완료 · " + timestamp(datetime.now(SEOUL).timestamp() * 1000))
         if isinstance(value, dict) and value.get("copyError"):
             self.message.setText(value["copyError"])
         self.update_controls()
@@ -401,7 +401,7 @@ class MainWindow(QMainWindow):
         self.report_export_button.setEnabled(self.task is None)
         self.resolve_button.setEnabled(paired and pending and self.conflict)
         self.connection_status.setText("연결 정보 저장됨" if self.data["paired"] else "서버 연결 필요")
-        self.pending_status.setText(f"전송 대기 {len(self.data['pending']):,}건 · 판매관리의 ‘서버에 올리기’로 백업하세요." if pending else "전송 대기 0건")
+        self.pending_status.setText(f"전송 대기 {len(self.data['pending']):,}건 · 자동으로 서버에 반영합니다(실패 시 ‘서버에 올리기’)" if pending else "전송 대기 0건")
 
     def allow_discard(self):
         if not self.dirty:
@@ -415,10 +415,11 @@ class MainWindow(QMainWindow):
 
     def auto_sync(self):
         if self.manager and self.data["paired"] and self.auto_check.isChecked() and not self.task and not self.dirty and not self.conflict:
-            self.run_job("AUTO SYNC  >  서버 동기화 중…", self.manager.sync_requests)
+            self.run_job("AUTO SYNC  >  서버 동기화 중…", self.manager.auto_sync)
 
     def apply_view(self, value):
         self.data = value
+        self.conflict = self.conflict or bool(value.get("salesSyncConflict"))
         self.dirty = False
         self.refresh_requests()
         self.refresh_sales()
@@ -906,7 +907,7 @@ class MainWindow(QMainWindow):
         self.copy_button.clicked.connect(self.open_request_copy)
         set_button_icon(self.copy_button, "folder")
         local_layout.addWidget(self.copy_button, 0, Qt.AlignmentFlag.AlignLeft)
-        self.auto_check = QCheckBox("10분마다 자동 가져오기 · 수정 중에는 입력내용 유지")
+        self.auto_check = QCheckBox("10분마다 견적요청 가져오기 · 판매자료 서버 반영")
         self.auto_check.setToolTip("최신 자료를 가져오고 전송 대기 중인 변경사항을 서버에 반영합니다.")
         self.auto_check.setChecked(True)
         self.large_font_check = QCheckBox("큰 글씨로 보기")

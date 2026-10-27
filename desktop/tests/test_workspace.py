@@ -333,11 +333,12 @@ class WorkspaceServiceTest(unittest.TestCase):
     def test_lost_new_order_ack_reuses_event_and_never_duplicates(self):
         draft = sent_draft_for_test()
         self.manager.api.lose_ack = True
-        with self.assertRaises(NetworkError):
-            self.manager.confirm_draft(draft)
+        value = self.manager.confirm_draft(draft)
+        self.assertEqual(1, len(value['sales']))
+        self.assertIn('판매자료 서버 반영 대기', value['transferNotice'])
         operation = self.manager.vault.pending()[0]
         self.assertEqual('save_sale', operation['action'])
-        view = self.manager.sync()
+        view = self.manager.auto_sync()
         self.assertEqual(1, len(view['sales']))
         self.assertEqual(1, view['sales'][0]['metadata']['revision'])
         self.assertEqual([], view['pending'])
@@ -1002,5 +1003,6 @@ class SellerUiTest(QtTestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
 
 

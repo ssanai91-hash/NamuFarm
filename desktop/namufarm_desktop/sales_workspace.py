@@ -39,7 +39,7 @@ class SalesWorkspace:
                       "payload": payload, "baseFingerprint": None, "preserveQuote": True}]
         self.vault.save_local_sales([*self.vault.rows("sales"), row], operations,
                                    self.vault.preference("hidden_sales", []), quotes=quotes)
-        return self.view()
+        return self._auto_upload_sales()
 
     def _merge_sales(self, incoming, *, server=False, imported_operations=(), marker=None, quotes=None, sold_labels=None):
         """Union by order number. Conflicting copies are retained locally, never overwritten."""
@@ -192,6 +192,7 @@ class SalesWorkspace:
                         "서버 저장 응답이 일치하지 않습니다. 전송 대기를 유지합니다.")
             self.vault.acknowledge(op["id"])
             sent += 1
+        self.sales_conflict_number = None
         self.transfer_notice = f"서버에 올리기 완료 · 변경 {sent}건 · 로컬 삭제는 서버에 반영하지 않습니다."
         self._prefetch_sold_numbers()
         return self.local_copy_view()

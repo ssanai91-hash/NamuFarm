@@ -40,21 +40,23 @@ class QuoteStorageUiTest(QtTestCase):
         self.assertEqual([], self.window.draft_rows)
         self.assertEqual(0, self.window.draft_table.rowCount())
 
-    def test_manual_and_automatic_refresh_keep_inbox_independent_of_sales(self):
-        manager = SimpleNamespace(connect=Mock(), sync=Mock(), sync_requests=Mock())
+    def test_automatic_refresh_uses_sale_upload_controller_and_respects_guards(self):
+        manager = Mock()
         self.window.manager = manager
         self.window.data['paired'] = True
         self.window.auto_check.setChecked(True)
         self.window.run_job = lambda title, work, *args, **kwargs: work()
-        for page, sales in ((self.window.PAGE_REQUESTS, False), (self.window.PAGE_QUOTES, False),
-                            (self.window.PAGE_SALES, True), (self.window.PAGE_SHIPPING, True)):
+        for page in (self.window.PAGE_REQUESTS, self.window.PAGE_QUOTES, self.window.PAGE_SALES, self.window.PAGE_SHIPPING):
             self.window.stack.setCurrentIndex(page)
-            self.window.manual_sync()
-            manager.connect.assert_called_with(include_sales=sales)
+            self.window.dirty = self.window.conflict = False
             self.window.auto_sync()
-            (manager.sync if sales else manager.sync_requests).assert_called()
-            manager.sync.reset_mock()
-            manager.sync_requests.reset_mock()
+            manager.auto_sync.assert_called_once()
+            manager.reset_mock()
+        for attribute in ('dirty', 'conflict', 'task'):
+            setattr(self.window, attribute, True)
+            self.window.auto_sync()
+            manager.auto_sync.assert_not_called()
+            setattr(self.window, attribute, False if attribute != 'task' else None)
 
     def test_summary_count_follows_quote_filter_and_sales_search(self):
         data = demo_data()
@@ -125,3 +127,4 @@ class QuoteStorageUiTest(QtTestCase):
             self.window.open_draft()
         self.assertTrue(self.window.timer.isActive())
         self.window.timer.stop()
+
