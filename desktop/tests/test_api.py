@@ -113,3 +113,21 @@ class ApiTest(unittest.TestCase):
 if __name__ == '__main__':
     unittest.main()
 
+
+
+class DeliveryApiTest(unittest.TestCase):
+    def test_timeout_is_uncertain_and_user_agent_uses_package_version(self):
+        from namufarm_desktop import __version__
+        from namufarm_desktop.errors import UncertainDeliveryError
+        opener = FakeOpener(TimeoutError())
+        api = ScriptApi(token='a' * 64, opener=opener)
+        with self.assertRaises(UncertainDeliveryError) as caught:
+            api.call('send_quote_sms', deliveryId='synthetic')
+        self.assertIn('결과 확인', str(caught.exception))
+        self.assertNotIn('지금 동기화', str(caught.exception))
+        self.assertEqual('NamuFarmDesktop/' + __version__, opener.calls[0][0].get_header('User-agent'))
+        for code in ('INVALID', 'UNAVAILABLE', 'UNAUTHORIZED', 'BUSY'):
+            api.opener = FakeOpener(json.dumps({'ok': False, 'code': code}).encode())
+            with self.assertRaises(UserError) as caught:
+                api.call('send_quote_sms')
+            self.assertEqual(code, caught.exception.code)

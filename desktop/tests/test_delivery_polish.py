@@ -51,6 +51,7 @@ class DeliveryPolishTest(QtTestCase):
     def test_service_records_actual_override_without_rewriting_quote_or_its_fingerprint(self):
         manager = Manager.__new__(Manager)
         manager.api = Mock()
+        manager._require_delivery_server = Mock(return_value={"quoteDeliveryIdempotency": 1})
         manager._prepare_quote_delivery = Mock()
         manager._confirmed_source = Mock()
         manager._sold_number_for_draft = Mock()
@@ -167,3 +168,28 @@ class DeliveryPolishTest(QtTestCase):
         self.assertFalse(dialog.isVisible())
         self.assertIsNone(dialog.collected_fields)
         self.assertEqual('', row['private']['order']['detailAddress'])
+
+
+    def test_uncertain_reopen_locks_send_and_dismiss_requires_explicit_yes(self):
+        from namufarm_desktop.errors import UncertainDeliveryError
+        manager = Mock()
+        pending = {'pendingDelivery': {'id': '00000000-0000-4000-8000-000000000002', 'channel': 'sms', 'recipient': '01000000000'}}
+        manager.quote_delivery_state.return_value = pending
+        manager.check_quote_delivery.return_value = {**pending, 'deliveryResolution': 'unknown'}
+        manager.dismiss_uncertain_delivery.return_value = {'deliveryResolution': 'dismissed'}
+        with patch('namufarm_desktop.workspace.Task', ImmediateTask), patch('namufarm_desktop.app.Task', ImmediateTask):
+            dialog = QuoteSmsDialog(self.draft, manager)
+            dialog.show(); self.settle()
+            self.assertFalse(dialog.send_button.isEnabled())
+            self.assertTrue(dialog.check_button.isEnabled())
+            self.assertIn('결과 불명', dialog.status.toPlainText())
+            dialog.check_button.click()
+            self.assertFalse(dialog.dismiss_button.isHidden())
+            with patch.object(QMessageBox, 'question', return_value=QMessageBox.StandardButton.No):
+                dialog.dismiss_button.click()
+            manager.dismiss_uncertain_delivery.assert_not_called()
+            manager.quote_delivery_state.return_value = {}
+            with patch.object(QMessageBox, 'question', return_value=QMessageBox.StandardButton.Yes):
+                dialog.dismiss_button.click()
+            manager.dismiss_uncertain_delivery.assert_called_once_with(self.draft['id'], 'sms', payment=False)
+            dialog.status_timer.stop()

@@ -59,10 +59,10 @@ class TestApi:
         result = self.bridge.send(action=action, deviceToken=self.token, **fields)
         if result.get('ok') is not True:
             if result.get('code') == 'UNAUTHORIZED':
-                raise AuthenticationError('connection rejected')
+                raise AuthenticationError('connection rejected', code=result.get('code'))
             if result.get('code') == 'CONFLICT':
-                raise ConflictError('conflict')
-            raise UserError('server failed')
+                raise ConflictError('conflict', code=result.get('code'))
+            raise UserError('server failed', code=result.get('code'))
         if action in ('save_sale', 'close_request') and self.lose_ack:
             self.lose_ack = False
             raise NetworkError('lost response')
@@ -85,4 +85,5 @@ def manager_at(path, bridge):
     manager = Manager(vault, api)
     manager.pair(bridge.send(control='invite')['invite'])
     return manager
+
 

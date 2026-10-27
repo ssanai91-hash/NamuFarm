@@ -11,7 +11,7 @@ from pathlib import Path
 from .api import DEFAULT_URL, ScriptApi
 from .crypto import canonical, digest, customer_digest, SellerKey
 from .domain import (changed, integer, metadata, now_ms, require, valid_id, validate_metadata, validate_request, sale_expired)
-from .errors import AuthenticationError, UserError, ConflictError
+from .errors import AuthenticationError, UserError, ConflictError, NetworkError, UncertainDeliveryError
 from .commerce import (validate_draft, order_from_draft, quote_document, tracking_fields,
                        tracking_number, normalize_tracking, quote_delivery_fingerprint, seller_note_draft,
                        shipping_problem, shipping_fingerprint, shipping_prepared, shipping_ready, normalize_sms_recipient, validate_working_draft)
@@ -431,6 +431,7 @@ class Manager(SoldNumbers, SalesWorkspace):
 
     def mark_quote_sent(self, draft):
         validate_draft(draft)
+        self._require_no_pending_delivery(draft["id"])
         local = self._confirmed_source(draft)
         source = draft.get("sourceRequestId", "")
         if not source:
@@ -451,7 +452,7 @@ class Manager(SoldNumbers, SalesWorkspace):
             # Older builds marked 2000 (accepted) as sent. Treat those records as
             # needing a final result check instead of assuming delivery success.
             sms_state = "pending"
-        return {"smsSentAt": int(value.get("smsSentAt", 0) or 0),
+        return {**copy.deepcopy(value), "smsSentAt": int(value.get("smsSentAt", 0) or 0),
                 "emailSentAt": int(value.get("emailSentAt", 0) or 0),
                 "smsTo": str(value.get("smsTo", "") or ""),
                 "senderPhone": str(value.get("senderPhone", "") or ""),
@@ -484,7 +485,7 @@ class Manager(SoldNumbers, SalesWorkspace):
 
     def sms_profile(self):
         require(self.credentials.get("paired") is True, "PC를 먼저 연결해주세요.")
-        info = self.verify_server()
+        info = self._require_delivery_server()
         require(info.get("quoteSms") is True,
                 "현재 PC가 연결된 Apps Script 웹앱은 문자 기능 이전 버전입니다. 기존 /exec 배포를 최신 코드로 새 버전 배포해주세요.")
         result = self.api.call("sms_profile")
@@ -522,6 +523,7 @@ class Manager(SoldNumbers, SalesWorkspace):
         return self.payment_delivery_state(identifier)
 
     def send_payment_sms(self, draft, text, *, recipient_phone=None):
+        self._require_delivery_server()
         normalize_sms_recipient(draft.get("customerPhone", "") if recipient_phone is None else recipient_phone)
         # Reserve before sending the notice; unsupported servers must not fail only
         # after the customer was already told their payment was received.
@@ -542,22 +544,10 @@ class Manager(SoldNumbers, SalesWorkspace):
             self._confirmed_source(draft)
         else:
             self._prepare_quote_delivery(draft)
-        result = self.api.call("send_quote_sms", requestId=source, recipientPhone=recipient, text=text.strip())
-        require(result.get("sent") is True and result.get("recipientPhone") == recipient_digits,
-                "문자 전송 접수를 확인하지 못했습니다.")
-        state = self.payment_delivery_state(draft["id"]) if payment else self.quote_delivery_state(draft["id"])
-        state.update({"smsSentAt": 0, "smsTo": recipient_digits,
-                      "senderPhone": result.get("senderPhone", ""),
-                      "smsMessageId": result.get("messageId", ""),
-                      "smsState": "pending",
-                      "smsQuoteFingerprint": quote_delivery_fingerprint(draft),
-                      "smsStatusCode": str(result.get("statusCode", "") or "2000"),
-                      "smsStatusMessage": str(result.get("statusMessage", "") or "문자 발송을 접수했습니다."),
-                      "smsUpdatedAt": now_ms()})
-        delivery = (self._save_payment_delivery_state if payment else self._save_quote_delivery_state)(draft["id"], state)
-        return {"delivery": delivery, "senderPhone": result.get("senderPhone", ""),
-                "messageId": result.get("messageId", ""), "statusCode": result.get("statusCode", ""),
-                "statusMessage": result.get("statusMessage", ""), "sentAt": result.get("sentAt", "")}
+        fields = dict(requestId=source, recipientPhone=recipient, text=text.strip())
+        result, delivery = self._dispatch_delivery(draft["id"], "sms", recipient, fields,
+                                                   quote_delivery_fingerprint(draft), payment=payment)
+        return {**result, "delivery": delivery}
 
     def refresh_quote_sms_status(self, identifier, *, payment=False):
         state = self.payment_delivery_state(identifier) if payment else self.quote_delivery_state(identifier)
@@ -580,7 +570,7 @@ class Manager(SoldNumbers, SalesWorkspace):
 
     def email_profile(self):
         require(self.credentials.get("paired") is True, "PC를 먼저 연결해주세요.")
-        info = self.verify_server()
+        info = self._require_delivery_server()
         require(info.get("quoteEmail") is True,
                 "현재 PC가 연결된 Apps Script 웹앱은 메일 기능 이전 버전입니다. 기존 /exec 배포를 최신 코드로 새 버전 배포해주세요.")
         require(info.get("quoteEmailSender") == "ssanai91@gmail.com",
@@ -612,21 +602,14 @@ class Manager(SoldNumbers, SalesWorkspace):
 
         source = draft.get("sourceRequestId", "")
         self._prepare_quote_delivery(draft)
-        result = self.api.call("send_quote_email", requestId=source, recipientEmail=recipient,
-                               senderName=draft.get("issuer", {}).get("businessName") or "나무팜농원",
-                               quoteNumber=draft.get("requestReceiptNumber") or ("PCQ_" + draft["id"][:8]),
-                               subject=subject.strip(), bodyText=body_text.strip(), bodyHtml=body_html.strip(),
-                               attachmentName=attachment_name, attachmentBase64=attachment_base64)
-        require(result.get("sent") is True and result.get("recipientEmail") == recipient,
-                "메일 전송 완료를 확인하지 못했습니다.")
-        if attachment_name:
-            require(result.get("attachmentName") == attachment_name, "공식견적서 첨부 전송을 확인하지 못했습니다.")
-        delivery = self._mark_quote_channel_sent(draft["id"], "email", emailTo=recipient,
-                                                 senderEmail=result.get("senderEmail", ""),
-                                                 emailQuoteFingerprint=quote_delivery_fingerprint(draft))
-        return {"delivery": delivery, "senderEmail": result.get("senderEmail", ""),
-                "attachmentName": result.get("attachmentName", ""),
-                "sentAt": result.get("sentAt", ""), "remainingDailyQuota": result.get("remainingDailyQuota", 0)}
+        fields = dict(requestId=source, recipientEmail=recipient,
+                      senderName=draft.get("issuer", {}).get("businessName") or "나무팜농원",
+                      quoteNumber=draft.get("requestReceiptNumber") or ("PCQ_" + draft["id"][:8]),
+                      subject=subject.strip(), bodyText=body_text.strip(), bodyHtml=body_html.strip(),
+                      attachmentName=attachment_name, attachmentBase64=attachment_base64)
+        result, delivery = self._dispatch_delivery(draft["id"], "email", recipient, fields,
+                                                   quote_delivery_fingerprint(draft))
+        return {**result, "delivery": delivery}
 
     def send_sales_report_email(self, recipient, attachment_name, attachment_data, subject, body_text):
         recipient = recipient.strip()
@@ -638,16 +621,120 @@ class Manager(SoldNumbers, SalesWorkspace):
                 and attachment_data.startswith(b"PK\x03\x04"), "메일에 첨부할 매출 엑셀은 2MB 이하여야 합니다.")
         require(isinstance(subject, str) and 1 <= len(subject.strip()) <= 160, "메일 제목을 확인해주세요.")
         require(isinstance(body_text, str) and 1 <= len(body_text.strip()) <= 12000, "메일 내용을 확인해주세요.")
-        info = self.verify_server()
+        info = self._require_delivery_server()
         require(info.get("salesReportEmail") is True,
-                "엑셀은 저장했습니다. 매출 엑셀 메일 기능을 사용하려면 기존 Apps Script /exec 웹앱을 최신 코드로 새 버전 배포해주세요.")
-        result = self.api.call("send_sales_report_email", recipientEmail=recipient,
-                               subject=subject.strip(), bodyText=body_text.strip(), attachmentName=attachment_name,
-                               attachmentBase64=base64.b64encode(attachment_data).decode("ascii"))
-        require(result.get("sent") is True and result.get("recipientEmail") == recipient
-                and result.get("attachmentName") == attachment_name,
-                "엑셀은 저장했습니다. 메일 전송 결과를 확인하지 못했습니다. 받은편지함을 확인해주세요.")
+                "엑셀은 저장했습니다. Apps Script를 최신 코드로 새 버전 배포해주세요.")
+        fields = dict(recipientEmail=recipient, subject=subject.strip(), bodyText=body_text.strip(),
+                      attachmentName=attachment_name, attachmentBase64=base64.b64encode(attachment_data).decode("ascii"))
+        result, _ = self._dispatch_delivery("report", "report_email", recipient, fields, "")
         return result
+
+    def _require_delivery_server(self):
+        info = self.verify_server()
+        require(info.get("quoteDeliveryIdempotency") == 1,
+                "Apps Script를 최신 코드로 새 버전 배포해주세요.")
+        return info
+
+    def _delivery_state(self, identifier, channel, payment=False):
+        if channel == "report_email":
+            return self.vault.preference("sales_report_delivery", {})
+        return (self.payment_delivery_state if payment else self.quote_delivery_state)(identifier)
+
+    def _save_delivery_state(self, identifier, channel, state, payment=False):
+        if channel == "report_email":
+            self.vault.save_preference("sales_report_delivery", state)
+            return copy.deepcopy(state)
+        return (self._save_payment_delivery_state if payment else self._save_quote_delivery_state)(identifier, state)
+
+    def _require_no_pending_delivery(self, identifier):
+        require(not self.quote_delivery_state(identifier).get("pendingDelivery") and
+                not self.payment_delivery_state(identifier).get("pendingDelivery"),
+                "이전 발송 결과를 먼저 확인해주세요.")
+
+    def _dispatch_delivery(self, identifier, channel, recipient, fields, fingerprint, *, payment=False):
+        self._require_delivery_server()
+        state = self._delivery_state(identifier, channel, payment)
+        content_hash = hashlib.sha256(canonical(fields).encode("utf-8")).hexdigest()
+        pending = state.get("pendingDelivery")
+        if pending:
+            require((pending.get("channel"), pending.get("recipient"), pending.get("contentHash")) ==
+                    (channel, recipient, content_hash), "이전 발송 결과를 먼저 확인해주세요.")
+            require(pending.get("startedAt", 0) > now_ms() - 30 * 86400000,
+                    "서버 발송 기록 보관기한이 지났습니다. 발송내역을 직접 확인한 뒤 결과 불명을 해제해주세요.")
+        else:
+            pending = {"id": str(uuid.uuid4()), "channel": channel, "recipient": recipient,
+                       "contentHash": content_hash, "quoteFingerprint": fingerprint, "startedAt": now_ms()}
+            state["pendingDelivery"] = pending
+            self._save_delivery_state(identifier, channel, state, payment)  # Commit BEFORE network.
+        try:
+            result = self.api.call({"sms": "send_quote_sms", "email": "send_quote_email",
+                                    "report_email": "send_sales_report_email"}[channel],
+                                   **fields, deliveryId=pending["id"])
+        except UserError as error:
+            if getattr(error, "code", None) in {"INVALID", "NOT_READY", "CONFLICT", "UNAUTHORIZED", "BUSY", "UPGRADE_REQUIRED", "INVALID_ACTION"}:
+                state.pop("pendingDelivery", None)
+                self._save_delivery_state(identifier, channel, state, payment)
+                raise
+            raise UncertainDeliveryError("결과를 확인하지 못했습니다. 이미 발송됐을 수 있으니 '결과 확인'을 눌러주세요. "
+                                         "같은 내용은 다시 보내도 중복 발송되지 않습니다.", code=getattr(error, "code", None)) from error
+        if result.get("state") == "rejected":
+            self._resolve_delivery(identifier, channel, state, "rejected", payment=payment)
+            raise UserError("서버가 발송을 거절했습니다. 설정과 수신 정보를 확인해주세요.")
+        expected = result.get("recipientPhone" if channel == "sms" else "recipientEmail")
+        accepted = (result.get("sent") is True and expected == recipient and
+                    (channel != "sms" or bool(result.get("messageId"))) and
+                    (channel == "sms" or result.get("attachmentName", "") == fields.get("attachmentName", "")))
+        if not accepted:
+            raise UncertainDeliveryError("결과 불명 · 결과 확인 필요. 이미 발송됐을 수 있으니 '결과 확인'을 눌러주세요.")
+        delivery = self._resolve_delivery(identifier, channel, state, "sent", result, payment=payment)
+        return result, delivery
+
+    def _resolve_delivery(self, identifier, channel, state, outcome, result=None, *, payment=False):
+        result = result or {}
+        pending = state.pop("pendingDelivery")
+        if outcome == "sent":
+            if channel == "sms":
+                state.update(smsSentAt=0, smsTo=pending["recipient"], senderPhone=result.get("senderPhone", ""),
+                             smsMessageId=result["messageId"], smsState="pending", smsQuoteFingerprint=pending["quoteFingerprint"],
+                             smsStatusCode=str(result.get("statusCode", "2000")), smsStatusMessage="문자 발송을 접수했습니다.", smsUpdatedAt=now_ms())
+            else:
+                state.update(emailSentAt=now_ms(), emailTo=pending["recipient"], senderEmail=result.get("senderEmail", "ssanai91@gmail.com"),
+                             emailQuoteFingerprint=pending["quoteFingerprint"])
+        elif channel == "sms":
+            state.update(smsState="failed", smsSentAt=0, smsStatusMessage="발송이 거절되었거나 서버가 받지 못했습니다.")
+        state["deliveryResolution"] = outcome
+        return self._save_delivery_state(identifier, channel, state, payment)
+
+    def check_quote_delivery(self, identifier, channel, *, payment=False):
+        self._require_delivery_server()
+        state = self._delivery_state(identifier, channel, payment)
+        pending = state.get("pendingDelivery")
+        require(pending and pending.get("channel") == channel, "확인할 발송 번호가 없습니다.")
+        result = self.api.call("quote_delivery_status", deliveryId=pending["id"])
+        if result.get("found") is False:
+            return self._resolve_delivery(identifier, channel, state, "not_found", payment=payment)
+        require(result.get("found") is True and result.get("channel") == channel, "발송 결과를 확인하지 못했습니다.")
+        outcome = result.get("state")
+        if outcome in ("sent", "rejected"):
+            if outcome == "sent" and channel == "sms":
+                require(bool(result.get("messageId")), "서버가 문자 접수 번호를 확인하지 못했습니다. 결과 불명을 유지합니다.")
+            state = self._resolve_delivery(identifier, channel, state, outcome, result, payment=payment)
+            if outcome == "sent" and channel == "sms":
+                # Acceptance and carrier success remain separate. Persist the message ID first.
+                return self.refresh_quote_sms_status(identifier, payment=payment)
+            return state
+        require(outcome == "sending", "발송 결과를 확인하지 못했습니다.")
+        return {**state, "deliveryResolution": "unknown"}
+
+    def dismiss_uncertain_delivery(self, identifier, channel, *, payment=False):
+        state = self._delivery_state(identifier, channel, payment)
+        pending = state.get("pendingDelivery")
+        require(pending and pending.get("channel") == channel, "해제할 발송 번호가 없습니다.")
+        state["dismissedDeliveries"] = [*state.get("dismissedDeliveries", []),
+                                        {"id": pending["id"], "dismissedAt": now_ms()}][-20:]
+        state.pop("pendingDelivery")
+        state["deliveryResolution"] = "dismissed"
+        return self._save_delivery_state(identifier, channel, state, payment)
 
     def request_notification_state(self):
         state = self.vault.preference("request_notifications")
@@ -698,6 +785,7 @@ class Manager(SoldNumbers, SalesWorkspace):
 
     def confirm_draft(self, draft):
         validate_draft(draft)
+        self._require_no_pending_delivery(draft["id"])
         # Retain the original draft link while assigning a reserved SOLD number.
         snapshot = self.view()
         require(self._sale_for_draft(draft) is None,
@@ -739,6 +827,7 @@ class Manager(SoldNumbers, SalesWorkspace):
         return {"alreadyRegistered": False, "view": view}
 
     def confirm_received_payment(self, draft, *, sms_required):
+        self._require_no_pending_delivery(draft["id"])
         prepared = self.prepare_received_payment(draft)
         if prepared["alreadyRegistered"]:
             return prepared["view"]
@@ -1113,6 +1202,7 @@ class Manager(SoldNumbers, SalesWorkspace):
             integer(bucket.get("knownProfit"), -9007199254740991)
             require(bucket["unknownProfitOrders"] <= bucket["orders"])
         return report
+
 
 
 

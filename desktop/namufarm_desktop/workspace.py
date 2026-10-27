@@ -29,6 +29,7 @@ from .commerce import (ISSUER, new_draft, new_manual_draft, draft_amounts, valid
                        shipping_ready, TRACKING_PREFIX, sale_number, normalize_sms_recipient, item_specification, validate_working_draft)
 from .domain import SEOUL, profit, require
 from .errors import UserError
+from .delivery_recovery import DeliveryRecoveryTools
 from .shipping_excel import shipping_xls, parse_tracking_xls, export_orders, UPLOAD_SHEET
 from .nursery_ui import NurseryPage, DigitalClock
 from .inquiry_ui import InquiryPage
@@ -2012,13 +2013,13 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
             if mode == "save_manual":
                 fingerprint = quote_delivery_fingerprint(draft)
                 state = self.delivery_state
-                delivered = ((state.get("smsState") == "success" and state.get("smsQuoteFingerprint") == fingerprint)
+                delivered = not state.get("pendingDelivery") and ((state.get("smsState") == "success" and state.get("smsQuoteFingerprint") == fingerprint)
                              or (bool(state.get("emailSentAt")) and state.get("emailQuoteFingerprint") == fingerprint))
                 draft["manualStatus"] = "견적발송완료" if delivered else "견적확정"
             if self.workbench and mode in ("finalize", "save_manual"):
                 fingerprint = quote_delivery_fingerprint(draft)
                 state = self.delivery_state
-                delivered = ((state.get("smsState") == "success" and state.get("smsQuoteFingerprint") == fingerprint)
+                delivered = not state.get("pendingDelivery") and ((state.get("smsState") == "success" and state.get("smsQuoteFingerprint") == fingerprint)
                              or (bool(state.get("emailSentAt")) and state.get("emailQuoteFingerprint") == fingerprint))
                 if not delivered:
                     QMessageBox.warning(self, "고객 전달 확인", "문자 또는 메일을 먼저 보내 주세요.\n현재 견적의 전송이 완료되어야 견적완료할 수 있습니다.\n문자 결과확인 중이면 최종 전송 결과를 확인해 주세요.")
@@ -2078,7 +2079,7 @@ QLineEdit#deliveryStatusLog[state="failed"]{border-color:#b96155;}
         self.setToolTip(display)
 
 
-class QuoteSmsDialog(QDialog):
+class QuoteSmsDialog(DeliveryRecoveryTools, QDialog):
     """견적 문자 작성, 실제 발송, 최종 성공/실패 확인 팝업."""
 
     def __init__(self, draft, manager=None, parent=None, *, payment=False):
@@ -2181,6 +2182,7 @@ class QuoteSmsDialog(QDialog):
             self.payment_confirm_button = button("입금확인", self.confirm_payment, True)
             self.payment_confirm_button.setEnabled(False)
             actions.addWidget(self.payment_confirm_button)
+        self.setup_delivery_recovery(actions, "sms")
         layout.addLayout(actions)
         setup_delivery_reading(self, layout)
 
@@ -2244,10 +2246,12 @@ class QuoteSmsDialog(QDialog):
             valid = True
         except UserError:
             valid = False
-        idle = not (self.profile_task or self.send_task or self.status_task)
+        idle = not (self.profile_task or self.send_task or self.status_task or self.delivery_state.get("pendingDelivery"))
         self.send_button.setEnabled(bool(self.manager and self._sender_ready and valid and idle))
 
     def load_profile(self):
+        if self.restore_uncertain_delivery():
+            return
         self.status.setText("문자 전송 준비 중")
         if not self.manager:
             self.sender_phone.setText("PC 연결 필요")
@@ -2294,7 +2298,7 @@ class QuoteSmsDialog(QDialog):
             self.status.setText("문자 전송 준비 실패 · 문자 내용을 입력해주세요.")
             QMessageBox.warning(self, "문자 확인", "문자 내용을 입력해주세요.")
             return
-        if not self.manager or self.profile_task or self.send_task or self.status_task:
+        if not self.manager or self.profile_task or self.send_task or self.status_task or self.restore_uncertain_delivery():
             return
         try:
             recipient = normalize_sms_recipient(self.recipient_phone.text())
@@ -2326,6 +2330,8 @@ class QuoteSmsDialog(QDialog):
             task.wait()
             self.send_task = None
             task.deleteLater()
+        if self.restore_uncertain_delivery():
+            return
         if error:
             self.message.setEnabled(True)
             self.recipient_phone.setReadOnly(False)
@@ -2349,6 +2355,9 @@ class QuoteSmsDialog(QDialog):
 
     def check_status(self, checked=False):
         if not self.manager or self.profile_task or self.status_task or self.send_task:
+            return
+        if self.recovery_state().get("pendingDelivery"):
+            self.check_uncertain_delivery()
             return
         if not self.delivery_state.get("smsMessageId"):
             self.status.setText("문자 전송 결과 확인 필요 · 확인할 발송 기록이 없습니다.")
@@ -2410,11 +2419,22 @@ class QuoteSmsDialog(QDialog):
         else:
             self.status.setText("문자 전송 결과 확인 중 · 자동 확인을 마쳤습니다. 결과 확인을 다시 눌러주세요.")
 
+    def delivery_recovered(self, state):
+        self.delivery_state = dict(state)
+        self.message.setEnabled(True)
+        if state.get("deliveryResolution") in ("not_found", "rejected", "dismissed"):
+            self.recipient_phone.setReadOnly(False)
+            self.check_button.setEnabled(False)
+            self.load_profile()
+            self.status.setText("발송 기록 없음 · 다시 보내기 가능" if state.get("deliveryResolution") == "not_found" else "발송 미완료 · 다시 보내기 가능")
+        else:
+            self.sms_status_checked(state, "", False)
+
     def confirm_payment(self):
         # Delivery success never registers a sale without this explicit click.
         if not self.payment_notice or self.profile_task or self.send_task or self.status_task:
             return
-        if (self.delivery_state.get("smsState") != "success" or
+        if (self.recovery_state().get("pendingDelivery") or self.delivery_state.get("smsState") != "success" or
                 self.delivery_state.get("smsQuoteFingerprint") != quote_delivery_fingerprint(self.draft)):
             return
         self.success_confirmed = True
@@ -2429,7 +2449,7 @@ class QuoteSmsDialog(QDialog):
         super().reject()
 
 
-class QuoteEmailDialog(QDialog):
+class QuoteEmailDialog(DeliveryRecoveryTools, QDialog):
     """메일 내용 확인과 실제 전송에 집중한 간결한 견적 메일 창."""
 
     SENDER_EMAIL = "ssanai91@gmail.com"
@@ -2439,7 +2459,7 @@ class QuoteEmailDialog(QDialog):
         self.draft = copy.deepcopy(draft)
         self.manager = manager
         self.attachment_path = Path(attachment_path) if attachment_path else None
-        self.delivery_state = {}
+        self.delivery_state = manager.quote_delivery_state(draft["id"]) if manager else {}
         self.success_confirmed = False
         self.profile_task = None
         self.send_task = None
@@ -2528,6 +2548,7 @@ class QuoteEmailDialog(QDialog):
         actions.addStretch()
         actions.addWidget(self.cancel_button)
         actions.addWidget(self.send_button)
+        self.setup_delivery_recovery(actions, "email")
         layout.addLayout(actions)
         setup_delivery_reading(self, layout)
 
@@ -2586,6 +2607,8 @@ class QuoteEmailDialog(QDialog):
         ]).strip()
 
     def load_profile(self):
+        if self.restore_uncertain_delivery():
+            return
         self.status.setText("메일 전송 준비 중")
         if not self.manager:
             self.status.setText("메일 전송 준비 실패 · PC를 서버에 연결해주세요.")
@@ -2652,7 +2675,7 @@ class QuoteEmailDialog(QDialog):
             self.status.setText("메일 전송 준비 실패 · 메일 제목과 내용을 입력해주세요.")
             QMessageBox.warning(self, "메일 확인", "메일 제목과 내용을 입력해주세요.")
             return
-        if not self.manager or self.profile_task or self.send_task or self.success_confirmed:
+        if not self.manager or self.profile_task or self.send_task or self.status_task or self.success_confirmed or self.restore_uncertain_delivery():
             return
         self.subject.setEnabled(False)
         self.message.setEnabled(False)
@@ -2679,6 +2702,8 @@ class QuoteEmailDialog(QDialog):
             task.wait()
             self.send_task = None
             task.deleteLater()
+        if self.restore_uncertain_delivery():
+            return
         if error:
             self.subject.setEnabled(True)
             self.message.setEnabled(True)
@@ -2706,8 +2731,19 @@ class QuoteEmailDialog(QDialog):
         self.cancel_button.setEnabled(True)
         # Keep the result log visible; the parent receives Accepted when closed.
 
+    def delivery_recovered(self, state):
+        self.delivery_state = dict(state)
+        self.check_button.setEnabled(False)
+        if state.get("deliveryResolution") == "sent":
+            self.email_sent({"delivery": state, "attachmentName": self.attachment_path.name if self.attachment_path else ""}, "", False)
+        else:
+            self.subject.setEnabled(True)
+            self.message.setEnabled(True)
+            self.load_profile()
+            self.status.setText("발송 기록 없음 · 다시 보내기 가능" if state.get("deliveryResolution") == "not_found" else "발송 미완료 · 다시 보내기 가능")
+
     def reject(self):
-        if self.profile_task or self.send_task:
+        if self.profile_task or self.send_task or self.status_task:
             self.status.setText("현재 메일 처리가 끝난 뒤 창을 닫아주세요.")
             return
         if self.success_confirmed:
@@ -5220,6 +5256,7 @@ class SellerWindow(MainWindow):
         if self.manager and self.data["paired"] and self.auto_check.isChecked() and not self.task and not self.dirty and not self.conflict:
             pull = self.manager.sync if self.stack.currentIndex() in (self.PAGE_SALES, self.PAGE_SHIPPING, self.PAGE_REPORTS) else self.manager.sync_requests
             self.run_job("AUTO SYNC  >  서버 동기화 중…", pull)
+
 
 
 

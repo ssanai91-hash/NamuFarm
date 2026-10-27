@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from .list_filters import ListPeriodFilter, first_date
 
-from PySide6.QtCore import QSettings, QStandardPaths, Qt, QThread, QTimer, Signal, QUrl
+from PySide6.QtCore import QSettings, QStandardPaths, Qt, QThread, QTimer, Signal, QUrl, Slot
 from PySide6.QtGui import QCloseEvent, QRegularExpressionValidator, QDesktopServices
 from PySide6.QtCore import QRegularExpression
 from PySide6.QtWidgets import (
@@ -21,6 +21,7 @@ from .commerce import sale_number
 from .crypto import SellerKey
 from .domain import EDITABLE, NEXT, SEOUL, STATES, MAX_SAFE, profit, require
 from .errors import ConflictError, UserError
+from .delivery_recovery import DeliveryRecoveryTools
 from .service import Manager
 from .store import Vault
 from .ui_theme import DataTable, StatusMessage, align_table, workspace_style
@@ -143,37 +144,97 @@ class LegacyImportDialog(QDialog):
             self.backup.setText(path)
 
 
-class ReportEmailDialog(QDialog):
-    """Ask the operator to confirm the seller's address after saving an export."""
+class ReportEmailDialog(DeliveryRecoveryTools, QDialog):
+    """The export is already saved; mail delivery has its own recoverable ID."""
 
-    def __init__(self, path, recipient, parent=None):
+    def __init__(self, path, recipient, parent=None, *, manager=None, data=b"", subject="", body=""):
         super().__init__(parent)
-        self.setWindowTitle("엑셀 저장 완료")
-        self.setMinimumWidth(440)
+        self.manager, self.path, self.data = manager, path, data
+        self.report_subject, self.report_body = subject, body
+        self.profile_task = self.send_task = self.status_task = None
+        self.delivery_state = {}
+        self.success_confirmed = False
+        self.setWindowTitle("엑셀 저장 완료 · 매출 메일")
+        self.setMinimumWidth(560)
         layout = QFormLayout(self)
-        question = QLabel("매출 엑셀을 저장했습니다.\n판매자 메일로 첨부해서 보낼까요?")
-        question.setWordWrap(True)
-        layout.addRow(question)
-        attachment = QLabel(path.name)
-        attachment.setTextFormat(Qt.TextFormat.PlainText)
-        attachment.setWordWrap(True)
-        layout.addRow("첨부파일", attachment)
+        layout.addRow(QLabel("매출 엑셀은 저장되었습니다. 판매자 메일로 첨부해서 보낼 수 있습니다."))
+        layout.addRow("첨부파일", QLabel(path.name))
         self.recipient = QLineEdit(recipient)
-        self.recipient.setPlaceholderText("판매자 이메일 주소")
         self.recipient.setMaxLength(254)
-        self.recipient.setClearButtonEnabled(True)
+        self.recipient.setPlaceholderText("판매자 이메일 주소")
         layout.addRow("받는 메일", self.recipient)
-        buttons = QDialogButtonBox()
-        send = buttons.addButton("메일 전송", QDialogButtonBox.ButtonRole.AcceptRole)
-        save_only = buttons.addButton("저장만", QDialogButtonBox.ButtonRole.RejectRole)
-        save_only.setDefault(True)
-        buttons.accepted.connect(self.accept)
-        buttons.rejected.connect(self.reject)
-        def update_recipient():
-            send.setEnabled(bool(re.fullmatch(r"[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+", self.recipient.text().strip())))
-        self.recipient.textChanged.connect(update_recipient)
-        update_recipient()
-        layout.addRow(buttons)
+        self.message = QPlainTextEdit(body)
+        self.message.setReadOnly(True)
+        layout.addRow(self.message)
+        self.status = QLabel("메일 전송 준비")
+        self.status.setWordWrap(True)
+        layout.addRow(self.status)
+        actions = QHBoxLayout()
+        self.send_button = QPushButton("메일 전송")
+        self.send_button.clicked.connect(self.send_report)
+        self.cancel_button = QPushButton("저장만 · 닫기")
+        self.cancel_button.clicked.connect(self.reject)
+        actions.addWidget(self.cancel_button)
+        actions.addWidget(self.send_button)
+        self.setup_delivery_recovery(actions, "report_email")
+        layout.addRow(actions)
+        self.recipient.textChanged.connect(self.update_recipient)
+        self.update_recipient()
+
+    def update_recipient(self):
+        pending = self.delivery_state.get("pendingDelivery")
+        self.send_button.setEnabled(bool(self.manager and not pending and not self.send_task and not self.status_task and
+                                    not self.success_confirmed and re.fullmatch(r"[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+", self.recipient.text().strip())))
+
+    def send_report(self):
+        if not self.manager or self.send_task or self.status_task or self.success_confirmed or self.restore_uncertain_delivery():
+            return
+        recipient = self.recipient.text().strip()
+        self.send_button.setEnabled(False)
+        self.check_button.setEnabled(False)
+        self.recipient.setReadOnly(True)
+        self.cancel_button.setEnabled(False)
+        self.status.setText("엑셀 저장 완료 · 메일 전송 중")
+        task = Task(lambda: self.manager.send_sales_report_email(recipient, self.path.name, self.data,
+                                                               self.report_subject, self.report_body), None, self)
+        self.send_task = task
+        task.completed.connect(self.report_sent)
+        task.start()
+
+    @Slot(object, str, bool)
+    def report_sent(self, value, error, conflict):
+        task = self.send_task
+        if task is not None:
+            task.wait()
+            self.send_task = None
+            task.deleteLater()
+        self.cancel_button.setEnabled(True)
+        if self.restore_uncertain_delivery():
+            self.status.setText("엑셀 저장 완료 · 결과 불명 · 결과 확인 필요")
+            return
+        if error or not isinstance(value, dict):
+            self.recipient.setReadOnly(False)
+            self.update_recipient()
+            self.status.setText("엑셀 저장 완료 · 메일 전송 실패 · " + (error or "응답을 확인하지 못했습니다."))
+            return
+        self.success_confirmed = True
+        self.send_button.setEnabled(False)
+        self.status.setText("엑셀 저장 완료 · 메일 전송 완료")
+
+    def delivery_recovered(self, state):
+        self.delivery_state = dict(state)
+        self.check_button.setEnabled(False)
+        self.success_confirmed = state.get("deliveryResolution") == "sent"
+        self.recipient.setReadOnly(self.success_confirmed)
+        self.message.setEnabled(True)
+        self.update_recipient()
+        self.status.setText("엑셀 저장 완료 · 이전 메일 발송 완료 확인" if self.success_confirmed else "엑셀 저장 완료 · 발송 미완료 · 다시 보내기 가능")
+
+    def reject(self):
+        if self.profile_task or self.send_task or self.status_task:
+            self.status.setText("현재 처리가 끝난 뒤 창을 닫아주세요. 엑셀은 저장되었습니다.")
+            return
+        super().reject()
 
 
 class MainWindow(QMainWindow):
@@ -773,29 +834,23 @@ class MainWindow(QMainWindow):
 
     def offer_sales_report_email(self, path, report, data):
         settings = QSettings("NamuFarm", "Desktop")
-        dialog = ReportEmailDialog(path, str(settings.value("salesReportSellerEmail", "") or ""), self)
-        was_active = self.timer.isActive()
-        self.timer.stop()
-        try:
-            accepted = dialog.exec() == QDialog.DialogCode.Accepted
-            recipient = dialog.recipient.text().strip()
-        finally:
-            dialog.deleteLater()
-            if was_active:
-                self.timer.start()
-        if not accepted:
-            return
-        settings.setValue("salesReportSellerEmail", recipient)
-        if not self.manager:
-            QMessageBox.information(self, "메일 전송", "엑셀은 저장했습니다. 메일 전송은 PC 서버 연결 후 사용할 수 있습니다.")
-            return
         subject = f"[나무팜] {report['unit']} 매출 집계 · {report['period']}"
         body = (f"나무팜 매출 집계 엑셀을 첨부합니다.\n\n조회 기간: {report['period']}\n집계 단위: {report['unit']}\n"
                 f"검색어: {report['query'] or '전체'}\n판매 건수: {report['count']:,}건\n판매금액 합계: {money(report['amount'])}\n\n"
                 "입금확인일 기준 · 선불 택배비 포함 / 후불 제외 · 취소 제외")
-        self.run_job("매출 엑셀 메일 전송 중…", lambda: self.manager.send_sales_report_email(
-            recipient, path.name, data, subject, body),
-            lambda result: self.sales_report_email_sent(path, result), False)
+        dialog = ReportEmailDialog(path, str(settings.value("salesReportSellerEmail", "") or ""), self,
+                                   manager=self.manager, data=data, subject=subject, body=body)
+        was_active = self.timer.isActive()
+        self.timer.stop()
+        try:
+            dialog.exec()
+            settings.setValue("salesReportSellerEmail", dialog.recipient.text().strip())
+            if dialog.success_confirmed:
+                self.message.setText("매출 엑셀 저장 · 메일 전송 완료")
+        finally:
+            dialog.deleteLater()
+            if was_active:
+                self.timer.start()
 
     def sales_report_email_sent(self, path, result):
         self.message.setText(f"매출 엑셀 저장 · 메일 전송 완료 · {result['recipientEmail']}")
@@ -979,6 +1034,7 @@ def main():
         return app.exec()
     QTimer.singleShot(0, window.open_vault)
     return app.exec()
+
 
 
 

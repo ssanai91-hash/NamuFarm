@@ -4,8 +4,9 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+from . import __version__
 from .crypto import canonical
-from .errors import AuthenticationError, ConflictError, NetworkError, UserError
+from .errors import AuthenticationError, ConflictError, NetworkError, UserError, UncertainDeliveryError
 
 RETIRED_URL = "https://script.google.com/macros/s/AKfycbw8uqBWveIhqmXielALjSLnY1yDenKAwl070FT6Lsxsj7Xiod1C5JSBDZGfQtlrl6A-CQ/exec"
 PREVIOUS_URL = "https://script.google.com/macros/s/AKfycbzY7JKzXYmS9APLNFDt15k8dv09zb4EXKFHOOv_T1vpFmkr6TLwbqGznGLgpd2cIVgD/exec"
@@ -20,7 +21,7 @@ ACTION_LABELS = {"list_customer_inquiries": "고객문의 불러오기", "save_i
                  "update_request_status": "견적 발송 상태 저장", "email_profile": "메일 발신 계정 확인",
                  "send_quote_email": "견적 메일 전송", "send_sales_report_email": "매출 엑셀 메일 전송",
                  "sms_profile": "문자 발신 설정 확인",
-                 "send_quote_sms": "견적 문자 전송", "quote_sms_status": "문자 전송 결과 확인",
+                 "quote_delivery_status": "발송 결과 확인", "send_quote_sms": "견적 문자 전송", "quote_sms_status": "문자 전송 결과 확인",
                  "list_requests": "문의 목록 조회",
                  "list_sales": "판매 목록 조회", "sales_report": "판매 통계 조회"}
 
@@ -62,17 +63,18 @@ class ScriptApi:
         def failure(reason):
             if payload is not None and payload.get("action") in ("save_inquiry_reply", "send_inquiry_reply", "set_inquiry_status", "inquiry_sms_status"):
                 return NetworkError(f"{label} 중 {reason} 답변과 작업 ID를 보관했습니다. 고객문의의 결과 확인으로 확인해주세요.")
-            if payload is not None and payload.get("action") == "send_sales_report_email":
-                return NetworkError(f"매출 엑셀은 저장했습니다. 메일 전송 중 {reason} 전송 결과를 확인하지 못했으니 받은편지함을 확인한 뒤 재시도해주세요.")
+            if payload is not None and payload.get("action") in ("send_quote_sms", "send_quote_email", "send_sales_report_email"):
+                return UncertainDeliveryError("결과를 확인하지 못했습니다. 이미 발송됐을 수 있으니 '결과 확인'을 눌러주세요. "
+                                              "같은 내용은 다시 보내도 중복 발송되지 않습니다.")
             return NetworkError(f"{label} 중 {reason} 로컬 기록과 전송 대기를 유지합니다. '지금 동기화'로 재시도해주세요.")
 
         try:
             data = None if payload is None else canonical(payload).encode("utf-8")
             limit = 3000000 if payload is not None and payload.get("action") in ("send_quote_email", "send_sales_report_email") else 65000
             if data is not None and len(data) > limit:
-                raise UserError("전송할 기록이 너무 큽니다.")
+                raise UserError("전송할 기록이 너무 큽니다.", code="INVALID")
             request = urllib.request.Request(self.url, data=data,
-                       headers={"Content-Type": "application/json", "User-Agent": "NamuFarmDesktop/0.4"})
+                       headers={"Content-Type": "application/json", "User-Agent": f"NamuFarmDesktop/{__version__}"})
             with self.opener.open(request, timeout=REQUEST_TIMEOUT) as response:
                 raw = response.read(MAX_RESPONSE + 1)
                 if len(raw) > MAX_RESPONSE:
@@ -81,16 +83,20 @@ class ScriptApi:
             if not isinstance(result, dict) or result.get("ok") is not True:
                 code = result.get("code") if isinstance(result, dict) else None
                 if code == "CONFLICT":
-                    raise ConflictError("앱이나 다른 PC에서 먼저 수정했습니다. 전송 대기를 확인해주세요.")
+                    raise ConflictError("앱이나 다른 PC에서 먼저 수정했습니다. 전송 대기를 확인해주세요.", code=code)
                 if code == "UNAUTHORIZED":
-                    raise AuthenticationError(f"{label} 중 기기 연결을 확인하지 못했습니다. ‘서버 동기화’를 눌러 다시 연결해주세요.")
+                    raise AuthenticationError(f"{label} 중 기기 연결을 확인하지 못했습니다. ‘서버 동기화’를 눌러 다시 연결해주세요.", code=code)
                 messages = {"NOT_READY": "서버 설정과 배포 버전을 확인해주세요.",
                             "DEVICE_LIMIT": "서버 기기 등록 한도에 도달했습니다. 서버 관리자에게 문의해주세요.",
                             "UPGRADE_REQUIRED": "앱과 서버를 최신 버전으로 업데이트해주세요.",
                             "INVALID_ACTION": "현재 연결된 Apps Script /exec 배포가 이전 버전입니다. 기존 웹앱을 새 버전으로 다시 배포해주세요.",
                             "UNAVAILABLE": "Apps Script 실행 중 오류가 발생했습니다. Apps Script의 실행 기록에서 실패 원인을 확인해주세요.",
                             "INVALID": "입력값과 앱·서버 버전을 확인해주세요.", "BUSY": "서버가 처리 중입니다. 잠시 후 동기화해주세요."}
-                raise UserError(f"{label}: " + messages.get(code, "서버가 저장을 확인하지 못했습니다. 전송 대기는 유지됩니다."))
+                if code == "UNAVAILABLE" and payload is not None and payload.get("action") in ("send_quote_sms", "send_quote_email", "send_sales_report_email"):
+                    error = failure("")
+                    error.code = code
+                    raise error
+                raise UserError(f"{label}: " + messages.get(code, "서버가 저장을 확인하지 못했습니다. 전송 대기는 유지됩니다."), code=code)
             return result
         except (UserError, ConflictError):
             raise
@@ -122,6 +128,7 @@ class ScriptApi:
         if not re.fullmatch(r"[a-f0-9]{64}", self.token):
             raise UserError("PC 기기 연결을 먼저 완료해주세요.")
         return self._send({"action": action, "deviceToken": self.token, **fields})
+
 
 
 

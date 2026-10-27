@@ -91,3 +91,112 @@ class RequestDeliveryTest(unittest.TestCase):
         with self.assertRaises(NetworkError):
             self.manager.send_quote_email(self.draft, '견적 안내', '본문', '<p>본문</p>')
         self.assert_request_still_new()
+
+
+    def test_timeout_retains_id_retries_same_id_and_blocks_changed_payload(self):
+        from namufarm_desktop.errors import UncertainDeliveryError
+        call = self.api.call
+        seen = []
+        def timeout(action, **fields):
+            if action == 'send_quote_email':
+                seen.append(fields['deliveryId'])
+                raise NetworkError('timeout')
+            return call(action, **fields)
+        self.api.call = timeout
+        for _ in range(2):
+            with self.assertRaises(UncertainDeliveryError):
+                self.manager.send_quote_email(self.draft, '견적', '본문', '<p>본문</p>')
+        self.assertEqual(seen[0], seen[1])
+        pending = Manager(self.vault, self.api).quote_delivery_state(self.draft['id'])['pendingDelivery']
+        self.assertEqual(seen[0], pending['id'])
+        with self.assertRaisesRegex(UserError, '이전 발송 결과'):
+            self.manager.send_quote_email(self.draft, '견적', '변경', '<p>변경</p>')
+        self.assertEqual(2, len(seen))
+        self.api.call = call
+        state = self.manager.check_quote_delivery(self.draft['id'], 'email')
+        self.assertEqual('not_found', state['deliveryResolution'])
+        self.assertNotIn('pendingDelivery', state)
+        self.assertTrue(self.manager.send_quote_email(self.draft, '견적', '본문', '<p>본문</p>')['sent'])
+
+    def test_lost_accepted_response_recovers_email_and_payment_requires_resolution(self):
+        from namufarm_desktop.errors import UncertainDeliveryError
+        call = self.api.call
+        def lose_ack(action, **fields):
+            result = call(action, **fields)
+            if action == 'send_quote_email':
+                raise NetworkError('lost acknowledgement')
+            return result
+        self.api.call = lose_ack
+        with self.assertRaises(UncertainDeliveryError):
+            self.manager.send_quote_email(self.draft, '견적', '본문', '<p>본문</p>')
+        with self.assertRaisesRegex(UserError, '이전 발송 결과'):
+            self.manager.mark_quote_sent(self.draft)
+        self.api.call = call
+        state = self.manager.check_quote_delivery(self.draft['id'], 'email')
+        self.assertGreater(state['emailSentAt'], 0)
+        self.assertEqual(quote_delivery_fingerprint(self.draft), state['emailQuoteFingerprint'])
+        self.assertNotIn('pendingDelivery', state)
+
+    def test_sms_acceptance_recovery_retains_carrier_success_check(self):
+        from namufarm_desktop.errors import UncertainDeliveryError
+        self.bridge.send(control='configure_sms')
+        call = self.api.call
+        def lose_ack(action, **fields):
+            result = call(action, **fields)
+            if action == 'send_quote_sms':
+                raise NetworkError('lost acknowledgement')
+            return result
+        self.api.call = lose_ack
+        with self.assertRaises(UncertainDeliveryError):
+            self.manager.send_quote_sms(self.draft, '견적 안내')
+        self.api.call = call
+        state = self.manager.check_quote_delivery(self.draft['id'], 'sms')
+        self.assertEqual('success', state['smsState'])
+        self.assertTrue(state['smsMessageId'])
+        self.assertNotIn('pendingDelivery', state)
+
+    def test_definite_rejection_clears_pending_unknown_retains_it_and_dismiss_is_audited(self):
+        from namufarm_desktop.errors import UncertainDeliveryError
+        call = self.api.call
+        def unavailable(action, **fields):
+            if action == 'send_quote_email':
+                return {'sent': False, 'state': 'unknown'}
+            return call(action, **fields)
+        self.api.call = unavailable
+        with self.assertRaises(UncertainDeliveryError):
+            self.manager.send_quote_email(self.draft, '견적', '본문', '<p>본문</p>')
+        first = self.manager.quote_delivery_state(self.draft['id'])['pendingDelivery']['id']
+        state = self.manager.dismiss_uncertain_delivery(self.draft['id'], 'email')
+        self.assertEqual(first, state['dismissedDeliveries'][-1]['id'])
+        self.assertNotIn('pendingDelivery', state)
+        def rejected(action, **fields):
+            if action == 'send_quote_email':
+                raise UserError('invalid', code='INVALID')
+            return call(action, **fields)
+        self.api.call = rejected
+        with self.assertRaises(UserError):
+            self.manager.send_quote_email(self.draft, '견적', '본문', '<p>본문</p>')
+        self.assertNotIn('pendingDelivery', self.manager.quote_delivery_state(self.draft['id']))
+
+    def test_old_server_stops_send_and_report_timeout_keeps_export_and_id(self):
+        from namufarm_desktop.errors import UncertainDeliveryError
+        original = self.manager._require_delivery_server
+        self.manager._server_info_cache = None
+        self.api.info_filter = lambda info: {**info, 'quoteDeliveryIdempotency': 0}
+        with self.assertRaisesRegex(UserError, '새 버전 배포'):
+            self.manager.send_quote_email(self.draft, '견적', '본문', '<p>본문</p>')
+        self.api.info_filter = None
+        self.manager._server_info_cache = None
+        call = self.api.call
+        ids = []
+        def timeout(action, **fields):
+            if action == 'send_sales_report_email':
+                ids.append(fields['deliveryId'])
+                raise NetworkError('timeout')
+            return call(action, **fields)
+        self.api.call = timeout
+        for _ in range(2):
+            with self.assertRaises(UncertainDeliveryError):
+                self.manager.send_sales_report_email('seller@example.com', 'report.xlsx', b'PK\x03\x04test', '매출', '집계')
+        self.assertEqual(ids[0], ids[1])
+        self.assertEqual(ids[0], self.vault.preference('sales_report_delivery')['pendingDelivery']['id'])
