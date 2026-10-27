@@ -15,7 +15,10 @@ class DeliveryRecoveryTools:
         self.dismiss_button = QPushButton('발송되지 않았음을 확인했어요')
         self.dismiss_button.clicked.connect(self.dismiss_delivery)
         self.dismiss_button.hide()
-        actions.addWidget(self.dismiss_button)
+        if hasattr(self.layout(), "addRow"):
+            self.layout().addRow(self.dismiss_button)
+        else:
+            self.layout().addWidget(self.dismiss_button)
         self.restore_uncertain_delivery()
 
     def recovery_identifier(self):

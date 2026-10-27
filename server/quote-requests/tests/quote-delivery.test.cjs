@@ -32,3 +32,23 @@ test('mail and report reuse the fence; cleanup removes only rows at least 30 day
  f.context.sendSalesReportEmail_(report);f.context.sendSalesReportEmail_(report);assert.equal(f.mail.length,2);
  const rows=f.book.get('견적발송기록').cells;f.setTime(new Date(Date.parse(rows[1][7])+30*86400000).toISOString());f.context.purgeQuoteDeliveries_();assert.equal(rows.length,1);
 });
+
+test('post-send journal lock failure remains unknown rather than preflight BUSY',()=>{
+ const f=setup(),body=message(),fetch=f.context.UrlFetchApp.fetch;
+ f.context.UrlFetchApp.fetch=(...args)=>{const response=fetch(...args);f.failLock();return response;};
+ assert.equal(f.context.sendQuoteSms_(body).state,'unknown');assert.equal(f.sms.length,1);
+ assert.equal(f.context.sendQuoteSms_(body).state,'unknown');assert.equal(f.sms.length,1);
+ assert.equal(f.context.quoteDeliveryStatus_({deliveryId:body.deliveryId}).state,'sending');
+});
+
+test('provider failed-message list is rejected before acceptance and never replayed',()=>{
+ const f=setup(),body=message();let calls=0;
+ f.context.UrlFetchApp.fetch=()=>{calls++;return {getResponseCode:()=>200,getContentText:()=>JSON.stringify({failedMessageList:[{statusCode:'1030'}],messageList:[]})};};
+ assert.equal(f.context.sendQuoteSms_(body).state,'rejected');assert.equal(f.context.sendQuoteSms_(body).state,'rejected');assert.equal(calls,1);
+});
+
+test('MailApp exception after acceptance is uncertain and never sent again',()=>{
+ const f=setup(),body={deliveryId:crypto.randomUUID(),recipientEmail:'buyer@example.com',quoteNumber:'PCQ_TEST',subject:'견적',bodyText:'안내',bodyHtml:'<p>안내</p>'};let calls=0;
+ f.context.MailApp.sendEmail=()=>{calls++;throw Error('response lost after mail acceptance');};
+ assert.equal(f.context.sendQuoteEmail_(body).state,'unknown');assert.equal(f.context.sendQuoteEmail_(body).state,'unknown');assert.equal(calls,1);
+});

@@ -569,7 +569,8 @@ function sendQuoteSms_Legacy_(body) {
   const failed=Array.isArray(result.failedMessageList)?result.failedMessageList:[];
   const list=Array.isArray(result.messageList)?result.messageList:[];
   if(failed.length && !list.some(row=>String(row.statusCode)==='2000'))quoteDeliveryRejected_();
-  assert_(failed.length===0 && list.length===1 && String(list[0].statusCode)==='2000' && /^M[A-Za-z0-9_-]+$/.test(String(list[0].messageId||'')),'UNAVAILABLE');
+  assert_(failed.length===0 && list.length===1 && String(list[0].statusCode)==='2000','UNAVAILABLE');
+  if(body.deliveryId)assert_(/^M[A-Za-z0-9_-]+$/.test(String(list[0].messageId||'')),'UNAVAILABLE');
   const accepted=list[0];
   return {sent:true,accepted:true,recipientPhone:recipientPhone,senderPhone:settings.senderPhone,
     messageId:String(accepted.messageId||''),state:'pending',statusCode:'2000',
@@ -787,7 +788,7 @@ function quoteDeliveryResult_(saved,body,channel) {
 }
 function quoteDelivery_(body,channel,send) {
   assert_(body && typeof body==='object','INVALID');
-  if(body.deliveryId===undefined || body.deliveryId==='')return send(); // Android/legacy contract.
+  if(body.deliveryId===undefined)return send(); // Android/legacy contract.
   assert_(typeof body.deliveryId==='string' && QUOTE_DELIVERY_ID.test(body.deliveryId),'INVALID');
   assert_(!body.requestId || UUID_PATTERN.test(body.requestId),'INVALID');
   const recipient=channel==='sms'?String(body.recipientPhone||'').replace(/\D/g,''):String(body.recipientEmail||'').trim();
@@ -802,7 +803,9 @@ function quoteDelivery_(body,channel,send) {
       return {ok:true,sent:false,state:row[3]==='REJECTED'?'rejected':'unknown',deliveryId:id};
     }
     const recipient=channel==='sms'?String(body.recipientPhone||'').replace(/\D/g,''):String(body.recipientEmail||'');
-    sheet.getRange(sheet.getLastRow()+1,1,1,10).setValues([[id,channel,String(body.requestId||''),'SENDING','',recipient.slice(-4),fingerprint,new Date().toISOString(),'','']]);
+    const nextRow=sheet.getLastRow()+1;
+    if(nextRow>sheet.getMaxRows())sheet.insertRowsAfter(sheet.getMaxRows(),Math.max(100,nextRow-sheet.getMaxRows()));
+    sheet.getRange(nextRow,1,1,10).setValues([[id,channel,String(body.requestId||''),'SENDING','',cell_(recipient.slice(-4)),fingerprint,new Date().toISOString(),'','']]);
     SpreadsheetApp.flush(); // Durable fence BEFORE any network or MailApp call.
     return null;
   });
@@ -811,7 +814,8 @@ function quoteDelivery_(body,channel,send) {
   try {result=send();}
   catch(error){
     if(error.deliveryRejected || ['INVALID','NOT_READY','CONFLICT','UNAUTHORIZED','UPGRADE_REQUIRED','INVALID_ACTION'].includes(error.code)){
-      lock_(()=>quoteDeliveryFinish_(id,'REJECTED',{sent:false,state:'rejected',deliveryId:id}));
+      try {lock_(()=>quoteDeliveryFinish_(id,'REJECTED',{sent:false,state:'rejected',deliveryId:id}));}
+      catch(_){return {ok:true,sent:false,state:'unknown',deliveryId:id};}
       if(!error.deliveryRejected)throw error;
       return {ok:true,sent:false,state:'rejected',deliveryId:id};
     }
@@ -823,7 +827,8 @@ function quoteDelivery_(body,channel,send) {
   ['accepted','messageId','state','statusCode','statusMessage','groupId','remainingDailyQuota'].forEach(key=>{
     if(result[key]!==undefined)stored[key]=result[key];
   });
-  lock_(()=>quoteDeliveryFinish_(id,'SENT',stored));
+  try {lock_(()=>quoteDeliveryFinish_(id,'SENT',stored));}
+  catch(_){return {ok:true,sent:false,state:'unknown',deliveryId:id};} // Never surface a post-send BUSY as a pre-send rejection.
   return Object.assign({},result,{deliveryId:id});
 }
 function quoteDeliveryFinish_(id,state,result) {

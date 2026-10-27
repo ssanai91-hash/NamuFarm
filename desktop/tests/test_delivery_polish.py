@@ -193,3 +193,17 @@ class DeliveryPolishTest(QtTestCase):
                 dialog.dismiss_button.click()
             manager.dismiss_uncertain_delivery.assert_called_once_with(self.draft['id'], 'sms', payment=False)
             dialog.status_timer.stop()
+
+    def test_closing_uncertain_email_updates_parent_badge_state_even_without_success(self):
+        from namufarm_desktop.workspace import QuoteDeliveryTools
+        pending = {'pendingDelivery': {'id': 'fixture-delivery', 'channel': 'email'}}
+        context = SimpleNamespace(draft=self.draft, manager=Mock(), delivery_state={},
+                                  generated_quote_path=None, persist_shipping=lambda: True,
+                                  update_delivery_badges=Mock())
+        dialog = Mock()
+        dialog.exec.return_value = 0  # Rejected: the operator only closed the window.
+        dialog.delivery_state = pending
+        with patch('namufarm_desktop.workspace.QuoteEmailDialog', return_value=dialog):
+            QuoteDeliveryTools.open_email(context)
+        self.assertEqual(pending, context.delivery_state)
+        context.update_delivery_badges.assert_called_once()

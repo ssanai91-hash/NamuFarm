@@ -1,10 +1,10 @@
 # 나무팜 프로젝트 현황 · 채팅 인수인계
 
-> 최종 정리: **2026-10-26 (KST)**  
+> 최종 정리: **2026-10-27 (KST)**
 > 저장소: `ssanai91-hash/NamuFarm` · **홈페이지/PC/Android/서버 모두 `main`** (2026-10-24 사용자 요청으로 통합)  
 > 홈페이지 최신 반영: **버전 70의 기존 화면 구성에 버튼 3안·줄바꿈 보완을 반영하여 Sites 버전 73 게시 완료 (2026-10-26 KST). 기존 namufarm.co.kr·서버 환경 revision 8 유지. 원복 기준은 Sites 버전 70.**
 > 홈페이지 운영 소스: **Sites 버전 73 · `80b5e5977264040f9480105a7900c73a13790e62`, main 코드 `f18c2112ecb4cc063786f4cfb6c9255990eff7ed`. C안 이력과 Sites 버전 72는 보관.**
-> PC 최신 코드: **0.5.4 · 확정견적 확인창의 입금확인 옆에 문자·메일 재전송 버튼 추가. 수정된 규격·판매자 요청사항을 기존 견적 전송창과 문구에 반영. 품목 표 빈 영역의 반복 도움말 제거. 가져오기 응답 개선 유지. 미실행/미빌드이며 로컬 검증은 사용자 진행. 이후 나피 수정 작업마다 패치 버전 +0.0.1.**
+> PC 최신 코드: **0.5.5 · 서버/PC 발송 ID 중복 방지·결과 불명 복구, 백업 30개/60분 간격, 미업로드 신규 판매 삭제 차단, 판매자료 자동 반영, 초안 만료 안내, 새 PC 등록 허용창 안내. 이번 전체 작업에서 버전은 한 번만 올림. 시험/컴파일/Actions/실제 발송 미실행. Apps Script 재배포는 미진행이며 서버 먼저 새 버전 배포 후 PC 설치 필요.**
 > Android 최신 소스: **초기 앱 1.1.16(19) + 문의 답변 3안/문자·메일 자동 문구 전송창 `ad0074f`를 main에 통합. 이번 문의 수정·통합은 미컴파일이며 새 APK를 제작하지 않음. 이전 전달 APK는 `a6610f6` 기준 1.1.16.**
 > 목적: 이전 채팅을 정리하거나 새 대화로 옮겨도 **확정 규칙·구현 범위·미완료 작업**을 구분하여 이어서 작업하기 위한 기록.
 
@@ -66,6 +66,8 @@
 최신 화면 소스는 기존 문서/README의 과거 설명과 다를 수 있다. 화면이나 상태를 수정할 때는 반드시 **현재 관련 코드만 확인**한다.
 
 ## 4. 미완료 또는 사용자가 확인할 항목
+
+- [ ] **나피 0.5.5 운영 반영/로컬 검증:** 아래 ‘나피 0.5.5 · 검토 지적사항 수정’의 순서대로 Apps Script 3개 파일을 기존 배포의 새 버전에 반영한 뒤 PC 0.5.5를 설치한다. 작성된 시험은 미실행이며 1~7단계의 로컬 검증 및 Android deliveryId 적용은 후속이다. 선택한 화면 코드 분리(8단계)는 검증 후 진행한다.
 
 - [ ] **C안 홈페이지 사용자 확인:** 사용자 게시 요청으로 Sites 버전 71 게시 성공. PC/모바일 메뉴·히어로·묘목 찾기 단일/여러 종 담기·심는 시기·양식·팝업 화면은 사용자가 확인한다. 원복 기준 Sites 버전 70을 보존한다.
 
@@ -387,6 +389,62 @@
 - 이전 미리보기 경로가 ERR_CONNECTION_REFUSED였고 복구 증거가 없어 재시도하지 않았다. 실제 PC/모바일·작은 화면/큰 글씨·버튼 이동·팝업은 사용자 확인 대상이다. 게시 버전/소스는 아래 게시 완료 기록에 추가한다.
 - 항목별 원복은 해당 1~4 커밋을 git revert한다. 후속 변경이 의존하면 최신 항목부터 역순으로 되돌린다. 운영 전체 원복은 Sites 버전 70 재게시이며 C안으로 돌아가는 것이 아니다.
 
+## 2026-10-27 나피 0.5.5 · 검토 지적사항 수정
+
+- 기준 main `76e07488a060407cfa1af930e68e6525e643f3ac`(나피 0.5.4). 사용자/Claude 검토 요청의 1~7단계를 각각 main에 [skip ci] 커밋했다. 이번 전체 작업에서 버전은 한 번만 **0.5.4 → 0.5.5**로 변경했으며 pyproject.toml·__init__.py를 함께 수정하고 api.py User-Agent가 __version__을 사용하도록 했다.
+- 금액 계산식·기존 업무 상태 전환·고객 원문·기존 DB/엑셀의 업무 의미는 유지한다. 기존 서버 URL·배포 ID·홈페이지 운영 버전 73은 변경하지 않았다. 기존 자료를 대상으로 실행하지 않았다.
+
+### 단계별 커밋과 파일
+
+| 단계 | main 커밋 | 변경 파일 |
+| --- | --- | --- |
+| 1 | `75c8163ec6448548a6c1a24f817368de6b5290f5` | `server/quote-requests/Code.gs`, `server/quote-requests/SecureCommerce.gs`, `server/quote-requests/CustomerInquiries.gs`, `server/quote-requests/tests/quote-delivery.test.cjs` |
+| 2 | `e7cf0421e37f943ee0cd7d0b90de29776ae9b50c` | `desktop/pyproject.toml`, `desktop/namufarm_desktop/__init__.py`, `desktop/namufarm_desktop/api.py`, `desktop/namufarm_desktop/errors.py`, `desktop/namufarm_desktop/service.py`, `desktop/namufarm_desktop/workspace.py`, `desktop/namufarm_desktop/app.py`, `desktop/namufarm_desktop/delivery_recovery.py`, `desktop/tests/test_api.py`, `desktop/tests/test_request_delivery.py`, `desktop/tests/test_delivery_polish.py`, `desktop/tests/support.py` |
+| 3 | `374fb3cd042ac33b727fa3af1e0f99bc795655d4` | `desktop/namufarm_desktop/store.py`, `desktop/namufarm_desktop/service.py`, `desktop/namufarm_desktop/sales_workspace.py`, `desktop/tests/test_backup_retention.py` |
+| 4 | `c2be844933bc9afe378f13379848f2b995451d4d` | `desktop/namufarm_desktop/service.py`, `server/quote-requests/ORDER_DELETION.md`, `desktop/tests/test_local_sync.py` |
+| 5 | `376341a0d91a3f85dba5f7d2e197e3601da8e06e` | `desktop/namufarm_desktop/service.py`, `desktop/namufarm_desktop/sales_workspace.py`, `desktop/namufarm_desktop/app.py`, `desktop/namufarm_desktop/workspace.py`, `desktop/tests/test_auto_sales_sync.py`, `desktop/tests/test_quote_storage_ui.py`, `desktop/tests/test_workspace.py` |
+| 6 | `610231bddcc24c40da8abe7444de6b708e998cdc` | `desktop/namufarm_desktop/service.py`, `desktop/namufarm_desktop/sales_workspace.py`, `desktop/namufarm_desktop/workspace.py`, `desktop/tests/test_workspace.py`, `desktop/tests/test_draft_retention.py` |
+| 7 | `7487dff38891d5c9c70eaa0f53c99219643e25a9` | `desktop/namufarm_desktop/service.py`, `desktop/namufarm_desktop/sales_workspace.py`, `desktop/namufarm_desktop/inquiries.py`, `desktop/namufarm_desktop/store.py`, `desktop/tests/test_manager.py`, `desktop/tests/test_local_sync.py`, `desktop/tests/test_inquiries.py` |
+
+### 반영 내용
+
+1. **서버 발송 중복 방지:** 세 발송 액션(send_quote_sms/send_quote_email/send_sales_report_email)에 선택적 UUID v4 deliveryId를 추가했다. 관리 장부의 내부 ‘견적발송기록’에 SENDING을 잠금 안에서 먼저 쓰고 flush한 뒤 잠금 밖에서 발송한다. SENT는 저장 결과를 재사용하고, SENDING은 unknown, REJECTED는 rejected를 반환한다. 같은 ID의 다른 내용은 CONFLICT다. 지문은 종류·수신자·본문/제목·첨부를 포함한다. 기록에는 본문과 전체 연락처를 저장하지 않는다.
+   - 인증된 quote_delivery_status와 quoteDeliveryIdempotency:1을 추가했다. purgeExpiredInquiries의 일일 정리에서 30일 지난 발송 기록을 제거한다. deliveryId를 보내지 않는 기존 Android 호출은 기존 방식으로 처리한다.
+   - SOLAPI 명시적 4xx/접수 전 failedMessageList는 거절로 기록하고, 그 외 전송/해석 예외는 결과 불명으로 남긴다. 실제 발송 뒤 결과 기록용 잠금/쓰기 실패는 BUSY 같은 ‘발송 전 거절’로 노출하지 않고 unknown을 반환해 PC가 ID를 유지하도록 최종 검토에서 보완했다.
+2. **PC 결과 불명:** 암호화된 기존 preference에 pendingDelivery(id/channel/recipient/contentHash/quoteFingerprint/startedAt)를 먼저 저장한다. 같은 내용 재시도는 같은 ID를 사용하며 내용이 다르면 결과 확인부터 요구한다. 명확한 발송 전 거절만 대기를 해제하고, 통신 실패·UNAVAILABLE·unknown은 UncertainDeliveryError로 구분하여 대기를 유지한다.
+   - 문자/입금문자·견적메일·매출 엑셀 메일 창에서 재개·결과 확인·사용자의 미발송 확인(기본 ‘아니오’)을 지원한다. 결과 불명은 보내기를 막고 확인 버튼을 활성화한다. sending 응답이면 SOLAPI/보낸편지함 확인 후 명시적으로 해제할 수 있으며 최근 20개 해제 ID/시각을 보존한다. 확인은 자동 재발송하지 않는다.
+   - found:false는 대기를 해제하고, sent는 발송 기록을 복구한다. 문자는 메시지 ID를 저장한 뒤 기존 통신사 결과 조회로 최종 성공을 판정한다. 기존 smsState success/emailSentAt와 견적 지문 판정은 유지하고 미해결 대기가 있으면 견적완료·입금확인을 막는다. 매출 엑셀은 메일 결과와 관계없이 저장 완료 상태를 유지한다.
+   - 서버 기능 플래그가 없으면 발송 전에 “Apps Script를 최신 코드로 새 버전 배포해주세요”로 중단한다. 결과 불명은 서버 전송 대기 동기화로 재발송하지 않는다.
+3. **백업:** backup(reason, min_interval=None)로 변경했다. 판매 가져오기는 마지막 백업 후 60분 이내이면 생략한다. 삭제·가져오기(파일)·내보내기·충돌 해결·확정엑셀 최초 변환은 항상 생성한다. 생성한 형식의 DB 백업 최신 30개만 남기고 현재 생성 파일·다른 이름 파일·심볼릭 링크를 보호하며 오래된 백업 삭제 실패는 무시한다.
+4. **판매 삭제:** baseFingerprint None인 신규 save_sale 대기가 있으면 삭제를 거부한다. 업로드된 판매의 삭제는 기존처럼 이 PC에서만 숨기며 서버/Android 원본을 유지한다. ORDER_DELETION.md를 이 실제 동작으로 정정했다.
+5. **자동 반영:** Manager.auto_sync는 견적요청을 가져온 뒤 save_sale 대기가 있을 때만 판매 업로드를 시도한다. 충돌은 기존 해결 흐름으로 중단하고 양쪽 자료를 보존한다. 통신 실패는 대기를 유지하고 상태줄에 남은 건수를 표시한다. 입금확인 직후에도 한 번 시도하며 실패해도 로컬 저장은 완료로 유지한다. 기존 dirty/작업 중/충돌 중 조건을 유지하고 타이머·체크박스·대기 안내를 맞췄다.
+6. **초안 보관:** 화면 조회 중에는 초안 만료 삭제를 하지 않는다. purge_expired_drafts는 시작과 가져오기 때만 실행하고 정리 건수를 transferNotice에 남긴다. 작성중 목록에는 3일 이하 남으면 ‘N일 후 정리’를 표시한다. 확정견적과 이전 버전의 확정 초안(마이그레이션 대기)은 보호한다.
+7. **PC 등록:** 기본 연결·판매 연결·고객문의 연결의 connect_app 인증 거절에 openAppEnrollment/15분/기존 자료 유지 안내를 표시한다. 미사용 Manager.reset_to_default_server, Vault.reset_workspace와 그 파괴적 초기화 시험을 제거했다.
+
+### 검토 보완 및 선택 항목
+
+- 별도 최종 보완 커밋(이 절을 포함한 커밋)에 발송 이후 기록 저장 실패의 unknown 처리, 대기 중인 ID가 상태 개수 제한으로 버려지지 않도록 보존, 창 닫기 후 결과 불명 표시 갱신, 복구한 SMS의 최종 조회 실패/재전송 준비, 긴 미발송 확인 버튼의 별도 행 배치를 포함했다. 이는 8단계의 기존 화면 코드 이동과 다르다.
+- **8단계 화면 분리 보류:** 사용자가 “선택 · 1~7단계 검증 후 권장”으로 지정했다. 이번에는 시험 실행을 금지했으므로 기존 문자/메일 창을 delivery_ui.py로 옮기는 작업은 하지 않았다. 새 delivery_recovery.py는 이번 결과 확인 기능의 공통 컨트롤만 제공하며 기존 화면 전체를 이동한 것이 아니다.
+
+### 검증 상태 · 실행하지 않은 것
+
+- 수행: 최신 main/관련 코드 읽기, 단계별 소스 diff 검토, git diff --check(공백/패치 형식 확인), 버전 두 파일과 User-Agent의 텍스트 확인. 서버 URL·배포 ID 및 다른 영역 변경 여부는 소스 차이로 확인한다.
+- 시험 코드 추가/수정: 서버 동일 ID 1회 발송·SENDING 재요청·내용 충돌·ID 없는 호환·거절/응답불명·메일/매출·30일 정리·발송 후 기록 잠금 실패, PC 시간초과/동일 ID 재사용·상태 복구·found:false·해제 확인창·거절 코드·서버 기능 플래그·백업 보관/간격·신규 판매 삭제·자동 업로드/충돌/오프라인·29/30일 초안·등록 제한 안내.
+- **미수행:** 시험 실행·컴파일·린트·앱 실행·GitHub Actions·실제 접수/동기화·문자/메일 발송·Apps Script 편집/재배포/운영 장부 생성·고객자료 조작. 시험 통과 또는 실제 화면/서버 검증 완료로 간주하지 않는다. Windows 실행파일/설치 파일을 새로 제작하지 않았다. 로컬 검증은 사용자가 진행한다.
+
+### 배포 순서 · 아직 운영에 반영하지 않음
+
+1. **서버 먼저:** 기존 Apps Script 운영 프로젝트에 최신 main의 Code.gs·SecureCommerce.gs·CustomerInquiries.gs를 반영하고, 기존 배포를 새 버전으로 갱신한다. 현재 /exec URL·배포 ID·실행 계정·기존 설정을 유지한다. 이번 GitHub 커밋은 Apps Script 재배포가 아니다. 기존 고객문의 일일 정리 트리거(purgeExpiredInquiries)도 유지한다.
+2. **그다음 PC 0.5.5:** 사용자가 로컬에서 검증·빌드 후 설치한다. 서버보다 먼저 설치하면 발송 기능이 재배포 안내와 함께 멈추는 것이 의도된 동작이다.
+3. 새 PC 등록이 필요한 경우에만 서버 소유자가 openAppEnrollment를 실행하고 15분 안에 ‘서버 동기화’한다. 사용 기기가 연결되면 closeAppEnrollment로 닫는다. 기존 토큰·고객자료·로컬 DB/엑셀은 유지한다.
+4. 소스 원복은 필요한 단계 커밋을 git revert하며 의존된 변경은 최신 커밋부터 역순으로 검토한다. 최종 검토 보완 커밋은 1·2·5·6단계에 의존하므로 함께 확인한다. 서버 원복도 운영 배포를 별도로 갱신해야 하며 이력이나 고객자료를 초기화하지 않는다.
+
+### Android 후속 과제 (미구현)
+
+- Android QuoteWorkflow.kt도 같은 발송 API를 사용하므로 deliveryId를 보내지 않는 현재 버전의 중복 발송 위험은 남는다. 이번 서버는 ID 없는 호출의 기존 동작을 유지하여 Android 호환성을 보존한다.
+- Android의 발송 ID 선저장·결과 불명·조회/명시적 해제 적용은 별도 작업이며 APK 빌드·기존 인증서 서명·실기기 검증이 필요하다. Android shared-key-v1 전환 후 auto-v1 완전 폐지 역시 기존 후속 과제로 유지한다.
+
+
 
 ## 2026-10-26 홈페이지 버튼 3안 게시 완료
 
@@ -396,3 +454,4 @@
 - 배포 ID: `appgdep_6adf6aa84b548191b32452e8bbf8f89e`, 결과 `succeeded`. 기존 https://namufarm.co.kr 및 서버 환경 revision 8 유지.
 - 앞서 성공한 최종 게시용 빌드 산출물로 저장·게시했다. 재개 시 빌드와 배포를 중복 실행하지 않았고, 실제 접수·문자/메일 시험·자동시험·Actions·Apps Script 재배포·고객자료 변경은 수행하지 않았다.
 - 실제 PC/모바일 화면·버튼 이동·팝업은 미확인이다. 단계별 원복은 1~4항 해당 커밋을 git revert하고, 운영 전체 원복은 기존 Sites **버전 70**을 재게시한다. 이 게시 기록 커밋은 문서만 변경한다.
+

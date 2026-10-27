@@ -358,10 +358,10 @@ class Manager(SoldNumbers, SalesWorkspace):
     def purge_expired_drafts(self):
         """Run only on startup or an explicit/automatic download, never on repaint."""
         drafts = self.vault.preference("drafts", [])
-        confirmed = {d["id"] for d in self.vault.preference("confirmed_quotes", [])}
+        confirmed = {d["id"] for d in (self.vault.preference("confirmed_quotes", []) or [])}
         # Protect legacy confirmed drafts until their one-time Excel migration completes.
         statuses = {r["requestId"]: r.get("status") for r in self.vault.rows("requests")}
-        keep = [d for d in drafts if d.get("id") in confirmed or
+        keep = [d for d in drafts if not isinstance(d, dict) or d.get("id") in confirmed or
                 d.get("manualStatus") in ("견적확정", "견적발송완료", "입금확인") or
                 statuses.get(d.get("sourceRequestId")) in ("견적확정", "견적발송완료", "입금확인") or
                 d.get("createdAt", now_ms()) > now_ms() - 30 * 86400000]
@@ -414,6 +414,7 @@ class Manager(SoldNumbers, SalesWorkspace):
 
     def confirm_quote(self, draft):
         validate_draft(draft)
+        self._require_no_pending_delivery(draft["id"])
         source = draft.get("sourceRequestId", "")
         require(valid_id(source), "홈페이지 견적 요청에서 작성한 견적만 견적확정으로 처리할 수 있습니다.")
         pending = self.vault.preference("quote_write_pending")
@@ -477,7 +478,8 @@ class Manager(SoldNumbers, SalesWorkspace):
         states = copy.deepcopy(states) if isinstance(states, dict) else {}
         states[identifier] = copy.deepcopy(state)
         if len(states) > 1000:
-            states = dict(list(states.items())[-1000:])
+            states = {**dict([(key, value) for key, value in states.items() if not value.get("pendingDelivery")][-1000:]),
+                      **{key: value for key, value in states.items() if value.get("pendingDelivery")}}
         self.vault.save_preference("quote_delivery", states)
         return self.quote_delivery_state(identifier)
 
@@ -524,7 +526,9 @@ class Manager(SoldNumbers, SalesWorkspace):
         states = self.vault.preference("payment_delivery", {})
         states = copy.deepcopy(states) if isinstance(states, dict) else {}
         states[identifier] = copy.deepcopy(state)
-        self.vault.save_preference("payment_delivery", dict(list(states.items())[-1000:]))
+        kept = {**dict([(key, value) for key, value in states.items() if not value.get("pendingDelivery")][-1000:]),
+                **{key: value for key, value in states.items() if value.get("pendingDelivery")}}
+        self.vault.save_preference("payment_delivery", kept)
         return self.payment_delivery_state(identifier)
 
     def send_payment_sms(self, draft, text, *, recipient_phone=None):
@@ -1110,7 +1114,8 @@ class Manager(SoldNumbers, SalesWorkspace):
         except (UserError, OSError):
             # Local payment/save is committed. Retain each event ID for safe later retry.
             count = sum(op["action"] == "save_sale" for op in self.vault.pending())
-            self.transfer_notice = f"판매자료 서버 반영 대기 {count:,}건"
+            self.transfer_notice = (f"판매자료 서버 반영 대기 {count:,}건" if count else
+                                    "판매자료 서버 반영 완료 · 추가 조회는 다음 가져오기에서 확인해주세요.")
         return self.local_copy_view()
 
     def sync(self, *, sales_only=False):

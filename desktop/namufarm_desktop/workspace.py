@@ -935,6 +935,11 @@ class QuoteDeliveryTools:
                 email_text = "메일 전송완료" if email_done else "메일 미전송" if customer_email else "이메일 없음"
         else:
             email_text = "메일 전송완료" if email_done else "메일 미전송" if customer_email else "이메일 없음"
+        pending_delivery = self.delivery_state.get("pendingDelivery") or {}
+        if pending_delivery.get("channel") == "sms":
+            sms_text, sms_style, sms_done = "문자 결과불명", "pending", False
+        elif pending_delivery.get("channel") == "email":
+            email_text, email_done = "메일 결과불명", False
         self.sms_status_badge.setText(sms_text.removeprefix("문자 ") if getattr(self, "integrated_delivery", False) else sms_text)
         self.sms_status_badge.setProperty("done", sms_done)
         self.sms_status_badge.setProperty("state", sms_style)
@@ -989,9 +994,10 @@ class QuoteDeliveryTools:
             self.draft, self.manager, self,
             attachment_path=attachment_path,
         )
-        if dialog.exec() == QDialog.DialogCode.Accepted:
-            self.delivery_state = dict(dialog.delivery_state or self.delivery_state)
-            self.update_delivery_badges()
+        dialog.exec()
+        # Uncertain sends are persisted even when the operator closes without success.
+        self.delivery_state = dict(dialog.delivery_state or (self.manager.quote_delivery_state(self.draft["id"]) if self.manager else self.delivery_state))
+        self.update_delivery_badges()
 
 
     def official_quote_filename(self):
@@ -2407,7 +2413,10 @@ class QuoteSmsDialog(DeliveryRecoveryTools, QDialog):
             self.status.setText("문자 전송 실패" + (" · " + self.delivery_state["smsStatusMessage"] if self.delivery_state.get("smsStatusMessage") else ""))
             self.message.setEnabled(True)
             self.recipient_phone.setReadOnly(False)
-            self.recipient_changed()
+            if not self._sender_ready:
+                self.load_profile()
+            else:
+                self.recipient_changed()
             self.check_button.setEnabled(True)
             return
 
@@ -2459,7 +2468,7 @@ class QuoteEmailDialog(DeliveryRecoveryTools, QDialog):
         self.draft = copy.deepcopy(draft)
         self.manager = manager
         self.attachment_path = Path(attachment_path) if attachment_path else None
-        self.delivery_state = manager.quote_delivery_state(draft["id"]) if manager else {}
+        self.delivery_state = {}
         self.success_confirmed = False
         self.profile_task = None
         self.send_task = None
