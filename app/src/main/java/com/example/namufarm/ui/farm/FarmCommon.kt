@@ -30,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.sp
 import com.example.namufarm.data.FarmEntity
 import com.example.namufarm.quotemode.components.*
@@ -109,9 +110,10 @@ internal fun FarmSubHeader(title: String, subtitle: String, onBack: () -> Unit) 
 }
 
 @Composable
-internal fun FarmFooter(content: @Composable ColumnScope.() -> Unit) {
+internal fun FarmFooter(topPadding: Dp = 10.dp, bottomPadding: Dp = 12.dp,
+    content: @Composable ColumnScope.() -> Unit) {
     Surface(color = Color.White, shadowElevation = 4.dp) {
-        Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 12.dp),
+        Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = topPadding, bottom = bottomPadding),
             verticalArrangement = Arrangement.spacedBy(8.dp), content = content)
     }
 }

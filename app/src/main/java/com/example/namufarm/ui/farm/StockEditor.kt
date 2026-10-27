@@ -15,6 +15,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -22,6 +25,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.sp
 import com.example.namufarm.data.InventoryDisplayRow
 import com.example.namufarm.quotemode.components.*
@@ -30,7 +34,7 @@ import com.example.namufarm.viewmodel.ManagementUiState
 import com.example.namufarm.viewmodel.ManagementViewModel
 import java.util.Locale
 
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun StockEditor(viewModel: ManagementViewModel, original: InventoryDisplayRow?, onBack: () -> Unit, onSaved: () -> Unit) {
     val state by viewModel.uiState.collectAsState()
@@ -53,6 +57,9 @@ internal fun StockEditor(viewModel: ManagementViewModel, original: InventoryDisp
         viewModel.updateSize(Math.round((state.inputSizeMeters + delta).coerceAtLeast(0f) * 10) / 10f)
     }
     val age = state.inputAge.filter(Char::isDigit).toIntOrNull() ?: 0
+    // Honor this editor's explicit 44dp controls and 36dp quick buttons. Large
+    // text may still expand their contents, and the body remains scrollable.
+    CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
     Column(Modifier.fillMaxSize().navigationBarsPadding().imePadding()) {
         FarmSubHeader(if (original == null) "새 재고 입력" else "재고 수정",
             "${state.selectedSpecies?.speciesName.orEmpty()} · ${state.selectedFarm?.farmName.orEmpty()}", onBack)
@@ -69,58 +76,63 @@ internal fun StockEditor(viewModel: ManagementViewModel, original: InventoryDisp
                 }
             }
             NamuCard {
-                Column(Modifier.padding(horizontal = 14.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("규격", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (state.inputAgeReadOnly) Text("${state.inputAge} · PC 입력 규격", fontSize = 15.sp)
                     else {
-                    SpecInputRow("년생") {
-                        SmallAdjust("−", { viewModel.updateAge(if (age > 1) "${age - 1}년생" else "") }, circle = true)
-                        Surface(Modifier.weight(1f).heightIn(min = 44.dp), shape = RoundedCornerShape(10.dp),
-                            border = BorderStroke(1.5.dp, NamuColors.input), color = Color.White) {
-                            Box(Modifier.padding(4.dp), contentAlignment = Alignment.Center) { Text(state.inputAge.ifBlank { "없음" },
-                                fontSize = 18.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center) }
+                        SpecInputRow("년생") {
+                            SmallAdjust("없음", { viewModel.updateAge("") }, width = 48.dp, selected = state.inputAge.isBlank())
+                            SmallAdjust("−", { viewModel.updateAge(if (age > 1) "${age - 1}년생" else "") },
+                                circle = true, enabled = age > 0)
+                            SpecValue(state.inputAge, Modifier.weight(1f), empty = state.inputAge.isBlank())
+                            SmallAdjust("+", { viewModel.updateAge("${age.coerceAtMost(Int.MAX_VALUE - 1) + 1}년생") }, circle = true)
                         }
-                        SmallAdjust("+", { viewModel.updateAge("${age.coerceAtMost(Int.MAX_VALUE - 1) + 1}년생") }, circle = true)
-                        SmallAdjust("없음", { viewModel.updateAge("") })
-                    }
                     }
                     if (state.inputSizeRaw != null) Text("${state.inputSizeRaw.orEmpty().ifBlank { "없음" }} · PC 입력 규격", fontSize = 15.sp)
                     else {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("크기", Modifier.width(58.dp), fontSize = 15.sp, fontWeight = FontWeight.Medium, color = Color(0xFF33423A))
-                        Spacer(Modifier.width(8.dp))
-                        FlowRow(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            SmallAdjust("−10cm", { changeSize(-0.1f) })
-                            Surface(shape = RoundedCornerShape(10.dp), color = Color.White, border = BorderStroke(1.5.dp, NamuColors.input)) {
-                                Box(Modifier.heightIn(min = 44.dp).padding(horizontal = 6.dp), contentAlignment = Alignment.Center) {
-                                    Text((state.inputSizeRaw ?: String.format(Locale.KOREA, "%.1fm", state.inputSizeMeters)), fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                        SpecInputRow("크기") {
+                            BoxWithConstraints(Modifier.weight(1f)) {
+                                val twoRows = maxWidth < 288.dp || LocalDensity.current.fontScale > 1f
+                                val sizeIsEmpty = state.inputSizeMeters == 0f
+                                val sizeText = String.format(Locale.KOREA, "%.1fm", state.inputSizeMeters)
+                                if (twoRows) Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        SmallAdjust("없음", { viewModel.updateSize(0f) }, width = 48.dp, selected = sizeIsEmpty)
+                                        SpecValue(sizeText, Modifier.weight(1f), empty = sizeIsEmpty)
+                                    }
+                                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        SmallAdjust("−10cm", { changeSize(-0.1f) }, width = 56.dp, enabled = !sizeIsEmpty)
+                                        SmallAdjust("+10cm", { changeSize(0.1f) }, width = 56.dp)
+                                        SmallAdjust("+1m", { changeSize(1f) }, width = 48.dp)
+                                    }
+                                } else Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    SmallAdjust("없음", { viewModel.updateSize(0f) }, width = 48.dp, selected = sizeIsEmpty)
+                                    SmallAdjust("−10cm", { changeSize(-0.1f) }, width = 56.dp, enabled = !sizeIsEmpty)
+                                    SpecValue(sizeText, Modifier.weight(1f), empty = sizeIsEmpty)
+                                    SmallAdjust("+10cm", { changeSize(0.1f) }, width = 56.dp)
+                                    SmallAdjust("+1m", { changeSize(1f) }, width = 48.dp)
                                 }
                             }
-                            SmallAdjust("+10cm", { changeSize(0.1f) })
-                            SmallAdjust("+1m", { changeSize(1f) })
                         }
-                    }
                     }
                     SpecChoice("타입", listOf("", "실생", "접목", "삽목", "근삽"), state.inputPlantType, viewModel::updatePlantType)
                     SpecChoice("품질", listOf("", "특묘", "상묘", "중묘", "하묘"), state.inputQuality, viewModel::updateQuality)
                 }
             }
             NamuCard {
-                Column(Modifier.padding(horizontal = 14.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("수량·가격", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     NumberAdjust("수량", state.inputQuantity, "주", listOf(1, 10, 100), viewModel::setQuantity) { openNumber("수량", state.inputQuantity) }
                     NumberAdjust("도매가", state.inputWholesale, "원", listOf(100, 1000, 10000), viewModel::setWholesale) { openNumber("도매가", state.inputWholesale) }
                     NumberAdjust("소매가", state.inputRetail, "원", listOf(100, 1000, 10000), viewModel::setRetail) { openNumber("소매가", state.inputRetail) }
                 }
             }
         }
-        FarmFooter {
+        FarmFooter(topPadding = 8.dp, bottomPadding = 10.dp) {
             val spec = listOf(stockSpec(state.inputAge, (state.inputSizeRaw ?: String.format(Locale.KOREA, "%.1fm", state.inputSizeMeters))),
                 state.inputPlantType, state.inputQuality).filter { it.isNotBlank() }.joinToString(" · ")
             Text(buildAnnotatedString {
                 if (spec.isNotBlank()) append("$spec · ")
                 withStyle(SpanStyle(color = NamuColors.text, fontWeight = FontWeight.Bold)) { append("${farmNumber(state.inputQuantity)}주") }
-            }, fontSize = 14.sp, color = NamuColors.muted)
+            }, fontSize = 13.sp, color = NamuColors.muted)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (original == null) NamuSecondaryButton("취소", onBack, Modifier.weight(1f))
                 else OutlinedButton(onClick = {
@@ -140,6 +152,7 @@ internal fun StockEditor(viewModel: ManagementViewModel, original: InventoryDisp
                 }, Modifier.weight(1.6f), original != null || state.inputQuantity > 0)
             }
         }
+    }
     }
     if (numberField != null) AlertDialog(onDismissRequest = { numberField = null },
         title = { Text("${numberField} 입력") },
@@ -172,18 +185,37 @@ internal fun StockEditor(viewModel: ManagementViewModel, original: InventoryDisp
 @Composable
 private fun SpecInputRow(label: String, content: @Composable RowScope.() -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(label, Modifier.width(58.dp), fontSize = 15.sp, color = Color(0xFF33423A), fontWeight = FontWeight.Medium)
-        Spacer(Modifier.width(8.dp))
+        Text(label, Modifier.width(40.dp), fontSize = 15.sp, color = Color(0xFF33423A), fontWeight = FontWeight.Medium)
+        Spacer(Modifier.width(4.dp))
         Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp), content = content)
     }
 }
 
 @Composable
-private fun SmallAdjust(label: String, onClick: () -> Unit, circle: Boolean = false) {
-    Surface(onClick = onClick, shape = if (circle) CircleShape else RoundedCornerShape(22.dp), color = Color(0xFFE3EFE7)) {
-        Box(Modifier.then(if (circle) Modifier.size(44.dp) else Modifier.heightIn(min = 44.dp).padding(horizontal = 7.dp)), contentAlignment = Alignment.Center) {
-            Text(label, color = Color(0xFF1F573B), fontSize = if (circle) 20.sp else 14.sp, fontWeight = FontWeight.Bold)
+private fun SmallAdjust(label: String, onClick: () -> Unit, circle: Boolean = false,
+    width: Dp? = null, enabled: Boolean = true, selected: Boolean = false) {
+    Surface(onClick = onClick, enabled = enabled,
+        modifier = Modifier.semantics { this.selected = selected },
+        shape = if (circle) CircleShape else RoundedCornerShape(22.dp),
+        border = if (selected) BorderStroke(2.dp, NamuColors.primary) else null,
+        color = if (selected) Color(0xFFEEF6F0) else Color(0xFFE3EFE7)) {
+        val bounds = if (circle) Modifier.size(44.dp) else
+            Modifier.then(if (width != null) Modifier.width(width) else Modifier.padding(horizontal = 7.dp)).heightIn(min = 44.dp)
+        Box(bounds, contentAlignment = Alignment.Center) {
+            Text(label, color = if (enabled) Color(0xFF1F573B) else Color(0xFF9AA59F),
+                fontSize = if (circle) 20.sp else 14.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+        }
+    }
+}
+
+@Composable
+private fun SpecValue(text: String, modifier: Modifier, empty: Boolean) {
+    Surface(modifier.widthIn(min = 64.dp).heightIn(min = 44.dp), shape = RoundedCornerShape(10.dp),
+        border = BorderStroke(1.5.dp, NamuColors.input), color = Color.White) {
+        Box(Modifier.padding(4.dp), contentAlignment = Alignment.Center) {
+            Text(if (empty) "없음" else text, fontSize = 18.sp, fontWeight = FontWeight.Bold,
+                color = if (empty) Color(0xFF9AA59F) else NamuColors.text, textAlign = TextAlign.Center)
         }
     }
 }
@@ -208,15 +240,15 @@ private fun SpecChoice(label: String, options: List<String>, selected: String, o
 @Composable
 private fun NumberAdjust(label: String, value: Int, unit: String, increments: List<Int>, onValue: (Int) -> Unit, onEdit: () -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(label, Modifier.width(58.dp), fontSize = 15.sp, color = Color(0xFF33423A))
-        Spacer(Modifier.width(8.dp))
+        Text(label, Modifier.width(40.dp), fontSize = 15.sp, color = Color(0xFF33423A))
+        Spacer(Modifier.width(4.dp))
         Surface(onClick = onEdit, modifier = Modifier.weight(1f).heightIn(min = 44.dp), shape = RoundedCornerShape(10.dp),
             color = Color.White, border = BorderStroke(1.5.dp, NamuColors.input)) {
             Text("${farmNumber(value)} $unit", Modifier.padding(horizontal = 12.dp, vertical = 9.dp), textAlign = TextAlign.End,
                 fontSize = 18.sp, fontWeight = FontWeight.Bold)
         }
     }
-    Row(Modifier.fillMaxWidth().padding(start = 66.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+    Row(Modifier.fillMaxWidth().padding(start = 44.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         increments.forEach { delta ->
             OutlinedButton(onClick = { onValue((value.toLong() + delta).coerceAtMost(999999999L).toInt()) },
                 modifier = Modifier.weight(1f).heightIn(min = 36.dp), shape = RoundedCornerShape(18.dp),
