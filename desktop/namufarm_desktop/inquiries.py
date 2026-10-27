@@ -43,6 +43,8 @@ def validate_row(value):
         result = {k: r[k] for k in ('kind', 'requestId', 'inquiryNumber', 'sequence', 'revision', 'createdAt', 'updatedAt', 'status', 'expired')}
         if r.get('_localExpiry'):
             result['_localExpiry'] = True
+        if r.get('deleted') is True:  # 관리자 삭제 표시(보관 종료와 구분)
+            result['deleted'] = True
         return result
     q, reply = r.get('inquiry'), r.get('reply')
     require(isinstance(q, dict) and q.get('requestId') == r['requestId'] and isinstance(reply, dict), '문의 원문을 확인할 수 없습니다.')
@@ -208,6 +210,8 @@ class InquiryService:
             content = [['문의접수번호', '접수시각(한국)', '문의종류', '이름', '연락처', '이메일', '문의내용',
                         '상태', '답변내용', '답변방법', '발송상태', '처리시각(한국)', '로컬답변초안', '답변·처리이력']]
             for r in sorted(values, key=lambda x: x['createdAt'], reverse=True):
+                if r.get('deleted'):
+                    continue  # 관리자 삭제 문의는 엑셀에 남기지 않음(해당 연도 파일은 다시 써서 지워짐)
                 q, reply, d = r.get('inquiry', {}), r.get('reply', {}), r.get('delivery') or {}
                 draft = self.store.read('drafts', r['requestId']) or {}
                 content.append([r['inquiryNumber'], local_time(r['createdAt']), q.get('category', ''), q.get('customerName', ''),

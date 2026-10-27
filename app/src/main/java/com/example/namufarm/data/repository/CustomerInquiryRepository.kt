@@ -135,8 +135,10 @@ class CustomerInquiryRepository(private val db: CustomerInquiryDatabase, private
         // Local editor text is recovery metadata, never part of the server contract.
         val result = call(operation.action, payload.filterKeys { it != "localDraftText" })
         val value = checkNotNull(result.inquiry) { "문의 처리 응답을 확인하지 못했습니다. 결과 확인을 눌러주세요." }.checked()
-        check(value.requestId == operation.requestId && value.expired != true) { "문의 처리 결과를 확인할 수 없습니다." }
+        val deleting = operation.action == "delete_customer_inquiry"
+        check(value.requestId == operation.requestId && (value.expired == true) == deleting) { "문의 처리 결과를 확인할 수 없습니다." }
         when (operation.action) {
+            "delete_customer_inquiry" -> check(value.deleted == true) { "문의 삭제를 확인하지 못했습니다. 다시 눌러주세요." }
             "save_inquiry_reply" -> check(value.lastEventId == payload["eventId"] &&
                 value.reply?.text == payload["replyText"] && value.reply?.channel == payload["replyChannel"]) { "답변 저장을 확인하지 못했습니다." }
             "send_inquiry_reply" -> check(value.delivery?.id == payload["deliveryId"] ||
@@ -198,6 +200,7 @@ class CustomerInquiryRepository(private val db: CustomerInquiryDatabase, private
         bindServer()
         val operation = dao.operation(id)
         var current = row(id)
+        if (operation?.action == "delete_customer_inquiry") { executeDelete(operation); return }
         if (operation != null) {
             try { current = execute(operation) }
             catch (error: WebQuoteResponseException) {
@@ -232,6 +235,36 @@ class CustomerInquiryRepository(private val db: CustomerInquiryDatabase, private
         check(status in setOf("open", "closed") && note.trim().length in 1..500) { "처리 메모는 1~500자로 입력해주세요." }
         execute(persist(id, "set_inquiry_status", mapOf("requestId" to id, "revision" to current.revision!!,
             "eventId" to UUID.randomUUID().toString(), "status" to status, "note" to note.trim())))
+    }
+
+    /**
+     * Seller (admin) force delete. The server wipes the inquiry and returns a deletion tombstone;
+     * merge() then removes the local draft and operation, and other phones/PCs remove it on refresh.
+     * Idempotent: a lost response is retried with the same eventId. Never sends or resends a message.
+     */
+    suspend fun delete(id: String) {
+        bindServer()
+        val operation = db.withTransaction {
+            val current = row(id)
+            val pending = dao.operation(id)
+            if (pending?.action == "delete_customer_inquiry") pending
+            else CustomerInquiryOperationEntity(id, "delete_customer_inquiry", gson.toJson(mapOf("requestId" to id,
+                "revision" to current.revision!!, "eventId" to UUID.randomUUID().toString()))).also { dao.put(it) }
+        }
+        executeDelete(operation)
+    }
+
+    private suspend fun executeDelete(operation: CustomerInquiryOperationEntity) {
+        try { execute(operation) }
+        catch (error: WebQuoteResponseException) {
+            // These codes are rejected before any change, so the delete request can be dropped safely.
+            if (error.responseCode in setOf("INVALID_ACTION", "INVALID", "UNAUTHORIZED")) {
+                dao.deleteOperation(operation.requestId)
+                throw IllegalStateException(if (error.responseCode == "INVALID_ACTION")
+                    "서버가 문의 삭제를 아직 지원하지 않습니다. Apps Script를 최신 버전으로 재배포해주세요." else error.message ?: "문의를 삭제하지 못했습니다.")
+            }
+            throw error
+        }
     }
 
     /** Explicit user choice after refreshing. A pending send can never be discarded here. */

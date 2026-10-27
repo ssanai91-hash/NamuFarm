@@ -56,6 +56,7 @@ fun CustomerInquiryScreen(viewModel: CustomerInquiryViewModel) {
     var search by rememberSaveable { mutableStateOf("") }
     var visible by rememberSaveable { mutableIntStateOf(50) }
     var selected by rememberSaveable { mutableStateOf<String?>(null) }
+    var deleteTarget by rememberSaveable { mutableStateOf<String?>(null) }
     val lifecycle = LocalLifecycleOwner.current
     DisposableEffect(lifecycle) {
         val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_RESUME) viewModel.reloadLocal() }
@@ -99,7 +100,8 @@ fun CustomerInquiryScreen(viewModel: CustomerInquiryViewModel) {
             }
             items(rows.take(visible), key = { it.requestId!! }) { row ->
                 InquiryListCard(row, state.operations.containsKey(row.requestId),
-                    hasDraft = state.drafts[row.requestId]?.text?.isNotBlank() == true || !row.reply?.text.isNullOrBlank()) {
+                    hasDraft = state.drafts[row.requestId]?.text?.isNotBlank() == true || !row.reply?.text.isNullOrBlank(),
+                    onDelete = { deleteTarget = row.requestId; viewModel.clearMessage() }) {
                     selected = row.requestId; viewModel.clearMessage()
                 }
             }
@@ -118,6 +120,17 @@ fun CustomerInquiryScreen(viewModel: CustomerInquiryViewModel) {
         else AlertDialog(onDismissRequest = { selected = null }, title = { Text("문의 확인") },
             text = { Text("문의 보관 기간이 끝났거나 원문이 없습니다.") },
             confirmButton = { TextButton(onClick = { selected = null }) { Text("닫기") } })
+    }
+    deleteTarget?.let { id ->
+        val row = state.rows.find { it.requestId == id }
+        if (row != null) AlertDialog(onDismissRequest = { deleteTarget = null }, containerColor = White,
+            title = { Text("문의 삭제", fontWeight = FontWeight.Bold) },
+            text = { Text("${row.inquiry?.customerName.orEmpty()} 님 문의(${row.inquiryNumber})를 삭제할까요?\n\n" +
+                "서버와 휴대폰·PC(나피)의 문의 원문·답변·초안이 모두 지워지며 되돌릴 수 없습니다. 고객에게 문자·메일은 보내지 않습니다.",
+                fontSize = 16.sp) },
+            confirmButton = { TextButton(enabled = !state.busy, onClick = { deleteTarget = null; viewModel.delete(id) }) {
+                Text("삭제", color = NamuColors.danger, fontWeight = FontWeight.Bold, fontSize = 16.sp) } },
+            dismissButton = { TextButton(onClick = { deleteTarget = null }) { Text("취소", fontSize = 16.sp) } })
     }
 }
 

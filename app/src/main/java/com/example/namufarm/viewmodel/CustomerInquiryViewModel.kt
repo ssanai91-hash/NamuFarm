@@ -103,6 +103,10 @@ class CustomerInquiryViewModel(private val repository: CustomerInquiryRepository
         repository.setStatus(id, status, note)
         if (status == "closed") "문의 처리를 완료했습니다." else "문의를 다시 열었습니다."
     }
+    fun delete(id: String) = operate {
+        repository.delete(id)
+        "문의를 삭제했습니다. 다른 휴대폰과 나피에서는 불러오기 때 함께 지워집니다."
+    }
     fun clearMessage() { mutable.update { it.copy(message = null) } }
     private fun message(text: String) { mutable.update { it.copy(message = text) } }
 }

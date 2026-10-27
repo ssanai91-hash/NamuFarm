@@ -37,6 +37,7 @@ function doPost(e) {
       else if (body.action === 'send_inquiry_reply') value = sendInquiryReply_(body);
       else if (body.action === 'set_inquiry_status') value = setInquiryStatus_(body);
       else if (body.action === 'inquiry_sms_status') value = inquirySmsStatus_(body);
+      else if (body.action === 'delete_customer_inquiry') value = deleteCustomerInquiry_(body);
       else if (body.action === 'snapshot_requests') value = snapshotRequests_(body);
       else if (body.action === 'update_request_status') value = updateRequestStatus_(body);
       else if (body.action === 'save_quote_pricing') value = saveQuotePricing_(body);

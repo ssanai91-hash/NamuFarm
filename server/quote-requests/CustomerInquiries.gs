@@ -95,7 +95,7 @@ function inquiryReceipt_(row) {return {kind:'customer_inquiry',requestId:String(
 function inquiryResponse_(row) {
   const raw=JSON.parse(row[IC.raw]);
   const base=Object.assign(inquiryReceipt_(row),{sequence:Number(row[IC.sequence]),revision:Number(row[IC.revision]),updatedAt:String(row[IC.updated]),status:inquiryStatus_(row),lastEventId:String(row[IC.event]||'')});
-  return raw.expired?Object.assign(base,{expired:true}):Object.assign(base,{inquiry:raw.inquiry,reply:raw.reply,delivery:raw.delivery||null,history:raw.history||[],answeredAt:String(row[IC.answered]||'')});
+  return raw.expired?Object.assign(base,{expired:true},raw.deleted?{deleted:true}:{}):Object.assign(base,{inquiry:raw.inquiry,reply:raw.reply,delivery:raw.delivery||null,history:raw.history||[],answeredAt:String(row[IC.answered]||'')});
 }
 function validateInquiry_(raw) {
   assert_(raw && typeof raw==='object' && !Array.isArray(raw),'INVALID');
@@ -197,12 +197,31 @@ function inquirySmsStatus_(body) {
     inquiryChange_(record,raw,raw.delivery.id);return {inquiry:inquiryResponse_(record.row)};
   });
 }
+/**
+ * Seller (admin) delete. Wipes the customer's personal data, reply and history immediately and
+ * leaves a deletion tombstone (ID/number/sequence only) so every app and PC removes the inquiry
+ * on its next sync. Idempotent: an already deleted/expired inquiry returns its tombstone.
+ * Never sends a message and never resends an uncertain delivery.
+ */
+function deleteCustomerInquiry_(body) {
+  assert_(INQUIRY_UUID.test(body.eventId),'INVALID');
+  return lock_(()=>{
+    const record=inquiryRecord_(body.requestId),raw=JSON.parse(record.row[IC.raw]);
+    if(raw.expired)return {inquiry:inquiryResponse_(record.row),duplicate:true};
+    for(let c=IC.name;c<=IC.message;c++)record.row[c]='';
+    record.row[IC.message]='[관리자 삭제]';record.row[IC.reply]='';record.row[IC.channel]='';record.row[IC.status]='closed';
+    inquiryChange_(record,{expired:true,deleted:true,deletedAt:new Date().toISOString()},body.eventId);
+    return {inquiry:inquiryResponse_(record.row),duplicate:false};
+  });
+}
 /** Pending questions remain available across years; completed personal data expires in 30 days. */
 function purgeExpiredInquiries() {
   purgeQuoteDeliveries_();
   if(PropertiesService.getScriptProperties().getProperty('INQUIRY_SETUP')!=='1')return;
   lock_(()=>inquiryRecords_().forEach(record=>{
     const row=record.row;if(inquiryStatus_(row)!=='closed' || !row[IC.answered] || Date.parse(String(row[IC.answered]))+30*86400000>Date.now())return;
+    // Already expired or deleted: keep the tombstone (and its deleted flag); do not bump the sequence again.
+    if(JSON.parse(row[IC.raw]).expired)return;
     for(let c=IC.name;c<=IC.message;c++)row[c]='';row[IC.reply]='';row[IC.channel]='';row[IC.status]='closed';
     inquiryChange_(record,{expired:true},'');
   }));

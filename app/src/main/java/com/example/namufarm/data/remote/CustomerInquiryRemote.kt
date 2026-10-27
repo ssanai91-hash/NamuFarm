@@ -28,6 +28,8 @@ data class CustomerInquiryRemote(
     val revision: Long? = null, val createdAt: String? = null,
     val updatedAt: String? = null, val status: String? = null,
     val expired: Boolean? = null, val lastEventId: String? = null,
+    /** Seller (admin) delete tombstone. Always sent together with expired=true. */
+    val deleted: Boolean? = null,
     val inquiry: CustomerInquiryBody? = null, val reply: CustomerInquiryReply? = null,
     val delivery: CustomerInquiryDelivery? = null,
     val history: List<CustomerInquiryHistory?>? = null, val answeredAt: String? = null

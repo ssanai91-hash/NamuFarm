@@ -90,7 +90,8 @@ internal fun InquiryStatus(status: String?) {
 }
 
 @Composable
-internal fun InquiryListCard(row: CustomerInquiryRemote, pending: Boolean, hasDraft: Boolean = false, onClick: () -> Unit) {
+internal fun InquiryListCard(row: CustomerInquiryRemote, pending: Boolean, hasDraft: Boolean = false,
+                             onDelete: (() -> Unit)? = null, onClick: () -> Unit) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
     val customer = row.inquiry?.customerName.orEmpty().ifBlank { "보관 종료" }
@@ -107,6 +108,7 @@ internal fun InquiryListCard(row: CustomerInquiryRemote, pending: Boolean, hasDr
                     Modifier.weight(1f), fontSize = 15.sp)
                 Text(shortNamuTime(runCatching { com.example.namufarm.data.remote.inquiryTimestamp(row.answeredAt ?: row.updatedAt) }
                     .getOrDefault(at)), fontSize = 13.sp, color = NamuColors.muted)
+                if (onDelete != null) InquiryDeleteButton(onDelete)
             }
         }
         return
@@ -120,6 +122,7 @@ internal fun InquiryListCard(row: CustomerInquiryRemote, pending: Boolean, hasDr
                 Text(if (checking) "결과 확인 중" else if (hasDraft) "초안 저장됨" else "답변 대기",
                     fontSize = 13.sp, fontWeight = FontWeight.Bold,
                     color = if (checking) Color(0xFF1D4F91) else if (hasDraft) Color(0xFF8A5300) else NamuColors.danger)
+                if (onDelete != null) InquiryDeleteButton(onDelete)
             }
             Text(customer, fontSize = 18.sp, fontWeight = FontWeight.Bold)
             Text(row.inquiry?.message.orEmpty(), fontSize = 15.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -140,6 +143,15 @@ internal fun InquiryListCard(row: CustomerInquiryRemote, pending: Boolean, hasDr
                 NamuPrimaryButton(if (hasDraft) "이어서 답변" else "답변하기", onClick, Modifier.weight(1f))
             }
         }
+    }
+}
+
+/** Admin delete: small red trash button at the right end of the card's top row. */
+@Composable
+private fun InquiryDeleteButton(onDelete: () -> Unit) {
+    IconButton(onClick = onDelete, modifier = Modifier.size(36.dp)
+        .background(Color(0xFFFDECEC), RoundedCornerShape(10.dp))) {
+        Icon(Icons.Outlined.Delete, "문의 삭제", tint = NamuColors.danger, modifier = Modifier.size(19.dp))
     }
 }
 

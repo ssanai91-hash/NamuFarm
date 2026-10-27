@@ -111,3 +111,15 @@ test('open/closed status actions preserve reply history, support phone resolutio
   const row=[...f.books.values()][0].sheets[0].rows[1];row[10]='답변 완료';
   assert.equal(f.context.listCustomerInquiries_({afterSequence:0}).inquiries[0].status,'closed');
 });
+
+test('admin delete wipes personal data, emits a deleted tombstone once, and survives purge',()=>{
+  const f=fixture();f.context.setupCustomerInquiries();f.post(f.body(1));
+  f.context.saveInquiryReply_({requestId:uuid(1),eventId:uuid(50),revision:1,replyText:'초안',replyChannel:'sms'});
+  const deleted=f.context.deleteCustomerInquiry_({requestId:uuid(1),eventId:uuid(51)});
+  assert.equal(deleted.inquiry.expired,true);assert.equal(deleted.inquiry.deleted,true);assert.equal(deleted.inquiry.inquiry,undefined);
+  assert.equal(f.context.deleteCustomerInquiry_({requestId:uuid(1),eventId:uuid(52)}).duplicate,true);
+  const row=[...f.books.values()][0].sheets[0].rows[1];assert.equal(row[6],'');assert.equal(row[9],'[관리자 삭제]');assert.equal(f.smsCount(),0);
+  f.advance('2027-03-01T00:00:00Z');f.context.purgeExpiredInquiries();
+  const all=f.context.listCustomerInquiries_({afterSequence:0}).inquiries;assert.equal(all.length,1);assert.equal(all[0].deleted,true);
+  assert.equal(f.post({action:'delete_customer_inquiry',requestId:uuid(1),eventId:uuid(53)}).code,'UNAUTHORIZED');
+});
