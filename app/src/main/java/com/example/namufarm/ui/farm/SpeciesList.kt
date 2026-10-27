@@ -19,6 +19,7 @@ import com.example.namufarm.data.SpeciesEntity
 import com.example.namufarm.data.formatSpeciesCategory
 import com.example.namufarm.data.parseSpeciesCategory
 import com.example.namufarm.data.speciesCategoryError
+import com.example.namufarm.data.speciesMatchesPurpose
 import com.example.namufarm.data.suggestSpeciesPurposeLabels
 import com.example.namufarm.quotemode.components.*
 import com.example.namufarm.ui.getChosungFromText
@@ -27,17 +28,18 @@ import com.example.namufarm.viewmodel.ManagementViewModel
 import com.google.gson.Gson
 
 @Composable
-internal fun SpeciesList(viewModel: ManagementViewModel, initial: String, search: String) {
+internal fun SpeciesList(viewModel: ManagementViewModel, initial: String, search: String, purpose: String) {
     val state by viewModel.uiState.collectAsState()
     var showSheet by rememberSaveable { mutableStateOf(false) }
     var editJson by rememberSaveable { mutableStateOf<String?>(null) }
     val editing = remember(editJson) { editJson?.let { Gson().fromJson(it, SpeciesEntity::class.java) } }
     val species = state.allSpeciesList.filter { (it.isActive ?: 1) == 1 &&
-        namuMatchesInitial(it.speciesName, it.chosung, initial) && namuSearchMatches(it.speciesName, search) }.sortedBy { it.speciesName }
+        namuMatchesInitial(it.speciesName, it.chosung, initial) && namuSearchMatches(it.speciesName, search) &&
+        speciesMatchesPurpose(it.category, purpose) }.sortedBy { it.speciesName }
     Column(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 12.dp)) {
         NamuCard(modifier = Modifier.weight(1f, fill = false)) {
             LazyColumn(contentPadding = PaddingValues(horizontal = 4.dp)) {
-                if (species.isEmpty()) item { NamuEmptyState("조건에 맞는 묘목이 없어요") }
+                if (species.isEmpty()) item { NamuEmptyState(if (purpose.isEmpty()) "조건에 맞는 묘목이 없어요" else "이 용도로 등록된 묘목이 없어요") }
                 itemsIndexed(species, key = { _, item -> item.speciesId ?: item.speciesName }) { index, item ->
                     val rows = state.allSellingInventory.filter { it.speciesId == item.speciesId }
                     val details = buildList {

@@ -38,6 +38,7 @@ fun ManagementModeScreen(viewModel: ManagementViewModel, onBack: () -> Unit,
     var page by rememberSaveable { mutableStateOf("list") }
     var search by rememberSaveable { mutableStateOf("") }
     var initial by rememberSaveable { mutableStateOf("전체") }
+    var speciesPurpose by rememberSaveable { mutableStateOf("") }
     var originalRowJson by rememberSaveable { mutableStateOf<String?>(null) }
     var baseline by rememberSaveable { mutableStateOf("") }
     var showLeaveConfirm by remember { mutableStateOf(false) }
@@ -92,6 +93,7 @@ fun ManagementModeScreen(viewModel: ManagementViewModel, onBack: () -> Unit,
                         if (view != 2) FarmPicker(state, viewModel::selectFarmForStock)
                         if (view != 1) {
                             FarmSearch(search, onChange = { search = it })
+                            if (view == 2) SpeciesPurposeFilter(speciesPurpose) { speciesPurpose = it }
                             NamuChosungRow(initial, state.allSpeciesList.size, onSelect = { initial = it }, available = { ch ->
                                 state.allSpeciesList.any { namuMatchesInitial(it.speciesName, it.chosung, ch) }
                             })
@@ -102,7 +104,7 @@ fun ManagementModeScreen(viewModel: ManagementViewModel, onBack: () -> Unit,
                             viewModel.selectSpecies(species); page = "spec"
                         }
                         1 -> FarmList(viewModel)
-                        2 -> SpeciesList(viewModel, initial, search)
+                        2 -> SpeciesList(viewModel, initial, search, speciesPurpose)
                     }
                 }
             }

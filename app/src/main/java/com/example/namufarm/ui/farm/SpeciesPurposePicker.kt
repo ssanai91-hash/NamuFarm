@@ -2,6 +2,8 @@ package com.example.namufarm.ui.farm
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Spa
@@ -19,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.toggleableState
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.state.ToggleableState
@@ -27,6 +30,25 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.namufarm.data.SPECIES_PURPOSES
 import com.example.namufarm.ui.theme.NamuColors
+
+@Composable
+internal fun SpeciesPurposeFilter(selectedLabel: String, onSelect: (String) -> Unit) {
+    val options = listOf("" to "전체") + SPECIES_PURPOSES.map { it.label to it.label }
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        items(options, key = { it.first }) { (value, label) ->
+            val checked = value == selectedLabel
+            Surface(onClick = { onSelect(value) }, modifier = Modifier.semantics { selected = checked },
+                shape = RoundedCornerShape(20.dp),
+                color = if (checked) NamuColors.primary else Color.White,
+                border = BorderStroke(1.dp, if (checked) NamuColors.primary else Color(0xFFC9D4CE))) {
+                Box(Modifier.heightIn(min = 40.dp).padding(horizontal = 14.dp, vertical = 8.dp), contentAlignment = Alignment.Center) {
+                    Text(label, fontSize = 15.sp, color = if (checked) Color.White else NamuColors.text,
+                        fontWeight = if (checked) FontWeight.Bold else FontWeight.Normal)
+                }
+            }
+        }
+    }
+}
 
 @Composable
 internal fun SpeciesPurposePicker(selectedLabels: List<String>, legacyValues: List<String>,
