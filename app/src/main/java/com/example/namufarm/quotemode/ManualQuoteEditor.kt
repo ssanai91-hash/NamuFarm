@@ -96,46 +96,49 @@ private fun QuoteItemField(label: String, content: @Composable RowScope.() -> Un
     }
 }
 
-/** The app cannot detect external SMS/email success; this is the seller's explicit attestation. */
+/** Seller attestation only. Opening an external app never marks a quote as sent. */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun ConfirmQuoteSentDialog(onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
-    var selected by remember { mutableStateOf("none") }
-    val choices = listOf(
-        "sms" to "문자로 보냈습니다",
-        "email" to "메일로 보냈습니다",
-        "both" to "문자와 메일 모두 보냈습니다",
-        "none" to "아직 보내지 않았습니다"
-    )
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("견적 발송 확인") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("고객에게 실제로 보낸 방법을 선택해 주세요.")
-                choices.forEach { (value, label) ->
-                    Row(
-                        Modifier.fillMaxWidth().heightIn(min = 48.dp)
-                            .clickable { selected = value },
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        RadioButton(selected = selected == value, onClick = { selected = value })
-                        Text(label)
+internal fun ConfirmQuoteSentDialog(onDismiss: () -> Unit, onConfirm: (String) -> Unit,
+    openedChannels: Set<String> = emptySet(), phone: String = "", email: String = "") {
+    val suggested = when {
+        openedChannels.containsAll(setOf("sms", "email")) -> "both"
+        "sms" in openedChannels -> "sms"
+        "email" in openedChannels -> "email"
+        else -> "none"
+    }
+    var selected by remember(suggested) { mutableStateOf(suggested) }
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = Color.White,
+        shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp)) {
+        Column(Modifier.fillMaxWidth().imePadding().verticalScroll(rememberScrollState())
+            .padding(start = 20.dp, end = 20.dp, bottom = 18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("고객에게 보냈나요?", fontSize = 21.sp, fontWeight = FontWeight.Bold)
+            Text("문자·메일 앱을 연 것만으로는 발송 완료가 아니에요. 실제로 보냈을 때만 견적완료를 눌러주세요.", fontSize = 15.sp)
+            listOf("sms" to "문자로 보냈어요", "email" to "메일로 보냈어요", "both" to "문자와 메일 모두 보냈어요")
+                .forEach { (value, label) ->
+                    Surface(shape = RoundedCornerShape(12.dp), color = if (selected == value) NamuColors.soft else Color.White,
+                        border = BorderStroke(1.dp, if (selected == value) NamuColors.primary else NamuColors.border)) {
+                        Column(Modifier.fillMaxWidth().clickable { selected = value }.padding(8.dp)) {
+                            Row(Modifier.heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
+                                RadioButton(selected = selected == value, onClick = { selected = value })
+                                Text(label, fontSize = 16.sp, modifier = Modifier.weight(1f))
+                            }
+                            if (selected == value && openedChannels.isNotEmpty()) {
+                                val hints = buildList {
+                                    if (value in setOf("sms", "both") && "sms" in openedChannels) add("방금 문자 앱을 열었어요 · $phone")
+                                    if (value in setOf("email", "both") && "email" in openedChannels) add("방금 메일 앱을 열었어요 · $email")
+                                }
+                                hints.forEach { Text(it, Modifier.padding(start = 12.dp, bottom = 6.dp), fontSize = 13.sp, color = NamuColors.muted) }
+                            }
+                        }
                     }
                 }
-                Text("문자·메일 앱을 연 것만으로는 발송 완료가 아닙니다.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                NamuSecondaryButton("아직 안 보냈어요", onDismiss, Modifier.weight(1f))
+                NamuPrimaryButton("견적완료", { onConfirm(selected) }, Modifier.weight(1f), selected != "none")
             }
-        },
-        confirmButton = {
-            Button(onClick = { onConfirm(selected) }, enabled = selected != "none") {
-                Text("견적완료 확인")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("취소") }
         }
-    )
+    }
 }
 
 /** Fullscreen quote editor with the same layout as the delivery screen. */
@@ -191,7 +194,7 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
     draftKey: String? = request?.requestId, onDeleteRequest: (() -> Unit)? = null,
     verifiedDelivery: QuoteDeliveryRecord? = null, verifyDelivery: Boolean = false,
     onConfirmSent: ((SellerQuoteDraft, String) -> Unit)? = null,
-    onPrepareDocument: suspend (SellerQuoteDraft) -> Unit = {}, messageIsError: Boolean = false) {
+    onPrepareDocument: suspend (SellerQuoteDraft) -> Unit = {}, messageIsError: Boolean = false, openedChannels: Set<String> = emptySet()) {
     val context = LocalContext.current
     val firstRequest = request != null && initialDraft == null
     val manualEntry = request == null
@@ -438,6 +441,7 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
         text = { Text("문자 또는 메일을 먼저 보내 주세요. 현재 견적의 전송이 완료되어야 견적완료할 수 있습니다. 문자 결과확인 중이면 문자 버튼을 눌러 최종 결과를 확인해주세요.") },
         confirmButton = { TextButton(onClick = { deliveryRequired = false }) { Text("확인") } })
     if (confirmSent) ConfirmQuoteSentDialog(
+        openedChannels = openedChannels, phone = displayEditorPhone(draft.phone), email = draft.recipient.customerEmail,
         onDismiss = { confirmSent = false },
         onConfirm = { method ->
             confirmSent = false

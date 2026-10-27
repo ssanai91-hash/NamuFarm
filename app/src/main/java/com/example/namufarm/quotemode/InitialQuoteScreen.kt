@@ -141,6 +141,7 @@ internal fun InitialQuoteScreen(viewModel: InitialQuoteViewModel, connection: In
         }
     }
     readyRequest?.takeIf { editing?.requestId == it.requestId && recordsReady && it.requestId !in confirmedIds }?.let { request ->
+        var openedChannels by remember(request.requestId) { mutableStateOf(emptySet<String>()) }
         val saved = records.firstOrNull { it.request.requestId == request.requestId && sameServerQuoteRequest(it.request, request) }
         fun handleAction(draft: SellerQuoteDraft, action: QuoteDelivery, sentVia: String? = null) {
             if (busy) return
@@ -158,6 +159,7 @@ internal fun InitialQuoteScreen(viewModel: InitialQuoteViewModel, connection: In
                             } else {
                                 QuoteReply.openTextEmail(context, draft.recipient.customerEmail.trim(), body)
                             }
+                            openedChannels = openedChannels + if (action == QuoteDelivery.SMS) "sms" else "email"
                             message = NamuMessage("문자·메일 앱에서 실제 전송을 마친 뒤 ‘견적완료’를 눌러주세요.")
                         }
                         QuoteDelivery.COMPLETE -> {
@@ -186,7 +188,7 @@ internal fun InitialQuoteScreen(viewModel: InitialQuoteViewModel, connection: In
         }
         ManualQuoteEditor(request, busy || inbox.busy || deleting, message?.text,
             onDismiss = { if (!busy) { viewModel.dismissManualQuote(); message = null } },
-            initialDraft = saved?.draft, draftKey = request.requestId, messageIsError = message?.isError == true,
+            initialDraft = saved?.draft, draftKey = request.requestId, messageIsError = message?.isError == true, openedChannels = openedChannels,
             onDeleteRequest = if (saved?.confirmationPending == true) null else ({ onDelete(request.requestId) }),
             verifiedDelivery = saved?.delivery, verifyDelivery = true,
             onSave = { draft, action -> handleAction(draft, action) },
