@@ -176,6 +176,7 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
     var discard by remember { mutableStateOf(false) }
     var deleteConfirm by remember { mutableStateOf(false) }
     var confirmSent by remember { mutableStateOf(false) }
+    var formalOpenedChannels by remember(draftKey) { mutableStateOf(emptySet<String>()) }
     var deliveryRequired by remember { mutableStateOf(false) }
     var initial by remember(draftKey) {
         mutableStateOf(initialDraft ?: SellerQuoteDraft.from(request, QuoteIssuerSettings(context).load()))
@@ -379,14 +380,17 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
                 TextButton(onClick = { issueDetails = !issueDetails }, enabled = !saving) {
                     Text(if (issueDetails) "발행정보 접기" else "공급자 · 계좌 · 발행정보")
                 }
-                if (issueDetails) QuoteIssueFields(draft.options, saving) { draft = draft.copy(options = it) }
+                if (issueDetails) QuoteIssueFields(draft.options, saving) {
+                    draft = draft.copy(options = it, recipient = if (confirmedEdit) draft.recipient.copy(formalQuoteRequested = true) else draft.recipient)
+                }
             }
         }
     }
     formalDraft?.let { snapshot ->
         request?.let { source ->
             InitialFormalQuoteDialog(source, snapshot, onDismiss = { formalDraft = null },
-                onPrepare = { onPrepareDocument(snapshot); initial = snapshot })
+                onPrepare = { onPrepareDocument(snapshot); initial = snapshot },
+                onOpened = { channel, _ -> formalOpenedChannels = formalOpenedChannels + channel })
         }
     }
     if (deliveryRequired) AlertDialog(onDismissRequest = { deliveryRequired = false },
@@ -394,7 +398,7 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
         text = { Text("문자 또는 메일을 먼저 보내 주세요. 현재 견적의 전송이 완료되어야 견적완료할 수 있습니다. 문자 결과확인 중이면 문자 버튼을 눌러 최종 결과를 확인해주세요.") },
         confirmButton = { TextButton(onClick = { deliveryRequired = false }) { Text("확인") } })
     if (confirmSent) ConfirmQuoteSentDialog(
-        openedChannels = openedChannels, phone = displayEditorPhone(draft.phone), email = draft.recipient.customerEmail,
+        openedChannels = openedChannels + formalOpenedChannels, phone = displayEditorPhone(draft.phone), email = draft.recipient.customerEmail,
         onDismiss = { confirmSent = false },
         onConfirm = { method ->
             confirmSent = false

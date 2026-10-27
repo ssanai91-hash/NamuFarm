@@ -14,7 +14,7 @@ fun confirmedQuoteEditBlock(record: QuoteWorkflowRecord, latest: WebQuoteRequest
     latest.status !in CONFIRMED_QUOTE_STATES -> "현재 서버 상태에서는 확정견적을 수정할 수 없어요."
     !sameConfirmedCustomer(record.request, latest) -> "고객 접수정보가 바뀌었습니다. 최신 목록에서 다시 확인해주세요."
     record.confirmedAt <= 0 && record.request.status !in CONFIRMED_QUOTE_STATES -> "확정한 견적 기록을 확인해주세요."
-    record.confirmationPending || record.delivery.smsState in setOf("pending", "unknown", "sending") -> "이전 발송·견적완료 결과를 먼저 확인해주세요."
+    record.confirmationPending || record.pendingConfirmedDelivery != null || record.delivery.smsState in setOf("pending", "unknown", "sending") -> "이전 발송·견적완료 결과를 먼저 확인해주세요."
     else -> null
 }
 

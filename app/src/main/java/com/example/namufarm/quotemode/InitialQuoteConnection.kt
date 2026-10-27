@@ -105,6 +105,14 @@ class InitialQuoteConnection(
         }
         database.withTransaction { dao.confirmed(id, gson.toJson(pricing)) }
     }
+    /** Status-only acknowledgement after seller attestation; confirmed pricing stays untouched. */
+    suspend fun markConfirmedQuoteDelivered(id: String) = mutex.withLock {
+        val response = gson.fromJson(gateway.request("update_request_status",
+            mapOf("requestId" to id, "status" to "견적발송완료")), WebQuoteEnvelope::class.java)
+        check(response.updated == true && response.requestId == id && response.status == "견적발송완료") {
+            "서버의 발송완료 응답을 확인하지 못했습니다. 다시 보내지 말고 결과를 확인해주세요."
+        }
+    }
     suspend fun close(id: String) = mutex.withLock {
         val response = gateway.request("close_request", mapOf("requestId" to id))
         check(response.get("closed")?.asBoolean == true && response.get("requestId")?.asString == id) {

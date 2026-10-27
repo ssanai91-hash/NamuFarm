@@ -5,6 +5,7 @@ import com.example.namufarm.data.WebQuoteRequestEntity
 import com.example.namufarm.data.remote.WebQuoteEnvelope
 import com.google.gson.Gson
 import java.security.MessageDigest
+import java.util.UUID
 
 /** Delivery and confirmation are independent; opening an external app never counts as delivery. */
 data class QuoteDeliveryRecord(
@@ -35,8 +36,15 @@ data class QuoteWorkflowRecord(
     val delivery: QuoteDeliveryRecord = QuoteDeliveryRecord(),
     val confirmationPending: Boolean = false, val confirmedAt: Long = 0,
     val originalDraft: SellerQuoteDraft? = null, val revisedAt: Long = 0,
-    val revision: Int = 0, val revisionSentAt: Long = 0
+    val revision: Int = 0, val revisionSentAt: Long = 0,
+    val originalDelivery: QuoteDeliveryRecord? = null,
+    val deliveryHistory: List<ConfirmedQuoteDelivery>? = null,
+    val pendingConfirmedDelivery: ConfirmedQuoteDelivery? = null
 )
+
+data class ConfirmedQuoteDelivery(val id: String, val revision: Int, val documentNumber: String,
+    val sentVia: String, val fingerprint: String, val sentAt: Long, val draft: SellerQuoteDraft,
+    val previousDelivery: QuoteDeliveryRecord)
 
 fun quoteWorkflowFingerprint(draft: SellerQuoteDraft): String {
     val json = Gson().toJsonTree(draft).asJsonObject
@@ -81,7 +89,8 @@ class QuoteWorkflow(
     private val call: suspend (String, Map<String, Any>) -> WebQuoteEnvelope,
     private val confirmRemote: suspend (String, SellerQuoteDraft) -> Unit,
     private val clock: () -> Long = System::currentTimeMillis,
-    private val latestRequest: suspend (WebQuoteRequestEntity) -> WebQuoteRequestEntity? = { it }
+    private val latestRequest: suspend (WebQuoteRequestEntity) -> WebQuoteRequestEntity? = { it },
+    private val markConfirmedDelivered: suspend (String) -> Unit = { error("확정견적 발송 상태 연결이 필요합니다.") }
 ) {
     fun records() = store.records()
     /** Local-only revision. The caller supplies the server snapshot checked before opening the editor. */
@@ -97,7 +106,61 @@ class QuoteWorkflow(
         }
         quoteWorkflowText(record.request, newDraft)
         return record.copy(draft = newDraft, originalDraft = record.originalDraft ?: record.draft,
+            originalDelivery = record.originalDelivery ?: record.delivery,
             revisedAt = clock(), revision = Math.addExact(record.revision, 1), revisionSentAt = 0).also(store::save)
+    }
+    private fun checkCurrentConfirmed(record: QuoteWorkflowRecord) {
+        check(store.records().firstOrNull { it.request.requestId == record.request.requestId }?.let { it == record } != false) {
+            "휴대폰 견적이 바뀌었습니다. 닫고 다시 열어주세요."
+        }
+    }
+    /** Preparing/launching an external app is neither a send nor a server status change. */
+    suspend fun prepareConfirmedExternal(record: QuoteWorkflowRecord, action: QuoteDelivery): WebQuoteRequestEntity {
+        require(action in setOf(QuoteDelivery.SMS, QuoteDelivery.EMAIL))
+        record.draft.validate(action); quoteWorkflowText(record.request, record.draft, action)
+        checkCurrentConfirmed(record)
+        val latest = latestRequest(record.request)
+        check(confirmedQuoteEditBlock(record, latest) == null) { confirmedQuoteEditBlock(record, latest).orEmpty() }
+        store.save(record)
+        return checkNotNull(latest)
+    }
+    /** Called only by the existing explicit '고객에게 보냈나요?' confirmation sheet. */
+    suspend fun completeConfirmedExternal(record: QuoteWorkflowRecord, sentVia: String,
+        documentNumber: String): QuoteWorkflowRecord {
+        require(sentVia in setOf("sms", "email", "both")) { "실제로 보낸 방법을 선택해주세요." }
+        require(documentNumber.matches(Regex("NQ-[0-9]{8}-[A-F0-9]{8}"))) { "보낸 공식견적서 번호를 확인해주세요." }
+        if (sentVia in setOf("email", "both")) record.draft.validate(QuoteDelivery.EMAIL)
+        else record.draft.validate(QuoteDelivery.COMPLETE)
+        checkCurrentConfirmed(record)
+        if (record.pendingConfirmedDelivery != null) return retryConfirmedDelivery(record)
+        val latest = latestRequest(record.request)
+        check(confirmedQuoteEditBlock(record, latest) == null) { confirmedQuoteEditBlock(record, latest).orEmpty() }
+        val evidence = ConfirmedQuoteDelivery(UUID.randomUUID().toString(), record.revision, documentNumber,
+            sentVia, quoteWorkflowFingerprint(record.draft), clock(), record.draft, record.delivery)
+        val journal = record.copy(pendingConfirmedDelivery = evidence)
+        store.save(journal) // Persist the attested snapshot before any remote acknowledgement.
+        return finishConfirmedDelivery(journal, checkNotNull(latest))
+    }
+    suspend fun retryConfirmedDelivery(record: QuoteWorkflowRecord): QuoteWorkflowRecord {
+        checkCurrentConfirmed(record)
+        val latest = latestRequest(record.request) ?: error("최신 서버 상태를 확인하지 못했습니다.")
+        return finishConfirmedDelivery(record, latest)
+    }
+    private suspend fun finishConfirmedDelivery(record: QuoteWorkflowRecord, latest: WebQuoteRequestEntity): QuoteWorkflowRecord {
+        val evidence = checkNotNull(record.pendingConfirmedDelivery)
+        check(evidence.fingerprint == quoteWorkflowFingerprint(record.draft) && evidence.revision == record.revision)
+        check(confirmedQuoteEditBlock(record.copy(pendingConfirmedDelivery = null), latest) == null) {
+            confirmedQuoteEditBlock(record.copy(pendingConfirmedDelivery = null), latest).orEmpty()
+        }
+        if (latest.status == "견적확정") markConfirmedDelivered(record.request.requestId)
+        // Already delivered: no status write and never resubmit revised prices to the server.
+        var delivery = record.delivery
+        if (evidence.sentVia in setOf("sms", "both")) delivery = delivery.copy(smsState = "success",
+            smsMessageId = "", smsFingerprint = evidence.fingerprint, smsStatusMessage = "판매자 전송 확인", smsSentAt = evidence.sentAt)
+        if (evidence.sentVia in setOf("email", "both")) delivery = delivery.copy(emailSentAt = evidence.sentAt, emailFingerprint = evidence.fingerprint)
+        val history = record.deliveryHistory.orEmpty().filterNot { it.id == evidence.id } + evidence
+        return record.copy(delivery = delivery, deliveryHistory = history, revisionSentAt = evidence.sentAt,
+            pendingConfirmedDelivery = null).also(store::save)
     }
     private suspend fun prepare(request: WebQuoteRequestEntity, draft: SellerQuoteDraft,
         completing: Boolean = false, refreshRequest: Boolean = true): QuoteWorkflowRecord {

@@ -34,20 +34,21 @@ object QuoteReply {
     }
 
     private fun body(doc: QuoteDocument) = "[${doc.issuer.businessName}] ${doc.recipient.recipientName.ifBlank { doc.recipient.customerName }}님, ${doc.number} 견적서를 보내드립니다."
-    fun emailIntent(doc: QuoteDocument, uri: Uri): Intent {
+    fun emailIntent(doc: QuoteDocument, uri: Uri, bodyText: String? = null): Intent {
         require(doc.recipient.customerEmail.isNotBlank() && validQuoteEmail(doc.recipient.customerEmail))
         return Intent(Intent.ACTION_SEND).apply {
             type = "application/pdf"; putExtra(Intent.EXTRA_EMAIL, arrayOf(doc.recipient.customerEmail))
             putExtra(Intent.EXTRA_SUBJECT, "[${doc.issuer.businessName}] ${doc.number} 견적서")
-            putExtra(Intent.EXTRA_TEXT, body(doc)); putExtra(Intent.EXTRA_STREAM, uri)
+            putExtra(Intent.EXTRA_TEXT, bodyText ?: body(doc)); putExtra(Intent.EXTRA_STREAM, uri)
             clipData = ClipData.newRawUri("견적서 PDF", uri); addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
     }
-    fun mmsIntent(doc: QuoteDocument, uris: List<Uri>): Intent {
+    fun mmsIntent(doc: QuoteDocument, uris: List<Uri>, bodyText: String? = null): Intent {
         require(uris.isNotEmpty())
         return Intent(if (uris.size == 1) Intent.ACTION_SEND else Intent.ACTION_SEND_MULTIPLE).apply {
             setDataAndType(Uri.fromParts("smsto", doc.customerPhone, null), "image/jpeg")
-            putExtra("address", doc.customerPhone); putExtra("sms_body", body(doc))
+            putExtra("address", doc.customerPhone); putExtra("sms_body", bodyText ?: body(doc))
+            putExtra(Intent.EXTRA_TEXT, bodyText ?: body(doc))
             if (uris.size == 1) putExtra(Intent.EXTRA_STREAM, uris.single())
             else putParcelableArrayListExtra(Intent.EXTRA_STREAM, ArrayList(uris))
             clipData = ClipData.newRawUri("견적서 이미지", uris.first()).also { clip -> uris.drop(1).forEach { clip.addItem(ClipData.Item(it)) } }
@@ -56,16 +57,16 @@ object QuoteReply {
     }
     private fun uri(context: Context, file: File) = FileProvider.getUriForFile(context, "${BuildConfig.APPLICATION_ID}.quote-files", file)
     @Suppress("DEPRECATION")
-    fun openEmail(context: Context, doc: QuoteDocument, file: File) {
+    fun openEmail(context: Context, doc: QuoteDocument, file: File, bodyText: String? = null) {
         val packages = context.packageManager.queryIntentActivities(Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:")), PackageManager.MATCH_DEFAULT_ONLY).map { it.activityInfo.packageName }.distinct()
         check(packages.isNotEmpty()) { "이메일 앱을 설치하거나 계정을 설정해주세요. PDF는 앱의 파일 공유로도 보낼 수 있습니다." }
-        val intents = packages.map { emailIntent(doc, uri(context, file)).setPackage(it) }
+        val intents = packages.map { emailIntent(doc, uri(context, file), bodyText).setPackage(it) }
         val chooser = Intent.createChooser(intents.first(), "견적서 이메일 작성")
         if (intents.size > 1) chooser.putExtra(Intent.EXTRA_INITIAL_INTENTS, intents.drop(1).toTypedArray())
         context.startActivity(chooser)
     }
-    fun openMms(context: Context, doc: QuoteDocument, files: List<File>) {
-        val intent = mmsIntent(doc, files.map { uri(context, it) })
+    fun openMms(context: Context, doc: QuoteDocument, files: List<File>, bodyText: String? = null) {
+        val intent = mmsIntent(doc, files.map { uri(context, it) }, bodyText)
         val smsPackage = Telephony.Sms.getDefaultSmsPackage(context)
         check(!smsPackage.isNullOrBlank()) { "기본 문자 앱을 설정해주세요." }
         intent.setPackage(smsPackage)

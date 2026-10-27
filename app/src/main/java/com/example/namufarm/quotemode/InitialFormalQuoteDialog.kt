@@ -20,11 +20,14 @@ import com.example.namufarm.quotemode.components.NamuDialog
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
 
 /** Native preview and export within the original app; opening a composer never marks a send. */
 @Composable
 internal fun InitialFormalQuoteDialog(request: WebQuoteRequestEntity, draft: SellerQuoteDraft,
-    onDismiss: () -> Unit, onPrepare: suspend () -> Unit = {}) {
+    onDismiss: () -> Unit, onPrepare: suspend () -> Unit = {},
+    onBeforeSend: suspend (String, QuoteDocument) -> Unit = { _, _ -> },
+    onOpened: (String, QuoteDocument) -> Unit = { _, _ -> }) {
     val context = LocalContext.current
     var document by remember(request.requestId, draft) { mutableStateOf<QuoteDocument?>(null) }
     var files by remember(request.requestId, draft) { mutableStateOf<QuoteDocumentRenderer.Files?>(null) }
@@ -32,6 +35,7 @@ internal fun InitialFormalQuoteDialog(request: WebQuoteRequestEntity, draft: Sel
     var error by remember { mutableStateOf<String?>(null) }
     var notice by remember { mutableStateOf<String?>(null) }
     var attempt by remember { mutableIntStateOf(0) }
+    val scope = rememberCoroutineScope()
     LaunchedEffect(request.requestId, draft, attempt) {
         busy = true
         error = null
@@ -52,21 +56,26 @@ internal fun InitialFormalQuoteDialog(request: WebQuoteRequestEntity, draft: Sel
     fun share(kind: String) {
         val saved = document ?: return
         val generated = files ?: return
-        try {
+        if (busy) return
+        busy = true
+        scope.launch { try {
             error = null
+            if (kind in setOf("email", "sms")) onBeforeSend(kind, saved)
             when (kind) {
-                "email" -> QuoteReply.openEmail(context, saved, generated.pdf)
-                "sms" -> QuoteReply.openMms(context, saved, generated.images)
+                "email" -> QuoteReply.openEmail(context, saved, generated.pdf, quoteWorkflowText(request, draft, QuoteDelivery.EMAIL))
+                "sms" -> QuoteReply.openMms(context, saved, generated.images, quoteWorkflowText(request, draft))
                 "view" -> QuoteReply.viewPdf(context, generated.pdf)
                 else -> QuoteReply.sharePdf(context, generated.pdf)
             }
             notice = "작성 앱에서 받는 사람과 첨부파일을 확인하고 실제로 전송해주세요."
-        } catch (e: Exception) {
+            if (kind in setOf("email", "sms")) onOpened(kind, saved)
+        } catch (e: CancellationException) { throw e }
+        catch (e: Exception) {
             error = when (kind) {
                 "view" -> "PDF를 열 앱이 없습니다. 아래 미리보기 또는 PDF 공유를 이용해주세요."
                 else -> e.message ?: "첨부파일을 열지 못했습니다. PDF 공유를 이용해주세요."
             }
-        }
+        } finally { busy = false } }
     }
     NamuDialog("공식견적서", document?.number ?: "문서 생성 중",
         onDismiss = { if (!busy) onDismiss() }, actions = {

@@ -39,7 +39,8 @@ internal fun InitialQuoteScreen(viewModel: InitialQuoteViewModel, connection: In
     val context = LocalContext.current
     val store = remember(context) { AndroidQuoteWorkflowStore(context) }
     val workflow = remember(store, connection) { QuoteWorkflow(store, connection::quoteAction, connection::confirmQuote,
-        latestRequest = { connection.latestRequest(it.requestId) }) }
+        latestRequest = { connection.latestRequest(it.requestId) },
+        markConfirmedDelivered = connection::markConfirmedQuoteDelivered) }
     val management by viewModel.uiState.collectAsState()
     val scope = rememberCoroutineScope()
     var recordsReady by remember { mutableStateOf(false) }

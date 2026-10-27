@@ -47,7 +47,10 @@ private val documentLine = Color(0xFFE2E6ED)
 internal fun InitialConfirmedQuoteDialog(request: WebQuoteRequestEntity, draft: SellerQuoteDraft?,
     confirmedAt: Long = 0, delivery: QuoteDeliveryRecord? = null, onDismiss: () -> Unit,
     record: QuoteWorkflowRecord? = null, editBlock: String? = null, onEdit: (() -> Unit)? = null,
-    originalView: Boolean = false) {
+    originalView: Boolean = false, sendEnabled: Boolean = true, onSms: (() -> Unit)? = null,
+    onBeforeFormalSend: suspend (String, QuoteDocument) -> Unit = { _, _ -> },
+    onFormalOpened: (String, QuoteDocument) -> Unit = { _, _ -> },
+    onRetryConfirmation: (() -> Unit)? = null, feedback: String? = null) {
     val context = LocalContext.current
     var formal by remember { mutableStateOf(false) }
     var firstQuote by remember { mutableStateOf(false) }
@@ -76,6 +79,7 @@ internal fun InitialConfirmedQuoteDialog(request: WebQuoteRequestEntity, draft: 
     NamuDialog(if (originalView) "처음 견적 보기" else "확정견적 확인", "$number\n$dateLabel", onDismiss,
         compact = true, documentStyle = true, actions = {
             actionError?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 13.sp) }
+            feedback?.let { Text(it, color = NamuColors.danger, fontSize = 13.sp) }
             if (!originalView) {
             if (onEdit != null) OutlinedButton(onClick = onEdit, enabled = editBlock == null,
                 modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("내용 수정") }
@@ -89,11 +93,13 @@ internal fun InitialConfirmedQuoteDialog(request: WebQuoteRequestEntity, draft: 
                     Spacer(Modifier.width(6.dp)); Text("PDF 생성", fontSize = 15.sp, fontWeight = FontWeight.Bold)
                 }
                 OutlinedButton(onClick = {
+                    if (onSms != null) onSms() else {
                     actionError = runCatching {
                         val saved = checkNotNull(draft)
                         openSmsComposer(context, saved.phone, quoteWorkflowText(request, saved))
                     }.getOrElse { it.message ?: "문자 앱을 열 수 없습니다." }
-                }, enabled = draft != null && dialNumber.isNotBlank(),
+                    }
+                }, enabled = sendEnabled && draft != null && dialNumber.isNotBlank(),
                     modifier = Modifier.weight(1f).heightIn(min = 52.dp), shape = RoundedCornerShape(8.dp),
                     contentPadding = PaddingValues(horizontal = 6.dp, vertical = 10.dp),
                     border = BorderStroke(1.5.dp, documentGreen),
@@ -102,6 +108,8 @@ internal fun InitialConfirmedQuoteDialog(request: WebQuoteRequestEntity, draft: 
                     Spacer(Modifier.width(6.dp)); Text("문자 발송", fontSize = 15.sp, fontWeight = FontWeight.Bold)
                 }
             }
+            if (onRetryConfirmation != null) OutlinedButton(onClick = onRetryConfirmation,
+                modifier = Modifier.fillMaxWidth()) { Text("발송완료 결과 확인") }
             }
         }) {
         LazyColumn(Modifier.fillMaxWidth(), contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp)) {
@@ -208,11 +216,23 @@ internal fun InitialConfirmedQuoteDialog(request: WebQuoteRequestEntity, draft: 
                 if (delivery.smsSentAt > 0) DocumentAmountRow("전송일", resultDate(delivery.smsSentAt))
                 DocumentAmountRow("메일", delivery.emailLabel(draft))
                 if (delivery.emailSentAt > 0) DocumentAmountRow("전송일", resultDate(delivery.emailSentAt))
+                if (record?.pendingConfirmedDelivery != null) Text("발송 확인 내용을 보관 중입니다. 다시 보내지 말고 발송완료 결과를 확인해주세요.", fontSize = 14.sp, color = NamuColors.danger)
+                record?.deliveryHistory.orEmpty().asReversed().forEach { sent ->
+                    DocumentAmountRow("수정 ${sent.revision}회 · ${sent.sentVia}", "${resultDate(sent.sentAt)}\n${sent.documentNumber}")
+                }
+                record?.originalDelivery?.let { original ->
+                    DocumentAmountRow("처음 문자 기록", original.smsLabel(record?.originalDraft ?: draft))
+                    DocumentAmountRow("처음 메일 기록", original.emailLabel(record?.originalDraft ?: draft))
+                }
             }
             item { Spacer(Modifier.height(10.dp)) }
         }
     }
-    if (formal && draft != null) InitialFormalQuoteDialog(request, draft, onDismiss = { formal = false })
+    if (formal && draft != null) InitialFormalQuoteDialog(request, draft, onDismiss = { formal = false },
+        onBeforeSend = onBeforeFormalSend, onOpened = { channel, document ->
+            if (onSms != null) formal = false
+            onFormalOpened(channel, document)
+        })
     if (firstQuote && record?.originalDraft != null) InitialConfirmedQuoteDialog(request, record.originalDraft,
         actualConfirmedAt, onDismiss = { firstQuote = false }, originalView = true)
 }
