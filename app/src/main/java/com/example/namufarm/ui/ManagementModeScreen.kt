@@ -267,8 +267,13 @@ fun ManagementModeScreen(viewModel: ManagementViewModel, onBack: () -> Unit) {
             onDismiss = { showSpeciesManageDialog = false },
             onSave = { id, name ->
                 val chosung = getChosungFromText(name)
-                // ViewModel의 saveSpecies (id, 이름, 농원명(빈값), 초성, 카테고리(빈값), 메모(빈값), 활성(1)) 호출
-                viewModel.saveSpecies(id, name, "", chosung, "", "", 1)
+                // 이름만 수정할 때 기존 농원명·분류·메모·활성 상태를 보존한다.
+                val existing = uiState.allSpeciesList.firstOrNull { id != null && it.speciesId == id }
+                    ?: uiState.selectedSpecies?.takeIf { id != null && it.speciesId == id }
+                viewModel.saveSpecies(
+                    id, name, existing?.nameFarm.orEmpty(), chosung,
+                    existing?.category.orEmpty(), existing?.memo.orEmpty(), existing?.isActive ?: 1
+                )
                 showSpeciesManageDialog = false
             },
             onDelete = { id ->
@@ -533,6 +538,17 @@ fun InventoryInputPane(viewModel: ManagementViewModel) {
             title = { Text("⚠️ 농원 선택 필요", fontWeight = FontWeight.Bold, color = Color.Red) },
             text = { Text("재고를 저장하려면 대상 '농원'이 필요합니다.\n화면 맨 위에서 농원을 먼저 선택해주세요.") },
             confirmButton = { Button(onClick = { showFarmRequiredError = false }) { Text("확인") } }
+        )
+    }
+
+    if (showValidationErrorDialog) {
+        AlertDialog(
+            onDismissRequest = { showValidationErrorDialog = false },
+            title = { Text("가격을 입력해 주세요", fontWeight = FontWeight.Bold) },
+            text = { Text("수량이 있는 재고는 도매가와 소매가를 모두 입력해야 해요.") },
+            confirmButton = {
+                Button(onClick = { showValidationErrorDialog = false }) { Text("확인") }
+            }
         )
     }
 
