@@ -71,16 +71,11 @@ fun CustomerInquiryScreen(viewModel: CustomerInquiryViewModel) {
         NamuTopBar("문의", masterSyncLabel(state.lastSyncAt), onSync = { if (!state.busy) viewModel.refresh() })
     }) { padding ->
     Column(Modifier.fillMaxSize().padding(padding).padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            InquiryChoice("미처리", state.rows.count { it.status == "open" }, filter == "open",
-                InquiryDesign.amber, InquiryDesign.honey, Icons.AutoMirrored.Outlined.Chat,
-                Modifier.weight(1f)) { filter = "open"; visible = 50 }
-            InquiryChoice("완료", state.rows.count { it.status == "closed" }, filter == "closed",
-                Forest700, Forest50, Icons.Outlined.CheckCircleOutline,
-                Modifier.weight(1f)) { filter = "closed"; visible = 50 }
-            InquiryChoice("전체", state.rows.size, filter == "all", InquiryDesign.blue, InquiryDesign.sky,
-                Icons.Outlined.FormatListBulleted, Modifier.weight(1f)) { filter = "all"; visible = 50 }
-        }
+        val filters = listOf("open", "closed", "all")
+        NamuSegmented(listOf(
+            NamuSegment("답변 대기", state.rows.count { it.status == "open" }, NamuColors.danger),
+            NamuSegment("완료", state.rows.count { it.status == "closed" }), NamuSegment("전체", state.rows.size)
+        ), filters.indexOf(filter), onSelect = { filter = filters[it]; visible = 50 })
         OutlinedTextField(value = search, onValueChange = { search = it; visible = 50 }, singleLine = true,
             placeholder = { Text("이름 · 전화 · 문의 검색", fontSize = 15.sp) },
             leadingIcon = { Icon(Icons.Outlined.Search, null, tint = InquiryDesign.blue) },
@@ -92,7 +87,7 @@ fun CustomerInquiryScreen(viewModel: CustomerInquiryViewModel) {
         if (selected == null) state.message?.let { message ->
             Surface(color = Forest50, shape = InquiryDesign.shape, border = BorderStroke(1.dp, Forest700)) {
                 Row(Modifier.padding(start = 10.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(message, Modifier.weight(1f).padding(vertical = 10.dp), fontSize = 14.sp)
+                    Text(namuPlainText(message), Modifier.weight(1f).padding(vertical = 10.dp), fontSize = 14.sp)
                     TextButton(onClick = viewModel::clearMessage) { Text("닫기") }
                 }
             }
@@ -103,7 +98,8 @@ fun CustomerInquiryScreen(viewModel: CustomerInquiryViewModel) {
                 InquiryEmpty(state.rows.isEmpty())
             }
             items(rows.take(visible), key = { it.requestId!! }) { row ->
-                InquiryListCard(row, state.operations.containsKey(row.requestId)) {
+                InquiryListCard(row, state.operations.containsKey(row.requestId),
+                    hasDraft = state.drafts[row.requestId]?.text?.isNotBlank() == true || !row.reply?.text.isNullOrBlank()) {
                     selected = row.requestId; viewModel.clearMessage()
                 }
             }
@@ -203,7 +199,7 @@ private fun InquiryDetailDialog(row: CustomerInquiryRemote, state: CustomerInqui
                                             maxLines = 1, overflow = TextOverflow.Ellipsis) }
                                     }
                                 }
-                                Text("${row.inquiryNumber} · ${row.deliveryLabel}", fontSize = 12.sp, color = muted)
+                                Text("${row.inquiryNumber} · ${row.deliveryLabel}", fontSize = 13.sp, color = muted)
                             }
                         }
                         HorizontalDivider(color = line)
@@ -216,7 +212,7 @@ private fun InquiryDetailDialog(row: CustomerInquiryRemote, state: CustomerInqui
                                     colors = ButtonDefaults.textButtonColors(contentColor = green),
                                     contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)) { Text("원문", fontSize = 13.sp) }
                             }
-                            Text(inquiryLocalTime(row.createdAt), fontSize = 12.sp, color = muted)
+                            Text(inquiryLocalTime(row.createdAt), fontSize = 13.sp, color = muted)
                             Surface(color = White, shape = RoundedCornerShape(14.dp)) {
                                 SelectionContainer { Text(row.inquiry?.message.orEmpty(), Modifier.fillMaxWidth().padding(12.dp),
                                     fontSize = 16.sp, color = ink, maxLines = 3, overflow = TextOverflow.Ellipsis) }
@@ -263,7 +259,7 @@ private fun InquiryDetailDialog(row: CustomerInquiryRemote, state: CustomerInqui
                                         focusedPlaceholderColor = muted, unfocusedPlaceholderColor = muted),
                                     modifier = Modifier.fillMaxWidth().then(
                                         if (scrollBody) Modifier.heightIn(min = 112.dp, max = 180.dp) else Modifier.weight(1f)))
-                                Text("${draft.text.length}자 · 전송창에서 인사말·마무리 자동 작성", fontSize = 11.sp, color = muted)
+                                Text("${draft.text.length}자 · 전송창에서 인사말·마무리 자동 작성", fontSize = 13.sp, color = muted)
                             }
                         }
                     }
@@ -314,7 +310,7 @@ private fun InquiryDetailDialog(row: CustomerInquiryRemote, state: CustomerInqui
                 row.history.orEmpty().asReversed().filterNotNull().forEach { entry ->
                     Surface(color = Canvas, shape = RoundedCornerShape(8.dp), border = BorderStroke(1.dp, InquiryDesign.line)) {
                         Column(Modifier.fillMaxWidth().padding(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text(inquiryLocalTime(entry.at), fontSize = 12.sp, color = Ink500)
+                            Text(inquiryLocalTime(entry.at), fontSize = 13.sp, color = Ink500)
                             if (entry.kind == "status") Text("${InquiryDesign.status(entry.status)} · ${entry.note.orEmpty()}")
                             else {
                                 Text("${if (entry.channel == "sms") "문자" else "메일"} · ${CustomerInquiryRemote.DELIVERY_LABELS[entry.state] ?: entry.state.orEmpty()}", fontSize = 13.sp)

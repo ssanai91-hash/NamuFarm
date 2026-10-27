@@ -1,5 +1,6 @@
 package com.example.namufarm.quotemode
 
+import com.example.namufarm.ui.theme.*
 import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.BorderStroke

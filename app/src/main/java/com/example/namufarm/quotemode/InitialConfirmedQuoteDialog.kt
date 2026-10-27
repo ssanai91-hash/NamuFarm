@@ -1,5 +1,6 @@
 package com.example.namufarm.quotemode
 
+import com.example.namufarm.ui.theme.*
 import android.content.Intent
 import android.net.Uri
 import android.telephony.PhoneNumberUtils
@@ -35,7 +36,7 @@ import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 
-private val documentGreen = Color(0xFF2F5D3F)
+private val documentGreen = NamuColors.primary
 private val documentBlue = Color(0xFF0969CE)
 private val documentInk = Color(0xFF17212B)
 private val documentMuted = Color(0xFF6B7280)
@@ -72,7 +73,7 @@ internal fun InitialConfirmedQuoteDialog(request: WebQuoteRequestEntity, draft: 
                 Button(onClick = { formal = true }, enabled = draft != null,
                     modifier = Modifier.weight(1f).heightIn(min = 52.dp), shape = RoundedCornerShape(8.dp),
                     contentPadding = PaddingValues(horizontal = 6.dp, vertical = 10.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1976D2))) {
+                    colors = ButtonDefaults.buttonColors(containerColor = NamuColors.primary)) {
                     Icon(Icons.Outlined.PictureAsPdf, null, Modifier.size(21.dp))
                     Spacer(Modifier.width(6.dp)); Text("PDF 생성", fontSize = 15.sp, fontWeight = FontWeight.Bold)
                 }
@@ -122,7 +123,7 @@ internal fun InitialConfirmedQuoteDialog(request: WebQuoteRequestEntity, draft: 
                         Surface(color = Color(0xFFFFF4D9), shape = RoundedCornerShape(8.dp)) {
                             Row(Modifier.padding(horizontal = 7.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Outlined.Info, null, Modifier.size(15.dp), tint = Color(0xFFB46B00))
-                                Spacer(Modifier.width(3.dp)); Text("확인 필요", fontSize = 12.sp, color = Color(0xFF9A5C00))
+                                Spacer(Modifier.width(3.dp)); Text("확인 필요", fontSize = 13.sp, color = Color(0xFF9A5C00))
                             }
                         }
                     }

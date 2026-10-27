@@ -1,5 +1,6 @@
 package com.example.namufarm.quotemode
 
+import com.example.namufarm.ui.theme.*
 import android.telephony.PhoneNumberUtils
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
@@ -28,11 +29,11 @@ import com.example.namufarm.quotation.QuoteIssuerSettings
 
 /** Neutral colors are scoped to the selected inquiry reply design. */
 internal object InquiryReplyDesign {
-    val green = Color(0xFF2F6B3F)
-    val canvas = Color(0xFFF7F8F6)
-    val ink = Color(0xFF1F2937)
-    val muted = Color(0xFF6B7280)
-    val line = Color(0xFFE5E7EB)
+    val green = NamuColors.primary
+    val canvas = NamuColors.background
+    val ink = NamuColors.text
+    val muted = NamuColors.muted
+    val line = NamuColors.border
 }
 
 internal fun inquiryReplyContent(answer: String, row: CustomerInquiryRemote, channel: String,
@@ -107,7 +108,7 @@ internal fun InquiryReplyDialog(row: CustomerInquiryRemote, channel: String, ans
                             cursorColor = InquiryReplyDesign.green), modifier = Modifier.fillMaxWidth())
                 }
                 Text("답변 ${outgoing.length} / ${limit}자 · 전체 ${prefix.length + outgoing.length}자",
-                    color = if (valid) InquiryReplyDesign.muted else MaterialTheme.colorScheme.error, fontSize = 12.sp)
+                    color = if (valid) InquiryReplyDesign.muted else MaterialTheme.colorScheme.error, fontSize = 13.sp)
                 if (!enabled) Text("문의나 초안이 변경됐습니다. 창을 닫고 최신 내용을 확인해주세요.",
                     fontSize = 13.sp, color = MaterialTheme.colorScheme.error)
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
