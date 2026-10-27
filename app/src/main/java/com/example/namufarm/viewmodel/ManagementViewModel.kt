@@ -278,14 +278,19 @@ class ManagementViewModel(
         }
     }
 
-    private suspend fun deductLocalInventoryFromSummary(summary: String) {
+    private suspend fun deductLocalInventoryFromSummary(summary: String): List<String> {
         val lines = summary.split("\n").filter { it.isNotBlank() }
+        val skipped = linkedSetOf<String>()
 
         lines.forEach { line ->
             val item = parseLocalOrderLine(line) ?: return@forEach
 
-            val farm = dao.getFarmByName(item.farmName.trim()) ?: return@forEach
-            val species = dao.getSpeciesByName(item.speciesName.trim()) ?: return@forEach
+            val farm = dao.getFarmByName(item.farmName.trim())
+            val species = dao.getSpeciesByName(item.speciesName.trim())
+            if (farm?.farmId == null || species?.speciesId == null || species.isActive != 1) {
+                skipped += item.speciesName.trim()
+                return@forEach
+            }
 
             val farmId = farm.farmId ?: return@forEach
             val speciesId = species.speciesId ?: return@forEach
@@ -303,6 +308,7 @@ class ManagementViewModel(
 
             syncManager.inventory.recordInventoryChange(current, newQty.coerceAtLeast(0))
         }
+        return skipped.toList()
     }
 
     fun selectChosung(chosung: String) {
@@ -626,12 +632,14 @@ class ManagementViewModel(
             }
 
             // 1) 로컬 DB 먼저 주문 확정
-            syncManager.masters.database.withTransaction {
+            val skipped = syncManager.masters.database.withTransaction {
                 dao.insertOrder(newOrder)
                 dao.deleteQuote(quote)
                 deductLocalInventoryFromSummary(quote.itemSummary)
             }
-            attemptInventorySync()
+            val skippedNotice = if (skipped.isEmpty()) "" else
+                "\n재고 차감을 건너뛴 품목: ${skipped.joinToString(", ")} (숨긴 묘목·삭제된 농원)"
+            attemptInventorySync(skippedNotice)
 
             val quotes = dao.getTodayQuotes()
             val orders = dao.getTodayOrders()
@@ -648,7 +656,7 @@ class ManagementViewModel(
                     todayOrders = orders,
                     allSellingInventory = allSellingInventory,
                     filteredSellingInventory = filteredSellingInventory,
-                    message = "💾 로컬 주문확정 완료"
+                    message = "💾 로컬 주문확정 완료" + skippedNotice
                 )
             }
 
@@ -674,11 +682,11 @@ class ManagementViewModel(
 
             _uiState.update {
                 it.copy(
-                    message = if (isCloudSuccess) {
+                    message = (if (isCloudSuccess) {
                         "✅ 로컬 주문확정 + 시트 연동 완료"
                     } else {
                         "⚠️ 로컬 주문확정 완료, 시트 연동 실패"
-                    }
+                    }) + skippedNotice
                 )
             }
             } catch (e: CancellationException) { throw e }
@@ -868,11 +876,11 @@ class ManagementViewModel(
         ) }
     }
 
-    private fun attemptInventorySync() {
+    private fun attemptInventorySync(completionNotice: String = "") {
         viewModelScope.launch(Dispatchers.IO) {
             val result = syncManager.inventory.sync(refreshMasters = false)
             refreshLocalState()
-            recordInventoryOutcome(result, refreshMasters = false)
+            recordInventoryOutcome(result.copy(message = result.message + completionNotice), refreshMasters = false)
         }
     }
 
