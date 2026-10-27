@@ -87,6 +87,14 @@ class ManagementViewModel(
     private val _uiState = MutableStateFlow(ManagementUiState())
     val uiState: StateFlow<ManagementUiState> = _uiState.asStateFlow()
     private var confirmedPendingSync: List<PendingSyncEntity> = emptyList()
+    val inventoryReview = syncManager.inventory.review
+    fun resolveInitialInventory(useServer: Boolean) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val result = syncManager.inventory.resolveInitialReview(useServer)
+            refreshLocalState()
+            _uiState.update { it.copy(message = result.message, lastSyncError = if (result.success) null else result.message) }
+        }
+    }
     private val clearingPendingSync = AtomicBoolean(false)
     internal val pendingSyncObserver: Job
 

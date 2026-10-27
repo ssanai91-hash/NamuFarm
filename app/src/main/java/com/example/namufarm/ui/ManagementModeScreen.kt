@@ -19,6 +19,8 @@ import com.google.gson.Gson
 fun ManagementModeScreen(viewModel: ManagementViewModel, onBack: () -> Unit,
     onBottomBarVisibleChange: (Boolean) -> Unit = {}, isActive: Boolean = true) {
     val state by viewModel.uiState.collectAsState()
+    val inventoryReview by viewModel.inventoryReview.collectAsState()
+    var showInventoryReview by remember { mutableStateOf(false) }
     val snackbar = remember { SnackbarHostState() }
     var feedbackError by remember { mutableStateOf(false) }
     LaunchedEffect(state.message, isActive) {
@@ -57,6 +59,10 @@ fun ManagementModeScreen(viewModel: ManagementViewModel, onBack: () -> Unit,
     }
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
+            if (inventoryReview.differences.isNotEmpty()) {
+                FarmInfo(if (inventoryReview.firstLink) "휴대폰과 서버의 재고를 먼저 맞춰주세요." else "다른 기기(PC)와 재고 수정이 겹쳤어요.")
+                TextButton(onClick = { showInventoryReview = true }) { Text("확인하기") }
+            }
             when (page) {
                 "input" -> StockEditor(viewModel, originalRow, onBack = ::back, onSaved = ::leaveInput)
                 "spec" -> StockSpecificationList(state, onBack = ::back, onEdit = { row ->
@@ -98,6 +104,8 @@ fun ManagementModeScreen(viewModel: ManagementViewModel, onBack: () -> Unit,
             Snackbar(data, containerColor = if (feedbackError) NamuColors.danger else NamuColors.dark)
         }
     }
+    if (showInventoryReview && inventoryReview.differences.isNotEmpty()) InventoryReviewSheet(inventoryReview, state,
+        onClose = { showInventoryReview = false }, onResolve = viewModel::resolveInitialInventory)
     if (showLeaveConfirm) AlertDialog(onDismissRequest = { showLeaveConfirm = false },
         title = { Text("입력 취소") }, text = { Text("입력 중인 내용이 사라집니다. 나갈까요?") },
         confirmButton = { TextButton(onClick = { showLeaveConfirm = false; leaveInput() }) { Text("나가기") } },

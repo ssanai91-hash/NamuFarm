@@ -48,6 +48,7 @@ class InventorySync(private val database: AppDatabase, private val client: Opera
     private val filesDir: java.io.File? = null) {
     private val dao = database.managementDao()
     private val gson = Gson()
+    private var firstBackupDone = false
     private val mutableReview = MutableStateFlow(InventoryReviewState())
     val review = mutableReview.asStateFlow()
     fun pendingCount(): Int = pending().size
@@ -219,8 +220,82 @@ class InventorySync(private val database: AppDatabase, private val client: Opera
             dao.deletePendingSync(requireNotNull(row.syncId))
         }
     }
-    private suspend fun reconcileInitial(records: List<InventoryRecord>): InventoryOutcome =
-        InventoryOutcome(false, "처음 재고 맞추기를 완료한 뒤 동기화해주세요.")
+    private suspend fun reconcileInitial(records: List<InventoryRecord>): InventoryOutcome {
+        if (!firstBackupDone) {
+            database.withTransaction {
+                InventoryFirstBackup.write(requireNotNull(filesDir) { "재고 맞추기 백업 위치가 없습니다." },
+                    dao.getAllInventoryEntities(), dao.getAllPendingSync())
+                dao.deleteLegacyInventoryPending() // Only legacy inventory; every removed row is in the durable JSON above.
+            }
+            firstBackupDone = true
+        }
+        val (mapped, skipped) = localRows(records)
+        val differences = database.withTransaction {
+            val phone = dao.getAllInventoryEntities().associateBy { it.stockKey() }.toMutableMap()
+            val queued = pending().groupBy { mutation(it).key() }
+            queued.forEach { (key, rows) -> if (key !in phone) phone[key] = mutation(rows.last()).local() }
+            phone.mapNotNull { (key, row) ->
+                mapped[key]?.takeIf { !sameValues(row, it.local(key.farmId, key.speciesId)) }?.let {
+                    InventoryDifference(key, row, it, queued[key].orEmpty(), true)
+                }
+            }
+        }
+        if (differences.isNotEmpty()) {
+            mutableReview.value = InventoryReviewState(differences, true)
+            return InventoryOutcome(false, "재고 맞추기 대기 ${differences.size}건 · 휴대폰과 서버 값을 확인해주세요.")
+        }
+        database.withTransaction {
+            // Recheck local values and pending operations after building the comparison, before writing anything.
+            val phone = dao.getAllInventoryEntities().associateBy { it.stockKey() }.toMutableMap()
+            val queued = pending().groupBy { mutation(it).key() }
+            queued.forEach { (key, rows) -> if (key !in phone) phone[key] = mutation(rows.last()).local() }
+            check(phone.none { (key, row) -> mapped[key]?.let { !sameValues(row, it.local(key.farmId, key.speciesId)) } == true }) {
+                "재고가 바뀌었습니다. 휴대폰 자료를 유지했으니 다시 맞춰주세요."
+            }
+            mapped.forEach { (key, remote) ->
+                if (key !in phone) applyServer(key, remote) else putLink(key, remote.version)
+            }
+            phone.forEach { (key, row) -> if (key !in mapped) {
+                dao.deleteInventoryLink(key.farmId, key.speciesId, key.quality, key.age, key.size, key.plantType)
+                if (queued[key].isNullOrEmpty()) enqueue(row)
+            } }
+        }
+        settings.inventoryLinked = true
+        mutableReview.value = InventoryReviewState()
+        val result = syncLinked(records)
+        return if (skipped > 0) result.copy(message = result.message + " · 연결 없는 서버 재고 ${skipped}건 건너뜀") else result
+    }
+    private fun reviewUnchanged(item: InventoryDifference): Boolean {
+        val current = local(item.key)
+        val sameLocal = current == item.local || (current == null && item.local?.quantity == 0)
+        return sameLocal && pending().filter { mutation(it).key() == item.key } == item.pending
+    }
+    suspend fun resolveInitialReview(useServer: Boolean): InventoryOutcome = masters.inventorySequence { master ->
+        if (!master.success) return@inventorySequence InventoryOutcome(false, master.message)
+        val review = mutableReview.value
+        if (!review.firstLink || review.differences.isEmpty()) return@inventorySequence InventoryOutcome(false, "먼저 재고 맞추기 목록을 확인해주세요.")
+        try {
+            val remote = fetch()
+            val mapped = localRows(remote).first
+            database.withTransaction {
+                check(review.differences.all { item -> reviewUnchanged(item) && mapped[item.key]?.version == item.remote?.version }) {
+                    "비교 중 재고가 바뀌었습니다. 휴대폰 자료를 유지했으니 다시 동기화해주세요."
+                }
+                for (item in review.differences) {
+                    val currentRemote = mapped[item.key]
+                    item.pending.forEach { dao.deletePendingSync(requireNotNull(it.syncId)) }
+                    if (useServer) applyServer(item.key, currentRemote)
+                    else {
+                        currentRemote?.let { putLink(item.key, it.version) }
+                        enqueue(requireNotNull(item.local))
+                    }
+                }
+            }
+            mutableReview.value = InventoryReviewState()
+            reconcileInitial(remote)
+        } catch (e: CancellationException) { throw e }
+        catch (e: Exception) { InventoryOutcome(false, e.message ?: "재고 맞추기를 완료하지 못했습니다. 휴대폰 자료를 유지합니다.") }
+    }
     private fun showConflict(row: PendingSyncEntity, records: List<InventoryRecord>) {
         val key = mutation(row).key()
         val remote = localRows(records).first[key]
