@@ -16,6 +16,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.namufarm.data.SpeciesEntity
+import com.example.namufarm.data.formatSpeciesCategory
+import com.example.namufarm.data.parseSpeciesCategory
+import com.example.namufarm.data.speciesCategoryError
+import com.example.namufarm.data.suggestSpeciesPurposeLabels
 import com.example.namufarm.quotemode.components.*
 import com.example.namufarm.ui.getChosungFromText
 import com.example.namufarm.ui.theme.NamuColors
@@ -64,17 +68,35 @@ internal fun SpeciesList(viewModel: ManagementViewModel, initial: String, search
 private fun SpeciesEditSheet(viewModel: ManagementViewModel, existing: SpeciesEntity?, onClose: () -> Unit) {
     val state by viewModel.uiState.collectAsState()
     var name by rememberSaveable(existing?.speciesId) { mutableStateOf(existing?.speciesName.orEmpty()) }
-    var category by rememberSaveable(existing?.speciesId) { mutableStateOf(existing?.category.orEmpty()) }
+    val originalCategory = remember(existing?.speciesId) { parseSpeciesCategory(existing?.category) }
+    val blankCategory = existing?.category.isNullOrBlank()
+    var selectedPurposes by rememberSaveable(existing?.speciesId) {
+        mutableStateOf(if (blankCategory) suggestSpeciesPurposeLabels(existing?.speciesName.orEmpty()) else originalCategory.selectedLabels)
+    }
+    var legacyValues by rememberSaveable(existing?.speciesId) { mutableStateOf(originalCategory.legacyValues) }
+    var purposesTouched by rememberSaveable(existing?.speciesId) { mutableStateOf(false) }
     var memo by rememberSaveable(existing?.speciesId) { mutableStateOf(existing?.memo.orEmpty()) }
     var hideConfirm by remember { mutableStateOf(false) }
     val duplicate = state.allSpeciesList.any { it.speciesId != existing?.speciesId && it.speciesName.trim().equals(name.trim(), ignoreCase = true) }
     val stocks = state.allSellingInventory.filter { existing != null && it.speciesId == existing.speciesId }
+    val category = formatSpeciesCategory(selectedPurposes, legacyValues)
+    val categoryError = speciesCategoryError(category)
     FarmSheet(if (existing == null) "묘목 추가" else "묘목 정보", onClose) {
-        FarmField("묘목명", name, { name = it }, required = true, trailing = {
+        FarmField("묘목명", name, {
+            name = it
+            if (existing == null && !purposesTouched) selectedPurposes = suggestSpeciesPurposeLabels(it)
+        }, required = true, trailing = {
             Text("초성 ${getChosungFromText(name)} · 자동", Modifier.padding(end = 12.dp), fontSize = 13.sp, color = NamuColors.muted)
         })
         if (duplicate) Text("같은 이름의 묘목이 있어요", fontSize = 13.sp, color = NamuColors.danger)
-        FarmField("분류", category, { category = it })
+        SpeciesPurposePicker(selectedPurposes, legacyValues,
+            suggested = blankCategory && !purposesTouched && selectedPurposes.isNotEmpty(), error = categoryError,
+            onToggle = { label ->
+                purposesTouched = true
+                selectedPurposes = if (label in selectedPurposes) selectedPurposes - label else selectedPurposes + label
+            }, onRemoveLegacy = { index ->
+                legacyValues = legacyValues.filterIndexed { i, _ -> i != index }
+            })
         FarmField("메모", memo, { memo = it }, memo = true)
         if (existing != null) FarmInfo(if (stocks.isEmpty()) "등록된 재고가 없어요" else
             "이 묘목 재고: " + stocks.groupBy { it.farmId }.values.joinToString(" · ") {
@@ -83,10 +105,11 @@ private fun SpeciesEditSheet(viewModel: ManagementViewModel, existing: SpeciesEn
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             NamuSecondaryButton("취소", onClose, Modifier.weight(1f))
             NamuPrimaryButton("저장", {
+                if (categoryError != null) return@NamuPrimaryButton
                 viewModel.saveSpecies(existing?.speciesId, name.trim(), existing?.nameFarm.orEmpty(), getChosungFromText(name.trim()),
                     category, memo, existing?.isActive ?: 1)
                 onClose()
-            }, Modifier.weight(1.6f), name.isNotBlank() && !duplicate)
+            }, Modifier.weight(1.6f), name.isNotBlank() && !duplicate && categoryError == null)
         }
         if (existing != null) TextButton(onClick = { hideConfirm = true }, modifier = Modifier.fillMaxWidth()) {
             Icon(Icons.Outlined.DeleteOutline, null, Modifier.size(18.dp), tint = NamuColors.danger)
