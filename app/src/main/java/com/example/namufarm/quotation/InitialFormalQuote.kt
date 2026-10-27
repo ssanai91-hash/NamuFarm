@@ -17,7 +17,7 @@ fun initialFormalQuote(request: WebQuoteRequestEntity, draft: SellerQuoteDraft,
         QuoteDocumentLine(row.name.trim(), row.spec.trim(), row.quantity.toInt(),
             row.price.toLong(), remarks = row.remarks.trim())
     }.toMutableList()
-    if (formal.prepaid) lines.add(QuoteDocumentLine("택배비", "선불", 1, formal.shipping().toLong(), "건"))
+    if (formal.prepaid) lines.add(QuoteDocumentLine("운반비", "선불", 1, formal.shipping().toLong(), "건", "택배비"))
     val supply = lines.fold(0L) { sum, line -> Math.addExact(sum, line.amount) }
     val tax = formal.options.taxAmount()
     val total = Math.addExact(supply, tax)
@@ -33,7 +33,8 @@ fun initialFormalQuote(request: WebQuoteRequestEntity, draft: SellerQuoteDraft,
         totalAmount = total,
         shippingNote = if (formal.prepaid) "배송비 선불 · 합계에 포함" else "배송비 후불 · 합계에 미포함",
         validUntil = formal.options.validUntil.trim(), notes = formal.options.notes.trim(),
-        paymentAccount = formal.options.account.trim()).validate()
+        paymentAccount = formal.options.account.trim(), shippingPrepaid = formal.prepaid,
+        quotedShippingFee = (formal.fee.toIntOrNull()?.coerceAtLeast(0) ?: 0).toLong()).validate()
 }
 
 /** Keep the issued snapshot before export; retries regenerate the same document number. */
@@ -45,7 +46,14 @@ class InitialFormalQuoteStore(context: Context) {
     fun issue(request: WebQuoteRequestEntity, draft: SellerQuoteDraft): QuoteDocument {
         val key = request.requestId + ":" + quoteWorkflowFingerprint(draft)
         val existing = preferences.getString(key, null)
-        if (existing != null) return QuoteDocument.read(existing)
+        if (existing != null) {
+            val saved = QuoteDocument.read(existing)
+            if (saved.shippingPrepaid != null && saved.quotedShippingFee != null) return saved
+            val upgraded = saved.copy(shippingPrepaid = draft.prepaid,
+                quotedShippingFee = (draft.fee.toIntOrNull()?.coerceAtLeast(0) ?: 0).toLong())
+            check(preferences.edit().putString(key, upgraded.json()).commit()) { "공식견적서 정보를 저장하지 못했습니다." }
+            return upgraded
+        }
         val document = initialFormalQuote(request, draft)
         check(preferences.edit().putString(key, document.json()).commit()) {
             "공식견적서를 휴대폰에 저장하지 못했습니다. 다시 시도해주세요."

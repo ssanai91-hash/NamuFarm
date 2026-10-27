@@ -110,7 +110,7 @@ internal fun InitialFormalQuoteDialog(request: WebQuoteRequestEntity, draft: Sel
                     Text("${index + 1} / ${images.size}쪽", style = MaterialTheme.typography.labelMedium)
                     Surface(border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
                         if (bitmap != null) Image(bitmap.asImageBitmap(), "공식견적서 ${index + 1}쪽",
-                            modifier = Modifier.fillMaxWidth().aspectRatio(595f / 842f))
+                            modifier = Modifier.fillMaxWidth().aspectRatio(955f / 1342f))
                     }
                 }
             }

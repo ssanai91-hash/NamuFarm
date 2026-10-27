@@ -13,7 +13,7 @@ internal object QuotePdfWriter {
         fun ascii(value: String) = write(value.toByteArray(Charsets.US_ASCII))
     }
     fun write(target: File, images: List<File>, imageWidth: Int, imageHeight: Int) {
-        require(images.isNotEmpty())
+        require(images.isNotEmpty() && imageWidth > 0 && imageHeight > 0)
         target.outputStream().buffered().use { raw ->
             val output = CountingOutput(raw); val offsets = mutableListOf(0L)
             output.ascii("%PDF-1.4\n"); output.write(byteArrayOf(37, -30, -29, -49, -45, 10))
@@ -30,7 +30,10 @@ internal object QuotePdfWriter {
                 output.ascii("<< /Type /XObject /Subtype /Image /Width $imageWidth /Height $imageHeight /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${image.length()} >>\nstream\n")
                 image.inputStream().use { it.copyTo(output) }
                 output.ascii("\nendstream"); objectEnd()
-                val content = "q\n595 0 0 842 0 0 cm\n/Im0 Do\nQ\n"
+                val scale = minOf(595.0 / imageWidth, 842.0 / imageHeight)
+                val width = imageWidth * scale; val height = imageHeight * scale
+                val content = String.format(Locale.US, "q\n%.6f 0 0 %.6f %.6f %.6f cm\n/Im0 Do\nQ\n",
+                    width, height, (595 - width) / 2, (842 - height) / 2)
                 objectStart(page + 2); output.ascii("<< /Length ${content.toByteArray(Charsets.US_ASCII).size} >>\nstream\n$content" + "endstream"); objectEnd()
             }
             val xref = output.count

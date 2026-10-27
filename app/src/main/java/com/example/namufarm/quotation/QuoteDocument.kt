@@ -54,11 +54,13 @@ data class QuoteDocument(
     val schemaVersion: Int = 1, val id: String, val number: String, val sourceQuoteNumber: String,
     val issuedAt: Long, val customerPhone: String, val recipient: QuoteRecipient, val issuer: QuoteIssuer,
     val lines: List<QuoteDocumentLine>, val supplyAmount: Long, val taxAmount: Long, val totalAmount: Long,
-    val shippingNote: String, val validUntil: String, val notes: String, val paymentAccount: String
+    val shippingNote: String, val validUntil: String, val notes: String, val paymentAccount: String,
+    val shippingPrepaid: Boolean? = null, val quotedShippingFee: Long? = null
 ) {
     fun validate(): QuoteDocument {
         require(schemaVersion == 1 && Regex("[0-9a-f-]{36}").matches(id) && number.matches(Regex("NQ-[0-9]{8}-[A-F0-9]{8}")))
         require(sourceQuoteNumber.isNotBlank() && issuedAt > 0 && customerPhone.matches(Regex("0[0-9]{8,10}")))
+        require(quotedShippingFee == null || quotedShippingFee in 0..Int.MAX_VALUE.toLong())
         recipient.checked(); issuer.checked()
         require(recipient.recipientName.isNotBlank() || recipient.customerName.isNotBlank()) { "견적서 수신인 또는 고객 성함을 입력해주세요." }
         require(lines.isNotEmpty() && lines.size <= 201)
@@ -84,7 +86,8 @@ data class QuoteDocument(
                 customerPhone = quote.customerPhone.replace(Regex("[\\s()-]"), ""), recipient = recipient.checked(), issuer = issuer.checked(), lines = lines,
                 supplyAmount = quote.totalPrice.toLong(), taxAmount = taxAmount, totalAmount = Math.addExact(quote.totalPrice.toLong(), taxAmount),
                 shippingNote = if (quote.isPrepaid) "배송비 선불 · 합계에 포함" else "배송비 착불 · 합계에 미포함",
-                validUntil = cleanText(validUntil, 100, true), notes = notes.trim(), paymentAccount = paymentAccount.trim()).validate()
+                validUntil = cleanText(validUntil, 100, true), notes = notes.trim(), paymentAccount = paymentAccount.trim(),
+                shippingPrepaid = quote.isPrepaid, quotedShippingFee = quote.shippingFee.coerceAtLeast(0).toLong()).validate()
         }
     }
 }
