@@ -88,9 +88,10 @@ class ManagementViewModel(
     val uiState: StateFlow<ManagementUiState> = _uiState.asStateFlow()
     private var confirmedPendingSync: List<PendingSyncEntity> = emptyList()
     val inventoryReview = syncManager.inventory.review
-    fun resolveInitialInventory(useServer: Boolean) {
+    fun resolveInventoryReview(useServer: Boolean) {
         viewModelScope.launch(Dispatchers.IO) {
-            val result = syncManager.inventory.resolveInitialReview(useServer)
+            val result = if (syncManager.inventory.review.value.firstLink) syncManager.inventory.resolveInitialReview(useServer)
+                else syncManager.inventory.resolveConflict(useServer)
             refreshLocalState()
             _uiState.update { it.copy(message = result.message, lastSyncError = if (result.success) null else result.message) }
         }

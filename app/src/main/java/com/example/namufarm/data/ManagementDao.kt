@@ -276,4 +276,6 @@ interface ManagementDao {
 
     @Query("DELETE FROM pending_sync WHERE sync_type='inventory'")
     fun deleteLegacyInventoryPending(): Int
+    @Query("UPDATE pending_sync SET last_error='' WHERE sync_id=:id")
+    fun clearPendingSyncError(id: Int)
 } // <- 인터페이스 닫는 괄호

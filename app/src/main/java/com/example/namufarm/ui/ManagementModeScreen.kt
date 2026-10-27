@@ -60,7 +60,7 @@ fun ManagementModeScreen(viewModel: ManagementViewModel, onBack: () -> Unit,
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
             if (inventoryReview.differences.isNotEmpty()) {
-                FarmInfo(if (inventoryReview.firstLink) "휴대폰과 서버의 재고를 먼저 맞춰주세요." else "다른 기기(PC)와 재고 수정이 겹쳤어요.")
+                FarmInfo(if (inventoryReview.firstLink) "휴대폰과 서버의 재고를 먼저 맞춰주세요." else "다른 기기(PC)와 재고 수정이 겹쳤어요.", warning = !inventoryReview.firstLink)
                 TextButton(onClick = { showInventoryReview = true }) { Text("확인하기") }
             }
             when (page) {
@@ -105,7 +105,7 @@ fun ManagementModeScreen(viewModel: ManagementViewModel, onBack: () -> Unit,
         }
     }
     if (showInventoryReview && inventoryReview.differences.isNotEmpty()) InventoryReviewSheet(inventoryReview, state,
-        onClose = { showInventoryReview = false }, onResolve = viewModel::resolveInitialInventory)
+        onClose = { showInventoryReview = false }, onResolve = viewModel::resolveInventoryReview)
     if (showLeaveConfirm) AlertDialog(onDismissRequest = { showLeaveConfirm = false },
         title = { Text("입력 취소") }, text = { Text("입력 중인 내용이 사라집니다. 나갈까요?") },
         confirmButton = { TextButton(onClick = { showLeaveConfirm = false; leaveInput() }) { Text("나가기") } },

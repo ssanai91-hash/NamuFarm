@@ -13,6 +13,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
@@ -153,11 +154,12 @@ internal fun FarmField(label: String, value: String, onChange: (String) -> Unit,
 }
 
 @Composable
-internal fun FarmInfo(text: String) {
-    Surface(color = Color(0xFFEEF5F0), shape = RoundedCornerShape(12.dp)) {
+internal fun FarmInfo(text: String, warning: Boolean = false) {
+    val ink = if (warning) Color(0xFF6B4300) else Color(0xFF1F573B)
+    Surface(color = if (warning) Color(0xFFFDF1DC) else Color(0xFFEEF5F0), shape = RoundedCornerShape(12.dp)) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Icon(Icons.Outlined.Info, null, Modifier.size(20.dp), tint = Color(0xFF1F573B))
-            Text(text, fontSize = 14.sp, lineHeight = 20.3.sp, color = Color(0xFF1F573B))
+            Icon(if (warning) Icons.Outlined.WarningAmber else Icons.Outlined.Info, null, Modifier.size(20.dp), tint = ink)
+            Text(text, fontSize = 14.sp, lineHeight = 20.3.sp, color = ink)
         }
     }
 }

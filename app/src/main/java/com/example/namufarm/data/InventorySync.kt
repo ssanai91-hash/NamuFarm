@@ -172,7 +172,10 @@ class InventorySync(private val database: AppDatabase, private val client: Opera
             catch (e: Exception) {
                 val conflict = e is MasterServerException && e.code == "CONFLICT"
                 dao.markPendingSyncFailed(requireNotNull(row.syncId), (if (conflict) "CONFLICT: " else "") + (e.message ?: "서버 확인 실패"))
-                if (conflict) runCatching { showConflict(row, fetch()) }
+                if (conflict) {
+                    showConflict(row, first)
+                    try { showConflict(row, fetch()) } catch (cancelled: CancellationException) { throw cancelled } catch (_: Exception) { }
+                }
                 return InventoryOutcome(false, if (conflict) "다른 기기(PC)와 재고 수정이 겹쳤어요. 확인하기를 눌러주세요."
                     else "재고 반영 대기 ${pendingCount()}건 · ${e.message ?: "네트워크 확인 후 다시 동기화해주세요."}", sent)
             }
@@ -220,7 +223,7 @@ class InventorySync(private val database: AppDatabase, private val client: Opera
             dao.deletePendingSync(requireNotNull(row.syncId))
         }
     }
-    private suspend fun reconcileInitial(records: List<InventoryRecord>): InventoryOutcome {
+    private suspend fun reconcileInitial(records: List<InventoryRecord>, resolved: Set<InventoryKey> = emptySet()): InventoryOutcome {
         if (!firstBackupDone) {
             database.withTransaction {
                 InventoryFirstBackup.write(requireNotNull(filesDir) { "재고 맞추기 백업 위치가 없습니다." },
@@ -235,7 +238,7 @@ class InventorySync(private val database: AppDatabase, private val client: Opera
             val queued = pending().groupBy { mutation(it).key() }
             queued.forEach { (key, rows) -> if (key !in phone) phone[key] = mutation(rows.last()).local() }
             phone.mapNotNull { (key, row) ->
-                mapped[key]?.takeIf { !sameValues(row, it.local(key.farmId, key.speciesId)) }?.let {
+                mapped[key]?.takeIf { key !in resolved && !sameValues(row, it.local(key.farmId, key.speciesId)) }?.let {
                     InventoryDifference(key, row, it, queued[key].orEmpty(), true)
                 }
             }
@@ -249,7 +252,7 @@ class InventorySync(private val database: AppDatabase, private val client: Opera
             val phone = dao.getAllInventoryEntities().associateBy { it.stockKey() }.toMutableMap()
             val queued = pending().groupBy { mutation(it).key() }
             queued.forEach { (key, rows) -> if (key !in phone) phone[key] = mutation(rows.last()).local() }
-            check(phone.none { (key, row) -> mapped[key]?.let { !sameValues(row, it.local(key.farmId, key.speciesId)) } == true }) {
+            check(phone.none { (key, row) -> key !in resolved && mapped[key]?.let { !sameValues(row, it.local(key.farmId, key.speciesId)) } == true }) {
                 "재고가 바뀌었습니다. 휴대폰 자료를 유지했으니 다시 맞춰주세요."
             }
             mapped.forEach { (key, remote) ->
@@ -292,9 +295,45 @@ class InventorySync(private val database: AppDatabase, private val client: Opera
                 }
             }
             mutableReview.value = InventoryReviewState()
-            reconcileInitial(remote)
+            reconcileInitial(remote, review.differences.map { it.key }.toSet())
         } catch (e: CancellationException) { throw e }
         catch (e: Exception) { InventoryOutcome(false, e.message ?: "재고 맞추기를 완료하지 못했습니다. 휴대폰 자료를 유지합니다.") }
+    }
+    suspend fun resolveConflict(useServer: Boolean): InventoryOutcome = masters.inventorySequence { master ->
+        if (!master.success) return@inventorySequence InventoryOutcome(false, master.message)
+        val review = mutableReview.value
+        val item = review.differences.singleOrNull()?.takeIf { !review.firstLink }
+            ?: return@inventorySequence InventoryOutcome(false, "먼저 재고 충돌 목록을 확인해주세요.")
+        try {
+            val remote = fetch()
+            val mapped = localRows(remote).first
+            val first = pending().firstOrNull() ?: return@inventorySequence InventoryOutcome(false, "재고 대기가 바뀌었습니다. 다시 동기화해주세요.")
+            val fresh = mapped[item.key]
+            val accepted = database.withTransaction {
+                if (first.syncId != item.pending.firstOrNull()?.syncId || !reviewUnchanged(item) || fresh?.version != item.remote?.version) false
+                else {
+                    if (fresh == null) dao.deleteInventoryLink(item.key.farmId, item.key.speciesId, item.key.quality, item.key.age, item.key.size, item.key.plantType)
+                    else putLink(item.key, fresh.version)
+                    if (useServer) {
+                        dao.deletePendingSync(requireNotNull(first.syncId))
+                        // The choice discards this operation only; later local edits must survive.
+                        if (pending().none { mutation(it).key() == item.key }) applyServer(item.key, fresh)
+                    } else {
+                        val retried = mutation(first).copy(operationId = UUID.randomUUID().toString())
+                        dao.updatePendingPayload(requireNotNull(first.syncId), gson.toJson(retried))
+                        dao.clearPendingSyncError(requireNotNull(first.syncId))
+                    }
+                    true
+                }
+            }
+            if (!accepted) {
+                showConflict(first, remote)
+                return@inventorySequence InventoryOutcome(false, "비교 중 재고가 바뀌었습니다. 최신 값으로 다시 선택해주세요.")
+            }
+            mutableReview.value = InventoryReviewState()
+            syncLinked(remote)
+        } catch (e: CancellationException) { throw e }
+        catch (e: Exception) { InventoryOutcome(false, e.message ?: "충돌 처리를 완료하지 못했습니다. 전송 대기를 유지합니다.") }
     }
     private fun showConflict(row: PendingSyncEntity, records: List<InventoryRecord>) {
         val key = mutation(row).key()
