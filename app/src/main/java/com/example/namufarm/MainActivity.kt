@@ -23,6 +23,14 @@ import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -61,6 +69,20 @@ class MainActivity : ComponentActivity() {
         @Suppress("DEPRECATION")
         window.statusBarColor = android.graphics.Color.WHITE
 
+        if (com.example.namufarm.data.DataMaintenance.active) {
+            setContent { com.example.namufarm.ui.theme.NamuTheme {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("자료를 보존하는 중입니다. 잠시 기다려주세요.") }
+            } }
+            lifecycleScope.launch {
+                com.example.namufarm.data.DataMaintenance.state.first { !it }
+                if (!isFinishing && !isDestroyed) recreate()
+            }
+            return
+        }
+
+        // Complete or roll back an interrupted replacement before opening any database.
+        com.example.namufarm.data.BackupRestoreJournal.recover(this)
+
         // 1. DB와 DAO 가져오기
         val database = AppDatabase.getDatabase(this)
         val dao = database.managementDao()
@@ -92,6 +114,17 @@ class MainActivity : ComponentActivity() {
                 com.example.namufarm.viewmodel.CustomerInquiryViewModel::class.java]
         com.example.namufarm.quotemode.CustomerInquiryCleanupWorker.schedule(this)
 
+        val backupController = com.example.namufarm.data.DataBackupController(this,
+            quiesce = {
+                withContext(Dispatchers.IO) {
+                    androidx.work.WorkManager.getInstance(this@MainActivity).cancelUniqueWork("initial-inquiry-disposal").result.get()
+                }
+                listOf(viewModel, quoteViewModel, inquiryViewModel).forEach {
+                    it.viewModelScope.coroutineContext[Job]?.cancelAndJoin()
+                }
+                withContext(Dispatchers.Main) { viewModelStore.clear() }
+            }, resumeUi = { if (!isFinishing && !isDestroyed) recreate() })
+
         // 🚨 4. 권한 체크 및 통화 감시자 작동 시작!
         checkAndRequestPermissions()
 
@@ -105,7 +138,7 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 composable("modes") {
-                    com.example.namufarm.quotemode.InitialAppModes(viewModel, quoteViewModel, inquiryViewModel)
+                    com.example.namufarm.quotemode.InitialAppModes(viewModel, quoteViewModel, inquiryViewModel, backupController)
                 }
             }
         }

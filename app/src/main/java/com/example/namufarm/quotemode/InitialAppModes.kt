@@ -29,7 +29,7 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun InitialAppModes(management: ManagementViewModel, quote: InitialQuoteViewModel,
-                    inquiry: CustomerInquiryViewModel) {
+                    inquiry: CustomerInquiryViewModel, backupController: com.example.namufarm.data.DataBackupController? = null) {
     val pager = rememberPagerState(initialPage = 0, pageCount = { 4 })
     val scope = rememberCoroutineScope()
     val inbox by quote.uiState.collectAsState()
@@ -92,7 +92,7 @@ fun InitialAppModes(management: ManagementViewModel, quote: InitialQuoteViewMode
                         onSync = quote::refresh, onRead = quote::read, onDelete = quote::close)
                     1 -> CustomerInquiryScreen(inquiry)
                     2 -> SellingModeScreen(management, onNavigateToManagement = { requestMove(3) }, isActive = pager.currentPage == 2)
-                    3 -> ManagementModeScreen(management, onBack = { move(2) }, onBottomBarVisibleChange = { bottomBarVisible = it }, isActive = pager.currentPage == 3)
+                    3 -> ManagementModeScreen(management, onBack = { move(2) }, onBottomBarVisibleChange = { bottomBarVisible = it }, isActive = pager.currentPage == 3, backupController = backupController)
                 }
             }
         }

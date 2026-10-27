@@ -13,6 +13,10 @@ abstract class InitialQuoteDatabase : RoomDatabase() {
     abstract fun inbox(): InitialQuoteDao
     companion object {
         @Volatile private var instance: InitialQuoteDatabase? = null
+        @Synchronized fun closeForRestore() {
+            instance?.close()
+            instance = null
+        }
         fun get(context: Context): InitialQuoteDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(context.applicationContext,
                 InitialQuoteDatabase::class.java, "NamuFarmQuotes.db").build().also { instance = it }

@@ -1,6 +1,8 @@
 package com.example.namufarm.quotemode
 
 import android.content.Context
+import com.example.namufarm.data.DataMaintenance
+import kotlinx.coroutines.sync.withLock
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
@@ -13,11 +15,14 @@ import java.util.concurrent.TimeUnit
 
 /** Local disposal only; this worker never contacts the server or sends a message. */
 class CustomerInquiryCleanupWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
-    override suspend fun doWork(): Result = try {
-        CustomerInquiryRepository.purgeExpired(CustomerInquiryDatabase.get(applicationContext))
-        Result.success()
-    } catch (error: CancellationException) { throw error }
-      catch (_: Exception) { Result.retry() }
+    override suspend fun doWork(): Result = DataMaintenance.lock.withLock {
+        if (DataMaintenance.active) return@withLock Result.retry()
+        try {
+            CustomerInquiryRepository.purgeExpired(CustomerInquiryDatabase.get(applicationContext))
+            Result.success()
+        } catch (error: CancellationException) { throw error }
+        catch (_: Exception) { Result.retry() }
+    }
 
     companion object {
         fun schedule(context: Context) {

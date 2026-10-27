@@ -463,6 +463,10 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        @Synchronized fun closeForRestore() {
+            instance?.close()
+            instance = null
+        }
         fun getDatabase(context: Context): AppDatabase {
             return instance ?: synchronized(this) {
                 val newInstance = Room.databaseBuilder(

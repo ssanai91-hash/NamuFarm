@@ -17,7 +17,7 @@ import com.google.gson.Gson
 /** Farm navigation owns its filters; it never changes the selling tab's initial filter. */
 @Composable
 fun ManagementModeScreen(viewModel: ManagementViewModel, onBack: () -> Unit,
-    onBottomBarVisibleChange: (Boolean) -> Unit = {}, isActive: Boolean = true) {
+    onBottomBarVisibleChange: (Boolean) -> Unit = {}, isActive: Boolean = true, backupController: com.example.namufarm.data.DataBackupController? = null) {
     val state by viewModel.uiState.collectAsState()
     val inventoryReview by viewModel.inventoryReview.collectAsState()
     var showInventoryReview by remember { mutableStateOf(false) }

@@ -14,6 +14,10 @@ abstract class CustomerInquiryDatabase : RoomDatabase() {
 
     companion object {
         @Volatile private var instance: CustomerInquiryDatabase? = null
+        @Synchronized fun closeForRestore() {
+            instance?.close()
+            instance = null
+        }
         fun get(context: Context): CustomerInquiryDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(context.applicationContext,
                 CustomerInquiryDatabase::class.java,
