@@ -23,7 +23,7 @@ object BackupRestoreJournal {
         val root = context.applicationInfo.dataDir.let(::File).canonicalFile
         value.moves.forEach { move ->
             listOfNotNull(move.target, move.staged, move.old).forEach {
-                check(File(it).canonicalFile.toPath().startsWith(root.toPath())) { "복원 경로를 확인할 수 없습니다." }
+                check(File(it).canonicalPath.startsWith(root.path + File.separator)) { "복원 경로를 확인할 수 없습니다." }
             }
         }
         if (value.phase != "committed") rollback(value)

@@ -73,7 +73,8 @@ class InventorySync(private val database: AppDatabase, private val client: Opera
     }
     /** This is also safe when nested in the order-creation Room transaction. */
     suspend fun recordInventoryChange(entity: FarmInventoryEntity, quantityAfter: Int) = database.withTransaction {
-        check(dao.getAllFarms().any { it.farmId == entity.farmId } && dao.getSpeciesById(entity.speciesId)?.isActive == 1) {
+        val species = dao.getSpeciesById(entity.speciesId)
+        check(dao.getAllFarms().any { it.farmId == entity.farmId } && species != null && (species.isActive ?: 1) == 1) {
             "사용할 농원과 묘목을 확인해주세요. 재고는 변경하지 않았습니다."
         }
         val changed = entity.copy(quantity = quantityAfter.coerceAtLeast(0))
