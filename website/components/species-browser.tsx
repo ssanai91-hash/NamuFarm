@@ -69,7 +69,7 @@ export default function SpeciesBrowser({ lines, onSelect, onRemove, notice, lock
         <p id="search-help" className="field-help">이름이나 초성으로 검색해요.</p>
         <div className="initial-filter" role="group" aria-label="첫 글자로 묘목 찾기">{catalogInitials.map(value => <Button type="button" variant="ghost" key={value} className="initial-button" aria-pressed={initial === value} onClick={() => chooseInitial(value)}>{value}</Button>)}</div>
       </div>}
-      <SelectedSpeciesSummary lines={lines} onRemove={onRemove} locked={locked} />
+      {lines.some(line => line.species.trim()) && <SelectedSpeciesSummary lines={lines} onRemove={onRemove} locked={locked} />}
       <div className="catalog-result-intro">{mode === "purpose" && <h3>{activePurpose.title}</h3>}<p className="catalog-results-heading">{mode === "planting" ? matches.length > 0 ? "묘목을 누르면 심는 시기를 알아볼 수 있어요." : "다른 달의 묘목을 미리 알아보세요." : "눌러서 담기 · 다시 눌러 해제"}</p></div>
       <p className={notice.startsWith("한 번에 20종") || notice.startsWith("20종까지") ? "catalog-live" : "sr-only"} role="status" aria-live="polite" aria-atomic="true">{notice}</p>
       <div className="catalog-grid" id="catalog-species-list">{pageMatches.map(species => mode === "planting" ? <button key={species.id} type="button" className={`catalog-card planting-choice${selected.has(species.name) ? " selected" : ""}`} aria-haspopup="dialog" aria-label={`${species.name} 심는 시기 알아보기${selected.has(species.name) ? " · 이미 담김" : ""}`} onClick={event => { guideOpener.current = event.currentTarget; setGuideName(species.name); }}>
