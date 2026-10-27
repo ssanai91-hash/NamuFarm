@@ -150,23 +150,6 @@ class Vault:
         with self.mutex, self._db() as db:
             db.execute("UPDATE config SET value=? WHERE name='credentials'", (self._seal(value, "credentials"),))
 
-    def reset_workspace(self, url):
-        """Discard this PC's local workspace and prepare a clean identity for one server."""
-        with self.mutex, self._db() as db:
-            blob = db.execute("SELECT value FROM config WHERE name='credentials'").fetchone()[0]
-            previous = self._open(blob, "credentials")
-            legacy_keys = {key: previous[key] for key in ("privateKey", "publicKey") if key in previous}
-            credentials = {**legacy_keys, "deviceToken": os.urandom(32).hex(), "paired": False, "url": url}
-            db.execute("DELETE FROM cache")
-            db.execute("DELETE FROM outbox")
-            for table in ('inquiry_records', 'inquiry_drafts', 'inquiry_operations', 'inquiry_meta'):
-                if db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,)).fetchone():
-                    db.execute(f"DELETE FROM {table}")
-            db.execute("DELETE FROM config WHERE name='snapshot' OR name LIKE 'workspace:%'")
-            db.execute("UPDATE config SET value=? WHERE name='credentials'",
-                       (self._seal(credentials, "credentials"),))
-        return credentials
-
     def preference(self, name, default=None):
         """Encrypted PC-only workspace data; survives cloud snapshot replacement."""
         with self.mutex, self._db() as db:

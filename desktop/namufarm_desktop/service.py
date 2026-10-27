@@ -11,7 +11,7 @@ from pathlib import Path
 from .api import DEFAULT_URL, ScriptApi
 from .crypto import canonical, digest, customer_digest, SellerKey
 from .domain import (changed, integer, metadata, now_ms, require, valid_id, validate_metadata, validate_request, sale_expired)
-from .errors import AuthenticationError, UserError, ConflictError, NetworkError, UncertainDeliveryError
+from .errors import AuthenticationError, UserError, ConflictError, NetworkError, UncertainDeliveryError, ENROLLMENT_NOTICE
 from .commerce import (validate_draft, order_from_draft, quote_document, tracking_fields,
                        tracking_number, normalize_tracking, quote_delivery_fingerprint, seller_note_draft,
                        shipping_problem, shipping_fingerprint, shipping_prepared, shipping_ready, normalize_sms_recipient, validate_working_draft)
@@ -44,20 +44,6 @@ class Manager(SoldNumbers, SalesWorkspace):
     @property
     def using_default_server(self):
         return self.api.url == DEFAULT_URL
-
-    def reset_to_default_server(self):
-        """User-approved destructive reset for PCs pinned to an obsolete Apps Script deployment."""
-        self.credentials = self.vault.reset_workspace(DEFAULT_URL)
-        self.seller = SellerKey(self.credentials["privateKey"], self.credentials["publicKey"]) if self.credentials.get("privateKey") else None
-        self.api = ScriptApi(DEFAULT_URL, self.credentials["deviceToken"])
-        self.request_snapshot = False
-        self.quote_read_mode = None
-        self.copy_error = ""
-        self._copy_signatures.clear()
-        self._copy_errors.clear()
-        self._server_info_cache = None
-        self.inbox_requests = []
-        return self.view()
 
     @property
     def request_copy_path(self):
@@ -179,7 +165,10 @@ class Manager(SoldNumbers, SalesWorkspace):
         info = self.verify_server()
         require(info.get("connectionAuth") == "auto-v1",
                 "운영 Apps Script 배포가 이전 인증 방식입니다. 기존 서버의 Code.gs와 SecureCommerce.gs를 최신 main 코드로 교체하고, 동일 배포 ID의 새 버전으로 업데이트해주세요. 기존 자료는 유지됩니다.")
-        result = self.api.call("connect_app", authMode="auto-v1", label="나무팜 PC")
+        try:
+            result = self.api.call("connect_app", authMode="auto-v1", label="나무팜 PC")
+        except AuthenticationError as error:
+            raise AuthenticationError(ENROLLMENT_NOTICE, code=error.code) from None
         require(result.get("paired") is True and result.get("authMode") == "auto-v1",
                 "서버에 자동 연결 기능을 배포해주세요.")
         credentials = {**self.credentials, "paired": True, "url": self.api.url}

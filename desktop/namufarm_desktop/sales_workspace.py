@@ -6,7 +6,7 @@ from pathlib import Path
 
 from .crypto import canonical
 from .domain import require, valid_id, integer
-from .errors import UserError, ConflictError
+from .errors import UserError, ConflictError, AuthenticationError, ENROLLMENT_NOTICE
 
 
 class SalesWorkspace:
@@ -18,7 +18,10 @@ class SalesWorkspace:
     def _sales_connection(self):
         self.verify_server()
         if self.credentials.get("paired") is not True:
-            result = self.api.call("connect_app", authMode="auto-v1", label="나무팜 PC")
+            try:
+                result = self.api.call("connect_app", authMode="auto-v1", label="나무팜 PC")
+            except AuthenticationError as error:
+                raise AuthenticationError(ENROLLMENT_NOTICE, code=error.code) from None
             require(result.get("paired") is True and result.get("authMode") == "auto-v1", "서버 연결을 확인해주세요.")
             self.credentials = {**self.credentials, "paired": True, "url": self.api.url}
             self.vault.save_credentials(self.credentials)

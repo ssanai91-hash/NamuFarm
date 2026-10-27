@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime, timezone, timedelta
 
 from .domain import SEOUL, require
-from .errors import UserError
+from .errors import UserError, AuthenticationError, ENROLLMENT_NOTICE
 from .request_excel import _write_copy
 
 UUID = re.compile(r'[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}')
@@ -148,7 +148,10 @@ class InquiryService:
                 '고객문의 서버를 최신 버전으로 재배포하고 setupCustomerInquiries를 실행해주세요.')
         if not self.manager.credentials.get('paired'):
             require(info.get('connectionAuth') == 'auto-v1', '연결 · 설정에서 서버에 먼저 연결해주세요.')
-            result = self.manager.api.call('connect_app', authMode='auto-v1', label='나무팜 PC')
+            try:
+                result = self.manager.api.call('connect_app', authMode='auto-v1', label='나무팜 PC')
+            except AuthenticationError as error:
+                raise AuthenticationError(ENROLLMENT_NOTICE, code=error.code) from None
             require(result.get('paired') is True, 'PC 연결을 확인할 수 없습니다.')
             self.manager.credentials.update(paired=True, url=self.manager.api.url)
             self.manager.vault.save_credentials(self.manager.credentials)
@@ -315,4 +318,5 @@ class InquiryService:
         self.store.write('operations', identifier, operation)
         self._execute(identifier, operation)
         return self.export()
+
 

@@ -159,3 +159,23 @@ class LocalSyncTest(unittest.TestCase):
         self.assertIn(number, self.vault.preference('hidden_sales'))
         self.assertNotIn('delete_sale', self.api.calls)
         self.assertTrue(self.api.call('list_sales', afterSequence=0)['sales'])
+
+    def test_closed_enrollment_window_has_owner_instructions_and_preserves_vault(self):
+        self.manager.credentials['paired'] = False
+        self.vault.save_credentials(self.manager.credentials)
+        before = self.vault.credentials()
+        pending = self.vault.pending()
+        call = self.api.call
+        def deny_enrollment(action, **fields):
+            if action == 'connect_app':
+                raise AuthenticationError('denied', code='UNAUTHORIZED')
+            return call(action, **fields)
+        self.api.call = deny_enrollment
+        for connect in (self.manager.connect, self.manager._sales_connection):
+            with self.assertRaisesRegex(AuthenticationError, 'openAppEnrollment') as caught:
+                connect()
+            self.assertEqual('UNAUTHORIZED', caught.exception.code)
+        self.assertEqual(before, self.vault.credentials())
+        self.assertEqual(pending, self.vault.pending())
+        self.assertFalse(hasattr(self.manager, 'reset_to_default_server'))
+        self.assertFalse(hasattr(self.vault, 'reset_workspace'))

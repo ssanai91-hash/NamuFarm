@@ -153,3 +153,21 @@ class InquiryTests(InquiryFixtureTest):
         self.assertEqual(self.service.row(IDENTIFIER)['status'], 'open')
 
 if __name__=='__main__': unittest.main()
+
+
+# Enrollment errors must never invite deleting an app, vault, or customer records.
+class EnrollmentNoticeTest(unittest.TestCase):
+    def test_inquiry_enrollment_uses_owner_window_guidance(self):
+        from unittest.mock import Mock
+        from namufarm_desktop.errors import AuthenticationError
+        from namufarm_desktop.inquiries import InquiryService
+        manager = Mock()
+        manager.server_info.return_value = {'customerInquiry': 1, 'customerInquiryReady': True,
+                                            'customerInquiryWorkflow': 2, 'connectionAuth': 'auto-v1'}
+        manager.credentials = {'paired': False}
+        manager.api.call.side_effect = AuthenticationError('denied', code='UNAUTHORIZED')
+        service = InquiryService.__new__(InquiryService)
+        service.manager = manager
+        with self.assertRaisesRegex(AuthenticationError, 'openAppEnrollment'):
+            service.ensure_connection()
+        manager.vault.save_credentials.assert_not_called()
