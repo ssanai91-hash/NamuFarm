@@ -66,7 +66,7 @@ internal fun InitialQuoteScreen(viewModel: InitialQuoteViewModel, connection: In
         }
         if (feedback?.phase == "error") message = NamuMessage(feedback.error ?: "삭제하지 못했습니다.", true)
     }
-    val confirmed = records.filter { it.confirmedAt > 0 }.sortedByDescending { it.confirmedAt }
+    val confirmed = records.filter { it.confirmedAt > 0 || it.revision > 0 }.sortedByDescending { it.confirmedAt }
     val confirmedIds = confirmed.map { it.request.requestId }.toSet()
     // The list already came from Room. Opening a row must never wait for a server snapshot.
     val readyRequest = editing?.takeIf { recordsReady && it.status == "신규" && it.requestId !in confirmedIds }
@@ -194,10 +194,18 @@ internal fun InitialQuoteScreen(viewModel: InitialQuoteViewModel, connection: In
                 records = withContext(Dispatchers.IO) { workflow.records() }
             })
     }
-    result?.let { QuoteWorkflowResultDialog(it) { result = null } }
+    fun changedConfirmed(saved: QuoteWorkflowRecord) {
+        records = records.filterNot { it.request.requestId == saved.request.requestId } + saved
+    }
+    result?.let { saved -> ConfirmedQuoteSessionDialog(
+        records.firstOrNull { it.request.requestId == saved.request.requestId } ?: saved,
+        workflow, connection, ::changedConfirmed) { result = null } }
     serverResult?.let { saved ->
         val draft = remember(saved) { runCatching { serverConfirmedDraft(saved) }.getOrNull() }
-        InitialConfirmedQuoteDialog(saved, draft, onDismiss = { serverResult = null })
+        val local = records.firstOrNull { it.request.requestId == saved.requestId }
+        if (local != null || draft != null) ConfirmedQuoteSessionDialog(local ?: QuoteWorkflowRecord(saved, checkNotNull(draft)),
+            workflow, connection, ::changedConfirmed) { serverResult = null }
+        else InitialConfirmedQuoteDialog(saved, null, onDismiss = { serverResult = null })
     }
 }
 

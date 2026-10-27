@@ -156,9 +156,10 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
     draftKey: String? = request?.requestId, onDeleteRequest: (() -> Unit)? = null,
     verifiedDelivery: QuoteDeliveryRecord? = null, verifyDelivery: Boolean = false,
     onConfirmSent: ((SellerQuoteDraft, String) -> Unit)? = null,
-    onPrepareDocument: suspend (SellerQuoteDraft) -> Unit = {}, messageIsError: Boolean = false, openedChannels: Set<String> = emptySet()) {
+    onPrepareDocument: suspend (SellerQuoteDraft) -> Unit = {}, messageIsError: Boolean = false,
+    openedChannels: Set<String> = emptySet(), confirmedEdit: Boolean = false) {
     val context = LocalContext.current
-    val manualEntry = request == null
+    val manualEntry = request == null && !confirmedEdit
     val requestedItems = remember(request?.itemsJson) {
         runCatching { Gson().fromJson(request?.itemsJson, Array<WebQuoteItem>::class.java)?.toList().orEmpty() }
             .getOrDefault(emptyList())
@@ -202,7 +203,7 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
         ?: request?.let { "${it.customerName} · ${it.region}" }
         ?: "빠른 견적"
 
-    EditorDialog("견적 작성", subtitle, onDismiss = ::close,
+    EditorDialog(if (confirmedEdit) "확정견적 수정" else "견적 작성", subtitle, onDismiss = ::close,
         onDeleteRequest = onDeleteRequest?.let { { deleteConfirm = true } }, actions = {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -217,6 +218,10 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
             Text(it, color = NamuColors.danger, fontSize = 13.sp)
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            if (confirmedEdit) {
+                NamuSecondaryButton("취소", ::close, Modifier.weight(1f), !saving)
+                NamuPrimaryButton("수정 저장", { submit(QuoteDelivery.SAVE) }, Modifier.weight(1.6f), !saving)
+            } else {
             NamuSecondaryButton("문자 앱 열기", { submit(QuoteDelivery.SMS) }, Modifier.weight(1f), !saving)
             NamuSecondaryButton("메일 앱 열기", { submit(QuoteDelivery.EMAIL) }, Modifier.weight(1f),
                 !saving && draft.recipient.customerEmail.isNotBlank())
@@ -225,6 +230,7 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
                 else if (verifiedDelivery?.canComplete(draft) == true) submit(QuoteDelivery.COMPLETE)
                 else deliveryRequired = true
             }, Modifier.weight(1.4f), !saving)
+            }
         }
     }) {
         Column(Modifier.verticalScroll(rememberScrollState()).testTag("quote_editor_body")
@@ -239,6 +245,7 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
                     Text(listOf(displayEditorPhone(draft.phone), request?.region.orEmpty(),
                         when (draft.recipient.replyChannel) { "email" -> "메일로 받기"; "both" -> "문자·메일로 받기"; else -> "문자로 받기" })
                         .filter { it.isNotBlank() }.joinToString(" · "), fontSize = 15.sp)
+                    if (confirmedEdit && draft.recipient.customerEmail.isNotBlank()) Text(draft.recipient.customerEmail, fontSize = 15.sp)
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         if (draft.recipient.formalQuoteRequested) NamuStatusBadge("공식견적서 요청")
                         request?.receiptNumber?.takeIf { it.isNotBlank() }?.let { Text(it, fontSize = 13.sp, color = NamuColors.muted) }
@@ -268,8 +275,8 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
                     fun update(value: SellerQuoteRow) {
                         draft = draft.copy(rows = draft.rows.toMutableList().also { it[index] = value })
                     }
-                    val editable = manualEntry || index >= requestedItems.size
-                    val specification = requestedItems.getOrNull(index)?.takeIf { it.species == row.name }?.specification ?: row.spec
+                    val editable = confirmedEdit || manualEntry || index >= requestedItems.size
+                    val specification = if (confirmedEdit) row.spec else requestedItems.getOrNull(index)?.takeIf { it.species == row.name }?.specification ?: row.spec
                     NamuCard {
                         Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -278,7 +285,7 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
                                 }
                                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                                     Text(row.name.ifBlank { "새 품목" }, fontSize = 17.sp, fontWeight = FontWeight.Bold)
-                                    SelectionContainer { Text("희망 규격 · ${specification.ifBlank { "미입력" }}", fontSize = 13.sp, color = NamuColors.muted) }
+                                    SelectionContainer { Text((if (confirmedEdit) "규격 · " else "희망 규격 · ") + specification.ifBlank { "미입력" }, fontSize = 13.sp, color = NamuColors.muted) }
                                 }
                                 Surface(shape = RoundedCornerShape(10.dp), color = NamuColors.soft,
                                     border = BorderStroke(1.5.dp, NamuColors.primary), modifier = Modifier.widthIn(min = 76.dp).heightIn(min = 40.dp)
@@ -289,7 +296,7 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
                             }
                             if (editable) {
                                 ManualField("묘목명 *", row.name, { update(row.copy(name = it)) }, saving, limit = 200)
-                                ManualField("규격", row.spec, { update(row.copy(spec = it)) }, saving, limit = 200)
+                                ManualField("규격", row.spec, { update(row.copy(spec = it)) }, saving, limit = if (confirmedEdit) 500 else 200)
                                 ManualField("수량 (주) *", row.quantity, { update(row.copy(quantity = it)) }, saving, KeyboardType.Number)
                             }
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -362,7 +369,7 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
                 OutlinedTextField(draft.options.notes, { value -> draft = draft.copy(options = draft.options.copy(notes = value.take(500))) },
                     label = { Text("요청사항 · 판매자 입력") }, placeholder = { Text("공식견적서 중요사항에 넣을 내용") },
                     enabled = !saving, minLines = 2, modifier = Modifier.fillMaxWidth())
-                NamuSecondaryButton("공식견적서 생성", {
+                if (!confirmedEdit) NamuSecondaryButton("공식견적서 생성", {
                     try {
                         val current = draft.copy(recipient = draft.recipient.copy(formalQuoteRequested = true))
                         current.validate(QuoteDelivery.COMPLETE)
@@ -433,6 +440,8 @@ internal fun QuoteIssueFields(options: QuoteIssueOptions, saving: Boolean, onCha
             ManualField("대표자", issuer.representative, { onChange(options.copy(issuer = issuer.copy(representative = it))) }, saving, limit = 50)
             ManualField("사업장 주소", issuer.address, { onChange(options.copy(issuer = issuer.copy(address = it))) }, saving, limit = 150)
             ManualField("공급자 전화번호", issuer.phone, { onChange(options.copy(issuer = issuer.copy(phone = it))) }, saving, KeyboardType.Phone, 30)
+            ManualField("업태", issuer.businessType, { onChange(options.copy(issuer = issuer.copy(businessType = it))) }, saving, limit = 50)
+            ManualField("종목", issuer.category, { onChange(options.copy(issuer = issuer.copy(category = it))) }, saving, limit = 50)
             ManualField("추가 세액 (원)", options.tax, { onChange(options.copy(tax = it)) }, saving, KeyboardType.Number)
             ManualField("견적 유효기간", options.validUntil, { onChange(options.copy(validUntil = it)) }, saving, limit = 100)
             ManualField("입금 계좌 · 선택", options.account, { onChange(options.copy(account = it)) }, saving, limit = 500)

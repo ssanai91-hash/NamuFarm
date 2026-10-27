@@ -45,9 +45,12 @@ private val documentLine = Color(0xFFE2E6ED)
 /** Selected document-style confirmation. Sharing never changes the saved delivery state. */
 @Composable
 internal fun InitialConfirmedQuoteDialog(request: WebQuoteRequestEntity, draft: SellerQuoteDraft?,
-    confirmedAt: Long = 0, delivery: QuoteDeliveryRecord? = null, onDismiss: () -> Unit) {
+    confirmedAt: Long = 0, delivery: QuoteDeliveryRecord? = null, onDismiss: () -> Unit,
+    record: QuoteWorkflowRecord? = null, editBlock: String? = null, onEdit: (() -> Unit)? = null,
+    originalView: Boolean = false) {
     val context = LocalContext.current
     var formal by remember { mutableStateOf(false) }
+    var firstQuote by remember { mutableStateOf(false) }
     var actionError by remember(request.requestId) { mutableStateOf<String?>(null) }
     val rows = remember(request, draft) {
         draft?.rows ?: runCatching {
@@ -65,10 +68,18 @@ internal fun InitialConfirmedQuoteDialog(request: WebQuoteRequestEntity, draft: 
     val recipient = draft?.recipient?.recipientName ?: request.recipientName
     val number = request.receiptNumber.ifBlank { request.requestId }
     // A receipt-number date is not evidence of when the quote was confirmed.
-    val dateLabel = if (confirmedAt > 0) "확정일 ${resultDate(confirmedAt)}" else "견적일 —"
-    NamuDialog("확정견적 확인", "$number\n$dateLabel", onDismiss,
+    val storedConfirmedAt = remember(request.requestId) {
+        runCatching { AndroidQuoteWorkflowStore(context).records().firstOrNull { it.request.requestId == request.requestId }?.confirmedAt ?: 0L }.getOrDefault(0L)
+    }
+    val actualConfirmedAt = listOf(confirmedAt, record?.confirmedAt ?: 0L, storedConfirmedAt).firstOrNull { it > 0 } ?: 0L
+    val dateLabel = if (actualConfirmedAt > 0) "확정일 ${resultDate(actualConfirmedAt)}" else "견적일 —"
+    NamuDialog(if (originalView) "처음 견적 보기" else "확정견적 확인", "$number\n$dateLabel", onDismiss,
         compact = true, documentStyle = true, actions = {
             actionError?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 13.sp) }
+            if (!originalView) {
+            if (onEdit != null) OutlinedButton(onClick = onEdit, enabled = editBlock == null,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("내용 수정") }
+            editBlock?.let { Text(it, fontSize = 13.sp, color = NamuColors.muted) }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = { formal = true }, enabled = draft != null,
                     modifier = Modifier.weight(1f).heightIn(min = 52.dp), shape = RoundedCornerShape(8.dp),
@@ -91,9 +102,19 @@ internal fun InitialConfirmedQuoteDialog(request: WebQuoteRequestEntity, draft: 
                     Spacer(Modifier.width(6.dp)); Text("문자 발송", fontSize = 15.sp, fontWeight = FontWeight.Bold)
                 }
             }
+            }
         }) {
         LazyColumn(Modifier.fillMaxWidth(), contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp)) {
             item {
+                if (record != null && record.revision > 0) {
+                    Text("수정 ${record.revision}회 · ${resultDate(record.revisedAt)}", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = documentGreen)
+                    Surface(color = Color(0xFFFDF1DC), shape = RoundedCornerShape(10.dp)) {
+                        Text("수정한 내용은 이 휴대폰에만 저장돼요. PC 나피에서 입금확인할 때는 PC에서도 같은 내용으로 수정해주세요.",
+                            Modifier.padding(12.dp), fontSize = 14.sp, color = Color(0xFF6B4300))
+                    }
+                    if (record.revisedUnsent()) Text("수정 후 미발송", fontSize = 14.sp, color = NamuColors.danger, fontWeight = FontWeight.Bold)
+                    if (record.originalDraft != null) TextButton(onClick = { firstQuote = true }) { Text("처음 견적 보기") }
+                }
                 Row(Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("고객 정보", Modifier.weight(1f), fontSize = 19.sp, fontWeight = FontWeight.Bold, color = documentInk)
                     Surface(color = Color(0xFFE1F2E4), shape = RoundedCornerShape(6.dp)) {
@@ -192,6 +213,8 @@ internal fun InitialConfirmedQuoteDialog(request: WebQuoteRequestEntity, draft: 
         }
     }
     if (formal && draft != null) InitialFormalQuoteDialog(request, draft, onDismiss = { formal = false })
+    if (firstQuote && record?.originalDraft != null) InitialConfirmedQuoteDialog(request, record.originalDraft,
+        actualConfirmedAt, onDismiss = { firstQuote = false }, originalView = true)
 }
 
 @Composable

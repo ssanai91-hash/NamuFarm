@@ -33,7 +33,9 @@ data class QuoteDeliveryRecord(
 data class QuoteWorkflowRecord(
     val request: WebQuoteRequestEntity, val draft: SellerQuoteDraft,
     val delivery: QuoteDeliveryRecord = QuoteDeliveryRecord(),
-    val confirmationPending: Boolean = false, val confirmedAt: Long = 0
+    val confirmationPending: Boolean = false, val confirmedAt: Long = 0,
+    val originalDraft: SellerQuoteDraft? = null, val revisedAt: Long = 0,
+    val revision: Int = 0, val revisionSentAt: Long = 0
 )
 
 fun quoteWorkflowFingerprint(draft: SellerQuoteDraft): String {
@@ -82,6 +84,21 @@ class QuoteWorkflow(
     private val latestRequest: suspend (WebQuoteRequestEntity) -> WebQuoteRequestEntity? = { it }
 ) {
     fun records() = store.records()
+    /** Local-only revision. The caller supplies the server snapshot checked before opening the editor. */
+    fun reviseConfirmed(record: QuoteWorkflowRecord, newDraft: SellerQuoteDraft,
+        latest: WebQuoteRequestEntity): QuoteWorkflowRecord {
+        check(confirmedQuoteEditBlock(record, latest) == null) { confirmedQuoteEditBlock(record, latest).orEmpty() }
+        check(store.records().firstOrNull { it.request.requestId == record.request.requestId }?.let { it == record } != false) {
+            "휴대폰 견적이 바뀌었습니다. 닫고 다시 열어주세요."
+        }
+        check(newDraft.phone == record.draft.phone &&
+            newDraft.recipient.copy(formalQuoteRequested = record.draft.recipient.formalQuoteRequested) == record.draft.recipient) {
+            "고객명·전화번호·이메일·접수정보는 수정할 수 없습니다."
+        }
+        quoteWorkflowText(record.request, newDraft)
+        return record.copy(draft = newDraft, originalDraft = record.originalDraft ?: record.draft,
+            revisedAt = clock(), revision = Math.addExact(record.revision, 1), revisionSentAt = 0).also(store::save)
+    }
     private suspend fun prepare(request: WebQuoteRequestEntity, draft: SellerQuoteDraft,
         completing: Boolean = false, refreshRequest: Boolean = true): QuoteWorkflowRecord {
         check(request.status == "신규") { "확정견적은 결과 확인만 가능합니다." }
