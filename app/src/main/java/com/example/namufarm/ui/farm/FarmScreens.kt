@@ -8,8 +8,6 @@ import com.example.namufarm.viewmodel.ManagementUiState
 import com.example.namufarm.viewmodel.ManagementViewModel
 
 @Composable
-internal fun StockSpeciesList(state: ManagementUiState, initial: String, search: String, onSelect: (SpeciesEntity) -> Unit) { Text("재고") }
-@Composable
 internal fun StockSpecificationList(state: ManagementUiState, onBack: () -> Unit, onEdit: (InventoryDisplayRow) -> Unit, onNew: () -> Unit) { Text("규격 재고") }
 @Composable
 internal fun StockEditor(viewModel: ManagementViewModel, original: InventoryDisplayRow?, onBack: () -> Unit, onSaved: () -> Unit) { Text("재고 입력") }
