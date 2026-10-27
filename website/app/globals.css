@@ -3135,3 +3135,10 @@ button,[data-slot=button],.nav-action { word-break: keep-all; overflow-wrap: any
   .footer-phone-row > span[aria-hidden=true] { display: none; }
   .footer-phone-row a { min-height: 2.75rem; }
 }
+
+/* 2026-10-28: menu reads as a button; hero location is a label, not a pill. */
+@media (max-width: 64rem) {
+  .site-header .menu-button { gap: .35rem; min-height: 2.75rem; padding: .45rem .8rem !important; border: 1px solid #b9c9bb; border-radius: .6rem; background: #fff; color: var(--forest); font-size: 1rem; font-weight: 600; }
+  .site-header .menu-button svg { width: 1.2rem; height: 1.2rem; }
+}
+.hero .eyebrow { padding: 0; border: 0; border-radius: 0; background: transparent; font-weight: 600; letter-spacing: .01em; color: #d5e7b6; }
