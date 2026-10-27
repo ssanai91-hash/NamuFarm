@@ -292,6 +292,45 @@ class Vault:
                         pass
             return target
 
+    def storage_status(self):
+        """Read-only counts. An unreadable source raises instead of reporting a false zero."""
+        with self.mutex:
+            with self._db() as db:
+                names = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+                sales = db.execute("SELECT COUNT(*) FROM outbox").fetchone()[0]
+                inquiry_ids = set()
+                if "inquiry_operations" in names:
+                    for key, blob in db.execute("SELECT id,body FROM inquiry_operations"):
+                        op = self._open(blob, "inquiry_operations:" + key)
+                        inquiry_ids.add(op.get("payload", {}).get("requestId") or key)
+                if "inquiry_records" in names:
+                    for key, blob in db.execute("SELECT id,body FROM inquiry_records"):
+                        row = self._open(blob, "inquiry_records:" + key)
+                        if (row.get("delivery") or {}).get("state") in ("sending", "pending", "unknown"):
+                            inquiry_ids.add(row.get("requestId") or key)
+            nursery = self.preference("nursery-v1", {}) or {}
+            pending = nursery.get("pending", [])
+            masters = sum(op.get("kind") in ("farms", "species") for op in pending)
+            inventory = sum(op.get("kind") == "inventory" for op in pending)
+            other_nursery = len(pending) - masters - inventory
+            quote = int(bool(self.preference("quote_write_pending")))
+            delivery = 0
+            for name in ("quote_delivery", "payment_delivery"):
+                for row in (self.preference(name, {}) or {}).values():
+                    delivery += bool(row.get("pendingDelivery") or row.get("smsState") in ("sending", "pending", "unknown"))
+            snapshots = []
+            folder = self.path.parent / "백업"
+            if folder.is_dir():
+                for item in folder.iterdir():
+                    if re.fullmatch(r"namufarm-\d{8}-\d{6}-\d{6}\.db", item.name) and item.is_file() and not item.is_symlink():
+                        snapshots.append(item.stat().st_mtime * 1000)
+            last = max(self.preference("storage-last-server-sync-at", 0) or 0, nursery.get("syncedAt", 0) or 0)
+            counts = {"sales": sales, "masters": masters, "inventory": inventory,
+                      "inquiries": len(inquiry_ids), "quote": quote, "delivery": delivery, "other": other_nursery}
+            return {"path": str(self.path.parent.resolve()), "lastSyncAt": last, "counts": counts,
+                    "totalPending": sum(counts.values()), "backupPath": str(folder.resolve()),
+                    "backupCount": len(snapshots), "lastBackupAt": max(snapshots, default=0)}
+
     def save_local_sales(self, sales, operations, hidden, *, quotes=None, marker=None, sold_labels=None):
         """Commit a merge/delete, its upload journal and local deletion markers together."""
         with self.mutex, self._db() as db:

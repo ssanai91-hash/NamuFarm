@@ -4042,9 +4042,9 @@ class SellerWindow(MainWindow):
             if panel:
                 panel.setFixedWidth(360 if self.width() < 1500 else 400)
 
-    def run_job(self, title, work, on_success=None, refresh_on_error=True):
+    def run_job(self, title, work, on_success=None, refresh_on_error=True, on_failure=None):
         starting = self.task is None
-        super().run_job(title, work, on_success, refresh_on_error)
+        super().run_job(title, work, on_success, refresh_on_error, on_failure)
         if starting and self.workspace_ready:
             self.set_status_state("working", "처리 중")
 
@@ -4362,6 +4362,9 @@ class SellerWindow(MainWindow):
             action = self.sales_data_menu.addAction(old_button.text())
             action.triggered.connect(old_button.click)
             self.sales_data_actions.append((action, old_button))
+        self.sales_data_menu.addSeparator()
+        self.storage_status_action = self.sales_data_menu.addAction("자료 보관 상태")
+        self.storage_status_action.triggered.connect(self.request_storage_status)
         self.sales_data_button.setMenu(self.sales_data_menu)
         self.sales_data_menu.aboutToShow.connect(self.update_sales_menu)
         self.header_actions.addWidget(self.sales_data_button)
@@ -4649,6 +4652,11 @@ class SellerWindow(MainWindow):
                 and server_transfer):
             completed = timestamp(datetime.now(SEOUL).timestamp() * 1000)
             self.last_sync_label.setText("성공 · " + completed)
+            if self.manager and not getattr(self, "demo_mode", False):
+                try:
+                    self.manager.vault.save_preference("storage-last-server-sync-at", int(datetime.now(SEOUL).timestamp() * 1000))
+                except Exception:
+                    self.message.setText("서버 반영은 완료했으나 마지막 동기화 시각을 저장하지 못했습니다.")
             self.set_status_state("success", "동기화 완료")
         if self._request_arrival_notice:
             current = getattr(self.message, "details", self.message.text()).strip()
@@ -4989,6 +4997,7 @@ class SellerWindow(MainWindow):
         self.update_controls()
 
     def update_sales_menu(self):
+        self.storage_status_action.setEnabled(bool(self.manager and not self.task and not getattr(self, "demo_mode", False)))
         for action, original in self.sales_data_actions:
             action.setEnabled(original.isEnabled())
 

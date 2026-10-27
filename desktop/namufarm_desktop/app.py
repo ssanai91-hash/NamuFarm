@@ -1051,11 +1051,53 @@ class MainWindow(QMainWindow):
         if dialog.exec() == QDialog.DialogCode.Accepted:
             self.run_job("서버 기록 반영 중…", lambda: self.manager.use_server_version(preview))
 
+    def request_storage_status(self):
+        if not self.manager or self.task or getattr(self, "demo_mode", False):
+            return
+        self.run_job("자료 보관 상태 확인 중…", self.manager.vault.storage_status, self.show_storage_status, False)
+
+    def show_storage_status(self, info):
+        dialog = QDialog(self)
+        dialog.setWindowTitle("자료 보관 상태")
+        dialog.resize(660, 440)
+        layout = QVBoxLayout(dialog)
+        form = QFormLayout()
+        folder_row = QHBoxLayout()
+        path_label = QLabel(info["path"])
+        path_label.setWordWrap(True)
+        folder_row.addWidget(path_label, 1)
+        browse = QPushButton("폴더 열기")
+        browse.clicked.connect(lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(info["path"])))
+        folder_row.addWidget(browse)
+        form.addRow("자료 폴더", folder_row)
+        form.addRow("마지막 서버 동기화", QLabel(timestamp(info["lastSyncAt"]) if info["lastSyncAt"] else "기록 없음"))
+        c = info["counts"]
+        for key, title in (("sales", "판매 outbox"), ("masters", "농원·묘목 대기"), ("inventory", "재고 대기"),
+                           ("inquiries", "고객문의 대기"), ("quote", "견적 저장 확인"), ("delivery", "견적·입금 안내 결과 확인"), ("other", "기타 농원 대기")):
+            form.addRow(title, QLabel(f"{c[key]:,}건"))
+        form.addRow("전송·결과 확인 대기 합계", QLabel(f"{info['totalPending']:,}건"))
+        form.addRow("백업 스냅샷", QLabel(f"{info['backupCount']:,}개 · 최근 " + (timestamp(info["lastBackupAt"]) if info["lastBackupAt"] else "기록 없음")))
+        backup_label = QLabel(info["backupPath"]); backup_label.setWordWrap(True)
+        form.addRow("백업 폴더", backup_label)
+        layout.addLayout(form)
+        note = QLabel("다른 PC로 옮기거나 윈도우를 다시 설치하기 전에 전송 대기가 0건인지 확인하세요.\n이 자료는 지금 Windows 계정에서만 열립니다.")
+        note.setWordWrap(True); layout.addWidget(note)
+        close = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        close.rejected.connect(dialog.reject); layout.addWidget(close)
+        dialog.exec()
+
     def closeEvent(self, event: QCloseEvent):
         if self.task:
             self.message.setText("현재 처리가 끝난 뒤 프로그램을 닫아주세요.")
             event.ignore()
         elif self.allow_discard():
+            if self.manager and not getattr(self, "demo_mode", False):
+                try:
+                    pending = self.manager.vault.storage_status()["totalPending"]
+                    if pending:
+                        QMessageBox.information(self, "전송 대기 안내", f"전송 대기 {pending:,}건이 있습니다. 다음 실행 때 동기화해주세요.")
+                except Exception:
+                    QMessageBox.information(self, "자료 보관 안내", "전송 대기를 확인하지 못했습니다. 다음 실행 때 자료 보관 상태와 동기화를 확인해주세요.")
             event.accept()
         else:
             event.ignore()
