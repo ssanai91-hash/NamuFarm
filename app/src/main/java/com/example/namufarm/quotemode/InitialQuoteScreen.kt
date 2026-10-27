@@ -186,7 +186,7 @@ internal fun InitialQuoteScreen(viewModel: InitialQuoteViewModel, connection: In
         }
         ManualQuoteEditor(request, busy || inbox.busy || deleting, message?.text,
             onDismiss = { if (!busy) { viewModel.dismissManualQuote(); message = null } },
-            initialDraft = saved?.draft, draftKey = request.requestId,
+            initialDraft = saved?.draft, draftKey = request.requestId, messageIsError = message?.isError == true,
             onDeleteRequest = if (saved?.confirmationPending == true) null else ({ onDelete(request.requestId) }),
             verifiedDelivery = saved?.delivery, verifyDelivery = true,
             onSave = { draft, action -> handleAction(draft, action) },
