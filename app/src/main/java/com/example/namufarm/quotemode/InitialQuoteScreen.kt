@@ -29,7 +29,7 @@ import androidx.compose.ui.unit.sp
 import com.example.namufarm.data.WebQuoteRequestEntity
 import com.example.namufarm.quotation.*
 import com.example.namufarm.phone.openSmsComposer
-import com.example.namufarm.quotemode.components.NamuDialog
+import com.example.namufarm.quotemode.components.*
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -92,16 +92,8 @@ internal fun InitialQuoteScreen(viewModel: InitialQuoteViewModel, connection: In
     val remoteConfirmed = inbox.requests.filter { it.status in setOf("견적확정", "견적발송완료") &&
         it.requestId !in confirmedIds }.sortedByDescending { it.sequence }
     Scaffold(containerColor = Color(0xFFF2F4F7), contentWindowInsets = WindowInsets(0, 0, 0, 0), topBar = {
-        TopAppBar(title = { Text("나무팜 견적모드", fontWeight = FontWeight.ExtraBold) },
-            windowInsets = WindowInsets(0, 0, 0, 0),
-            colors = TopAppBarDefaults.topAppBarColors(containerColor = ModeDesign.quote,
-                titleContentColor = Color.White, actionIconContentColor = Color.White), actions = {
-            TextButton(onClick = onSync, enabled = !busy && !inbox.busy && !deleting,
-                colors = ButtonDefaults.textButtonColors(contentColor = Color.White)) {
-                Icon(Icons.Outlined.CloudSync, null, Modifier.size(20.dp))
-                Spacer(Modifier.width(5.dp)); Text("동기화")
-            }
-        })
+        NamuTopBar("견적", masterSyncLabel(inbox.lastSyncAt),
+            onSync = { if (!busy && !inbox.busy && !deleting) onSync() })
     }) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {

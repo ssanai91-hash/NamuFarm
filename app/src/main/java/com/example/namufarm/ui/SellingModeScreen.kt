@@ -1,5 +1,7 @@
 package com.example.namufarm.ui
 
+import com.example.namufarm.quotemode.components.*
+import com.example.namufarm.ui.theme.*
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
@@ -373,65 +375,11 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    Column {
-                        SellingModeTitle()
-                        if (uiState.pendingSyncCount > 0) {
-                            TextButton(
-                                onClick = { showPendingSyncDialog = true },
-                                modifier = Modifier.height(24.dp),
-                                contentPadding = PaddingValues(0.dp)
-                            ) {
-                                Text("전송 대기 ${uiState.pendingSyncCount}건", color = Color.White, fontSize = 12.sp)
-                            }
-                        }
-                    }
-                },
-                windowInsets = WindowInsets(0, 0, 0, 0),
-                // Match the selected trading tab with a calm navy header.
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = ModeDesign.selling),
-                actions = {
-                    // 🚨 2. 구글 시트 동기화 버튼 (아이콘 형태) 추가!
-                    Button(
-                        onClick = { viewModel.syncDataWithGoogleSheet() },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = ModeDesign.selling),
-                        shape = RoundedCornerShape(10.dp),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.CloudSync,
-                            contentDescription = null,
-                            tint = ModeDesign.selling, modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = "동기화",
-                            color = ModeDesign.selling,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 12.sp
-                        )
-                    }
-
-                    Spacer(Modifier.width(8.dp))
-                    // Switch modes using the existing unsaved-cart confirmation.
-                    Button(
-                        onClick = {
-                            if (uiState.estimateCart.isNotEmpty()) {
-                                showMoveToManagementConfirm = true
-                            } else {
-                                onNavigateToManagement()
-                            }
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color.White),
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.padding(end = 8.dp),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
-                    ) {
-                        Text("관리모드", color = Color.Black, fontWeight = FontWeight.ExtraBold)
-                    }
+            NamuTopBar("매매", masterSyncLabel(uiState.lastMasterSyncAt), onSync = { viewModel.syncDataWithGoogleSheet() }) {
+                if (uiState.pendingSyncCount > 0) TextButton(onClick = { showPendingSyncDialog = true }) {
+                    Text("전송 대기 ${uiState.pendingSyncCount}건", fontSize = 13.sp)
                 }
-            )
+            }
         },
         bottomBar = {
             Column(modifier = Modifier.navigationBarsPadding()) {

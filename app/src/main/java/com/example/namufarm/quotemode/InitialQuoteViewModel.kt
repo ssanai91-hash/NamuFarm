@@ -19,6 +19,7 @@ data class InitialDeleteFeedback(val phase: String, val requestId: String, val e
 data class InitialQuoteUiState(
     val requests: List<WebQuoteRequestEntity> = emptyList(),
     val editingRequest: WebQuoteRequestEntity? = null,
+    val lastSyncAt: Long? = null,
     val busy: Boolean = false, val message: NamuMessage? = null,
     val deferredCount: Int = 0, val deleteFeedback: InitialDeleteFeedback? = null
 )
@@ -51,7 +52,7 @@ class InitialQuoteViewModel(
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 connection.refresh()
-                mutable.update { it.copy(message = NamuMessage("견적 목록을 동기화했습니다.")) }
+                mutable.update { it.copy(message = NamuMessage("견적 목록을 동기화했습니다."), lastSyncAt = System.currentTimeMillis()) }
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) {
                 mutable.update { it.copy(message = NamuMessage(e.message ?: "기존 자료를 유지합니다. 다시 가져와주세요.", true)) }

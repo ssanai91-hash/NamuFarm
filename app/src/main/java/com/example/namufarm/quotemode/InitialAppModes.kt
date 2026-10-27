@@ -1,15 +1,11 @@
 package com.example.namufarm.quotemode
 
-import com.example.namufarm.ui.theme.NamuTheme
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Chat
 import androidx.compose.material.icons.outlined.Handshake
@@ -17,21 +13,19 @@ import androidx.compose.material.icons.outlined.Park
 import androidx.compose.material.icons.outlined.ReceiptLong
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.namufarm.ui.ManagementModeScreen
 import com.example.namufarm.ui.SellingModeScreen
+import com.example.namufarm.ui.theme.*
 import com.example.namufarm.viewmodel.ManagementViewModel
 import com.example.namufarm.viewmodel.CustomerInquiryViewModel
 import kotlinx.coroutines.launch
 
-/** Mode navigation preserves the original workflows and uses matching header/tab colors. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun InitialAppModes(management: ManagementViewModel, quote: InitialQuoteViewModel,
@@ -40,56 +34,75 @@ fun InitialAppModes(management: ManagementViewModel, quote: InitialQuoteViewMode
     val scope = rememberCoroutineScope()
     val inbox by quote.uiState.collectAsState()
     val inquiryState by inquiry.state.collectAsState()
-    val colors = listOf(ModeDesign.quote, ModeDesign.inquiry, ModeDesign.selling, ModeDesign.farm)
-    val labels = listOf("견적", "문의처리", "매매", "농원·묘목")
+    val stock by management.uiState.collectAsState()
+    var showMoveToManagementConfirm by remember { mutableStateOf(false) }
+    val labels = listOf("견적", "문의", "매매", "농원·묘목")
     val icons = listOf(Icons.Outlined.ReceiptLong, Icons.AutoMirrored.Outlined.Chat,
         Icons.Outlined.Handshake, Icons.Outlined.Park)
-    val stackedTabs = LocalDensity.current.fontScale > 1.15f
     fun move(page: Int) { scope.launch { pager.animateScrollToPage(page) } }
+    fun requestMove(page: Int) {
+        if (page == 3 && stock.estimateCart.isNotEmpty()) showMoveToManagementConfirm = true
+        else move(page)
+    }
     BackHandler(enabled = pager.currentPage != 0) { move(0) }
+    // Swiping to the farm page uses the same unsent-cart confirmation as tapping its tab.
+    LaunchedEffect(pager.currentPage) {
+        if (pager.currentPage == 3 && stock.estimateCart.isNotEmpty()) {
+            showMoveToManagementConfirm = true
+            pager.scrollToPage(2)
+        }
+    }
     NamuTheme {
-    Column(Modifier.fillMaxSize().background(Color.White).statusBarsPadding().consumeWindowInsets(WindowInsets.statusBars)) {
-        Surface(color = Color.White, shadowElevation = 1.dp) {
-            Row(Modifier.fillMaxWidth().padding(horizontal = 3.dp, vertical = 2.dp),
-                horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                labels.forEachIndexed { index, label ->
-                    val selected = pager.currentPage == index
-                    val color = if (selected) colors[index] else Color(0xFF667085)
-                    Surface(color = if (selected) color.copy(alpha = 0.06f) else Color.White,
-                        shape = RoundedCornerShape(topStart = 7.dp, topEnd = 7.dp),
-                        border = BorderStroke(if (selected) 1.5.dp else 0.dp, if (selected) color else Color.Transparent),
-                        modifier = Modifier.weight(1f)) {
-                        if (stackedTabs) {
-                            Column(Modifier.selectable(selected = selected, role = Role.Tab, onClick = { move(index) })
-                                .heightIn(min = 56.dp).padding(horizontal = 3.dp, vertical = 6.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                                Icon(icons[index], null, tint = color, modifier = Modifier.size(18.dp))
-                                Text(label, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = color)
-                            }
-                        } else {
-                            Row(Modifier.selectable(selected = selected, role = Role.Tab, onClick = { move(index) })
-                                .heightIn(min = 50.dp).padding(horizontal = 3.dp, vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
-                                Icon(icons[index], null, tint = color, modifier = Modifier.size(17.dp))
-                                Spacer(Modifier.width(3.dp))
-                                Text(label, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = color, maxLines = 1)
+        Scaffold(containerColor = NamuColors.background,
+            contentWindowInsets = WindowInsets(0, 0, 0, 0), bottomBar = {
+                Surface(color = Color.White, shadowElevation = 2.dp) {
+                    Column {
+                        HorizontalDivider(color = NamuColors.border)
+                        NavigationBar(containerColor = Color.White, tonalElevation = 0.dp,
+                            modifier = Modifier.heightIn(min = 72.dp), windowInsets = WindowInsets.navigationBars) {
+                            labels.forEachIndexed { index, label ->
+                                val count = when (index) {
+                                    0 -> inbox.requests.count { it.status == "신규" }
+                                    1 -> inquiryState.rows.count { it.status == "open" }
+                                    else -> 0
+                                }
+                                NavigationBarItem(selected = pager.currentPage == index,
+                                    onClick = { requestMove(index) },
+                                    icon = {
+                                        BadgedBox(badge = { if (count > 0) Badge(containerColor = NamuColors.danger,
+                                            contentColor = Color.White) { Text("$count", fontSize = 13.sp) } }) {
+                                            Icon(icons[index], null, Modifier.size(24.dp))
+                                        }
+                                    }, label = { Text(label, fontSize = 13.sp,
+                                        fontWeight = if (pager.currentPage == index) FontWeight.Bold else FontWeight.Normal) },
+                                    colors = NavigationBarItemDefaults.colors(indicatorColor = NamuColors.navPill,
+                                        selectedIconColor = NamuColors.primary, selectedTextColor = NamuColors.text,
+                                        unselectedIconColor = NamuColors.muted, unselectedTextColor = NamuColors.muted))
                             }
                         }
                     }
                 }
+            }) { padding ->
+            HorizontalPager(state = pager, modifier = Modifier.fillMaxSize().padding(padding)
+                .statusBarsPadding().consumeWindowInsets(WindowInsets.statusBars),
+                userScrollEnabled = inbox.editingRequest == null && !inbox.busy && !inquiryState.busy) { page ->
+                when (page) {
+                    0 -> InitialQuoteScreen(quote, quote.connection, inbox,
+                        onSync = quote::refresh, onRead = quote::read, onDelete = quote::close)
+                    1 -> CustomerInquiryScreen(inquiry)
+                    2 -> SellingModeScreen(management, onNavigateToManagement = { requestMove(3) })
+                    3 -> ManagementModeScreen(management, onBack = { move(2) })
+                }
             }
         }
-        HorizontalPager(state = pager, modifier = Modifier.fillMaxWidth().weight(1f),
-            userScrollEnabled = inbox.editingRequest == null && !inbox.busy && !inquiryState.busy) { page ->
-            when (page) {
-                0 -> InitialQuoteScreen(quote, quote.connection, inbox,
-                    onSync = quote::refresh, onRead = quote::read, onDelete = quote::close)
-                1 -> CustomerInquiryScreen(inquiry)
-                2 -> SellingModeScreen(management, onNavigateToManagement = { move(3) })
-                3 -> ManagementModeScreen(management, onBack = { move(2) })
-            }
-        }
-    }
+        if (showMoveToManagementConfirm) AlertDialog(
+            onDismissRequest = { showMoveToManagementConfirm = false },
+            title = { Text("견적 진행 중") },
+            text = { Text("현재 장바구니에 담긴 견적 내용이 있습니다.\n견적서를 취소하고 농원·묘목으로 이동할까요?") },
+            confirmButton = { TextButton(onClick = {
+                management.resetEstimateSession(); showMoveToManagementConfirm = false; move(3)
+            }) { Text("취소 후 이동") } },
+            dismissButton = { TextButton(onClick = { showMoveToManagementConfirm = false }) { Text("계속 견적") } }
+        )
     }
 }
-

@@ -1,5 +1,7 @@
 package com.example.namufarm.quotemode
 
+import com.example.namufarm.quotemode.components.*
+import com.example.namufarm.ui.theme.*
 import android.content.Intent
 import android.net.Uri
 import android.telephony.PhoneNumberUtils
@@ -66,18 +68,7 @@ fun CustomerInquiryScreen(viewModel: CustomerInquiryViewModel) {
                 row.inquiry?.message).any { it.orEmpty().contains(search.trim(), ignoreCase = true) })
     }
     Scaffold(containerColor = Canvas, contentWindowInsets = WindowInsets(0, 0, 0, 0), topBar = {
-        TopAppBar(title = { Text("나무팜 문의처리", fontWeight = FontWeight.ExtraBold) },
-            windowInsets = WindowInsets(0, 0, 0, 0),
-            colors = TopAppBarDefaults.topAppBarColors(containerColor = ModeDesign.inquiry,
-                titleContentColor = Color.White, actionIconContentColor = Color.White),
-            actions = {
-                TextButton(onClick = viewModel::refresh, enabled = !state.busy,
-                    colors = ButtonDefaults.textButtonColors(contentColor = Color.White)) {
-                    Icon(Icons.Outlined.CloudSync, null, Modifier.size(20.dp))
-                    Spacer(Modifier.width(5.dp))
-                    Text("불러오기", fontSize = 15.sp, fontWeight = FontWeight.Bold)
-                }
-            })
+        NamuTopBar("문의", masterSyncLabel(state.lastSyncAt), onSync = { if (!state.busy) viewModel.refresh() })
     }) { padding ->
     Column(Modifier.fillMaxSize().padding(padding).padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {

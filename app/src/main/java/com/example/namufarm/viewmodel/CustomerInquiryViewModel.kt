@@ -21,6 +21,7 @@ data class CustomerInquiryState(
     val rows: List<CustomerInquiryRemote> = emptyList(),
     val drafts: Map<String, CustomerInquiryDraftEntity> = emptyMap(),
     val operations: Map<String, CustomerInquiryOperationEntity> = emptyMap(),
+    val lastSyncAt: Long? = null,
     val busy: Boolean = false,
     val message: String? = null
 ) {
@@ -83,7 +84,11 @@ class CustomerInquiryViewModel(private val repository: CustomerInquiryRepository
         }
     }
 
-    fun refresh() = operate { "문의 변경사항 ${repository.refresh()}건을 반영했습니다." }
+    fun refresh() = operate {
+        val count = repository.refresh()
+        mutable.update { it.copy(lastSyncAt = System.currentTimeMillis()) }
+        "문의 변경사항 ${count}건을 반영했습니다."
+    }
     fun save(id: String) = operate { repository.save(id); "초안을 서버에 저장했습니다. 나피에서 불러올 수 있습니다." }
     fun send(id: String, channel: String, preparedText: String, sourceDraft: CustomerInquiryDraftEntity) = operate {
         repository.send(id, channel, preparedText, sourceDraft)

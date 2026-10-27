@@ -34,6 +34,7 @@ data class ManagementUiState(
     val message: String? = null,
     val pendingSyncCount: Int = 0,
     val oldestPendingAt: Long? = null,
+    val lastMasterSyncAt: Long? = null,
     val lastSyncError: String? = null,
     val pendingSyncClearStep: PendingSyncClearStep = PendingSyncClearStep.NONE,
     val pendingSyncDeleteCount: Int = 0,
@@ -1170,6 +1171,7 @@ class ManagementViewModel(
     private fun recordSyncOutcome(result: MasterSyncOutcome) {
         val pending = dao.getAllPendingSync()
         _uiState.update { it.copy(
+            lastMasterSyncAt = if (result.success) System.currentTimeMillis() else it.lastMasterSyncAt,
             pendingSyncCount = pending.size,
             oldestPendingAt = pending.minOfOrNull { row -> row.createdAt },
             lastSyncError = if (result.success) pending.asReversed()
