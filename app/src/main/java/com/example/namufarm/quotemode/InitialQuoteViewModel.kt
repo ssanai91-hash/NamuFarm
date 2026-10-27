@@ -1,6 +1,7 @@
 package com.example.namufarm.quotemode
 
 import android.content.Context
+import com.example.namufarm.ui.theme.NamuMessage
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -18,7 +19,7 @@ data class InitialDeleteFeedback(val phase: String, val requestId: String, val e
 data class InitialQuoteUiState(
     val requests: List<WebQuoteRequestEntity> = emptyList(),
     val editingRequest: WebQuoteRequestEntity? = null,
-    val busy: Boolean = false, val message: String? = null,
+    val busy: Boolean = false, val message: NamuMessage? = null,
     val deferredCount: Int = 0, val deleteFeedback: InitialDeleteFeedback? = null
 )
 
@@ -40,20 +41,20 @@ class InitialQuoteViewModel(
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) {
                 mutable.update { it.copy(busy = false,
-                    message = "❌ 저장된 견적 확인이 필요합니다: " + e.message) }
+                    message = NamuMessage("저장된 견적 확인이 필요합니다: " + e.message, true)) }
             }
         }
     }
     fun refresh() {
         if (mutable.value.busy) return
-        mutable.update { it.copy(busy = true, message = "견적 목록을 동기화하는 중…") }
+        mutable.update { it.copy(busy = true, message = NamuMessage("견적 목록을 동기화하는 중…")) }
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 connection.refresh()
-                mutable.update { it.copy(message = "견적 목록을 동기화했습니다.") }
+                mutable.update { it.copy(message = NamuMessage("견적 목록을 동기화했습니다.")) }
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) {
-                mutable.update { it.copy(message = "❌ " + (e.message ?: "기존 자료를 유지합니다. 다시 가져와주세요.")) }
+                mutable.update { it.copy(message = NamuMessage(e.message ?: "기존 자료를 유지합니다. 다시 가져와주세요.", true)) }
             } finally { mutable.update { it.copy(busy = false) } }
         }
     }
@@ -61,7 +62,7 @@ class InitialQuoteViewModel(
         viewModelScope.launch(Dispatchers.IO) {
             try { connection.read(id) }
             catch (e: CancellationException) { throw e }
-            catch (e: Exception) { mutable.update { it.copy(message = "❌ 읽음 표시를 저장하지 못했습니다: " + e.message) } }
+            catch (e: Exception) { mutable.update { it.copy(message = NamuMessage("읽음 표시를 저장하지 못했습니다: " + e.message, true)) } }
         }
     }
     fun close(id: String) {

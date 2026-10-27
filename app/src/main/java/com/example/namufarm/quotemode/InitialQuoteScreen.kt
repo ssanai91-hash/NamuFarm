@@ -1,5 +1,6 @@
 package com.example.namufarm.quotemode
 
+import com.example.namufarm.ui.theme.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -49,7 +50,7 @@ internal fun InitialQuoteScreen(viewModel: InitialQuoteViewModel, connection: In
     var recordsReady by remember { mutableStateOf(false) }
     var records by remember { mutableStateOf(emptyList<QuoteWorkflowRecord>()) }
     var busy by remember { mutableStateOf(false) }
-    var message by remember { mutableStateOf<String?>(null) }
+    var message by remember { mutableStateOf<NamuMessage?>(null) }
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     var result by remember { mutableStateOf<QuoteWorkflowRecord?>(null) }
     var serverResult by remember { mutableStateOf<WebQuoteRequestEntity?>(null) }
@@ -60,15 +61,15 @@ internal fun InitialQuoteScreen(viewModel: InitialQuoteViewModel, connection: In
     }
     LaunchedEffect(workflow) {
         try { records = withContext(Dispatchers.IO) { workflow.records() } }
-        catch (e: Exception) { message = "저장된 견적 기록 확인이 필요합니다: ${e.message}" }
+        catch (e: Exception) { message = NamuMessage("저장된 견적 기록 확인이 필요합니다: ${e.message}", true) }
         finally { recordsReady = true }
     }
     LaunchedEffect(inbox.deleteFeedback) {
         val feedback = inbox.deleteFeedback
         if (feedback?.phase == "success" && editing?.requestId == feedback.requestId) {
-            viewModel.dismissManualQuote(); message = "견적요청을 삭제했습니다."
+            viewModel.dismissManualQuote(); message = NamuMessage("견적요청을 삭제했습니다.")
         }
-        if (feedback?.phase == "error") message = "❌ ${feedback.error ?: "삭제하지 못했습니다."}"
+        if (feedback?.phase == "error") message = NamuMessage(feedback.error ?: "삭제하지 못했습니다.", true)
     }
     val confirmed = records.filter { it.confirmedAt > 0 }.sortedByDescending { it.confirmedAt }
     val confirmedIds = confirmed.map { it.request.requestId }.toSet()
@@ -111,7 +112,7 @@ internal fun InitialQuoteScreen(viewModel: InitialQuoteViewModel, connection: In
                 FilterChip(selected = selectedTab == 1, onClick = { selectedTab = 1 },
                     label = { Text("확정견적 ${confirmed.size + remoteConfirmed.size}") })
             }
-            message?.let { Text(it, color = if (it.startsWith("❌")) MaterialTheme.colorScheme.error
+            message?.let { Text(it.text, color = if (it.isError) MaterialTheme.colorScheme.error
                 else MaterialTheme.colorScheme.primary) }
             if (inbox.deferredCount > 0) Text("이전 암호화 요청 ${inbox.deferredCount}건은 원본 기기에서 확인해주세요.",
                 style = MaterialTheme.typography.bodySmall)
@@ -155,7 +156,7 @@ internal fun InitialQuoteScreen(viewModel: InitialQuoteViewModel, connection: In
         fun handleAction(draft: SellerQuoteDraft, action: QuoteDelivery, sentVia: String? = null) {
             if (busy) return
             busy = true
-            message = if (action == QuoteDelivery.COMPLETE) "서버 견적확정 확인 중…" else "전송 화면 준비 중…"
+            message = NamuMessage(if (action == QuoteDelivery.COMPLETE) "서버 견적확정 확인 중…" else "전송 화면 준비 중…")
             scope.launch {
                 try {
                     when (action) {
@@ -168,7 +169,7 @@ internal fun InitialQuoteScreen(viewModel: InitialQuoteViewModel, connection: In
                             } else {
                                 QuoteReply.openTextEmail(context, draft.recipient.customerEmail.trim(), body)
                             }
-                            message = "문자·메일 앱에서 실제 전송을 마친 뒤 ‘견적완료’를 눌러주세요."
+                            message = NamuMessage("문자·메일 앱에서 실제 전송을 마친 뒤 ‘견적완료’를 눌러주세요.")
                         }
                         QuoteDelivery.COMPLETE -> {
                             withContext(Dispatchers.IO) {
@@ -176,25 +177,25 @@ internal fun InitialQuoteScreen(viewModel: InitialQuoteViewModel, connection: In
                                     sentVia ?: error("실제로 보낸 방법을 선택해주세요."))
                             }
                             viewModel.dismissManualQuote(); selectedTab = 1
-                            message = "견적을 확정했습니다."
+                            message = NamuMessage("견적을 확정했습니다.")
                         }
                         else -> error("견적완료로 저장해주세요.")
                     }
                 } catch (e: CancellationException) { throw e }
                 catch (e: ServerQuoteRequestChanged) {
                     viewModel.dismissManualQuote()
-                    message = e.message
+                    message = e.message?.let { NamuMessage(it, true) }
                 }
-                catch (e: Exception) { message = "❌ ${e.message ?: "처리 결과를 확인하지 못했습니다. 다시 확인해주세요."}" }
+                catch (e: Exception) { message = NamuMessage(e.message ?: "처리 결과를 확인하지 못했습니다. 다시 확인해주세요.", true) }
                 finally {
                     try { records = withContext(Dispatchers.IO) { workflow.records() } }
                     catch (e: CancellationException) { throw e }
-                    catch (e: Exception) { message = "❌ 저장된 견적 기록을 확인해주세요: ${e.message}" }
+                    catch (e: Exception) { message = NamuMessage("저장된 견적 기록을 확인해주세요: ${e.message}", true) }
                     finally { busy = false }
                 }
             }
         }
-        ManualQuoteEditor(request, busy || inbox.busy || deleting, message,
+        ManualQuoteEditor(request, busy || inbox.busy || deleting, message?.text,
             onDismiss = { if (!busy) { viewModel.dismissManualQuote(); message = null } },
             initialDraft = saved?.draft, draftKey = request.requestId,
             onDeleteRequest = if (saved?.confirmationPending == true) null else ({ onDelete(request.requestId) }),

@@ -1,5 +1,6 @@
 package com.example.namufarm.quotemode
 
+import com.example.namufarm.ui.theme.NamuTheme
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
@@ -46,6 +47,7 @@ fun InitialAppModes(management: ManagementViewModel, quote: InitialQuoteViewMode
     val stackedTabs = LocalDensity.current.fontScale > 1.15f
     fun move(page: Int) { scope.launch { pager.animateScrollToPage(page) } }
     BackHandler(enabled = pager.currentPage != 0) { move(0) }
+    NamuTheme {
     Column(Modifier.fillMaxSize().background(Color.White).statusBarsPadding().consumeWindowInsets(WindowInsets.statusBars)) {
         Surface(color = Color.White, shadowElevation = 1.dp) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 3.dp, vertical = 2.dp),
@@ -80,23 +82,14 @@ fun InitialAppModes(management: ManagementViewModel, quote: InitialQuoteViewMode
         HorizontalPager(state = pager, modifier = Modifier.fillMaxWidth().weight(1f),
             userScrollEnabled = inbox.editingRequest == null && !inbox.busy && !inquiryState.busy) { page ->
             when (page) {
-                0 -> MaterialTheme(colorScheme = lightColorScheme(primary = colors[0],
-                    secondary = colors[3], tertiary = colors[2], background = Color(0xFFF2F4F7),
-                    surface = Color.White)) {
-                    InitialQuoteScreen(quote, quote.connection, inbox,
-                        onSync = quote::refresh, onRead = quote::read, onDelete = quote::close)
-                }
-                1 -> MaterialTheme(colorScheme = lightColorScheme(primary = InquiryDesign.green,
-                    secondary = InquiryDesign.blue, tertiary = InquiryDesign.coral,
-                    primaryContainer = InquiryDesign.mint, secondaryContainer = InquiryDesign.sky,
-                    onSurface = InquiryDesign.ink, outline = InquiryDesign.line,
-                    background = InquiryDesign.canvas, surface = Color.White)) {
-                    CustomerInquiryScreen(inquiry)
-                }
+                0 -> InitialQuoteScreen(quote, quote.connection, inbox,
+                    onSync = quote::refresh, onRead = quote::read, onDelete = quote::close)
+                1 -> CustomerInquiryScreen(inquiry)
                 2 -> SellingModeScreen(management, onNavigateToManagement = { move(3) })
                 3 -> ManagementModeScreen(management, onBack = { move(2) })
             }
         }
+    }
     }
 }
 
