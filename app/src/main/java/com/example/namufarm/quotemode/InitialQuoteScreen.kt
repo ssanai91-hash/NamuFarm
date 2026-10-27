@@ -13,6 +13,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.CloudSync
 import androidx.compose.material.icons.outlined.Phone
+import com.example.namufarm.data.remote.inquiryTimestamp
 import com.example.namufarm.data.remote.inquiryLocalTime
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -91,19 +92,15 @@ internal fun InitialQuoteScreen(viewModel: InitialQuoteViewModel, connection: In
         .distinctBy { it.requestId }.filter { it.requestId !in confirmedIds }.sortedByDescending { it.sequence }
     val remoteConfirmed = inbox.requests.filter { it.status in setOf("견적확정", "견적발송완료") &&
         it.requestId !in confirmedIds }.sortedByDescending { it.sequence }
-    Scaffold(containerColor = Color(0xFFF2F4F7), contentWindowInsets = WindowInsets(0, 0, 0, 0), topBar = {
+    Scaffold(containerColor = NamuColors.background, contentWindowInsets = WindowInsets(0, 0, 0, 0), topBar = {
         NamuTopBar("견적", masterSyncLabel(inbox.lastSyncAt),
             onSync = { if (!busy && !inbox.busy && !deleting) onSync() })
     }) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(selected = selectedTab == 0, onClick = { selectedTab = 0 },
-                    label = { Text("견적요청 ${requests.size}") })
-                FilterChip(selected = selectedTab == 1, onClick = { selectedTab = 1 },
-                    label = { Text("확정견적 ${confirmed.size + remoteConfirmed.size}") })
-            }
+            NamuSegmented(listOf(NamuSegment("견적요청", requests.size),
+                NamuSegment("확정견적", confirmed.size + remoteConfirmed.size)), selectedTab,
+                onSelect = { selectedTab = it })
             message?.let { Text(it.text, color = if (it.isError) MaterialTheme.colorScheme.error
                 else MaterialTheme.colorScheme.primary) }
             if (inbox.deferredCount > 0) Text("이전 암호화 요청 ${inbox.deferredCount}건은 원본 기기에서 확인해주세요.",
@@ -117,7 +114,7 @@ internal fun InitialQuoteScreen(viewModel: InitialQuoteViewModel, connection: In
                         Text("새 견적요청이 없습니다. 동기화로 서버 요청을 확인하세요.", Modifier.padding(12.dp))
                     }
                     itemsIndexed(requests, key = { _, request -> request.requestId }) { index, request ->
-                        QuoteRequestCard(index + 1, request, request.customerName, request.customerPhone,
+                        QuoteRequestCard(request, request.customerName, request.customerPhone,
                             status = "견적 대기", date = inquiryLocalTime(request.createdAt),
                             pending = records.any { it.request.requestId == request.requestId && it.confirmationPending },
                             enabled = !busy && !inbox.busy && !deleting) {
@@ -129,12 +126,12 @@ internal fun InitialQuoteScreen(viewModel: InitialQuoteViewModel, connection: In
                         Text("확정된 견적이 없습니다.", Modifier.padding(12.dp))
                     }
                     itemsIndexed(confirmed, key = { _, saved -> saved.request.requestId }) { index, saved ->
-                        QuoteRequestCard(index + 1, saved.request, saved.draft.recipient.customerName, saved.draft.phone,
-                            status = "견적확정", date = workflowDate(saved.confirmedAt),
+                        QuoteRequestCard(saved.request, saved.draft.recipient.customerName, saved.draft.phone,
+                            status = "견적확정", date = workflowDate(saved.confirmedAt), at = saved.confirmedAt,
                             itemCount = saved.draft.rows.count { it.name.isNotBlank() }) { result = saved }
                     }
                     itemsIndexed(remoteConfirmed, key = { _, saved -> "server-${saved.requestId}" }) { index, saved ->
-                        QuoteRequestCard(confirmed.size + index + 1, saved, saved.customerName, saved.customerPhone,
+                        QuoteRequestCard(saved, saved.customerName, saved.customerPhone,
                             status = "견적확정", date = "접수 ${inquiryLocalTime(saved.createdAt)}") {
                             serverResult = saved
                         }
@@ -212,48 +209,48 @@ private fun requestedSpeciesCount(request: WebQuoteRequestEntity): Int? = runCat
     org.json.JSONArray(request.itemsJson).length()
 }.getOrNull()
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun QuoteRequestCard(serial: Int, request: WebQuoteRequestEntity, name: String, phone: String,
+private fun QuoteRequestCard(request: WebQuoteRequestEntity, name: String, phone: String,
     status: String, date: String, pending: Boolean = false, enabled: Boolean = true,
-    itemCount: Int? = requestedSpeciesCount(request), onClick: () -> Unit) {
-    val context = LocalContext.current
-    val number = request.receiptNumber.ifBlank { request.requestId }
-    val formattedPhone = android.telephony.PhoneNumberUtils.formatNumber(phone, "KR") ?: phone
-    val dialNumber = android.telephony.PhoneNumberUtils.normalizeNumber(phone)
-    Surface(onClick = onClick, enabled = enabled, color = Color.White,
-        modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp),
-        border = BorderStroke(1.dp, ModeDesign.line)) {
-        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("$serial", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(name.ifBlank { "이름 없음" }, Modifier.weight(1f), fontSize = 19.sp,
-                    fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Surface(color = ModeDesign.quote.copy(alpha = 0.08f), shape = RoundedCornerShape(6.dp)) {
-                    Text(status, Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                        color = ModeDesign.quote, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+    itemCount: Int? = requestedSpeciesCount(request),
+    at: Long = runCatching { inquiryTimestamp(request.createdAt) }.getOrDefault(0L), onClick: () -> Unit) {
+    val items = remember(request.itemsJson) { runCatching {
+        com.google.gson.Gson().fromJson(request.itemsJson, Array<com.example.namufarm.data.WebQuoteItem>::class.java).toList()
+    }.getOrDefault(emptyList()) }
+    val representative = items.firstOrNull()?.let { "${it.species} ${String.format("%,d", it.quantity)}주" }
+        ?: "품목 확인"
+    val extra = ((itemCount ?: items.size) - 1).coerceAtLeast(0)
+    Surface(color = Color.White, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp),
+        border = BorderStroke(1.dp, NamuColors.border)) {
+        Row(Modifier.padding(start = 14.dp, end = 10.dp, top = 12.dp, bottom = 12.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(Modifier.weight(1f).clickable(enabled = enabled, onClick = onClick),
+                verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(name.ifBlank { "이름 없음" }, Modifier.weight(1f), fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold, color = NamuColors.text)
+                    Text(shortNamuTime(at), fontSize = 13.sp, color = NamuColors.muted)
+                }
+                Text(representative + if (extra > 0) " 외 ${extra}종" else "", fontSize = 15.sp, color = NamuColors.text)
+                if (pending) Row(verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Icon(Icons.Outlined.Info, null, Modifier.size(18.dp), tint = NamuColors.danger)
+                    Text("견적완료 확인 필요", fontSize = 13.sp, color = NamuColors.danger)
+                } else FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    if (status == "견적확정") {
+                        NamuStatusBadge("견적확정")
+                        Text(date, fontSize = 13.sp, color = NamuColors.muted)
+                    } else {
+                        if (request.formalQuoteRequested) NamuStatusBadge("공식견적서")
+                        val receipt = request.receiptNumber
+                        if (receipt.isNotBlank()) Text(receipt.substringBefore('-') + "-" + receipt.takeLast(4),
+                            fontSize = 13.sp, color = NamuColors.muted)
+                    }
                 }
             }
-            Text(number, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 2, overflow = TextOverflow.Ellipsis)
-            TextButton(enabled = enabled && dialNumber.isNotBlank(), contentPadding = PaddingValues(0.dp),
-                onClick = {
-                    runCatching {
-                        context.startActivity(android.content.Intent(android.content.Intent.ACTION_DIAL,
-                            android.net.Uri.fromParts("tel", dialNumber, null)))
-                    }.onFailure {
-                        android.widget.Toast.makeText(context, "전화 앱을 열 수 없습니다.", android.widget.Toast.LENGTH_SHORT).show()
-                    }
-                }) {
-                Icon(Icons.Outlined.Phone, null, Modifier.size(18.dp))
-                Spacer(Modifier.width(6.dp))
-                Text(formattedPhone.ifBlank { "전화번호 없음" }, fontSize = 16.sp)
-            }
-            Text(listOfNotNull(date.takeIf { it.isNotBlank() }, itemCount?.let { "품목 ${it}개" }).joinToString(" · "),
-                fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            if (pending) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                Icon(Icons.Outlined.Info, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.error)
-                Text("견적완료 확인 필요", fontSize = 13.sp, color = MaterialTheme.colorScheme.error)
-            }
+            NamuCallButton(phone, enabled = enabled)
         }
     }
 }

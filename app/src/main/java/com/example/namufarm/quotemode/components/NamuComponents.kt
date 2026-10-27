@@ -351,3 +351,18 @@ internal fun NamuDashedAdd(text: String, onClick: () -> Unit, modifier: Modifier
 internal fun masterSyncLabel(at: Long?): String? = at?.let {
     java.text.SimpleDateFormat("HH:mm", Locale.KOREA).format(java.util.Date(it)) + " 동기화"
 }
+
+internal fun shortNamuTime(at: Long): String {
+    if (at <= 0L) return "시각 없음"
+    val zone = java.util.TimeZone.getTimeZone("Asia/Seoul")
+    val now = java.util.Calendar.getInstance(zone)
+    val day = java.util.Calendar.getInstance(zone).apply { timeInMillis = at }
+    val format = java.text.SimpleDateFormat("HH:mm", Locale.KOREA).apply { timeZone = zone }
+    fun sameDay(a: java.util.Calendar, b: java.util.Calendar) =
+        a.get(java.util.Calendar.YEAR) == b.get(java.util.Calendar.YEAR) &&
+            a.get(java.util.Calendar.DAY_OF_YEAR) == b.get(java.util.Calendar.DAY_OF_YEAR)
+    if (sameDay(now, day)) return "오늘 " + format.format(day.time)
+    now.add(java.util.Calendar.DAY_OF_YEAR, -1)
+    if (sameDay(now, day)) return "어제 " + format.format(day.time)
+    return java.text.SimpleDateFormat("MM.dd", Locale.KOREA).apply { timeZone = zone }.format(day.time)
+}
