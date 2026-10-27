@@ -4,9 +4,9 @@
 > 저장소: `ssanai91-hash/NamuFarm` · **홈페이지/PC/Android/서버 모두 `main`** (2026-10-24 사용자 요청으로 통합)  
 > 홈페이지 최신 반영: **버전 70의 기존 화면 구성에 버튼 3안·줄바꿈 보완을 반영하여 Sites 버전 73 게시 완료 (2026-10-26 KST). 기존 namufarm.co.kr·서버 환경 revision 8 유지. 원복 기준은 Sites 버전 70.**
 > 홈페이지 운영 소스: **Sites 버전 73 · `80b5e5977264040f9480105a7900c73a13790e62`, main 코드 `f18c2112ecb4cc063786f4cfb6c9255990eff7ed`. C안 이력과 Sites 버전 72는 보관.**
-> PC 최신 코드·배포본: **0.5.7 · main `d0f0fd7` 기준 Windows x64 EXE·실행환경 ZIP 빌드 완료(2026-10-27 사용자 요청). Windows 실제 실행·자동시험·Actions·실제 서버 검증 미실행. 업데이트는 EXE와 `_runtime`만 교체하고 기존 `자료` 폴더 유지.**
-> Android 최신 소스: **1.1.21(24) 안정화 + 실제 릴리스 APK 빌드·기존 인증서 서명 완료(2026-10-27 추가 요청). DAO 콜백 KSP 오류·백업 XML 릴리스 검사 오류 보완. DB14·스키마·패키지·서명 유지. 자동시험·Actions·실기기/실제 서버 검증 미실행. Apps Script는 2026-10-27 사용자가 직접 재배포 완료를 알림(배포 버전·응답은 별도 미검증).**
-> 다음 확인 — 운영 반영 순서: **① main 최신 Apps Script 파일 반영 → 기존 배포의 새 버전 → 공개 정보 quoteDeliveryIdempotency:1·list_inventory inventoryVersioning:1 확인 ② closeAppEnrollment / listAppDevices 확인 ③ 나피 0.5.7 설치(서버보다 먼저면 PC 견적 발송 중단이 정상) ④ Android 1.1.21 업데이트 설치(앱 삭제 금지). 2026-10-27 사용자가 직접 Apps Script 재배포 완료를 알림. 실제 반영 파일·배포 버전·기능 응답과 기기 등록 상태는 별도 미검증. Android 매매 견적·주문은 여전히 외부 ZIP 백업 필수. 실기기 확인 전 기능 동결.**
+> PC 최신 코드: **0.5.8 · 홈페이지와 같은 용도 6개 선택·기존 분류 보존·용도 필터. 이번 버전 컴파일·시험·Actions·실제 서버 호출 미실행. 기존 Windows 배포본은 0.5.7(2026-10-27 빌드)이다.**
+> Android 최신 소스: **1.1.22(25) · 묘목 용도 6개 선택·기존 분류 보존·용도 필터 + 재고 입력 간격·없음 버튼·좁은 폭 두 줄 정리. DB14·스키마·패키지·서명 유지. 이번 버전 빌드·시험·Actions·실기기/서버 검증 미실행. 기존 서명 APK는 1.1.21(24)이다. Apps Script는 사용자가 2026-10-27 직접 재배포 완료를 알림(반영 버전·응답 미검증).**
+> 다음 확인 — **이번 소스를 로컬에서 빌드한 뒤 용도 제안/취소/기존 값 보존/용도 필터·기기 간 동기화, 기본 글자 390×844 재고 입력 스크롤·없음 0.0m 같은 키·큰 글씨 두 줄을 확인한다. 이번 범위는 서버·홈페이지 재배포가 필요 없다. 기존 서버의 quoteDeliveryIdempotency:1·inventoryVersioning:1, closeAppEnrollment/listAppDevices 상태는 여전히 별도 확인 대상. 앱 삭제 없이 업데이트·미전송 자료 보존·Android 매매 견적/주문의 외부 ZIP 백업을 유지한다.**
 > 목적: 이전 채팅을 정리하거나 새 대화로 옮겨도 **확정 규칙·구현 범위·미완료 작업**을 구분하여 이어서 작업하기 위한 기록.
 
 > **현재 작업 기준 · main 통합 (2026-10-24):** 사용자가 홈페이지·나피·Android·스크립트를 한 프로젝트 폴더와 main에서 관리하도록 요청했다. 기존 main의 `desktop/`, `website/`, `server/`는 그대로 보존하고, Android는 초기버전 최신 `ad0074f`의 `app/` 전체와 서명 도구를 통합한다. 초기 패키지 `com.example.namufarm.original`, 기존 인증서·DB·운영 URL을 유지한다. `restore/android-initial-20260927`는 기록용으로 남기며 이후 작업 기준은 main이다. 아래 별도 브랜치 지침은 통합 전 이력이다. 이번 통합은 컴파일·자동시험·Actions·운영 발송·홈페이지 게시·서버 재배포를 수행하지 않았다.
@@ -764,3 +764,55 @@ Room 엔티티의 NOT NULL·열 이름·복합 기본키 순서를 위 SQL과 �
 - 배포 파일: `Napi-0.5.7-Windows-x64.zip` (**268,102,911바이트**), SHA-256 **`6996bf68931cfb229c1cd660e5b0a1ad543f3e588bf5d78241ff97b91fcda3a0`**. Windows GUI x64 PE 생성과 ZIP 무결성·필수 실행환경·기존 코드 일치를 확인했다. 고객 자료·개인 인증/서명 키는 넣지 않았으며 `자료` 폴더는 배포본에 포함하지 않는다.
 - 사용법: 앱을 종료하고 ZIP을 전부 푼 뒤 `NamuFarm-PC.exe`와 `_runtime`을 함께 교체한다. 기존 **`자료` 폴더는 삭제·덮어쓰기하지 않는다.** Python 별도 설치는 필요 없다. EXE만 단독 전달하거나 교체하면 실행환경이 누락된다.
 - 미실행: Windows 실제 앱 실행·화면·기존 자료 열기·다른 Windows 계정 복구·서버 동기화·견적 발송·문자/메일·자동시험·GitHub Actions. 이번 요청으로 컴파일·배포본 생성만 수행했으며 실제 사용 검증은 사용자가 진행한다. 기존 기능 동결·미전송 자료 보존 원칙은 유지한다.
+
+## 2026-10-27 Android 1.1.22 · 나피 0.5.8 — 묘목 분류를 홈페이지 용도와 통일
+
+- 사용자 요청으로 기존 기능 동결에서 이번 범위만 추가했다. 버전은 **Android 1.1.22(25)**, **나피 0.5.8**이다. main에서 단계별로 커밋하고 모든 메시지에 `[skip ci]`를 붙였다. 이번 버전의 컴파일·APK/EXE 생성·자동시험 실행·GitHub Actions·실제 서버 호출은 하지 않았다. 앞서 전달한 빌드 결과물은 Android 1.1.21(24)·나피 0.5.7이며 새 소스와 구별한다.
+- **묘목 분류 = 홈페이지 용도 6개(여러 개, ', ' 구분).** 고정 순서는 **열매(fruit) · 울타리(hedge) · 꽃(flower) · 그늘(shade) · 정원(garden) · 잔디(lawn)**. 원본 `website/lib/species-purposes.ts`의 `purposes` id·label·names를 Android `app/src/main/java/com/example/namufarm/data/SpeciesPurposes.kt`, 나피 `desktop/namufarm_desktop/species_purposes.py`에 복사했다. **홈페이지 목록을 바꾸면 Android·나피 복사본도 함께 바꾼다.**
+- 이름은 공백·밑줄을 제거하고 끝의 '나무'를 제외하여 비교한다. `에메랄드_그린 = 에메랄드그린`, `홍가시 = 홍가시나무`, `석류나무 = 석류`가 같은 기준으로 미리 선택된다. **186종을 일괄 반영하지 않는다.** 분류가 비어 있는 묘목을 열었을 때만 기본 선택을 제시하며 안내문을 표시한다. 취소하면 빈 값과 기존 대기는 그대로이고, 저장해야 기존 category 열에 반영된다.
+- 새 묘목은 이름 입력에 따라 기본 선택을 다시 계산하되, 사용자가 용도 버튼을 한 번이라도 직접 누르면 이름을 바꿔도 자동 변경하지 않는다. 기존 묘목의 빈 분류는 열 때만 제안하고 기존 분류가 있으면 자동 제안으로 바꾸지 않는다.
+- 저장은 알려진 label을 고정 순서로 `, `로 합친 다음 알 수 없는 기존 글자(예: 생울타리·유실수)를 원래 순서대로 덧붙인다. 알 수 없는 같은 글자가 여러 번 있어도 지우지 않는다. 기존 값은 Android 회색 칩·나피 회색 안내와 지우기로 명시적으로 제거한다. 합친 분류가 100자 초과이면 **“분류가 너무 깁니다. 기존 값을 정리해주세요.”**를 표시하고 저장을 막으며 줄바꿈도 저장하지 않는다. 기존 서버와 맞춰 Kotlin/JavaScript UTF-16 길이를 기준으로 한다.
+- Android 묘목 시트에 3열×2줄 선택 버튼, 선택 테두리·체크, 기존 값 칩을 추가했다. 기존 Material 아이콘 의존성에 Apple 아이콘이 없어 열매에는 식물 의미의 Spa를 사용하고 울타리·꽃·그늘·정원·잔디는 Fence·LocalFlorist·Park·Yard·Grass를 사용했다. 묘목 목록 검색 아래 용도 한 줄을 넣고 검색·초성과 AND로 필터링한다. 필터는 화면 상태만 저장하고 저장된 label만 판정한다. 빈 category에 추정된 용도는 저장 전 목록 필터에 포함하지 않는다. 재고 보기·매매 초성 필터는 바꾸지 않았다.
+- 나피는 6개 같은 폭·높이 36의 체크 버튼으로 교체하고 기존 선택 버튼 스타일·색 토큰을 사용한다. 묘목 표의 분류 문자열은 그대로 표시하며 표 위 전체/6용도 콤보를 추가했다. 용도만 바꿀 때 재고 표·농원/묘목 선택을 다시 만들지 않는다. 저장은 기존 `NurseryStore.save('species', …)` 경로를 사용한다.
+- **변경하지 않은 범위:** Apps Script·홈페이지 코드/게시·DB 스키마와 버전(NamuFarm.db v14, Quotes/Inquiries v1)·Android 패키지/서명·서버 주소/기기 인증·저장/동기화/충돌/재고 키·견적/주문/발송 흐름. 저장 위치는 기존 **나무팜_견적관리_운영 › 묘목관리 › 분류(category)** 열이다.
+
+| 단계 | main 커밋 | 바뀐 파일 |
+| --- | --- | --- |
+| A1 · Android 용도 선택 | [`5ef46a4`](https://github.com/ssanai91-hash/NamuFarm/commit/5ef46a4b267889fdc27f7e60ae32c39e31592141) | `app/build.gradle.kts` · `app/src/main/java/com/example/namufarm/data/SpeciesPurposes.kt` · `app/src/main/java/com/example/namufarm/ui/farm/SpeciesList.kt` · `app/src/main/java/com/example/namufarm/ui/farm/SpeciesPurposePicker.kt` · `app/src/test/java/com/example/namufarm/data/SpeciesPurposesTest.kt` |
+| A2 · Android 용도 필터 | [`9cbdf1e`](https://github.com/ssanai91-hash/NamuFarm/commit/9cbdf1e079372610ffbb253769cb910ac114cb38) | `app/src/main/java/com/example/namufarm/ui/ManagementModeScreen.kt` · `app/src/main/java/com/example/namufarm/ui/farm/SpeciesList.kt` · `app/src/main/java/com/example/namufarm/ui/farm/SpeciesPurposePicker.kt` |
+| B1 · 나피 용도 편집 | [`3d527af`](https://github.com/ssanai91-hash/NamuFarm/commit/3d527afce70c9e26129ae1f77c369263b1fa282a) | `desktop/namufarm_desktop/nursery_ui.py` · `desktop/namufarm_desktop/species_purposes.py` · `desktop/tests/test_nursery_ui.py` · `desktop/tests/test_species_purpose_editor.py` · `desktop/tests/test_species_purposes.py` |
+| B2 · 나피 용도 필터 | [`58cbb31`](https://github.com/ssanai91-hash/NamuFarm/commit/58cbb316243a302a1f2c7308f791b5d08fd89ea5) | `desktop/namufarm_desktop/nursery_ui.py` · `desktop/tests/test_nursery_ui.py` |
+| B3 · 나피 버전 | [`b02ef40`](https://github.com/ssanai91-hash/NamuFarm/commit/b02ef4032a90b5c8d9c2614deb5adbbfdb8a31ca) | `desktop/namufarm_desktop/__init__.py` · `desktop/pyproject.toml` |
+| 0-2 추가 · 재고 입력 배치 | [`a73d15c`](https://github.com/ssanai91-hash/NamuFarm/commit/a73d15c58ff640bb7025349b50ecb703118fd0d9) | `app/src/main/java/com/example/namufarm/ui/farm/StockEditor.kt` · `app/src/main/java/com/example/namufarm/ui/farm/FarmCommon.kt` |
+
+### 1.1.22 0-2 추가 — 재고 입력 간격·'없음' 버튼
+
+- `ui/farm/StockEditor.kt`에서 카드 제목 '규격', '수량·가격'을 제거하고 카드 여백 10×12, 행·카드 간격 8, 본문 위 8, 라벨 폭 40·간격 4, 숫자 버튼 들여쓰기 44로 맞췄다. 값 칸 최소 44·빠른 버튼 최소 36을 적용하고 이 화면 안에서만 Material 기본 최소 터치 영역으로 인해 높이가 더 늘어나지 않도록 했다.
+- 아래 고정 영역은 위 8·아래 10·요약 13sp. 공용 `FarmFooter`에 선택적 여백 매개변수만 추가하여 다른 화면의 기본 여백(위 10·아래 12)은 유지한다.
+- 년생은 **[없음] [−] [값] [+]**. 없음은 폭 48, 선택 테두리·연한 초록 바탕, 없을 때 값은 회색 '없음'으로 표시한다. 1년생에서 −는 기존처럼 빈 문자열, 없음에서 −는 비활성이다.
+- 크기는 **[없음] [−10cm] [값] [+10cm] [+1m]**. 버튼 폭은 48/56/56/48, 값 최소 폭 64. **없음은 기존 `updateSize(0f)`를 호출하고 저장 형식 `0.0m`은 바꾸지 않는다.** 수량·가격/저장·동기화·삭제 확인창·재고 키 생성 코드는 변경하지 않았다.
+- 버튼 영역이 288dp 미만이거나 fontScale이 1보다 크면 **첫 줄 [없음] [값], 둘째 줄 [−10cm] [+10cm] [+1m]**. PC 비표준 년생·크기는 기존 읽기 전용을 유지하며 버튼을 숨긴다. 타입·품질 없음 선택과 아래 요약의 없음/0.0m 생략은 유지한다.
+- `verticalScroll`은 유지한다. 기본 글자·390×844dp에서 한 화면에 들어가도록 수치를 정리했으나 **실제 스크롤 여부·큰 글씨 줄바꿈은 빌드/실기기로 확인하지 않았다.**
+
+### 작성만 하고 실행하지 않은 시험
+
+- `SpeciesPurposesTest.kt` 5개: 이름의 공백/밑줄/나무 접미어, 고정 저장 순서·중복 기존 값 보존, 기존 값 일부 제거, 100자/UTF-16/줄바꿈, 저장된 용도만 필터.
+- `desktop/tests/test_species_purposes.py` 7개: 홈페이지 TS를 직접 읽어 Python과 Android의 id·label·names 일치, 이름 맞추기, 고정 순서·기존 값 보존/제거, 100자·줄바꿈, 저장된 용도 필터.
+- `desktop/tests/test_species_purpose_editor.py` 5개: 빈 분류 제안/안내, 기존 분류 미변경·삭제, 새 이름 자동 제안과 수동 선택 후 중지, 기존 빈 분류의 열 때만 제안, 100자 초과 보존·차단·정리.
+- `desktop/tests/test_nursery_ui.py` 신규 5개: 취소 시 자료/대기 미변경, 이름·용도 저장 후 농원사용명/메모/활성/기존 값 유지, 초과 시 저장 비활성, 검색·초성·용도 AND 및 저장 문자열 표시, 용도 필터에서 재고 선택 유지.
+- 합계 **22개 작성, 모두 미실행**. 정적 diff 확인만 했으며 컴파일·APK·EXE·시험·Actions·실제 서버 호출·실기기 확인은 수행하지 않았다.
+
+### 사용자 확인
+
+- [ ] 빈 분류의 기존 묘목: 홈페이지 기준 미리 선택·안내 표시, 취소 시 빈 값 유지, 저장 후 나피에 같은 분류 표시
+- [ ] 나피에서 수정·동기화한 값이 Android 동기화 후 표시
+- [ ] 생울타리·유실수 등 기존 글자 보존, 지우기를 눌렀을 때만 제거, 100자 초과 경고·저장 차단
+- [ ] 새 묘목 이름 변경 시 제안 갱신, 직접 선택 후 자동 변경 중지, 저장 시 고정 순서
+- [ ] 용도 필터가 검색·초성과 함께 적용되고 분류가 비어 있는 묘목을 임의로 분류하지 않음
+- [ ] 큰 글씨 설정에서 용도 버튼 3열×2줄과 줄바꿈, 재고/매매 필터에 영향 없음
+- [ ] 재고 입력: **기본 글자·390×844dp에서 아래 고정 영역을 포함해 스크롤 없음**
+- [ ] 년생·크기의 **[없음]이 맨 왼쪽**, 없음 선택 표시·값 회색·− 비활성
+- [ ] 크기 없음 저장이 **0.0m**이고 기존 **0.0m 재고와 같은 키로 합쳐짐**
+- [ ] 큰 글씨/좁은 폭에서 크기 행 두 줄·본문 스크롤, 글자 잘림·줄임표 없음, PC 규격 읽기 전용 유지
+
+이번 요청 범위 이후에는 실기기 확인 전 새 기능을 추가하지 않는 기존 원칙을 유지한다.
