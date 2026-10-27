@@ -10,6 +10,5 @@
     <exclude domain="sharedpref" path="operations_master_device.xml" />
     <exclude domain="sharedpref" path="operations_master_device.xml.bak" />
     <include domain="file" path="sync_backup/" />
-    <exclude domain="root" path="cache/" />
-    <exclude domain="root" path="code_cache/" />
+    <!-- Android excludes cache/code_cache automatically; root is not included here. -->
 </full-backup-content>

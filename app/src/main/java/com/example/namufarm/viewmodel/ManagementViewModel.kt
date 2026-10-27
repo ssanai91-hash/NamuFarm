@@ -1258,8 +1258,16 @@ class ManagementViewModel(
         viewModelScope.launch(Dispatchers.IO) {
             var backup: File? = null
             try {
-                val deleted = dao.backupAndClearPendingSync(confirmed) { rows ->
-                    backup = writePendingSyncBackup(context.applicationContext, rows)
+                val deleted = syncManager.masters.database.withTransaction {
+                    val rows = dao.getAllPendingSync()
+                    when {
+                        rows != confirmed -> null // The changed queue needs two new confirmations.
+                        rows.isEmpty() -> 0
+                        else -> {
+                            backup = writePendingSyncBackup(context.applicationContext, rows)
+                            dao.clearAllPendingSync() // Backup failure rolls back and never reaches DELETE.
+                        }
+                    }
                 }
                 _uiState.update { it.copy(message = when {
                     deleted == null -> "전송 대기 내용이 변경되어 삭제하지 않았습니다. 다시 확인해주세요."

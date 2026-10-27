@@ -5,7 +5,6 @@ import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
-import androidx.room.Transaction
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -200,22 +199,9 @@ interface ManagementDao {
     @Query("DELETE FROM species")
     fun clearAllSpecies()
 
-    // Call only inside backupAndClearPendingSync, after the backup has been saved.
+    // Call only in the ViewModel's confirmed backup-and-clear Room transaction.
     @Query("DELETE FROM pending_sync")
     fun clearAllPendingSync(): Int
-
-    /** Keep concurrent inserts/updates outside the snapshot-to-delete interval. No schema change. */
-    @Transaction
-    fun backupAndClearPendingSync(
-        confirmed: List<PendingSyncEntity>,
-        writeBackup: (List<PendingSyncEntity>) -> Unit
-    ): Int? {
-        val pending = getAllPendingSync()
-        if (pending != confirmed) return null // The user must confirm the changed queue again.
-        if (pending.isEmpty()) return 0
-        writeBackup(pending) // An exception rolls back and MUST NOT reach DELETE.
-        return clearAllPendingSync()
-    }
 
     // 🚨 [추가] 중복 주문 방지용: 주문번호로 기존 주문 삭제하는 쿼리
     @Query("DELETE FROM order_list WHERE order_number = :orderNumber")
