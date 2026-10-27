@@ -11,6 +11,7 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Phone
+import androidx.compose.material.icons.outlined.Sms
 import androidx.compose.material.icons.outlined.CloudSync
 import androidx.compose.ui.unit.sp
 import com.example.namufarm.ui.theme.NamuColors
@@ -313,7 +314,8 @@ internal fun NamuTopBar(title: String, syncText: String? = null, onSync: (() -> 
 }
 
 @Composable
-internal fun NamuCallButton(phone: String, modifier: Modifier = Modifier, enabled: Boolean = true) {
+internal fun NamuCallButton(phone: String, modifier: Modifier = Modifier, enabled: Boolean = true,
+    iconSize: androidx.compose.ui.unit.Dp = 20.dp) {
     val context = LocalContext.current
     val number = android.telephony.PhoneNumberUtils.normalizeNumber(phone)
     OutlinedIconButton(onClick = {
@@ -321,7 +323,23 @@ internal fun NamuCallButton(phone: String, modifier: Modifier = Modifier, enable
             .onFailure { Toast.makeText(context, "전화 앱을 열 수 없습니다.", Toast.LENGTH_SHORT).show() }
     }, modifier = modifier.size(48.dp), enabled = enabled && number.isNotBlank(),
         border = BorderStroke(1.5.dp, NamuColors.primary)) {
-        Icon(Icons.Outlined.Phone, "전화", Modifier.size(20.dp), tint = NamuColors.primary)
+        Icon(Icons.Outlined.Phone, "전화", Modifier.size(iconSize), tint = NamuColors.primary)
+    }
+}
+
+/** Opens the SMS app with only the recipient filled in. Not a quote delivery and never marks a send. */
+@Composable
+internal fun NamuSmsButton(phone: String, modifier: Modifier = Modifier, enabled: Boolean = true,
+    iconSize: androidx.compose.ui.unit.Dp = 20.dp) {
+    val context = LocalContext.current
+    val number = android.telephony.PhoneNumberUtils.normalizeNumber(phone)
+    OutlinedIconButton(onClick = {
+        com.example.namufarm.phone.openSmsComposer(context, number, "")?.let {
+            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+        }
+    }, modifier = modifier.size(48.dp), enabled = enabled && number.isNotBlank(),
+        border = BorderStroke(1.5.dp, NamuColors.primary)) {
+        Icon(Icons.Outlined.Sms, "문자", Modifier.size(iconSize), tint = NamuColors.primary)
     }
 }
 

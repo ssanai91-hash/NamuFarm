@@ -255,7 +255,11 @@ private fun QuoteRequestCard(request: WebQuoteRequestEntity, name: String, phone
                     }
                 }
             }
-            NamuCallButton(phone, enabled = enabled)
+            // Slightly smaller contact buttons so the card text keeps its width.
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                NamuSmsButton(phone, Modifier.size(42.dp), enabled = enabled, iconSize = 18.dp)
+                NamuCallButton(phone, Modifier.size(42.dp), enabled = enabled, iconSize = 18.dp)
+            }
         }
     }
 }
