@@ -35,6 +35,10 @@ data class ManagementUiState(
     val selectedChosung: String = "ㄱ",
     val message: String? = null,
     val pendingSyncCount: Int = 0,
+    val pendingMasterCount: Int = 0,
+    val pendingInventoryCount: Int = 0,
+    val pendingOrderCount: Int = 0,
+    val inventoryConflictPending: Boolean = false,
     val oldestPendingAt: Long? = null,
     val lastMasterSyncAt: Long? = null,
     val lastSyncError: String? = null,
@@ -93,7 +97,7 @@ class ManagementViewModel(
             val result = if (syncManager.inventory.review.value.firstLink) syncManager.inventory.resolveInitialReview(useServer)
                 else syncManager.inventory.resolveConflict(useServer)
             refreshLocalState()
-            _uiState.update { it.copy(message = result.message, lastSyncError = if (result.success) null else result.message) }
+            recordInventoryOutcome(result)
         }
     }
     private val clearingPendingSync = AtomicBoolean(false)
@@ -104,6 +108,10 @@ class ManagementViewModel(
             dao.observePendingSync().collect { pending ->
                 _uiState.update { state -> state.copy(
                     pendingSyncCount = pending.size,
+                    pendingMasterCount = pending.count { OperationsMasterSync.kind(it.syncType) != null },
+                    pendingInventoryCount = pending.count { it.syncType in setOf(PendingSyncType.INVENTORY_SAVE, PendingSyncType.INVENTORY) },
+                    pendingOrderCount = pending.count { OperationsMasterSync.kind(it.syncType) == null && it.syncType !in setOf(PendingSyncType.INVENTORY_SAVE, PendingSyncType.INVENTORY) },
+                    inventoryConflictPending = pending.any { it.syncType == PendingSyncType.INVENTORY_SAVE && it.lastError.startsWith("CONFLICT:") },
                     oldestPendingAt = pending.minOfOrNull { it.createdAt },
                     lastSyncError = pending.asReversed().firstOrNull { it.lastError.isNotBlank() }
                         ?.lastError ?: state.lastSyncError
@@ -152,6 +160,9 @@ class ManagementViewModel(
             }
 
             selectChosung(firstChosung)
+            val stockResult = syncManager.inventory.sync()
+            refreshLocalState()
+            recordInventoryOutcome(stockResult)
         }
     }
 
@@ -820,7 +831,7 @@ class ManagementViewModel(
         viewModelScope.launch(Dispatchers.IO) {
             val result = syncManager.inventory.sync()
             refreshLocalState()
-            _uiState.update { it.copy(message = result.message, lastSyncError = if (result.success) null else result.message) }
+            recordInventoryOutcome(result)
         }
     }
 
@@ -840,15 +851,27 @@ class ManagementViewModel(
                     inventoryList = rows, message = "휴대폰 저장 완료 · 서버 반영 대기 ${syncManager.inventory.pendingCount()}건") }
                 val result = syncManager.inventory.sync()
                 refreshLocalState()
-                _uiState.update { it.copy(message = if (result.success) "휴대폰 저장 완료 · 서버 반영 완료"
-                    else "휴대폰 저장 완료 · 서버 반영 대기 ${syncManager.inventory.pendingCount()}건",
-                    lastSyncError = if (result.success) null else result.message) }
+                recordInventoryOutcome(result.copy(message = if (result.success) "휴대폰 저장 완료 · 서버 반영 완료"
+                    else "휴대폰 저장 완료 · 서버 반영 대기 ${syncManager.inventory.pendingCount()}건 · ${result.message}"))
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) { _uiState.update { it.copy(message = "재고 처리 확인이 필요합니다. 기존 자료와 대기를 유지합니다: ${e.message}") } }
         }
     }
 
-    fun syncDataWithGoogleSheet() = syncMasterDirectory(null)
+    fun syncDataWithGoogleSheet() = syncInventoryWithMasters()
+    fun syncInventoryWithMasters() {
+        viewModelScope.launch(Dispatchers.IO) {
+            _uiState.update { it.copy(message = "농원·묘목·재고를 순서대로 동기화하는 중입니다.") }
+            val result = syncManager.inventory.sync()
+            refreshLocalState()
+            recordInventoryOutcome(result)
+        }
+    }
+    private fun recordInventoryOutcome(result: InventoryOutcome) {
+        _uiState.update { it.copy(message = result.message,
+            lastSyncError = if (result.success) null else result.message,
+            lastMasterSyncAt = if (result.success) System.currentTimeMillis() else it.lastMasterSyncAt) }
+    }
     fun syncFarmMasterFromGoogleSheet() = syncMasterDirectory(OperationsMasterSync.FARM)
     fun syncSpeciesMasterFromGoogleSheet() = syncMasterDirectory(OperationsMasterSync.SPECIES)
 
@@ -1142,7 +1165,6 @@ class ManagementViewModel(
     private fun recordSyncOutcome(result: MasterSyncOutcome) {
         val pending = dao.getAllPendingSync()
         _uiState.update { it.copy(
-            lastMasterSyncAt = if (result.success) System.currentTimeMillis() else it.lastMasterSyncAt,
             pendingSyncCount = pending.size,
             oldestPendingAt = pending.minOfOrNull { row -> row.createdAt },
             lastSyncError = if (result.success) pending.asReversed()

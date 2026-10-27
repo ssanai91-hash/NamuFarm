@@ -61,6 +61,12 @@ class OperationsMasterSync(internal val database: AppDatabase, internal val clie
         syncLocked(FARM)
     }
     suspend fun deleteSpecies(id: Int): MasterSyncOutcome = mutex.withLock {
+        if (dao.getAllInventoryEntities().any { it.speciesId == id && it.quantity > 0 } ||
+            dao.getAllPendingSync().any { row -> when (row.syncType) {
+                PendingSyncType.INVENTORY_SAVE -> runCatching { gson.fromJson(row.payloadJson, InventoryMutation::class.java).speciesId == id }.getOrDefault(true)
+                PendingSyncType.INVENTORY -> runCatching { gson.fromJson(row.payloadJson, PendingInventorySyncPayload::class.java).entity.speciesId == id }.getOrDefault(true)
+                else -> false
+            } }) return@withLock MasterSyncOutcome(false, "이 묘목의 재고를 먼저 삭제하고 동기화해주세요.")
         database.withTransaction {
             dao.deactivateSpecies(id)
             // Freeze the disabled record, so retries cannot change a later edit.
@@ -105,9 +111,9 @@ class OperationsMasterSync(internal val database: AppDatabase, internal val clie
             for (k in kinds) counts[k] = pull(k)
             if (onlyKind == null) client.downloaded = true
             val names = kinds.joinToString(", ") { (if (it == FARM) "농원" else "묘목") + " ${counts[it]}건" }
-            val other = dao.getAllPendingSync().count { kind(it.syncType) == null }
+            val other = dao.getAllPendingSync().count { it.syncType in setOf(PendingSyncType.ORDER, PendingSyncType.CANCEL_ORDER, PendingSyncType.DELIVERY, "update_order_status") }
             MasterSyncOutcome(true, "✅ 운영 시트 동기화 완료 ($names)" +
-                if (other > 0) " · 재고·주문 전송 대기 ${other}건은 기기에 보관 중" else "")
+                if (other > 0) " · 주문 전송 대기 ${other}건은 기기에 보관 중" else "")
         } catch (e: Exception) {
             MasterSyncOutcome(false, "⚠️ 기기 데이터 보관 중 · " + (e.message ?: "네트워크 확인 후 다시 동기화해주세요."))
         }
