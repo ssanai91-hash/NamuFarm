@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (QApplication, QBoxLayout, QButtonGroup, QCheckBox
 from . import __version__
 from .ui_theme import (align_table, fit_window, scroll_dialog, scroll_page, workspace_style,
                        CustomerDelegate, StatusDelegate, customer_reference, CompactDateDelegate,
-                       NavigationButton, QuoteRemarksDelegate, size_table_to_rows, collapsible, quote_workbench_style)
+                       NavigationButton, QuoteRemarksDelegate, TOKENS, status_badge, stage_label, size_table_to_rows, collapsible, quote_workbench_style)
 from .ui_icons import set_button_icon, ui_icon
 from .app import MainWindow, Task, table, fill_table, money, timestamp
 from .commerce import (ISSUER, new_draft, new_manual_draft, draft_amounts, validate_draft, quote_html, quote_document_html, shipping_html,
@@ -3741,61 +3741,56 @@ class SellerWindow(MainWindow):
         sidebar = QFrame()
         sidebar.setObjectName("sidebar")
         self.sidebar = sidebar
-        sidebar.setFixedWidth(286)
+        sidebar.setFixedWidth(232)
         side = QVBoxLayout(sidebar)
-        side.setContentsMargins(12, 16, 12, 14)
+        side.setContentsMargins(8, 16, 8, 16)
         side.setSpacing(8)
         self.brand_panel = QFrame()
-        self.brand_panel.setObjectName("brandPanel")
-        brand_layout = QVBoxLayout(self.brand_panel)
-        brand_layout.setContentsMargins(12, 18, 12, 18)
-        self.brand_label = label("나무팜(주)", "brand")
-        self.brand_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        brand_layout.addWidget(self.brand_label)
+        brand_layout = QHBoxLayout(self.brand_panel)
+        brand_layout.setContentsMargins(8, 8, 8, 8)
+        leaf = QPushButton()
+        leaf.setEnabled(False)
+        leaf.setFixedSize(24, 24)
+        set_button_icon(leaf, "leaf", TOKENS["accent"], 24)
+        brand_layout.addWidget(leaf)
+        brand_words = QVBoxLayout()
+        self.brand_label = label("나무팜 판매관리", "brand")
+        self.brand_label.setStyleSheet("font-size:18px;font-weight:700;")
+        brand_words.addWidget(self.brand_label)
+        brand_words.addWidget(label("Ver " + __version__, "navFoot"))
+        brand_layout.addLayout(brand_words)
         side.addWidget(self.brand_panel)
-        side.addSpacing(6)
-        self.nav = []
+        self.nav, self.nav_badges = [], {}
         for index, (title, _) in enumerate(self.PAGES):
+            if index in (self.PAGE_REQUESTS, self.PAGE_REPORTS):
+                side.addWidget(label("업무" if index == self.PAGE_REQUESTS else "관리", "navGroup"))
+            if index == self.PAGE_SETTINGS:
+                side.addStretch(1)
+                self.sidebar_connection = label("● 연결 전", "navFoot")
+                self.sidebar_transfer = label("가져오기 전 · 전송 대기 0건", "navFoot", True)
+                side.addWidget(self.sidebar_connection)
+                side.addWidget(self.sidebar_transfer)
             widget = NavigationButton(title)
             widget.clicked.connect(lambda checked=False, i=index: self.navigate(i))
             icons = ("requests", "confirmed", "orders", "shipping", "reports", "farm", "leaf", "requests", "settings")
-            set_button_icon(widget, icons[index], "#e0ebe3", 22)
+            set_button_icon(widget, icons[index], TOKENS["card"], 20)
             widget.setCheckable(True)
+            widget.setFixedHeight(44)
             self.nav.append(widget)
-            if index == self.PAGE_REQUESTS:
-                nav_row = QWidget()
-                nav_row.setObjectName("navRow")
-                nav_layout = QHBoxLayout(nav_row)
-                nav_layout.setContentsMargins(0, 0, 0, 0)
-                nav_layout.setSpacing(6)
-                nav_layout.addWidget(widget, 1)
-                self.request_nav_badge = QLabel("")
-                self.request_nav_badge.setObjectName("navBadge")
-                self.request_nav_badge.hide()
-                nav_layout.addWidget(self.request_nav_badge, 0, Qt.AlignmentFlag.AlignVCenter)
-                side.addWidget(nav_row)
-            else:
-                side.addWidget(widget)
-        side.addStretch(1)
-        self.sidebar_tree = SidebarTree()
-        side.addWidget(self.sidebar_tree, 1)
-        self.sidebar_clock = QFrame()
-        self.sidebar_clock.setObjectName("sidebarClock")
-        clock_layout = QVBoxLayout(self.sidebar_clock)
-        clock_layout.setContentsMargins(14, 12, 14, 12)
-        clock_layout.setSpacing(3)
-        self.sidebar_date = label("", "sidebarDate")
-        self.sidebar_time = DigitalClock()
-        for clock_label in (self.sidebar_date, self.sidebar_time):
-            if isinstance(clock_label, QLabel):
-                clock_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            clock_layout.addWidget(clock_label)
-        side.addWidget(self.sidebar_clock)
-        self.update_sidebar_clock()
-        self.sidebar_clock_timer = QTimer(self)
-        self.sidebar_clock_timer.setInterval(1000)
-        self.sidebar_clock_timer.timeout.connect(self.update_sidebar_clock)
-        self.sidebar_clock_timer.start()
+            row = QWidget()
+            row.setObjectName("navRow")
+            row_layout = QHBoxLayout(row)
+            row_layout.setContentsMargins(0, 0, 0, 0)
+            row_layout.setSpacing(0)
+            row_layout.addWidget(widget, 1)
+            if index in (self.PAGE_REQUESTS, self.PAGE_QUOTES, self.PAGE_SALES, self.PAGE_SHIPPING, self.PAGE_INQUIRIES):
+                badge = label("0", "navBadge")
+                badge.setProperty("kind", "new" if index == self.PAGE_REQUESTS else "inquiry" if index == self.PAGE_INQUIRIES else "count")
+                self.nav_badges[index] = badge
+                row_layout.addWidget(badge)
+                if index == self.PAGE_REQUESTS:
+                    self.request_nav_badge = badge
+            side.addWidget(row)
         outer.addWidget(sidebar)
         content = QWidget()
         content_layout = QVBoxLayout(content)
@@ -3933,12 +3928,6 @@ class SellerWindow(MainWindow):
         self.refresh_workspace()
         self.update_controls()
 
-    def update_sidebar_clock(self):
-        current = datetime.now(SEOUL)
-        weekday = ("월", "화", "수", "목", "금", "토", "일")[current.weekday()]
-        self.sidebar_date.setText(f"{current:%Y.%m.%d} ({weekday})")
-        self.sidebar_time.setText(current.strftime("%H:%M:%S"))
-
     def resizeEvent(self, event):
         super().resizeEvent(event)
         if not hasattr(self, "ui_settings"):
@@ -3968,12 +3957,10 @@ class SellerWindow(MainWindow):
         style = workspace_style(large, compact)
         app.setStyleSheet(style)
         self.setStyleSheet(style)
-        self.sidebar.setFixedWidth((236 if large else 214) if compact else 286)
-        self.sidebar.layout().setSpacing(6 if compact else 8)
-        self.sidebar.layout().setContentsMargins(10 if compact else 12, 12 if compact else 16,
-                                                 10 if compact else 12, 12 if compact else 14)
-        self.brand_panel.layout().setContentsMargins(10 if compact else 12, 10 if compact else 18,
-                                                     10 if compact else 12, 10 if compact else 18)
+        self.sidebar.setFixedWidth(232)
+        self.sidebar.layout().setSpacing(8)
+        self.sidebar.layout().setContentsMargins(8, 16, 8, 16)
+        self.brand_panel.layout().setContentsMargins(8, 8, 8, 8)
         self.page_content_layout.setContentsMargins(16 if compact else 24, 12 if compact else 16,
                                                    16 if compact else 24, 12 if compact else 16)
         self.page_content_layout.setSpacing(8 if compact else 12)
@@ -4036,6 +4023,8 @@ class SellerWindow(MainWindow):
 
     def set_page_count(self, index, count):
         self.page_counts[index] = count
+        if hasattr(self, "nav_badges") and index in self.nav_badges:
+            self.nav_badges[index].setText(str(count))
         if hasattr(self, "stack") and self.stack.currentIndex() == index:
             self.update_page_title(index)
 
@@ -4518,6 +4507,12 @@ class SellerWindow(MainWindow):
             text = f"{local} · {transfer} · 최근 서버 동기화: {recent}"
             if pending or self.dirty or self.data.get("copyError") or self._last_storage_transfer_error:
                 color = "#805a17"
+        if hasattr(self, "sidebar_connection"):
+            failed = bool(self._last_storage_transfer_error or self.data.get("copyError"))
+            key = "danger" if failed else "waiting" if pending else "accent"
+            self.sidebar_connection.setStyleSheet(f"color:{TOKENS[key]};font-size:13px;")
+            self.sidebar_connection.setText("● " + ("오류" if failed else "서버 반영 대기" if pending else "연결됨" if self.data.get("paired") else "연결 전"))
+            self.sidebar_transfer.setText(self.last_sync_label.text().removeprefix("성공 · ") + f" 가져옴 · 전송 대기 {pending:,}건")
         self.storage_status.setText(text)
         self.storage_status.setToolTip(
             "PC 저장과 서버 백업은 별도입니다. 판매자료는 ‘서버에 올리기’로 반영합니다. "
