@@ -1,12 +1,15 @@
 """Nursery pages read the PC cache; only an explicit sync uses the server."""
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (QButtonGroup, QCheckBox, QComboBox, QDialog, QDialogButtonBox,
     QFormLayout, QGridLayout, QHBoxLayout, QLabel, QLCDNumber, QLineEdit, QMessageBox,
-    QPushButton, QSpinBox, QTabWidget, QVBoxLayout, QWidget)
+    QPushButton, QSizePolicy, QSpinBox, QTabWidget, QVBoxLayout, QWidget)
 
 from .app import table, fill_table
 from .errors import UserError
 from .nursery import INITIALS, NurseryStore, initial
+from .species_purposes import (PURPOSES, category_error, format_category, parse_category,
+                               suggest_purpose_labels)
+from .ui_theme import TOKENS
 
 
 class DigitalClock(QLCDNumber):
@@ -26,6 +29,97 @@ class DigitalClock(QLCDNumber):
 
     def text(self):
         return self._text
+
+
+class SpeciesPurposeEditor(QWidget):
+    """Defaults and legacy edits stay in the dialog until its Save action."""
+    changed = Signal()
+
+    def __init__(self, category='', name='', new_species=False, parent=None):
+        super().__init__(parent)
+        category = category or ''
+        parts = parse_category(category)
+        self.blank_category = not category.strip()
+        self.new_species = new_species
+        self.manually_changed = False
+        self.selected_labels = set(suggest_purpose_labels(name) if self.blank_category else parts.selected_labels)
+        self.legacy_values = list(parts.legacy_values)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(6)
+        self.hint = QLabel('홈페이지 기준으로 미리 골라 두었어요. 저장해야 반영돼요.')
+        self.hint.setObjectName('infoCaption')
+        self.hint.setWordWrap(True)
+        layout.addWidget(self.hint)
+        choices = QHBoxLayout()
+        choices.setSpacing(6)
+        self.buttons = {}
+        for purpose in PURPOSES:
+            button = QPushButton(purpose.label)
+            button.setCheckable(True)
+            button.setObjectName('filterTab')
+            button.setAccessibleName(purpose.label + ' 용도')
+            button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+            button.setStyleSheet('QPushButton{min-height:36px;max-height:36px;padding:0 4px;}')
+            button.clicked.connect(lambda checked=False, label=purpose.label: self.choose(label, checked))
+            self.buttons[purpose.label] = button
+            choices.addWidget(button, 1)
+        layout.addLayout(choices)
+        legacy = QHBoxLayout()
+        self.legacy_label = QLabel()
+        self.legacy_label.setObjectName('infoCaption')
+        self.legacy_label.setTextFormat(Qt.TextFormat.PlainText)
+        self.legacy_label.setWordWrap(True)
+        legacy.addWidget(self.legacy_label, 1)
+        self.clear_legacy = QPushButton('지우기')
+        self.clear_legacy.setAccessibleName('기존 분류 값 지우기')
+        self.clear_legacy.setStyleSheet('QPushButton{min-height:36px;max-height:36px;padding:0 8px;}')
+        self.clear_legacy.clicked.connect(self.remove_legacy)
+        legacy.addWidget(self.clear_legacy)
+        layout.addLayout(legacy)
+        self.error_label = QLabel()
+        self.error_label.setWordWrap(True)
+        self.error_label.setStyleSheet('color:' + TOKENS['danger'] + ';')
+        layout.addWidget(self.error_label)
+        self.refresh()
+
+    def update_name(self, name):
+        if self.new_species and not self.manually_changed:
+            self.selected_labels = set(suggest_purpose_labels(name))
+            self.refresh()
+
+    def choose(self, label, checked):
+        self.manually_changed = True
+        if checked:
+            self.selected_labels.add(label)
+        else:
+            self.selected_labels.discard(label)
+        self.refresh()
+
+    def remove_legacy(self):
+        self.legacy_values.clear()
+        self.refresh()
+
+    def error(self):
+        return category_error(format_category(self.selected_labels, self.legacy_values))
+
+    def value(self):
+        value = format_category(self.selected_labels, self.legacy_values)
+        if error := category_error(value):
+            raise ValueError(error)
+        return value
+
+    def refresh(self):
+        for label, button in self.buttons.items():
+            button.setChecked(label in self.selected_labels)
+        self.hint.setVisible(self.blank_category and not self.manually_changed and bool(self.selected_labels))
+        self.legacy_label.setText('기존 값: ' + ', '.join(self.legacy_values))
+        self.legacy_label.setVisible(bool(self.legacy_values))
+        self.clear_legacy.setVisible(bool(self.legacy_values))
+        error = self.error()
+        self.error_label.setText(error or '')
+        self.error_label.setVisible(bool(error))
+        self.changed.emit()
 
 
 class NurseryPage(QWidget):
@@ -182,12 +276,18 @@ class NurseryPage(QWidget):
             return
         dialog = QDialog(self)
         dialog.setWindowTitle(('농원' if self.kind == 'farms' else '묘목') + (' 수정' if row else ' 추가'))
-        dialog.setMinimumWidth(460)
+        dialog.setMinimumWidth(600 if self.kind == 'species' else 460)
         form = QFormLayout(dialog)
         labels = [('farmName', '농원명'), ('address', '주소'), ('phone', '전화번호'), ('memo', '메모')] if self.kind == 'farms' else [
             ('speciesName', '묘목명'), ('chosung', '초성'), ('farmName', '농원사용명'), ('category', '분류'), ('memo', '메모')]
         inputs = {}
+        purpose_editor = None
         for name, title in labels:
+            if self.kind == 'species' and name == 'category':
+                purpose_editor = SpeciesPurposeEditor((row or {}).get('category', ''),
+                    (row or {}).get('speciesName', ''), new_species=row is None)
+                form.addRow('용도 (여러 개 선택)', purpose_editor)
+                continue
             entry = QLineEdit(str((row or {}).get(name, '')))
             inputs[name] = entry
             form.addRow(title, entry)
@@ -195,6 +295,7 @@ class NurseryPage(QWidget):
             inputs['chosung'].setReadOnly(True)
             inputs['chosung'].setText(initial(inputs['speciesName'].text()))
             inputs['speciesName'].textChanged.connect(lambda text: inputs['chosung'].setText(initial(text)))
+            inputs['speciesName'].textChanged.connect(purpose_editor.update_name)
         active = QCheckBox('사용')
         active.setChecked(bool((row or {}).get('isActive', 1)))
         if self.kind == 'species':
@@ -204,14 +305,20 @@ class NurseryPage(QWidget):
         form.addRow(message)
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
         form.addRow(buttons)
+        if purpose_editor is not None:
+            def update_category_validation():
+                buttons.button(QDialogButtonBox.StandardButton.Save).setEnabled(purpose_editor.error() is None)
+            purpose_editor.changed.connect(update_category_validation)
+            update_category_validation()
         def save():
             try:
                 values = {k: v.text() for k, v in inputs.items()}
                 if self.kind == 'species':
+                    values['category'] = purpose_editor.value()
                     values.update(isActive=int(active.isChecked()))
                     values['chosung'] = initial(values['speciesName'])
                 self.store().save(self.kind, values, row['_key'] if row else None)
-            except UserError as error:
+            except (UserError, ValueError) as error:
                 message.setText(str(error))
                 return
             dialog.accept()

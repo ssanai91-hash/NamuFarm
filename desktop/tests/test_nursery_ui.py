@@ -4,6 +4,7 @@ from unittest.mock import patch
 
 from PySide6.QtWidgets import QDialog, QDialogButtonBox, QLineEdit
 from namufarm_desktop.workspace import SellerWindow
+from namufarm_desktop.nursery_ui import SpeciesPurposeEditor
 from qt_support import QtTestCase
 import test_nursery as nursery_tests
 
@@ -72,3 +73,52 @@ class NurseryUiTest(QtTestCase):
         self.assertEqual(8, page.initial_columns)
         for title, button in page.initial_buttons.items():
             self.assertGreaterEqual(button.width(), button.fontMetrics().horizontalAdvance(title) + 20)
+
+    def test_canceling_suggested_category_does_not_write_rows_or_pending(self):
+        self.fixture.parents()
+        self.window.refresh_nursery()
+        before = self.fixture.store.read()
+        row = before['species'][0]
+        def cancel(dialog):
+            editor = dialog.findChild(SpeciesPurposeEditor)
+            self.assertEqual('꽃', editor.value())
+            self.assertEqual(before, self.fixture.store.read())
+            dialog.reject()
+            return dialog.result()
+        with patch.object(QDialog, 'exec', cancel):
+            self.window.species_page.edit(row)
+        self.assertEqual(before, self.fixture.store.read())
+        self.assertEqual([], self.fixture.api.calls)
+
+    def test_category_save_retains_farm_memo_active_and_legacy_value(self):
+        key = self.fixture.store.save('species', {'speciesName': '능소화', 'category': '생울타리',
+            'farmName': '기존 농원사용명', 'memo': '보존할 메모', 'isActive': 1})
+        self.window.refresh_nursery()
+        row = next(r for r in self.fixture.store.read()['species'] if r['_key'] == key)
+        def save(dialog):
+            dialog.findChild(SpeciesPurposeEditor).buttons['꽃'].click()
+            dialog.findChildren(QLineEdit)[0].setText('능소화나무')
+            dialog.findChild(QDialogButtonBox).button(QDialogButtonBox.StandardButton.Save).click()
+            return dialog.result()
+        with patch.object(QDialog, 'exec', save):
+            self.window.species_page.edit(row)
+        saved = next(r for r in self.fixture.store.read()['species'] if r['_key'] == key)
+        self.assertEqual(('능소화나무', '꽃, 생울타리', '기존 농원사용명', '보존할 메모', 1),
+                         tuple(saved[k] for k in ('speciesName', 'category', 'farmName', 'memo', 'isActive')))
+        self.assertEqual([], self.fixture.api.calls)
+
+    def test_overlong_category_disables_save_and_legacy_clear_reenables_it(self):
+        key = self.fixture.store.save('species', {'speciesName': '능소화', 'category': '가' * 100})
+        self.window.refresh_nursery()
+        row = next(r for r in self.fixture.store.read()['species'] if r['_key'] == key)
+        def inspect(dialog):
+            editor = dialog.findChild(SpeciesPurposeEditor)
+            save = dialog.findChild(QDialogButtonBox).button(QDialogButtonBox.StandardButton.Save)
+            editor.buttons['꽃'].click()
+            self.assertFalse(save.isEnabled())
+            editor.clear_legacy.click()
+            self.assertTrue(save.isEnabled())
+            dialog.reject()
+            return dialog.result()
+        with patch.object(QDialog, 'exec', inspect):
+            self.window.species_page.edit(row)
