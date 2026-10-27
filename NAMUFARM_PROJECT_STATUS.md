@@ -4,9 +4,9 @@
 > 저장소: `ssanai91-hash/NamuFarm` · **홈페이지/PC/Android/서버 모두 `main`** (2026-10-24 사용자 요청으로 통합)  
 > 홈페이지 최신 반영: **버전 70의 기존 화면 구성에 버튼 3안·줄바꿈 보완을 반영하여 Sites 버전 73 게시 완료 (2026-10-26 KST). 기존 namufarm.co.kr·서버 환경 revision 8 유지. 원복 기준은 Sites 버전 70.**
 > 홈페이지 운영 소스: **Sites 버전 73 · `80b5e5977264040f9480105a7900c73a13790e62`, main 코드 `f18c2112ecb4cc063786f4cfb6c9255990eff7ed`. C안 이력과 Sites 버전 72는 보관.**
-> PC 최신 코드: **0.5.5 · 서버/PC 발송 ID 중복 방지·결과 불명 복구, 백업 30개/60분 간격, 미업로드 신규 판매 삭제 차단, 판매자료 자동 반영, 초안 만료 안내, 새 PC 등록 허용창 안내. 이번 전체 작업에서 버전은 한 번만 올림. 시험/컴파일/Actions/실제 발송 미실행. Apps Script 재배포는 미진행이며 서버 먼저 새 버전 배포 후 PC 설치 필요.**
-> Android 최신 소스: **1.1.19(22) · 1.1.18 공통/견적/매매/문의 개편 1~7단계와 1.1.19 농원·묘목 개편 1~7단계 구현. 묘목 정보 보존·가격 경고 버그 수정 포함. 컴파일·APK·서명·자동시험·Actions·실기기 검증 미실행.**
-> Android 다음 작업: **사용자 로컬 빌드·기존 키 서명·앱 삭제 없이 업데이트 설치 및 실기기 확인. 화면 개편 구현과 실제 정상 동작 확인을 구분한다.**
+> PC 최신 코드: **0.5.7 · Windows 계정 자료 열기 실패 시 원본 폴더 보관 후 새 시작, 자료 보관 상태·종류별 대기·백업 시각, 종료 시 대기 안내 구현. 컴파일·실행·자동시험·Actions·실제 서버 시험 미실행.**
+> Android 최신 소스: **1.1.20(23) · 운영 재고 연결·처음 재고 맞추기·충돌 처리·수동 ZIP 백업/복원·자동 백업 규칙 구현. NamuFarm.db v14는 inventory_links 테이블만 추가; Quotes/Inquiries v1 유지. 1.1.18/1.1.19 화면 개편 유지. 컴파일·APK·서명·자동시험·Actions·실기기/실제 서버 검증 미실행.**
+> 다음 확인: **InventoryManagement.gs·34bcd50의 운영 배포 미확인. 서버 소유자 확인 후 사용자 로컬 빌드·기존 키 서명·앱 삭제 없이 업데이트 설치 및 실기기 확인. Android 매매 견적·주문은 서버 미연결이므로 재설치 전 외부 ZIP 백업 필수. 아래 재설치·기기 교체 절차 참고.**
 > 목적: 이전 채팅을 정리하거나 새 대화로 옮겨도 **확정 규칙·구현 범위·미완료 작업**을 구분하여 이어서 작업하기 위한 기록.
 
 > **현재 작업 기준 · main 통합 (2026-10-24):** 사용자가 홈페이지·나피·Android·스크립트를 한 프로젝트 폴더와 main에서 관리하도록 요청했다. 기존 main의 `desktop/`, `website/`, `server/`는 그대로 보존하고, Android는 초기버전 최신 `ad0074f`의 `app/` 전체와 서명 도구를 통합한다. 초기 패키지 `com.example.namufarm.original`, 기존 인증서·DB·운영 URL을 유지한다. `restore/android-initial-20260927`는 기록용으로 남기며 이후 작업 기준은 main이다. 아래 별도 브랜치 지침은 통합 전 이력이다. 이번 통합은 컴파일·자동시험·Actions·운영 발송·홈페이지 게시·서버 재배포를 수행하지 않았다.
@@ -541,3 +541,123 @@
 - 재고 입력: 아래 탭 숨김/가로 넘김 차단, 년생·크기 증감/없음, 숫자 직접 입력과 해당 값만 지우기, 가격 0 경고, 규격 변경 저장 시 새 재고 추가 및 기존 유지, 편집한 규격과 무관하게 원래 재고 삭제, 삭제 취소 시 편집값 복구, 뒤로가기 확인.
 - 농원: 카드·전화, 추가/수정/메모, 중복 이름 차단, 재고 있는 농원 삭제 비활성, 거부/오류 결과 안내.
 - 묘목: 분류·메모 수정 후 유지, 이름만 수정해도 농원명·분류·메모·활성 상태 유지, 같은 이름 차단, 농원별 재고 정보, 숨기기.
+
+## 2026-10-27 Android 1.1.20 + 나피 0.5.7 · 재설치·기기 교체 시 자료 보존
+
+### 구현 상태와 경계
+
+- Android **1.1.20(23)**, 나피 **0.5.7** 소스를 main에 단계별 별도 커밋했다. 모든 커밋에 `[skip ci]`를 넣었다. 컴파일·APK·서명·프로그램 실행·자동시험·Actions·실제 서버 시험은 하지 않았다. 아래 내용은 구현 기록이며 실기기/Windows/운영 서버 정상 동작 확인은 남아 있다.
+- Android 패키지 `com.example.namufarm.original`, 기존 서명 도구·키·인증서, 운영 URL·배포 ID·기기 인증 방식을 유지한다. Apps Script 코드는 이번 작업에서 **수정하지 않았다**.
+- 재고는 기존 운영 서버 `InventoryManagement.gs`의 `농원별묘목` 시트와 연결한다. 서버 응답의 `inventoryVersioning:1`을 확인하지 못하면 재고를 반영하지 않는다. 저장 응답의 `saved`, 작업 ID, 규격·수량·가격·64자리 버전이 전부 일치한 뒤에만 해당 대기를 지운다.
+- 농원 → 묘목 → 재고를 같은 마스터 동기화 잠금에서 실행한다. 재고 저장/삭제와 주문 전환 차감은 로컬 변경과 `inventory_save` 작업 적재를 같은 Room 트랜잭션으로 처리한다. 전송 시도 전 작업만 값 합치기를 허용하고 작업 ID를 유지한다. 시도한 작업은 보존하며 충돌 뒤의 작업도 앞서 보내지 않는다.
+- 서버·휴대폰 ID는 `master_links`로 변환하고 재고 버전은 새 `inventory_links`에 보관한다. 수량 0 삭제도 서버 버전을 유지한다. 서버 목록 전체를 검증하고 재고 대기가 없을 때만 내려받아 반영한다. 연결 안 된 서버 행은 건너뛰어 건수를 알리고, 서버에서 사라진 휴대폰 재고도 자동 삭제하지 않는다.
+- 첫 연결은 현재 재고와 전체 전송 대기를 `filesDir/sync_backup/inventory_first_yyyyMMdd_HHmmss.json`에 저장한 뒤 진행한다. 백업 실패 시 중단한다. 이전 `inventory` 타입만 백업 후 정리하며 주문·배송 등 다른 대기는 유지한다. 다른 값은 기본 선택 없이 ‘재고 맞추기’ 시트에서 확인 후 서버/휴대폰 값을 고른다. 닫으면 휴대폰 자료를 유지하고 보류한다.
+- 동시 수정은 경고/비교 시트로 처리한다. 선택 시 최신 서버 버전과 로컬 변경 여부를 다시 확인한다. 서버 값 선택은 실패한 해당 작업만 취소하며 그 뒤의 로컬 변경은 남긴다. 휴대폰 재전송 선택에서만 새 작업 ID를 발급한다.
+- PC 비표준 크기/년생은 읽기 전용으로 표시하고 원래 문자열로 저장한다. 재고 또는 재고 대기가 있는 묘목 숨기기를 막는다. 저장 화면은 로컬 트랜잭션 성공 후 돌아간다. 농원·묘목 머리줄의 완료 시각은 재고까지 성공한 경우만 갱신한다. 시작 시 재고 동기화를 한 번 시도하며 실패 시 로컬 자료로 계속 표시한다.
+
+### DB 13 → 14: 테이블 하나만 추가
+
+`NamuFarm.db`만 v14로 올렸다. `MIGRATION_13_14`는 아래 CREATE 문 **한 개만** 실행한다. 기존 테이블 변경/삭제, 기존 자료 변환, destructive migration은 추가하지 않았다. `NamuFarmQuotes.db`와 `NamuFarmInquiries.db`는 v1을 유지한다.
+
+```sql
+CREATE TABLE IF NOT EXISTS inventory_links (
+    farm_id INTEGER NOT NULL,
+    species_id INTEGER NOT NULL,
+    quality TEXT NOT NULL,
+    age TEXT NOT NULL,
+    size TEXT NOT NULL,
+    plant_type TEXT NOT NULL,
+    version TEXT NOT NULL,
+    PRIMARY KEY(farm_id, species_id, quality, age, size, plant_type)
+)
+```
+
+Room 엔티티의 NOT NULL·열 이름·복합 기본키 순서를 위 SQL과 맞추고 `addMigrations`에 등록했다. 실제 Room 마이그레이션 실행/검증은 하지 않았다.
+
+### Android 자료 백업·복원
+
+- 위치: 농원·묘목 머리줄 더보기 → ‘자료 백업 만들기’ / ‘백업에서 복원’. 개인정보 포함 경고 후 SAF로 저장 위치를 선택한다. 기본 이름은 `NamuFarm-backup-YYYYMMDD-HHmm.zip`이다. 앱 전용 폴더 밖에 저장한 파일은 앱 삭제 후에도 사용할 수 있으므로 안전한 별도 위치에도 복사해 보관한다.
+- ZIP에 세 DB의 FULL WAL 체크포인트 후 복사본, 패키지·앱 버전·DB user_version·생성 시각·행 수·해시가 있는 manifest를 넣는다. 견적 진행 상태/공식견적서 보존에 필요한 `quote_workflow_v1`, `initial_formal_quotes_v1`, `quote_issuer`, `NamuFarmPrefs` 설정도 명시적으로 포함한다. `operations_master_device`와 인증 토큰·Keystore·서명/키 파일은 넣지 않는다.
+- 문의 DB는 기존 `noBackupFilesDir` 위치의 원본을 남기고 체크포인트·v1·무결성을 검증한 복사본만 표준 database 위치로 옮겨 사용한다. DB 스키마/버전은 바꾸지 않는다.
+- 복원 파일은 임시 폴더에서 이름/용량/중복 항목·패키지·DB 버전·SQLite 헤더·`integrity_check=ok`·행 수·해시·설정 형식을 확인한다. 검증 실패 시 현재 파일을 교체하지 않는다. 요약 시트에 백업 시각·농원/묘목/재고/매매 견적/주문/대기를 표시한다.
+- 복원 확정 전 현재 자료를 `filesDir/restore_backup/before_restore_*.zip`으로 먼저 저장한다. 이 자동 백업은 최근 3개만 보관하며 다른 파일은 건드리지 않는다. 저장 실패 시 복원을 중단한다.
+- 쓰기 작업을 멈추고 세 Room 인스턴스를 닫은 뒤 임시 파일을 rename으로 교체한다. WAL/SHM과 이전 설정 보조 파일을 정리한다. 여러 파일 교체 도중 중단되면 다음 시작에서 복구 기록을 읽어 원래 파일로 되돌린다. 성공 시 프로세스를 다시 시작한다. 재고 연결 상태를 false로 되돌려 서버와 ‘재고 맞추기’를 다시 거친다.
+- 복원 ZIP은 고객 전화번호·주소가 포함된 민감한 자료다. 타인에게 공유하지 않는다. 복원 전 자동 ZIP과 sync_backup은 앱 전용 경로이므로 **앱 삭제 자체를 견디는 외부 수동 백업의 대체물이 아니다**.
+- 자동 백업 규칙은 API 30 이하, cloud-backup, device-transfer 모두 세 DB·관련 WAL/SHM·sharedpref·sync_backup을 포함하고 기기 인증 설정과 캐시를 제외한다. `allowBackup=true`를 유지한다. Android 자동 백업은 계정·OS·기기 설정에 따른 **보조 수단이며 실행/복원을 보장하지 않는다**.
+- **Android 매매 탭의 견적/주문(`quote_list`, `order_list`)은 아직 서버 주문 장부로 보내지 않는다. 이번 범위에서는 외부에 만든 수동 ZIP 백업이 이 자료를 명시적으로 보호하는 유일한 수단이다.** 주문·배송 대기는 서버 미연결로 표시하고 확인되지 않은 전송을 성공 처리하지 않는다.
+
+### 나피 자료 보호
+
+- Windows 계정에서 보호 키를 열지 못하면 ‘다시 시도 / 새 자료로 시작 / 닫기’를 표시한다. 새 시작은 기본 ‘아니요’ 확인 후 기존 **자료 폴더 전체**를 `자료_보관_YYYYMMDD-HHMMSS`로 이름만 바꾸며, 이름이 있으면 번호를 붙인다. 새 자료 생성 실패 시 원본 폴더를 되돌리고 새로 생긴 부분 자료도 별도 이름으로 남긴다. 기존 폴더를 삭제하거나 덮어쓰지 않는다.
+- 서버에서 다시 받을 수 있는 자료와 서버 미전송 기록을 구분해 안내한다. 보관 폴더와 암호화 DB 스냅샷은 **원래 Windows 계정 보호를 그대로 받으며 다른 계정에서 해독하는 기능은 추가하지 않았다**.
+- 기존 ‘자료 관리’ 메뉴에 ‘자료 보관 상태’를 추가했다. 자료 경로/폴더 열기, 마지막 서버 동기화, 판매 outbox·농원/묘목·재고·고객문의·기타 결과 확인 대기 각각의 건수, 백업 스냅샷 개수/최근 시각을 표시한다. 읽기 실패를 0건으로 바꾸지 않는다.
+- 종료 가능한 상태에서 대기가 남으면 알림을 표시하고 종료한다. 대기를 지우거나 종료를 거부하지 않는다. 기존 진행 중 작업/미저장 내용 확인은 유지한다.
+- `desktop/pyproject.toml`과 `namufarm_desktop/__init__.py`를 함께 0.5.7로 올렸다. 휴대용 사용안내에 보관 폴더를 원래 계정에서 ‘자료’로 되돌리는 절차와 업데이트 시 자료 폴더 유지 안내를 추가했다.
+
+### 재설치·기기 교체 절차
+
+**배포 전 서버 확인**
+
+1. 서버 소유자가 기존 운영 Apps Script 배포가 `InventoryManagement.gs`와 `inventoryVersioning:1`을 제공하는 최신본인지 먼저 확인한다. 소스에는 구현되어 있으나 실제 운영 배포는 **미확인**이다. 기존 URL·배포 ID를 유지한 채 필요한 배포를 마친 다음 Android 1.1.20을 설치한다.
+2. 기기 자동 등록 기간 제한 커밋 [`34bcd508894ba6637f4d1a7b7434ca03f9adb8de`](https://github.com/ssanai91-hash/NamuFarm/commit/34bcd508894ba6637f4d1a7b7434ca03f9adb8de)의 운영 Apps Script 재배포 여부도 **미확인**이다. 이번 작업에서 재배포하지 않았다.
+3. 현재 소스의 함수는 인자 없는 `openAppEnrollment()`이며 **15분** 등록 창을 연다. 사용자 지시문의 `openAppEnrollment(분)`과 달리 분 인자를 받는 구현은 아니다. 이번에는 서버 코드를 바꾸지 않았으므로 실제 소스대로 실행하고 연결 후 `closeAppEnrollment()`를 실행한다.
+
+**Android**
+
+1. 평소에는 앱을 삭제하지 않고 기존 인증서로 서명한 APK를 **업데이트 설치**한다. 기존 앱·DB를 유지한다.
+2. 재설치가 불가피하면 먼저 동기화하고 전송 대기를 확인한다. 서버 연결된 농원·묘목·재고 대기는 0건으로 만든다. 충돌/오류가 남으면 해결 전 삭제하지 않는다. 매매 주문·배송 등 서버 미연결 대기는 동기화로 0건이 되지 않을 수 있으므로 이를 억지로 비우지 말고 아래 ZIP으로 반드시 보관한다.
+3. ‘자료 백업 만들기’로 앱 밖의 안전한 위치에 ZIP을 저장하고 파일이 있는지 확인한다. 가능하면 다른 기기/외장 저장소에도 복사한다. 앱 전용 sync_backup만 믿고 삭제하지 않는다.
+4. 새 기기 연결이 필요한 경우 소유자가 `openAppEnrollment()`를 실행한다. 앱을 재설치하고 15분 내에 기기 연결/동기화를 시도한다.
+5. ‘백업에서 복원’으로 로컬 전용 자료까지 되돌리거나, 백업이 필요 없는 서버 자료만 동기화로 받는다. ZIP 없이 서버만 내려받으면 Android 매매 견적·주문·서버 미전송 기록은 돌아오지 않는다. 복원 후 앱 재시작과 첫 재고 맞추기를 완료한다. 동기화가 안 되면 서버 기기 연결 창을 다시 열어 확인한다.
+6. 등록을 마치면 `closeAppEnrollment()`를 실행한다. 기존 자료·건수와 대기를 확인한 뒤 이전 기기의 자료를 정리한다. 고객문의의 기존 보존 기간/폐기 규칙은 복원으로 연장하지 않는다.
+
+**나피**
+
+1. 같은 PC 업데이트는 EXE와 `_runtime`만 교체하고 **‘자료’ 폴더는 유지**한다.
+2. PC 교체/Windows 재설치 전에 서버 동기화 후 ‘자료 보관 상태’에서 각 전송/결과 확인 대기가 0건인지 확인한다. 미전송 기록이 있으면 원래 계정에서 해결하거나 원본 폴더를 별도로 보존한다.
+3. 새 PC/다른 계정에서는 필요한 등록 창을 열고 ‘새 자료로 시작’ + 기기 연결 후 서버 자료를 다시 받는다. 기존 자료가 있으면 먼저 보관 폴더로 이름이 바뀌었는지 확인한다. 연결을 마치면 등록 창을 닫는다.
+4. 보관 폴더를 다시 쓰려면 **원래 Windows 계정**으로 돌아가 나피를 종료한다. 현재 ‘자료’ 폴더도 다른 이름으로 보존한 후 원하는 `자료_보관_…` 폴더를 ‘자료’로 되돌려 연다. 서로 덮어쓰거나 폴더 내용을 섞지 않는다. Windows를 새로 설치한 뒤 같은 계정 이름만 만들었다고 기존 보호 키가 복원되지는 않는다.
+
+### 서버에 저장되는 것 / 기기에만 있는 것 — 이번 작업 후 기준
+
+| 자료 | 서버 확인 후 보관되는 곳 | 기기 자료·복구 한계 |
+| --- | --- | --- |
+| 농원·묘목 마스터 | 운영 장부 농원/묘목 관리 시트 | 오프라인 변경/대기는 각 기기에 남음. 서버 확인 전 삭제하지 않음 |
+| 농원별 규격 재고 | 운영 장부 `농원별묘목` 시트, 수량 0 행·버전 포함 | Android/PC 대기와 충돌 선택은 로컬. 서버 확인된 재고만 기기 간 공유 |
+| 웹 견적요청·서버 확인된 확정견적 | `나무팜_견적_YYYY`의 기존 견적 장부 | 미저장 편집/초안·로컬 진행 상태는 기기 자료. Android ZIP에 DB와 관련 설정 포함 |
+| 서버 확인된 PC 판매·배송 | `나무팜_주문_YYYY`와 기존 운영 장부 | PC 판매 outbox·미전송 로컬 판매·미확정 초안·내보낸 엑셀은 로컬 자료 폴더에만 있을 수 있음 |
+| 고객문의·확인된 답변 결과 | 기존 `나무팜_고객문의_YYYY` | 초안/전송·결과 확인 대기는 기기 자료이며 기존 보존 기간 적용 |
+| Android 매매 견적 `quote_list` / 주문 `order_list` / 미연결 주문·배송 대기 | **이번 범위에서 서버 전송 없음** | **외부 수동 ZIP 필요**. 서버 동기화만으로 복구 불가 |
+| Android 재고 버전·첫 연결 상태 / 기기 인증 정보 | 서버 재고의 버전/기기 등록과 별개로 클라이언트가 관리 | 재고 링크는 DB 백업에 포함, 첫 연결 상태는 복원 후 false. 기기 인증 토큰·키는 ZIP/자동 백업 제외 |
+| PC ‘자료’ 폴더·백업 스냅샷 / Android 외부 ZIP | 서버 자동 업로드 대상 아님 | 직접 보관. PC 암호화 자료는 원래 Windows 보호 키 필요. ZIP에는 개인정보 포함 |
+
+### 단계별 커밋과 변경 파일
+
+아래 `android/`는 `app/src/main/java/com/example/namufarm/`를 줄인 표기다. 모든 해시는 main에 반영한 실제 GitHub 커밋이다. 추가 보완 커밋도 개별 기록한다.
+
+| 단계 | 커밋 | 변경 파일 |
+| --- | --- | --- |
+| A1 DB·버전 | [`52e0477716a92a64ed12f5594773baee3c2d1f22`](https://github.com/ssanai91-hash/NamuFarm/commit/52e0477716a92a64ed12f5594773baee3c2d1f22) | `AGENTS.md`, `app/build.gradle.kts`, `android/data/AppDatabase.kt`, `android/data/InventoryLinkEntity.kt`, `android/data/ManagementDao.kt`, `android/data/PendingSyncEntity.kt` |
+| A2 재고 동기화 | [`41bdbc8afd68ba429161a5c0068be4df7062b5b6`](https://github.com/ssanai91-hash/NamuFarm/commit/41bdbc8afd68ba429161a5c0068be4df7062b5b6) | `android/data/InventorySync.kt`, `android/data/OperationsMasterSync.kt` |
+| A3 변경 큐·차감·규격 | [`e38fa22842942b3ab600cc80e8880a2ece66925a`](https://github.com/ssanai91-hash/NamuFarm/commit/e38fa22842942b3ab600cc80e8880a2ece66925a) | `android/MainActivity.kt`, `android/data/InventorySync.kt`, `android/data/OperationsMasterSync.kt`, `android/data/SyncManager.kt`, `android/data/remote/OperationsMasterApi.kt`, `android/ui/farm/StockEditor.kt`, `android/viewmodel/ManagementViewModel.kt` |
+| A4 처음 재고 맞추기 | [`a0ec6e6e584992740ecfbafb222cf166d22e394c`](https://github.com/ssanai91-hash/NamuFarm/commit/a0ec6e6e584992740ecfbafb222cf166d22e394c) | `android/data/InventoryFirstBackup.kt`, `android/data/InventorySync.kt`, `android/ui/ManagementModeScreen.kt`, `android/ui/farm/InventoryReviewSheet.kt`, `android/viewmodel/ManagementViewModel.kt` |
+| A5 충돌 처리 | [`f5ff29e9e08058512739a081a4d6d7a1ab3f8917`](https://github.com/ssanai91-hash/NamuFarm/commit/f5ff29e9e08058512739a081a4d6d7a1ab3f8917) | `android/data/InventorySync.kt`, `android/data/ManagementDao.kt`, `android/ui/ManagementModeScreen.kt`, `android/ui/farm/FarmCommon.kt`, `android/viewmodel/ManagementViewModel.kt` |
+| A6 순차 동기화·대기 | [`3fea594ac7ae5b7226d69951c08cc9f0c48c5129`](https://github.com/ssanai91-hash/NamuFarm/commit/3fea594ac7ae5b7226d69951c08cc9f0c48c5129) | `android/data/OperationsMasterSync.kt`, `android/ui/ManagementModeScreen.kt`, `android/ui/SellingModeScreen.kt`, `android/viewmodel/ManagementViewModel.kt` |
+| A7 수동 백업·복원 | [`c11fb10dfbd1209fad40808ef98789c681e51b0b`](https://github.com/ssanai91-hash/NamuFarm/commit/c11fb10dfbd1209fad40808ef98789c681e51b0b) | `android/MainActivity.kt`, `android/data/AppDatabase.kt`, `android/data/BackupRestoreJournal.kt`, `android/data/CustomerInquiryDatabase.kt`, `android/data/DataBackup.kt`, `android/quotemode/CustomerInquiryCleanupWorker.kt`, `android/quotemode/InitialAppModes.kt`, `android/quotemode/InitialQuoteDatabase.kt`, `android/ui/ManagementModeScreen.kt`, `android/ui/farm/BackupMenu.kt` |
+| A8 자동 백업 | [`052986b05a0664fc15e38663e958ef349a86357d`](https://github.com/ssanai91-hash/NamuFarm/commit/052986b05a0664fc15e38663e958ef349a86357d) | `android/data/CustomerInquiryDatabase.kt`, `app/src/main/res/xml/backup_rules.xml`, `app/src/main/res/xml/data_extraction_rules.xml` |
+| A6·A7 화면 연결 보완 | [`1428811ebbd6f656a066cbb8205666728fe7f9f0`](https://github.com/ssanai91-hash/NamuFarm/commit/1428811ebbd6f656a066cbb8205666728fe7f9f0) | `android/data/InventorySync.kt`, `android/ui/ManagementModeScreen.kt` |
+| B1 열기 실패·새 시작 | [`56364c64826ee4ca312e168bc84a1753a7310577`](https://github.com/ssanai91-hash/NamuFarm/commit/56364c64826ee4ca312e168bc84a1753a7310577) | `desktop/namufarm_desktop/app.py`, `desktop/namufarm_desktop/store.py` |
+| B2 자료 보관 상태 | [`8dd74ff069a1a2e5d2f96b8b7b8211bb69dd1dd8`](https://github.com/ssanai91-hash/NamuFarm/commit/8dd74ff069a1a2e5d2f96b8b7b8211bb69dd1dd8) | `desktop/namufarm_desktop/app.py`, `desktop/namufarm_desktop/store.py`, `desktop/namufarm_desktop/workspace.py` |
+| B3 버전·사용안내 | [`c1515e43bbc165129048aec04d2d97642db6e08c`](https://github.com/ssanai91-hash/NamuFarm/commit/c1515e43bbc165129048aec04d2d97642db6e08c) | `desktop/build_windows_portable.py`, `desktop/namufarm_desktop/__init__.py`, `desktop/pyproject.toml` |
+| 자료 보존 보완 | [`c762aa08ad2f8149540648861a0bac71c3d1cffe`](https://github.com/ssanai91-hash/NamuFarm/commit/c762aa08ad2f8149540648861a0bac71c3d1cffe) | `android/MainActivity.kt`, `android/data/DataBackup.kt`, `android/data/InventorySync.kt`, `android/data/OperationsMasterSync.kt`, `android/ui/farm/StockEditor.kt`, `android/viewmodel/ManagementViewModel.kt` |
+| API 24·기존 값 호환 | [`227256f2b27b41cce38d08903345a110cf110ca2`](https://github.com/ssanai91-hash/NamuFarm/commit/227256f2b27b41cce38d08903345a110cf110ca2) | `android/data/BackupRestoreJournal.kt`, `android/data/InventorySync.kt` |
+| 동기화 오류 표시 | [`f13d6e1cc1fc6a573d98b547a7d5f45ceb9f7bcb`](https://github.com/ssanai91-hash/NamuFarm/commit/f13d6e1cc1fc6a573d98b547a7d5f45ceb9f7bcb) | `android/viewmodel/ManagementViewModel.kt` |
+| C 기록 | 이 기록을 포함한 커밋 | `NAMUFARM_PROJECT_STATUS.md` |
+
+### 검토 및 실행하지 않은 검증
+
+- 수행: 소스/호출 경로/DB 엔티티·마이그레이션 SQL/버전/백업 포함·제외 규칙/전송 확인·실패 시 대기 보존/커밋 차이를 정적으로 검토하고 `git diff --check`를 확인했다. 실제 동작 성공을 뜻하지 않는다.
+- **미실행:** Kotlin/Gradle 컴파일, DB 마이그레이션 실행, APK/EXE 빌드, 서명, 단위/계측/자동시험, 앱·나피 실행, Android/Windows 실기기 시험, 운영 API 호출/재고 저장·삭제·충돌 시험, 문자/메일 발송, Apps Script 재배포/실제 배포 확인, GitHub Actions.
+- 사용자 로컬에서 `assembleRelease` 후 기존 `scripts/sign_initial_apk.py`로 원래 키 서명하여 앱 삭제 없이 업데이트 설치한다. 서명 도구/키는 이번 작업에서 변경하지 않았다.
+- 사용자 확인 — Android: 기존 자료 유지·DB14 정상 열림 / 처음 재고 맞추기의 다른 값 목록·기본 선택 없음·두 버튼 / 휴대폰 저장→PC 표시 / PC 수정→휴대폰 표시 / 삭제→서버 수량0 / 주문 전환 차감 반영 / 동시 수정 충돌 시트·뒤 작업 보류 / PC 입력 규격(H1.2 등) 읽기 전용·원문 유지 / 재고·대기 있는 묘목 숨기기 차단 / 백업 위치 선택·ZIP 생성 / 복원 전 자동 백업·복원 재시작·재고 맞추기 / 비행기 모드 저장 후 대기 유지 / 대기 종류별 건수·마지막 완료 시각 / 큰 글씨 줄바꿈.
+- 사용자 확인 — 나피: 자료 보관 상태의 경로·건수·시각·스냅샷 / 종료 시 대기 알림 / 가능하면 다른 Windows 계정에서 열기 실패→새 자료로 시작→보관 폴더 생성 / 원래 계정에서 폴더 되돌려 열기 / 기존 자료 폴더 유지한 0.5.7 업데이트.
