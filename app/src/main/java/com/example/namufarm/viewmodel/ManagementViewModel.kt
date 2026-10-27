@@ -721,6 +721,14 @@ class ManagementViewModel(
         }
     }
 
+    fun selectFarmForStock(farm: FarmEntity) {
+        _uiState.update { it.copy(selectedFarm = farm, selectedSpecies = null, inventoryList = emptyList(),
+            isInputActive = false, isInputEnabled = false) }
+    }
+    fun setQuantity(value: Int) { _uiState.update { it.copy(inputQuantity = value.coerceAtLeast(0)) } }
+    fun setWholesale(value: Int) { _uiState.update { it.copy(inputWholesale = value.coerceAtLeast(0)) } }
+    fun setRetail(value: Int) { _uiState.update { it.copy(inputRetail = value.coerceAtLeast(0)) } }
+
     // A new farm starts with an unselected seedling in the first initial group.
     fun selectFarm(farm: FarmEntity) {
         _uiState.update { it.copy(selectedFarm = farm, selectedSpecies = null,

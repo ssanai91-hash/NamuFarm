@@ -35,6 +35,7 @@ fun InitialAppModes(management: ManagementViewModel, quote: InitialQuoteViewMode
     val inbox by quote.uiState.collectAsState()
     val inquiryState by inquiry.state.collectAsState()
     val stock by management.uiState.collectAsState()
+    var bottomBarVisible by remember { mutableStateOf(true) }
     var showMoveToManagementConfirm by remember { mutableStateOf(false) }
     val labels = listOf("견적", "문의", "매매", "농원·묘목")
     val icons = listOf(Icons.Outlined.ReceiptLong, Icons.AutoMirrored.Outlined.Chat,
@@ -55,7 +56,7 @@ fun InitialAppModes(management: ManagementViewModel, quote: InitialQuoteViewMode
     NamuTheme {
         Scaffold(containerColor = NamuColors.background,
             contentWindowInsets = WindowInsets(0, 0, 0, 0), bottomBar = {
-                Surface(color = Color.White, shadowElevation = 2.dp) {
+                if (bottomBarVisible) Surface(color = Color.White, shadowElevation = 2.dp) {
                     Column {
                         HorizontalDivider(color = NamuColors.border)
                         NavigationBar(containerColor = Color.White, tonalElevation = 0.dp,
@@ -85,13 +86,13 @@ fun InitialAppModes(management: ManagementViewModel, quote: InitialQuoteViewMode
             }) { padding ->
             HorizontalPager(state = pager, modifier = Modifier.fillMaxSize().padding(padding)
                 .statusBarsPadding().consumeWindowInsets(WindowInsets.statusBars),
-                userScrollEnabled = inbox.editingRequest == null && !inbox.busy && !inquiryState.busy) { page ->
+                userScrollEnabled = bottomBarVisible && inbox.editingRequest == null && !inbox.busy && !inquiryState.busy) { page ->
                 when (page) {
                     0 -> InitialQuoteScreen(quote, quote.connection, inbox,
                         onSync = quote::refresh, onRead = quote::read, onDelete = quote::close)
                     1 -> CustomerInquiryScreen(inquiry)
                     2 -> SellingModeScreen(management, onNavigateToManagement = { requestMove(3) })
-                    3 -> ManagementModeScreen(management, onBack = { move(2) })
+                    3 -> ManagementModeScreen(management, onBack = { move(2) }, onBottomBarVisibleChange = { bottomBarVisible = it })
                 }
             }
         }
