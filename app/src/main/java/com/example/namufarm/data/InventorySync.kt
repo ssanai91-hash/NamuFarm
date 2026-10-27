@@ -41,6 +41,12 @@ data class InventoryDifference(val key: InventoryKey, val local: FarmInventoryEn
     val pending: List<PendingSyncEntity>, val firstLink: Boolean)
 data class InventoryReviewState(val differences: List<InventoryDifference> = emptyList(), val firstLink: Boolean = false)
 data class InventoryOutcome(val success: Boolean, val message: String, val sent: Int = 0, val received: Int = 0)
+data class BlockedInventoryWork(val key: InventoryKey, val pending: List<PendingSyncEntity>,
+    val local: FarmInventoryEntity?, val change: InventoryMutation, val reason: String,
+    val farm: FarmEntity?, val species: SpeciesEntity?) {
+    val isUnlinked: Boolean get() = reason.startsWith("UNLINKED:")
+}
+private class UnlinkedInventoryException : IllegalStateException("서버에 등록되지 않은 농원 또는 묘목입니다.")
 
 /** A single master/inventory sequence owns mapping and versions. No network call runs in a Room transaction. */
 class InventorySync(private val database: AppDatabase, private val client: OperationsMasterGateway,
@@ -53,6 +59,17 @@ class InventorySync(private val database: AppDatabase, private val client: Opera
     val review = mutableReview.asStateFlow()
     fun pendingCount(): Int = pending().size
     private fun pending() = dao.getAllPendingSync().filter { it.syncType == PendingSyncType.INVENTORY_SAVE }
+    private fun isBlocked(row: PendingSyncEntity) = row.lastError.startsWith("UNLINKED:") || row.lastError.startsWith("REJECTED:")
+    private fun blockedKeys(rows: List<PendingSyncEntity>): Set<InventoryKey> = rows.groupBy { mutation(it).key() }
+        .filterValues { isBlocked(it.first()) }.keys
+    /** One row per blocked specification; later operations on that specification remain in order. */
+    fun blockedInventoryWork(): List<BlockedInventoryWork> = pending().mapNotNull { row ->
+        runCatching { mutation(row).key() to row }.getOrNull()
+    }.groupBy({ it.first }, { it.second })
+        .filterValues { isBlocked(it.first()) }.map { (key, rows) ->
+            BlockedInventoryWork(key, rows, local(key), mutation(rows.last()), rows.first().lastError,
+                dao.getAllFarms().firstOrNull { it.farmId == key.farmId }, dao.getSpeciesById(key.speciesId))
+        }
     private fun link(k: InventoryKey) = dao.getInventoryLink(k.farmId, k.speciesId, k.quality, k.age, k.size, k.plantType)
     private fun local(k: InventoryKey) = dao.findInventory(k.farmId, k.speciesId, k.quality, k.age, k.size, k.plantType)
     private fun deleteLocal(k: InventoryKey) = dao.deleteInventory(k.farmId, k.speciesId, k.quality, k.age, k.size, k.plantType)
@@ -166,7 +183,11 @@ class InventorySync(private val database: AppDatabase, private val client: Opera
     }
     private suspend fun syncLinked(first: List<InventoryRecord>): InventoryOutcome {
         var sent = 0
+        val blockedDuringPush = mutableSetOf<InventoryKey>()
         for (row in pending()) {
+            val key = mutation(row).key()
+            if (key in blockedDuringPush) continue
+            if (row.lastError.startsWith("REJECTED:")) { blockedDuringPush += key; continue }
             if (row.lastError.startsWith("CONFLICT:")) {
                 showConflict(row, first)
                 return InventoryOutcome(false, "다른 기기(PC)와 재고 수정이 겹쳤어요. 확인하기를 눌러주세요.", sent)
@@ -174,6 +195,16 @@ class InventorySync(private val database: AppDatabase, private val client: Opera
             try { push(row); sent++ }
             catch (e: CancellationException) { throw e }
             catch (e: Exception) {
+                val blockReason = when {
+                    e is UnlinkedInventoryException -> "UNLINKED: ${e.message}"
+                    e is MasterServerException && e.code == "INVALID" -> "REJECTED: 서버가 받지 않았어요(숨긴 묘목·삭제된 농원 등)"
+                    else -> null
+                }
+                if (blockReason != null) {
+                    dao.markPendingSyncFailed(requireNotNull(row.syncId), blockReason)
+                    blockedDuringPush += key
+                    continue
+                }
                 val conflict = e is MasterServerException && e.code == "CONFLICT"
                 dao.markPendingSyncFailed(requireNotNull(row.syncId), (if (conflict) "CONFLICT: " else "") + (e.message ?: "서버 확인 실패"))
                 if (conflict) {
@@ -187,25 +218,28 @@ class InventorySync(private val database: AppDatabase, private val client: Opera
         val records = if (sent > 0) fetch() else first
         val (mapped, skipped) = localRows(records)
         var missing = 0
+        var received = 0
         database.withTransaction {
-            check(pending().isEmpty()) { "새 재고 변경은 휴대폰에 보관했습니다. 다시 동기화해주세요." }
+            val remaining = pending()
+            val protectedKeys = blockedKeys(remaining)
+            check(remaining.all { mutation(it).key() in protectedKeys }) { "새 재고 변경은 휴대폰에 보관했습니다. 다시 동기화해주세요." }
             val phone = dao.getAllInventoryEntities()
-            for ((key, remote) in mapped) applyServer(key, remote)
-            for (row in phone) if (row.stockKey() !in mapped) {
+            for ((key, remote) in mapped) if (key !in protectedKeys) { applyServer(key, remote); received++ }
+            for (row in phone) if (row.stockKey() !in mapped && row.stockKey() !in protectedKeys) {
                 if (link(row.stockKey()) == null) enqueue(row) else missing++
             }
         }
         val count = pendingCount()
         return InventoryOutcome(count == 0, if (count > 0) "재고 반영 대기 ${count}건 · 다시 동기화해주세요." else
-            "재고 동기화 완료 (보냄 ${sent}건 · 받음 ${mapped.size}건)" +
+            "재고 동기화 완료 (보냄 ${sent}건 · 받음 ${received}건)" +
                 (if (missing > 0) " · 서버에 없는 재고 ${missing}건은 휴대폰에 보관 중" else "") +
-                (if (skipped > 0) " · 연결 없는 서버 재고 ${skipped}건 건너뜀" else ""), sent, mapped.size)
+                (if (skipped > 0) " · 연결 없는 서버 재고 ${skipped}건 건너뜀" else ""), sent, received)
     }
     private suspend fun push(row: PendingSyncEntity) {
         val value = mutation(row)
         val farm = dao.getMasterLinks(OperationsMasterSync.FARM).firstOrNull { it.localId == value.farmId }
         val species = dao.getMasterLinks(OperationsMasterSync.SPECIES).firstOrNull { it.localId == value.speciesId }
-        check(farm != null && species != null) { "농원·묘목 등록이 서버에서 확인된 뒤 재고를 보냅니다." }
+        if (farm == null || species == null) throw UnlinkedInventoryException()
         val expected = database.withTransaction {
             check(dao.getAllPendingSync().firstOrNull { it.syncId == row.syncId }?.payloadJson == row.payloadJson) {
                 "전송 대기 내용이 바뀌었습니다. 휴대폰 자료를 유지합니다."
@@ -311,7 +345,10 @@ class InventorySync(private val database: AppDatabase, private val client: Opera
         try {
             val remote = fetch()
             val mapped = localRows(remote).first
-            val first = pending().firstOrNull() ?: return@inventorySequence InventoryOutcome(false, "재고 대기가 바뀌었습니다. 다시 동기화해주세요.")
+            val rows = pending()
+            val blocked = blockedKeys(rows)
+            val first = rows.firstOrNull { mutation(it).key() !in blocked }
+                ?: return@inventorySequence InventoryOutcome(false, "재고 대기가 바뀌었습니다. 다시 동기화해주세요.")
             val fresh = mapped[item.key]
             val accepted = database.withTransaction {
                 if (first.syncId != item.pending.firstOrNull()?.syncId || !reviewUnchanged(item) || fresh?.version != item.remote?.version) false
@@ -344,5 +381,45 @@ class InventorySync(private val database: AppDatabase, private val client: Opera
         val remote = localRows(records).first[key]
         mutableReview.value = InventoryReviewState(listOf(InventoryDifference(key, local(key), remote,
             pending().filter { mutation(it).key() == key }, false)), false)
+    }
+
+    suspend fun retryRejected(item: BlockedInventoryWork): InventoryOutcome = masters.inventorySequence { master ->
+        if (!master.success) return@inventorySequence InventoryOutcome(false, master.message)
+        try {
+            database.withTransaction {
+                val current = pending().filter { mutation(it).key() == item.key }
+                check(current == item.pending && current.first().lastError.startsWith("REJECTED:")) {
+                    "대기 내용이 바뀌었습니다. 현재 목록을 다시 확인해주세요."
+                }
+                // Keep the persisted operationId, even after an earlier transmission attempt.
+                dao.clearPendingSyncError(requireNotNull(current.first().syncId))
+            }
+            syncLinked(fetch())
+        } catch (e: CancellationException) { throw e }
+        catch (e: Exception) { InventoryOutcome(false, e.message ?: "다시 보내지 못했습니다. 전송 대기를 유지합니다.") }
+    }
+
+    suspend fun useServerForRejected(item: BlockedInventoryWork): InventoryOutcome = masters.inventorySequence { master ->
+        if (!master.success) return@inventorySequence InventoryOutcome(false, master.message)
+        try {
+            // A missing ID mapping is not proof that the server has no matching inventory.
+            check(dao.getMasterLinks(OperationsMasterSync.FARM).any { it.localId == item.key.farmId } &&
+                dao.getMasterLinks(OperationsMasterSync.SPECIES).any { it.localId == item.key.speciesId }) {
+                "농원·묘목 연결을 먼저 확인해주세요. 휴대폰 재고와 대기는 유지합니다."
+            }
+            val server = localRows(fetch()).first[item.key]
+            val backup = database.withTransaction {
+                val current = pending().filter { mutation(it).key() == item.key }
+                check(current == item.pending && current.first().lastError.startsWith("REJECTED:") && local(item.key) == item.local) {
+                    "재고가 바뀌었습니다. 현재 목록을 다시 확인해주세요."
+                }
+                val file = InventoryFirstBackup.write(requireNotNull(filesDir), listOfNotNull(item.local), current, "inventory_rejected")
+                current.forEach { dao.deletePendingSync(requireNotNull(it.syncId)) }
+                applyServer(item.key, server)
+                file
+            }
+            InventoryOutcome(true, "서버 기준으로 맞췄습니다. 백업: ${backup.name}")
+        } catch (e: CancellationException) { throw e }
+        catch (e: Exception) { InventoryOutcome(false, "서버 기준으로 맞추지 못했습니다. 휴대폰 재고와 대기는 유지합니다: ${e.message}") }
     }
 }

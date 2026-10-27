@@ -88,6 +88,12 @@ private fun PendingSyncDialog(
                 Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("전송 대기 ${state.pendingSyncCount}건")
                     Text("농원·묘목 ${state.pendingMasterCount}건 / 재고 ${state.pendingInventoryCount}건 / 주문(서버 미연결) ${state.pendingOrderCount}건", fontSize = 14.sp)
+                    state.blockedInventory.forEach { item ->
+                        val name = item.species?.speciesName ?: "묘목 ${item.key.speciesId}"
+                        val farm = item.farm?.farmName ?: "농원 ${item.key.farmId}"
+                        Text("재고 · $name · $farm · ${item.pending.size}건\n" +
+                            if (item.isUnlinked) "UNLINKED: 서버에 등록되지 않은 농원 또는 묘목" else "REJECTED: 서버가 받지 않았어요(숨긴 묘목·삭제된 농원 등)", fontSize = 14.sp)
+                    }
                     val oldest = state.oldestPendingAt?.let {
                         SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.KOREA).format(Date(it))
                     } ?: "없음"

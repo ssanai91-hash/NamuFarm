@@ -184,7 +184,7 @@ class OperationsMasterSync(internal val database: AppDatabase, internal val clie
                 val present = records.map { it.get(idKey).asInt }.toSet()
                 dao.getMasterLinks(k).filter { it.remoteId !in present && it.localId !in dirty }.forEach {
                     // Keep historical stock references even if a contact was removed in Sheets.
-                    if (dao.getFarmInventoryCount(it.localId) == 0) {
+                    if (dao.getFarmInventoryCount(it.localId) == 0 && !hasInventoryWork(it.localId, true)) {
                         dao.deleteFarmById(it.localId)
                         dao.deleteMasterLink(k, it.localId)
                     }

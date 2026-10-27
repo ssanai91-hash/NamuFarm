@@ -40,6 +40,7 @@ data class ManagementUiState(
     val pendingInventoryCount: Int = 0,
     val pendingOrderCount: Int = 0,
     val inventoryConflictPending: Boolean = false,
+    val blockedInventory: List<BlockedInventoryWork> = emptyList(),
     val oldestPendingAt: Long? = null,
     val lastMasterSyncAt: Long? = null,
     val lastSyncError: String? = null,
@@ -104,13 +105,44 @@ class ManagementViewModel(
             recordInventoryOutcome(result)
         }
     }
+    fun retryRejectedInventory(item: BlockedInventoryWork) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val result = syncManager.inventory.retryRejected(item)
+            refreshLocalState()
+            recordInventoryOutcome(result)
+        }
+    }
+    fun useServerForRejectedInventory(item: BlockedInventoryWork) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val result = syncManager.inventory.useServerForRejected(item)
+            refreshLocalState()
+            recordInventoryOutcome(result)
+        }
+    }
+    fun resaveBlockedFarm(item: BlockedInventoryWork) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val farm = dao.getAllFarms().firstOrNull { it.farmId == item.key.farmId }
+            if (farm == null) _uiState.update { it.copy(message = "휴대폰에 없는 농원입니다. 재고와 대기는 그대로 보관합니다.") }
+            else saveFarm(farm.farmId, farm.farmName, farm.address.orEmpty(), farm.phone.orEmpty(), farm.memo.orEmpty())
+        }
+    }
+    fun resaveBlockedSpecies(item: BlockedInventoryWork) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val species = dao.getSpeciesById(item.key.speciesId)
+            if (species == null) _uiState.update { it.copy(message = "휴대폰에 없는 묘목입니다. 재고와 대기는 그대로 보관합니다.") }
+            else saveSpecies(species.speciesId, species.speciesName, species.nameFarm.orEmpty(), species.chosung.orEmpty(),
+                species.category.orEmpty(), species.memo.orEmpty(), species.isActive ?: 1)
+        }
+    }
     private val clearingPendingSync = AtomicBoolean(false)
     internal val pendingSyncObserver: Job
 
     init {
         pendingSyncObserver = viewModelScope.launch(Dispatchers.IO) {
             dao.observePendingSync().collect { pending ->
+                val blocked = syncManager.inventory.blockedInventoryWork()
                 _uiState.update { state -> state.copy(
+                    blockedInventory = blocked,
                     pendingSyncCount = pending.size,
                     pendingMasterCount = pending.count { OperationsMasterSync.kind(it.syncType) != null },
                     pendingInventoryCount = pending.count { it.syncType in setOf(PendingSyncType.INVENTORY_SAVE, PendingSyncType.INVENTORY) },
@@ -220,9 +252,11 @@ class ManagementViewModel(
         val allInventory = dao.getAllSellingInventory()
         val quotes = dao.getTodayQuotes()
         val orders = dao.getTodayOrders()
+        val blocked = syncManager.inventory.blockedInventoryWork()
 
         _uiState.update { current ->
             current.copy(
+                blockedInventory = blocked,
                 farmList = farms,
                 allSpeciesList = allSpecies,
                 allSellingInventory = allInventory,
