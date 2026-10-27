@@ -63,7 +63,7 @@ fun ManagementModeScreen(viewModel: ManagementViewModel, onBack: () -> Unit,
     }
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
-            if (state.blockedInventory.isNotEmpty()) {
+            if (page == "list" && state.blockedInventory.isNotEmpty()) {
                 FarmInfo("보낼 수 없는 재고 ${state.blockedInventory.sumOf { it.pending.size }}건이 있어요.", warning = true)
                 TextButton(onClick = { showBlockedInventory = true }) { Text("확인하기") }
             }

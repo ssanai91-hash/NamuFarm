@@ -51,6 +51,8 @@ internal fun BackupMenu(controller: DataBackupController) {
             Text("백업 시각 · " + SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.KOREA).format(Date(preview.manifest.createdAt)))
             Text("농원 ${rows["farm_info"] ?: 0} · 묘목 ${rows["species"] ?: 0} · 재고 ${rows["farm_inventory"] ?: 0}\n" +
                 "매매 견적 ${rows["quote_list"] ?: 0} · 주문 ${rows["order_list"] ?: 0} · 전송 대기 ${rows["pending_sync"] ?: 0}", fontSize = 15.sp)
+            if (preview.pendingMasterCount > 0) FarmInfo(
+                "보내지 못한 농원·묘목 수정 ${preview.pendingMasterCount}건이 함께 복원돼요. 그사이 서버(PC)에서 바뀌었으면 동기화가 멈출 수 있어요.", warning = true)
             FarmInfo("현재 휴대폰 자료를 이 백업으로 바꿉니다. 바꾸기 전에 현재 자료를 자동으로 백업해요.", warning = true)
             Text("복원 후 앱을 다시 시작합니다. 동기화가 안 되면 서버 기기 연결을 열어주세요.", fontSize = 14.sp)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

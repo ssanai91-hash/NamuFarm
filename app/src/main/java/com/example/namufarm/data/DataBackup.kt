@@ -44,8 +44,21 @@ object DataMaintenance {
 data class BackupDbInfo(val name: String, val userVersion: Int, val sha256: String, val rows: Map<String, Long>)
 data class BackupManifest(val packageName: String, val versionName: String, val versionCode: Int,
     val createdAt: Long, val databases: List<BackupDbInfo>, val preferences: Map<String, String>)
-data class BackupPreview(val directory: File, val manifest: BackupManifest)
+data class BackupPreview(val directory: File, val manifest: BackupManifest, val pendingMasterCount: Long = 0)
 data class BackupStatus(val busy: Boolean = false, val preview: BackupPreview? = null, val message: String? = null)
+
+/** Read the extracted snapshot only; do not open Room or replay any pending operation. */
+internal fun restoredMasterPendingCount(file: File): Long {
+    val db = SQLiteDatabase.openDatabase(file.absolutePath, null, SQLiteDatabase.OPEN_READONLY)
+    try {
+        val exists = db.rawQuery("SELECT 1 FROM sqlite_master WHERE type='table' AND name='pending_sync'", null)
+            .use { it.moveToFirst() }
+        if (!exists) return 0
+        return db.rawQuery("SELECT COUNT(*) FROM pending_sync WHERE sync_type IN (?,?,?,?)", arrayOf(
+            PendingSyncType.FARM_SAVE, PendingSyncType.FARM_DELETE, PendingSyncType.SPECIES_SAVE, PendingSyncType.SPECIES_DELETE))
+            .use { check(it.moveToFirst()); it.getLong(0) }
+    } finally { db.close() }
+}
 
 /** No tokens or keystore/key material enter the archive. Export pauses writers and then recreates the UI. */
 class DataBackupController(private val context: Context, private val quiesce: suspend () -> Unit,
@@ -188,7 +201,7 @@ class DataBackupController(private val context: Context, private val quiesce: su
                     }; event = parser.next()
                 }; check(rootSeen)
             }
-            return BackupPreview(directory, manifest)
+            return BackupPreview(directory, manifest, restoredMasterPendingCount(File(directory, "databases/NamuFarm.db")))
         } catch (e: Exception) { directory.deleteRecursively(); throw e }
     }
     suspend fun inspectArchive(uri: Uri) = gate.withLock {

@@ -394,7 +394,8 @@ class InventorySync(private val database: AppDatabase, private val client: Opera
                 // Keep the persisted operationId, even after an earlier transmission attempt.
                 dao.clearPendingSyncError(requireNotNull(current.first().syncId))
             }
-            syncLinked(fetch())
+            val remote = fetch()
+            if (settings.inventoryLinked) syncLinked(remote) else reconcileInitial(remote)
         } catch (e: CancellationException) { throw e }
         catch (e: Exception) { InventoryOutcome(false, e.message ?: "다시 보내지 못했습니다. 전송 대기를 유지합니다.") }
     }

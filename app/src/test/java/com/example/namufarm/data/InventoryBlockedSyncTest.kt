@@ -174,6 +174,21 @@ class InventoryBlockedSyncTest {
         assertEquals(4, gateway.actions.count { it == "list_farms" || it == "list_species" })
     }
 
+    @Test fun retryAfterRestoreStillRequiresFirstInventoryReconciliation() = runBlocking {
+        queue(stock(quantity = 30), "REJECTED: 서버 거절")
+        val operationId = gson.fromJson(dao.getAllPendingSync().single().payloadJson, InventoryMutation::class.java).operationId
+        settings.inventoryLinked = false
+        gateway.put(stock(quantity = 5))
+        val result = sync.retryRejected(sync.blockedInventoryWork().single())
+        assertFalse(result.success)
+        assertFalse(settings.inventoryLinked)
+        assertTrue(sync.review.value.firstLink)
+        assertEquals(1, sync.review.value.differences.size)
+        assertEquals(30, requireNotNull(local(stock())).quantity)
+        assertEquals(operationId, gson.fromJson(dao.getAllPendingSync().single().payloadJson, InventoryMutation::class.java).operationId)
+        assertTrue(gateway.sent.isEmpty())
+    }
+
     private class FakeGateway : OperationsMasterGateway {
         override var downloaded = true
         val actions = mutableListOf<String>()
