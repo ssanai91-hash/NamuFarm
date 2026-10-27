@@ -42,7 +42,7 @@ def stage_label(stage, parent=None):
 
 def _theme(css, large=False):
     values = {**TOKENS, **{key: str(value + (2 if large else 0)) for key, value in
-              {"body": 15, "small": 13, "title": 22, "section": 16, "action": 17, "total": 26}.items()}}
+              {"body": 15, "small": 13, "title": 22, "section": 16, "action": 17, "total": 26, "detail": 20, "brand": 18}.items()}}
     for key, value in values.items():
         css = css.replace("@" + key + "@", value)
     return css
@@ -55,7 +55,7 @@ QWidget{font-family:'Malgun Gothic','NanumGothic',sans-serif;font-size:@body@px;
 QMainWindow,#workspace,QDialog{background:@page-bg@;}
 #sidebar{background:@sidebar@;border:0;}
 #sidebar QLabel{color:@card@;background:transparent;}
-#sidebar QLabel#brand{font-size:18px;font-weight:700;}
+#sidebar QLabel#brand{font-size:@brand@px;font-weight:700;}
 #sidebar QLabel#navGroup,#sidebar QLabel#navFoot{font-size:@small@px;color:@nav-caption@;}
 #sidebar QPushButton{background:transparent;color:@card@;border:0;border-left:3px solid transparent;border-radius:8px;text-align:left;padding:0 8px;min-height:44px;max-height:44px;font-size:@body@px;font-weight:600;}
 #sidebar QPushButton:checked{background:@nav-selected@;border-left-color:@accent@;}
@@ -69,7 +69,8 @@ QFrame#pageHeader{background:@card@;border:0;border-bottom:1px solid @border@;}
 QLabel#pageTitle,QLabel#summaryTitle,QLabel#heroTitle,QLabel#deliveryTitle{font-size:@title@px;font-weight:700;}
 QLabel#sectionTitle,QLabel#quoteItemsTitle,QLabel#emailSectionTitle{font-size:@section@px;font-weight:700;}
 QLabel#summaryCount,QLabel#summaryCountUnit,QLabel#muted,QLabel#eyebrow,QLabel#selectionHint,QLabel#deliverySubtitle,QLabel#infoCaption{font-size:@small@px;color:@muted@;}
-QLabel#detailCustomer{font-size:20px;font-weight:700;}
+QLabel#detailCustomer{font-size:@detail@px;font-weight:700;}
+QLabel#detailQuantity{font-size:@action@px;font-weight:700;}
 QLabel#metricValue,QLabel#quoteTotalValue,QLabel#workbenchTotal{font-size:@total@px;font-weight:700;color:@primary@;}
 QFrame#card,QFrame#hero,QFrame#detailPanel,QFrame#quoteItemsCard,QFrame#customerInfoCard,QFrame#emailAddressCard,QFrame#workbenchDocumentTools{background:@card@;border:1px solid @border@;border-radius:10px;}
 QFrame#statusBar{background:@card@;border:0;border-top:1px solid @border@;}
@@ -228,8 +229,8 @@ class NavigationButton(QPushButton):
 class CompactDateDelegate(RowSelectionDelegate):
     def initStyleOption(self, option, index):
         super().initStyleOption(option, index)
-        if len(option.text) >= 16 and option.text[4:5] == '-':
-            option.text = option.text[5:16].replace('-', '.')
+        from .presentation import date_text
+        option.text = date_text(option.text)
 
 
 class CustomerDelegate(RowSelectionDelegate):
@@ -306,7 +307,10 @@ class StatusDelegate(RowSelectionDelegate):
         rect.moveCenter(QRectF(option.rect).center())
         painter.drawRoundedRect(rect, 8, 8)
         painter.setPen(QColor(foreground))
-        painter.setFont(option.font)
+        font = option.font
+        font.setPixelSize(15 if QApplication.instance().property("namufarmLargeFont") else 13)
+        font.setBold(True)
+        painter.setFont(font)
         painter.drawText(rect, Qt.AlignmentFlag.AlignCenter,
                          painter.fontMetrics().elidedText(text, Qt.TextElideMode.ElideRight, max(1, int(rect.width())-8)))
         painter.restore()
@@ -364,9 +368,15 @@ class DataTable(QTableWidget):
             available = max(1, self.viewport().width())
             minimum_total = sum(minimum for _column, _weight, minimum in self._weights)
             total = sum(weight for _column, weight, _minimum in self._weights)
+            if minimum_total > available:
+                columns = [(column, weight, max(36, int(minimum * available / minimum_total)))
+                           for column, weight, minimum in self._weights]
+            else:
+                columns = self._weights
+            minimum_total = sum(minimum for _, _, minimum in columns)
             extra = max(0, available - minimum_total)
             used = 0
-            for position, (column, weight, minimum) in enumerate(self._weights):
+            for position, (column, weight, minimum) in enumerate(columns):
                 width = minimum + int(extra * weight / total) if total else minimum
                 if position == len(self._weights) - 1:
                     width = max(minimum, available - used)
@@ -406,12 +416,12 @@ def align_table(widget):
             heading = widget.horizontalHeaderItem(column).text()
             if any(word in heading for word in ('금액', '단가', '수량', '매출', '이익', '비용', '원가', '세액', '건수')):
                 alignment = Qt.AlignmentFlag.AlignRight
-            elif any(word in heading for word in ('상태', '일자', '작성일', '접수일', '주문일', '규격', '견적서')):
-                alignment = Qt.AlignmentFlag.AlignHCenter
             else:
                 alignment = Qt.AlignmentFlag.AlignLeft
             item.setTextAlignment(alignment | Qt.AlignmentFlag.AlignVCenter)
-            item.setToolTip(item.text())
+            if not item.toolTip():
+                item.setToolTip(item.text())
+            widget.horizontalHeaderItem(column).setTextAlignment(alignment | Qt.AlignmentFlag.AlignVCenter)
 
 
 def fit_window(window, width, height):
@@ -483,7 +493,7 @@ def collapsible(title, content, expanded=False):
     toggle.setCheckable(True)
     toggle.setChecked(expanded)
     toggle.setAccessibleName(title + " 펼치기 또는 접기")
-    set_button_icon(toggle, "chevron", "#5c6b73")
+    set_button_icon(toggle, "chevron", TOKENS["muted"])
     content.setVisible(expanded)
     toggle.toggled.connect(content.setVisible)
     layout.addWidget(toggle)

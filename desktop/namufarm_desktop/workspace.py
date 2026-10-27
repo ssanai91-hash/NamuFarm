@@ -35,8 +35,8 @@ from .nursery_ui import NurseryPage, DigitalClock
 from .inquiry_ui import InquiryPage
 from .nursery import NurseryStore
 from .quote_species import SpeciesNameEditor, QuoteSpeciesPicker
-from .list_filters import ListPeriodFilter, first_date
-from .presentation import DetailPanel, phone_text, date_text, order_stage
+from .list_filters import ListPeriodFilter, first_date, record_date
+from .presentation import DetailPanel, phone_text, date_text, order_stage, time_value
 
 STYLE = workspace_style()
 
@@ -46,6 +46,10 @@ def label(text, name="", wrap=False):
     widget.setTextFormat(Qt.TextFormat.PlainText)
     widget.setObjectName(name)
     widget.setWordWrap(wrap)
+    if name in ("quoteStatusBadge", "customerStatusBadge"):
+        badge = status_badge(text)
+        widget.setText(badge["text"])
+        widget.setStyleSheet(badge["style"])
     return widget
 
 
@@ -133,12 +137,12 @@ def setup_delivery_reading(dialog, layout):
 def polish_table(widget):
     large = bool(QApplication.instance().property("namufarmLargeFont"))
     compact = bool(QApplication.instance().property("namufarmCompactLayout"))
-    row_height = (56 if large else 48) if compact else (64 if large else 56)
+    row_height = 64 if large else 60
     widget.verticalHeader().setMinimumSectionSize(row_height)
     widget.verticalHeader().setDefaultSectionSize(row_height)
     widget.setShowGrid(False)
     widget.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-    widget.horizontalHeader().setDefaultAlignment(Qt.AlignmentFlag.AlignCenter)
+    widget.horizontalHeader().setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
     if widget.property("visibleItemRows"):
         size_table_to_rows(widget, int(widget.property("visibleItemRows")))
 
@@ -1301,7 +1305,7 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
                 return
             value_style = ("workbenchCustomerName" if title == "고객명" else
                            "workbenchReceipt" if title == "견적번호" else "workbenchInfo")
-            text = CustomerInfoValue(str(value or "미입력"), value_style)
+            text = CustomerInfoValue(phone_text(value) if title == "연락처" else str(value or "미입력"), value_style)
             text.setMinimumWidth(0)
             text.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
             text_policy = text.sizePolicy()
@@ -3783,7 +3787,6 @@ class SellerWindow(MainWindow):
         brand_layout.addWidget(leaf)
         brand_words = QVBoxLayout()
         self.brand_label = label("나무팜 판매관리", "brand")
-        self.brand_label.setStyleSheet("font-size:18px;font-weight:700;")
         brand_words.addWidget(self.brand_label)
         brand_words.addWidget(label("Ver " + __version__, "navFoot"))
         brand_layout.addLayout(brand_words)
@@ -3930,6 +3933,7 @@ class SellerWindow(MainWindow):
         self.build_request_detail(old_pages[0])
         self.request_table.horizontalHeaderItem(1).setToolTip("접수일 · 전체 날짜와 시간은 셀 도움말에서 확인합니다.")
         set_button_icon(self.request_quote_button, "document", "#23593a")
+        self.configure_page_actions()
         self.ui_settings = QSettings("NamuFarm", "NamuFarmDesktop")
         self.large_font_check.setChecked(self.ui_settings.value("ui/largeFont", False, type=bool))
         self.large_font_check.toggled.connect(self.apply_design_scale)
@@ -3962,6 +3966,28 @@ class SellerWindow(MainWindow):
         self.refresh_workspace()
         self.update_controls()
 
+    def configure_page_actions(self):
+        self.page_action_widgets = {
+            self.PAGE_REQUESTS: self.manual_quote_button, self.PAGE_SALES: self.sales_data_button,
+            self.PAGE_SHIPPING: self.export_button, self.PAGE_REPORTS: self.report_export_button,
+            self.PAGE_FARMS: self.farms_page.add_button, self.PAGE_SPECIES: self.species_page.add_button,
+            self.PAGE_INQUIRIES: self.inquiries_page.open_button, self.PAGE_SETTINGS: self.connect_button,
+        }
+        for page, widget in self.page_action_widgets.items():
+            self.header_actions.addWidget(widget)
+            if page != self.PAGE_SALES:
+                widget.setObjectName("primary")
+            widget.hide()
+        for page in (self.farms_page, self.species_page):
+            page.sync_button.setObjectName("secondary")
+        self.inquiries_page.load.setObjectName("secondary")
+        for search in (self.request_search, self.draft_search, self.sale_search, self.shipping_search,
+                       self.farms_page.search, self.species_page.search, self.inquiries_page.search):
+            search.setFixedWidth(340)
+            search.addAction(ui_icon("search", TOKENS["muted"]), QLineEdit.ActionPosition.LeadingPosition)
+        self.export_button.setText("선택 주문 로젠 XLS 저장")
+        self.report_export_button.setText("엑셀 저장")
+
     def resizeEvent(self, event):
         super().resizeEvent(event)
         if not hasattr(self, "ui_settings"):
@@ -3976,6 +4002,8 @@ class SellerWindow(MainWindow):
         self.update_responsive_layout()
         if self.workspace_ready:
             self.refresh_storage_status()
+            self.refresh_request_detail()
+            self.refresh_sale_detail()
 
     def update_responsive_layout(self):
         # Qt geometry is in logical pixels: 1920x1200 at 150% is about 1280x800.
@@ -4144,7 +4172,7 @@ class SellerWindow(MainWindow):
                 rows = [r for r in self.data["requests"] if r.get("status", "신규") == "신규"]
                 today = datetime.now(SEOUL).date()
                 counts = {"all": len(rows), "formal": sum(bool(r["personal"].get("formalQuoteRequested")) for r in rows),
-                          "today": sum(datetime.fromtimestamp(r["createdAt"] / 1000, SEOUL).date() == today for r in rows)}
+                          "today": sum(record_date(r["createdAt"]) == today for r in rows)}
                 for key, item in self.request_quick_buttons.items():
                     title = {"all": "전체", "formal": "공식견적서 요청", "today": "오늘 접수"}[key]
                     item.setText(f"{title} {counts[key]:,}")
@@ -4321,7 +4349,7 @@ class SellerWindow(MainWindow):
         self.state_filter.hide()
         self.sale_search.setFixedWidth(340)
         tabs, self.sales_filters = self.filter_buttons(
-            (("입金확인".replace("金", "금"), "입금확인"), ("배송준비", "배송준비"), ("송장등록", "송장등록"),
+            (("입금확인", "입금확인"), ("배송준비", "배송준비"), ("송장등록", "송장등록"),
              ("배송완료", "배송완료"), ("전체", "전체 상태")), self.set_sales_filter)
         for tab in self.sales_filters.values():
             tab.setObjectName("stageTab")
@@ -4492,6 +4520,9 @@ class SellerWindow(MainWindow):
             page.refresh_local()
             self.set_page_count(index, len(page.rows))
         self.update_page_title(index)
+        if hasattr(self, "page_action_widgets"):
+            for page, widget in self.page_action_widgets.items():
+                widget.setVisible(index == page)
         if hasattr(self, "manual_quote_button"):
             self.manual_quote_button.setVisible(index == self.PAGE_REQUESTS)
         if hasattr(self, "sales_data_button"):
@@ -4658,7 +4689,7 @@ class SellerWindow(MainWindow):
             key = "danger" if failed else "waiting" if pending else "accent"
             self.sidebar_connection.setStyleSheet(f"color:{TOKENS[key]};font-size:13px;")
             self.sidebar_connection.setText("● " + ("오류" if failed else "서버 반영 대기" if pending else "연결됨" if self.data.get("paired") else "연결 전"))
-            self.sidebar_transfer.setText(self.last_sync_label.text().removeprefix("성공 · ") + f" 가져옴 · 전송 대기 {pending:,}건")
+            self.sidebar_transfer.setText(self.last_sync_label.text().split(" ")[-1][:5] + f" 가져옴 · 전송 대기 {pending:,}건")
         if hasattr(self, "status_pending"):
             self.status_connection.setText(self.sidebar_connection.text())
             self.status_pending.setText(f"전송 대기 {pending:,}건")
@@ -4669,7 +4700,7 @@ class SellerWindow(MainWindow):
             "‘엑셀 파일 저장’은 파일 내보내기이며 서버에 전송하지 않습니다.\n" +
             (self._last_storage_transfer_error or self.data.get("copyError", "")))
         large = bool(QApplication.instance().property("namufarmLargeFont"))
-        self.storage_status.setStyleSheet(f"color:{color};font-size:{16 if large else 14}px;padding:0 2px;")
+        self.storage_status.setStyleSheet(f"color:{color};font-size:{15 if large else 13}px;padding:0 8px;")
 
     def update_controls(self):
         super().update_controls()
@@ -4893,7 +4924,7 @@ class SellerWindow(MainWindow):
             table_rows.append((
                 sale_number(row) if sale_number(row).startswith("SOLD-") else "번호 발급 대기",
                 order_stage(row),
-                date_text(first_date(meta.get("paidAt"), meta.get("purchasedAt"), meta.get("orderDate"))),
+                date_text(time_value(meta.get("paidAt"), meta.get("purchasedAt"), meta.get("orderDate"))),
                 order.get("customerName", ""),
                 order.get("customerPhone", ""),
                 order.get("customerEmail") or "—",
@@ -4911,7 +4942,7 @@ class SellerWindow(MainWindow):
             cell.setData(Qt.ItemDataRole.UserRole, phone_text(row["private"]["order"].get("customerPhone", "")))
             cell.setToolTip(cell.text() + "\n" + phone_text(row["private"]["order"].get("customerPhone", "")))
             self.sale_table.item(index, 9).setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-            self.sale_table.item(index, 2).setToolTip(timestamp(first_date(row["metadata"].get("paidAt"), row["metadata"].get("purchasedAt"), row["metadata"].get("orderDate"))))
+            self.sale_table.item(index, 2).setToolTip(timestamp(time_value(row["metadata"].get("paidAt"), row["metadata"].get("purchasedAt"), row["metadata"].get("orderDate"))))
         self.sale_table.clearSelection()
         self.sale_table.setCurrentCell(-1, -1)
         self.sale_table.blockSignals(False)
@@ -4976,7 +5007,7 @@ class SellerWindow(MainWindow):
         order, meta = row["private"]["order"], row["metadata"]
         stage = order_stage(row)
         number = sale_number(row) if sale_number(row).startswith("SOLD-") else "번호 발급 대기"
-        self.sale_detail.reset(order.get("customerName", ""), number + " · " + date_text(first_date(meta.get("paidAt"), meta.get("purchasedAt"))), stage)
+        self.sale_detail.reset(order.get("customerName", ""), number + " · " + date_text(time_value(meta.get("paidAt"), meta.get("purchasedAt"))), stage)
         steps = ("입금확인", "배송준비", "송장등록", "배송완료")
         current = steps.index(stage) if stage in steps else -1
         progress = self.sale_detail.note(" → ".join(("✓ " if i < current else "◉ " if i == current else "○ ") + value for i, value in enumerate(steps)))

@@ -21,6 +21,15 @@ def phone_text(value):
     return raw
 
 
+def time_value(*values):
+    from .list_filters import record_date
+    return next((value for value in values if record_date(value) is not None), None)
+
+
+def phones_in_text(value):
+    return re.sub(r'(?<![0-9])0[0-9]{8,10}(?![0-9])', lambda match: phone_text(match.group()), str(value))
+
+
 def date_text(value, now=None):
     if not value:
         return '—'
@@ -123,7 +132,7 @@ class DetailPanel(QFrame):
             info.addWidget(plain_label(item.get('specification', '') or '규격 미입력', 'muted'))
             layout.addLayout(info, 1)
             qty = plain_label(f"{item.get('quantity', 0):,}주")
-            qty.setStyleSheet('font-size:17px;font-weight:700;')
+            qty.setObjectName("detailQuantity")
             layout.addWidget(qty)
             self.body.addWidget(row)
 

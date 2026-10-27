@@ -8,7 +8,8 @@ from .app import table, fill_table, Task
 from .errors import UserError
 from .inquiries import InquiryService, DELIVERY_LABELS, local_time
 from .ui_theme import fit_window, scroll_dialog
-from .ui_theme import align_table
+from .ui_theme import align_table, StatusDelegate
+from .presentation import phone_text, date_text
 from .ui_icons import set_button_icon
 
 
@@ -30,7 +31,7 @@ class InquiryPage(QWidget):
         tools = QHBoxLayout()
         self.search = QLineEdit()
         self.search.setPlaceholderText('이름 · 전화 · 문의번호 · 내용 검색')
-        self.search.setMaximumWidth(380)
+        self.search.setFixedWidth(340)
         self.search.setClearButtonEnabled(True)
         tools.addWidget(self.search, 1)
         self.filter = QComboBox()
@@ -112,12 +113,16 @@ class InquiryPage(QWidget):
             service = self.service()
             if (service.store.read('meta', 'export_due') or {}).get('value'):
                 self.copy_error = service.export()['copyError']
+        if hasattr(self.owner, 'nav_badges') and self.owner.PAGE_INQUIRIES in self.owner.nav_badges:
+            self.owner.nav_badges[self.owner.PAGE_INQUIRIES].setText(str(sum(r['status'] == 'open' for r in active)))
         self.rows = matched[:self.limit]
         self.table.blockSignals(True)
-        fill_table(self.table, [(r['inquiryNumber'], local_time(r['createdAt']),
-            r['inquiry']['customerName'] + ' · ' + r['inquiry']['customerPhone'], r['inquiry']['category'],
+        fill_table(self.table, [(r['inquiryNumber'], date_text(r['createdAt']),
+            r['inquiry']['customerName'] + ' · ' + phone_text(r['inquiry']['customerPhone']), r['inquiry']['category'],
             r['inquiry']['message'].replace('\n', ' '), r['status'],
             DELIVERY_LABELS.get((r.get('delivery') or {}).get('state'), '미발송')) for r in self.rows])
+        for index, row in enumerate(self.rows):
+            self.table.item(index, 1).setToolTip(local_time(row["createdAt"]))
         self.table.setCurrentCell(-1, -1)
         if previous:
             index = next((i for i, r in enumerate(self.rows) if r['requestId'] == previous['requestId']), None)
@@ -350,3 +355,4 @@ class InquiryDialog(QDialog):
         if self.task or (not getattr(self, "expired", False) and not self.remember()): event.ignore()
         else:
             self.reject(); event.accept()
+

@@ -4,7 +4,7 @@ import copy
 import re
 from datetime import datetime, timedelta
 from pathlib import Path
-from .list_filters import ListPeriodFilter, first_date
+from .list_filters import ListPeriodFilter, first_date, record_date
 
 from PySide6.QtCore import QSettings, QStandardPaths, Qt, QThread, QTimer, Signal, QUrl, Slot
 from PySide6.QtGui import QCloseEvent, QRegularExpressionValidator, QDesktopServices
@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
 
 from .api import DEFAULT_URL
 from .commerce import sale_number
-from .presentation import phone_text, date_text
+from .presentation import phone_text, date_text, phones_in_text
 from .crypto import SellerKey
 from .domain import EDITABLE, NEXT, SEOUL, STATES, MAX_SAFE, profit, require
 from .errors import ConflictError, UserError
@@ -68,7 +68,14 @@ def fill_table(widget, rows):
     widget.setRowCount(len(rows))
     for index, values in enumerate(rows):
         for column, value in enumerate(values):
-            widget.setItem(index, column, QTableWidgetItem(str(value)))
+            original = str(value)
+            heading = widget.horizontalHeaderItem(column).text()
+            shown = phones_in_text(original) if any(word in heading for word in ("전화", "연락처")) else original
+            if any(word in heading for word in ("접수일", "작성일", "주문일", "입금일")):
+                shown = date_text(original)
+            item = QTableWidgetItem(shown)
+            item.setToolTip(original)
+            widget.setItem(index, column, item)
     align_table(widget)
 
 
@@ -468,7 +475,7 @@ class MainWindow(QMainWindow):
         self.request_rows = [r for r in self.data["requests"] if r.get("status", "신규") == "신규"
                             and query in (r["requestId"] + r.get("receiptNumber", "") + str(r["personal"])).casefold()
                             and (quick != "formal" or r["personal"].get("formalQuoteRequested"))
-                            and (quick != "today" or datetime.fromtimestamp(r["createdAt"] / 1000, SEOUL).date() == today)]
+                            and (quick != "today" or record_date(r["createdAt"]) == today)]
         self.request_table.set_empty_message(
             "검색 조건에 맞는 견적요청이 없습니다.\n검색어를 지우거나 가져오기를 확인하세요." if query else
             "표시할 견적요청이 없습니다.\n가져오기로 최신 요청을 확인하세요.")
