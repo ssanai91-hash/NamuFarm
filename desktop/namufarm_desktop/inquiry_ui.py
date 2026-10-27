@@ -77,6 +77,8 @@ class InquiryPage(QWidget):
         self.table.itemSelectionChanged.connect(self.update_controls)
 
     def service(self):
+        if getattr(self.owner, 'demo_mode', False):
+            raise UserError('미리보기 모드에서는 고객문의를 불러오지 않습니다')
         if not self.owner.manager:
             raise UserError('PC 자료를 먼저 열어주세요.')
         return InquiryService(self.owner.manager)
@@ -94,6 +96,19 @@ class InquiryPage(QWidget):
         return self.rows[i] if 0 <= i < len(self.rows) else None
 
     def refresh_local(self):
+        if getattr(self.owner, 'demo_mode', False):
+            self.rows = []
+            self._rendered = None
+            self.table.setRowCount(0)
+            message = '미리보기 모드에서는 고객문의를 불러오지 않습니다'
+            self.table.set_empty_message(message)
+            self.summary.setText(message)
+            self.hint.setText(message)
+            self.more.hide()
+            if hasattr(self.owner, 'set_page_count'):
+                self.owner.set_page_count(self.owner.PAGE_INQUIRIES, 0)
+            self.update_controls()
+            return
         previous = self.selected()
         query = self.search.text().strip().casefold()
         try:

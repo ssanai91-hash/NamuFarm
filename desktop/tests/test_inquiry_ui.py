@@ -47,3 +47,19 @@ class InquiryUiTests(InquiryFixtureTest):
         dialog.reject(); self.assertEqual(dialog.result(), 0)
         owner.deleteLater(); dialog.deleteLater(); self.app.processEvents()
 
+
+
+class DemoInquiryIsolationTest(QtTestCase):
+    def test_preview_never_creates_service_or_reads_a_vault(self):
+        from types import SimpleNamespace
+        from unittest.mock import patch
+        from namufarm_desktop.inquiry_ui import InquiryPage
+        owner = SimpleNamespace(manager=SimpleNamespace(), task=None, demo_mode=True)
+        with patch('namufarm_desktop.inquiry_ui.InquiryService', side_effect=AssertionError('demo must not create service')):
+            page = InquiryPage(owner)
+            page.refresh_local()
+            self.assertEqual([], page.rows)
+            self.assertEqual(0, page.table.rowCount())
+            self.assertIn('미리보기 모드에서는', page.summary.text())
+            self.assertFalse(page.open_button.isEnabled())
+            page.close()
