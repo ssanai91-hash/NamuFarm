@@ -200,3 +200,35 @@ class RequestDeliveryTest(unittest.TestCase):
                 self.manager.send_sales_report_email('seller@example.com', 'report.xlsx', b'PK\x03\x04test', '매출', '집계')
         self.assertEqual(ids[0], ids[1])
         self.assertEqual(ids[0], self.vault.preference('sales_report_delivery')['pendingDelivery']['id'])
+
+    def test_sms_refusal_reason_is_visible_and_survives_lost_response_recovery(self):
+        call = self.api.call
+        reason = '무료 수신거부로 발송이 차단되었습니다. 재발송하지 마세요.'
+        def rejected(action, **fields):
+            if action == 'send_quote_sms':
+                return {'sent': False, 'state': 'rejected', 'statusCode': '1061', 'statusMessage': reason}
+            return call(action, **fields)
+        self.api.call = rejected
+        with self.assertRaisesRegex(UserError, '무료 수신거부'):
+            self.manager.send_quote_sms(self.draft, '요청하신 견적 안내')
+        state = self.manager.quote_delivery_state(self.draft['id'])
+        self.assertNotIn('pendingDelivery', state)
+        self.assertEqual('failed', state['smsState'])
+        self.assertEqual('1061', state['smsStatusCode'])
+        self.assertEqual(reason, state['smsStatusMessage'])
+
+        from namufarm_desktop.errors import UncertainDeliveryError
+        def lost(action, **fields):
+            if action == 'send_quote_sms':
+                raise NetworkError('lost response')
+            if action == 'quote_delivery_status':
+                return {'found': True, 'channel': 'sms', 'state': 'rejected',
+                        'statusCode': '1061', 'statusMessage': reason}
+            return call(action, **fields)
+        self.api.call = lost
+        with self.assertRaises(UncertainDeliveryError):
+            self.manager.send_quote_sms(self.draft, '요청하신 견적 안내')
+        state = self.manager.check_quote_delivery(self.draft['id'], 'sms')
+        self.assertNotIn('pendingDelivery', state)
+        self.assertEqual(reason, state['smsStatusMessage'])
+        self.assertEqual('1061', state['smsStatusCode'])

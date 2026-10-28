@@ -47,6 +47,34 @@ test('provider failed-message list is rejected before acceptance and never repla
  assert.equal(f.context.sendQuoteSms_(body).state,'rejected');assert.equal(f.context.sendQuoteSms_(body).state,'rejected');assert.equal(calls,1);
 });
 
+test('blocked and opted-out sends retain safe reasons across retries and status recovery',()=>{
+ for(const code of ['1060','1061','2061','3061','1064','2064','1065','2065','2254']){
+  const f=setup(),body=message();let calls=0;
+  f.context.UrlFetchApp.fetch=()=>{calls++;return {getResponseCode:()=>200,getContentText:()=>JSON.stringify({
+   failedMessageList:[{statusCode:code,statusMessage:body.text+' '+body.recipientPhone}],messageList:[]})};};
+  const first=f.context.sendQuoteSms_(body),again=f.context.sendQuoteSms_(body);
+  assert.equal(first.state,'rejected');assert.equal(first.statusCode,code);assert.equal(again.statusMessage,first.statusMessage);
+  const recovered=f.context.quoteDeliveryStatus_({deliveryId:body.deliveryId});
+  assert.equal(recovered.statusCode,code);assert.equal(recovered.statusMessage,first.statusMessage);assert.equal(calls,1);
+  assert.ok(!JSON.stringify(f.book.get('견적발송기록').cells).includes(body.recipientPhone));
+  assert.ok(!JSON.stringify(f.book.get('견적발송기록').cells).includes(body.text));
+ }
+});
+
+test('HTTP refusal has a safe fallback and transport or mixed results stay unknown',()=>{
+ const f=setup(),refused=message();
+ f.context.UrlFetchApp.fetch=()=>({getResponseCode:()=>403,getContentText:()=>JSON.stringify({errorMessage:'private provider echo'})});
+ const result=f.context.sendQuoteSms_(refused);assert.equal(result.state,'rejected');assert.match(result.statusMessage,/약관 동의/);
+ for(const response of [
+  {http:503,body:{errorMessage:'unavailable'}},
+  {http:200,body:{failedMessageList:[{statusCode:'1064'}],messageList:[{statusCode:'4000',messageId:'M4V_TEST'}]}}
+ ]){
+  const body=message();let calls=0;
+  f.context.UrlFetchApp.fetch=()=>{calls++;return {getResponseCode:()=>response.http,getContentText:()=>JSON.stringify(response.body)};};
+  assert.equal(f.context.sendQuoteSms_(body).state,'unknown');assert.equal(f.context.sendQuoteSms_(body).state,'unknown');assert.equal(calls,1);
+ }
+});
+
 test('MailApp exception after acceptance is uncertain and never sent again',()=>{
  const f=setup(),body={deliveryId:crypto.randomUUID(),recipientEmail:'buyer@example.com',quoteNumber:'PCQ_TEST',subject:'견적',bodyText:'안내',bodyHtml:'<p>안내</p>'};let calls=0;
  f.context.MailApp.sendEmail=()=>{calls++;throw Error('response lost after mail acceptance');};

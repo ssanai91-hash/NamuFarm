@@ -181,7 +181,11 @@ function sendInquiryReply_(body) {
         assert_(result.messageId,'UNAVAILABLE');
         raw.delivery.state='pending';raw.delivery.messageId=result.messageId;raw.delivery.sentAt=result.sentAt;
       }
-    } catch(_) {raw.delivery.state='unknown';}
+    } catch(error) {
+      // A provider rejection is final non-delivery; a timeout may already have sent.
+      raw.delivery.state=error.deliveryRejected?'failed':'unknown';
+      if(error.deliveryRejected){raw.delivery.statusCode=error.statusCode;raw.delivery.statusMessage=error.statusMessage;}
+    }
     inquiryHistoryDelivery_(raw);
     inquiryChange_(record,raw,body.deliveryId);return {inquiry:inquiryResponse_(record.row),duplicate:false};
   });
@@ -191,7 +195,7 @@ function inquirySmsStatus_(body) {
     const record=inquiryRecord_(body.requestId),raw=JSON.parse(record.row[IC.raw]);
     assert_(!raw.expired && raw.delivery && raw.delivery.channel==='sms' && raw.delivery.messageId,'INVALID');
     if(['success','failed'].includes(raw.delivery.state))return {inquiry:inquiryResponse_(record.row)};
-    const result=quoteSmsStatus_({messageId:raw.delivery.messageId});raw.delivery.state=result.state;raw.delivery.statusCode=result.statusCode;
+    const result=quoteSmsStatus_({messageId:raw.delivery.messageId});raw.delivery.state=result.state;raw.delivery.statusCode=result.statusCode;raw.delivery.statusMessage=result.statusMessage;
     if(result.success){record.row[IC.status]='closed';record.row[IC.answered]=record.row[IC.answered]||new Date().toISOString();}
     inquiryHistoryDelivery_(raw);
     inquiryChange_(record,raw,raw.delivery.id);return {inquiry:inquiryResponse_(record.row)};

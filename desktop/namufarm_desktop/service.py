@@ -687,8 +687,8 @@ class Manager(SoldNumbers, SalesWorkspace):
             raise UncertainDeliveryError("결과를 확인하지 못했습니다. 이미 발송됐을 수 있으니 '결과 확인'을 눌러주세요. "
                                          "같은 내용은 다시 보내도 중복 발송되지 않습니다.", code=getattr(error, "code", None)) from error
         if result.get("state") == "rejected":
-            self._resolve_delivery(identifier, channel, state, "rejected", payment=payment)
-            raise UserError("서버가 발송을 거절했습니다. 설정과 수신 정보를 확인해주세요.")
+            self._resolve_delivery(identifier, channel, state, "rejected", result, payment=payment)
+            raise UserError(result.get("statusMessage") or "서버가 발송을 거절했습니다. 설정과 수신 정보를 확인해주세요.")
         expected = result.get("recipientPhone" if channel == "sms" else "recipientEmail")
         accepted = (result.get("sent") is True and expected == recipient and
                     (channel != "sms" or bool(result.get("messageId"))) and
@@ -710,7 +710,8 @@ class Manager(SoldNumbers, SalesWorkspace):
                 state.update(emailSentAt=now_ms(), emailTo=pending["recipient"], senderEmail=result.get("senderEmail", "ssanai91@gmail.com"),
                              emailQuoteFingerprint=pending["quoteFingerprint"])
         elif channel == "sms":
-            state.update(smsState="failed", smsSentAt=0, smsStatusMessage="발송이 거절되었거나 서버가 받지 못했습니다.")
+            state.update(smsState="failed", smsSentAt=0, smsStatusCode=str(result.get("statusCode") or ""),
+                         smsStatusMessage=result.get("statusMessage") or "발송이 거절되었거나 서버가 받지 못했습니다.")
         state["deliveryResolution"] = outcome
         return self._save_delivery_state(identifier, channel, state, payment)
 

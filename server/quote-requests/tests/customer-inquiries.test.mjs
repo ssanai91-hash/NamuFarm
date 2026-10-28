@@ -41,6 +41,8 @@ function fixture() {
   context.quoteSmsSettings_=()=>({configured:true});
   context.sendQuoteSms_=()=>{smsCount++;return {messageId:'M_mock',sentAt:new Clock().toISOString()};};
   context.quoteSmsStatus_=()=>({success:true,state:'success',statusCode:'4000'});
+  // Delivery-journal retention is exercised with the full server fixture separately.
+  context.purgeQuoteDeliveries_=()=>{};
   const input=n=>({requestId:uuid(n),category:'구매·배송',customerName:'테스트고객',customerPhone:'01000000000',customerEmail:'fixture@example.invalid',message:'문의 저장 테스트입니다.',consent:true,website:''});
   const body=n=>({action:'submit_customer_inquiry',webSecret:'w'.repeat(64),protocolVersion:1,requestId:uuid(n),fingerprint:String(n).padStart(64,'0'),rateKey:'f'.repeat(64),inquiry:input(n)});
   return {context,books,values,body,props,advance:time=>{now=Date.parse(time);},failWrite:()=>{failFlush=true;},failMail:()=>{mailThrows=true;},mailCount:()=>mailCount,smsCount:()=>smsCount,post:body=>context.doPost({postData:{contents:JSON.stringify(body)}})};
@@ -91,6 +93,26 @@ test('SMS acceptance stays pending until confirmed; expiry removes personal data
   assert.equal(updates.inquiries[0].expired,true);assert.equal(updates.inquiries[0].inquiry,undefined);
   assert.equal(f.context.listCustomerInquiries_({afterSequence:0}).inquiries.find(i=>i.requestId===uuid(2)).status,'open');
   const rows=[...f.books.values()][0].sheets[0].rows;assert.equal(rows[1][6],'');assert.equal(rows[1][9],'');assert.equal(rows[1][18],'{"expired":true}');
+});
+
+test('definite SMS refusal stays open and editable; timeout remains fenced without resending',()=>{
+  const f=fixture();f.context.setupCustomerInquiries();f.post(f.body(1));f.post(f.body(2));
+  let calls=0;
+  f.context.sendQuoteSms_=()=>{calls++;const error=new Error('UNAVAILABLE');Object.assign(error,{deliveryRejected:true,statusCode:'1064',statusMessage:'KISA 신고로 차단되었습니다.'});throw error;};
+  const draft=f.context.saveInquiryReply_({requestId:uuid(1),eventId:uuid(60),revision:1,replyText:'거래 관련 답변',replyChannel:'sms'});
+  const body={requestId:uuid(1),deliveryId:uuid(61),revision:draft.inquiry.revision};
+  const refused=f.context.sendInquiryReply_(body).inquiry;
+  assert.equal(refused.delivery.state,'failed');assert.equal(refused.delivery.statusCode,'1064');assert.match(refused.delivery.statusMessage,/KISA/);
+  assert.equal(refused.status,'open');assert.equal(refused.answeredAt,'');
+  assert.equal(f.context.sendInquiryReply_(body).duplicate,true);assert.equal(calls,1);
+  const revised=f.context.saveInquiryReply_({requestId:uuid(1),eventId:uuid(62),revision:refused.revision,replyText:'수정 답변',replyChannel:'email'});
+  assert.equal(revised.inquiry.reply.channel,'email');assert.equal(calls,1);
+  f.context.sendQuoteSms_=()=>{calls++;throw Error('timeout after acceptance');};
+  const other=f.context.saveInquiryReply_({requestId:uuid(2),eventId:uuid(63),revision:1,replyText:'문의 답변',replyChannel:'sms'});
+  const unknown={requestId:uuid(2),deliveryId:uuid(64),revision:other.inquiry.revision};
+  const uncertain=f.context.sendInquiryReply_(unknown).inquiry;assert.equal(uncertain.delivery.state,'unknown');
+  f.context.sendInquiryReply_(unknown);assert.equal(calls,2);
+  assert.throws(()=>f.context.sendInquiryReply_({...unknown,deliveryId:uuid(65),revision:uncertain.revision}),error=>error.code==='CONFLICT');assert.equal(calls,2);
 });
 
 test('open/closed status actions preserve reply history, support phone resolution and legacy statuses',()=>{

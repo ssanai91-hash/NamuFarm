@@ -301,6 +301,8 @@ class InquiryDialog(QDialog):
         self.loading = False
         self.counter.setText(f"{len(draft['text']):,} / 2,000자 · 문자 900자")
         delivery = DELIVERY_LABELS.get(d.get('state'), '아직 발송하지 않았습니다.')
+        if d.get('statusMessage'):
+            delivery += ' · ' + d['statusMessage']
         conflict = draft['baseRevision'] != r['revision']
         self.info.setText(delivery + (' · 다른 기기 변경 있음. 최신 답변과 내 초안을 확인해주세요.' if conflict else ' · 입력 내용은 이 PC에 자동 보관됩니다.'))
         history = ['현재 서버 답변\n' + (r['reply']['text'] or '(없음)')]

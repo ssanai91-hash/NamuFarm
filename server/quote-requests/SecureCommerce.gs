@@ -532,6 +532,15 @@ function quoteSmsReason_(code) {
     '4000':'문자 전송에 성공했습니다.',
     '1030':'문자 발송 잔액이 부족합니다.','2230':'문자 발송 잔액이 부족합니다.',
     '1062':'등록된 발신번호를 확인해주세요.','2062':'등록된 발신번호를 확인해주세요.',
+    '1060':'차단된 발신번호입니다. SOLAPI에서 차단 사유를 확인해주세요.',
+    '1061':'무료 수신거부로 발송이 차단되었습니다. 재발송하지 마세요.',
+    '2061':'무료 수신거부로 발송이 차단되었습니다. 재발송하지 마세요.',
+    '3061':'무료 수신거부로 발송이 차단되었습니다. 재발송하지 마세요.',
+    '1064':'KISA 신고로 발송이 차단되었습니다. SOLAPI에서 사유를 확인해주세요.',
+    '2064':'KISA 신고로 발송이 차단되었습니다. SOLAPI에서 사유를 확인해주세요.',
+    '1065':'발신자 수신거부 설정으로 차단되었습니다. 설정을 확인해주세요.',
+    '2065':'발신자 수신거부 설정으로 차단되었습니다. 설정을 확인해주세요.',
+    '2254':'SOLAPI 스팸 차단입니다. 재발송 전에 차단 사유를 확인해주세요.',
     '3010':'수신번호 형식을 확인해주세요.','3032':'가입되지 않은 번호입니다.',
     '3040':'전송 시간이 초과되었습니다.','3041':'수신 단말기가 사용 중입니다.',
     '3042':'수신 단말기가 음영지역에 있습니다.','3043':'수신 단말기 전원이 꺼져 있습니다.',
@@ -562,13 +571,17 @@ function sendQuoteSms_Legacy_(body) {
     muteHttpExceptions:true
   });
   const httpCode=response.getResponseCode();
-  if(httpCode>=400 && httpCode<500)quoteDeliveryRejected_();
   let result;
-  try { result=JSON.parse(response.getContentText()); } catch (_) { fail_('UNAVAILABLE'); }
-  assert_(httpCode>=200 && httpCode<300,'UNAVAILABLE');
+  try { result=JSON.parse(response.getContentText()); } catch (_) {
+    if(httpCode>=400 && httpCode<500)quoteDeliveryRejected_();
+    fail_('UNAVAILABLE');
+  }
+  if(httpCode>=400 && httpCode<500)quoteDeliveryRejected_(result && Array.isArray(result.failedMessageList) && result.failedMessageList[0] && result.failedMessageList[0].statusCode);
+  assert_(httpCode>=200 && httpCode<300 && result && typeof result==='object','UNAVAILABLE');
   const failed=Array.isArray(result.failedMessageList)?result.failedMessageList:[];
   const list=Array.isArray(result.messageList)?result.messageList:[];
-  if(failed.length && !list.some(row=>String(row.statusCode)==='2000'))quoteDeliveryRejected_();
+  // Only an explicit rejection with no acceptance proves that it is safe to retry.
+  if(failed.length && list.length===0)quoteDeliveryRejected_(failed[0].statusCode);
   assert_(failed.length===0 && list.length===1 && String(list[0].statusCode)==='2000','UNAVAILABLE');
   if(body.deliveryId)assert_(/^M[A-Za-z0-9_-]+$/.test(String(list[0].messageId||'')),'UNAVAILABLE');
   const accepted=list[0];
@@ -761,8 +774,12 @@ function purgeExpiredCustomerData() {
 const QUOTE_DELIVERY_SHEET = '견적발송기록';
 const QUOTE_DELIVERY_HEADERS = ['발송번호','종류','요청번호','상태','메시지ID','수신끝4자리','내용지문','시작(UTC)','완료(UTC)','결과JSON'];
 const QUOTE_DELIVERY_ID = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
-function quoteDeliveryRejected_() {
-  const error=new Error('UNAVAILABLE');error.code='UNAVAILABLE';error.deliveryRejected=true;throw error;
+function quoteDeliveryRejected_(statusCode) {
+  const error=new Error('UNAVAILABLE');error.code='UNAVAILABLE';error.deliveryRejected=true;
+  // Never persist provider text: it may echo message bodies or full phone numbers.
+  error.statusCode=/^\d{4}$/.test(String(statusCode||''))?String(statusCode):'';
+  error.statusMessage=error.statusCode?quoteSmsReason_(error.statusCode):'SOLAPI가 발송을 거절했습니다. 계정·약관 동의·발신번호 설정을 확인해주세요.';
+  throw error;
 }
 function quoteDeliveryFingerprint_(body,channel) {
   const recipient=channel==='sms'?String(body.recipientPhone||'').replace(/\D/g,''):String(body.recipientEmail||'').trim();
@@ -800,7 +817,8 @@ function quoteDelivery_(body,channel,send) {
     if(index>=0){
       const row=rows[index];assert_(row[6]===fingerprint,'CONFLICT');
       if(row[3]==='SENT')return Object.assign(quoteDeliveryResult_(JSON.parse(row[9]),body,channel),{duplicate:true});
-      return {ok:true,sent:false,state:row[3]==='REJECTED'?'rejected':'unknown',deliveryId:id};
+      if(row[3]==='REJECTED')return Object.assign({ok:true},JSON.parse(row[9]));
+      return {ok:true,sent:false,state:'unknown',deliveryId:id};
     }
     const recipient=channel==='sms'?String(body.recipientPhone||'').replace(/\D/g,''):String(body.recipientEmail||'');
     const nextRow=sheet.getLastRow()+1;
@@ -814,10 +832,12 @@ function quoteDelivery_(body,channel,send) {
   try {result=send();}
   catch(error){
     if(error.deliveryRejected || ['INVALID','NOT_READY','CONFLICT','UNAUTHORIZED','UPGRADE_REQUIRED','INVALID_ACTION'].includes(error.code)){
-      try {lock_(()=>quoteDeliveryFinish_(id,'REJECTED',{sent:false,state:'rejected',deliveryId:id}));}
+      const rejected={sent:false,state:'rejected',deliveryId:id};
+      if(error.deliveryRejected){rejected.statusCode=error.statusCode;rejected.statusMessage=error.statusMessage;}
+      try {lock_(()=>quoteDeliveryFinish_(id,'REJECTED',rejected));}
       catch(_){return {ok:true,sent:false,state:'unknown',deliveryId:id};}
       if(!error.deliveryRejected)throw error;
-      return {ok:true,sent:false,state:'rejected',deliveryId:id};
+      return Object.assign({ok:true},rejected);
     }
     // A timeout, malformed response, or MailApp exception cannot prove non-delivery.
     return {ok:true,sent:false,state:'unknown',deliveryId:id};
@@ -846,7 +866,12 @@ function quoteDeliveryStatus_(body) {
   return lock_(()=>{
     const row=namedRows_(namedSheet_(QUOTE_DELIVERY_SHEET,QUOTE_DELIVERY_HEADERS,true),10).find(row=>row[0]===body.deliveryId);
     if(!row)return {found:false};
-    return {found:true,state:String(row[3]).toLowerCase(),channel:row[1],messageId:row[4]||'',sentAt:row[3]==='SENT'?row[8]:''};
+    const result={found:true,state:String(row[3]).toLowerCase(),channel:row[1],messageId:row[4]||'',sentAt:row[3]==='SENT'?row[8]:''};
+    if(row[3]==='REJECTED'){
+      const saved=JSON.parse(row[9]);
+      ['statusCode','statusMessage'].forEach(key=>{if(saved[key]!==undefined)result[key]=saved[key];});
+    }
+    return result;
   });
 }
 function purgeQuoteDeliveries_() {
