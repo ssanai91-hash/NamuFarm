@@ -1126,3 +1126,15 @@ Room 엔티티의 NOT NULL·열 이름·복합 기본키 순서를 위 SQL과 �
 - 값은 공식견적서 발행자 설정(`QuoteIssuerSettings`)에서 읽어 설정이 바뀌면 함께 바뀜. 읽기 실패 시 기본 발행자 값. 빈 값 줄은 표시하지 않음.
 - versionCode 32 → **33**, versionName 1.1.29 → **1.1.30**. 표시만 변경, DB·서버·나피 변경 없음. 컴파일·APK·서명 미실행.
 
+
+
+## 2026-10-28 Android 1.1.30(33) 새 빌드·기존 초기 앱 키 서명 완료
+
+- 사용자 최신 main 컴파일 요청. 새 체크아웃에서 `git pull --ff-only origin main`으로 **`b257b93ef6674e3aa76eea13fb479ce69f1593fd`** 확인. versionName **1.1.30**, versionCode **33**. 시작 화면 하단 대표·사업자등록번호 표시(B안)를 포함하며 앱 코드는 추가 수정하지 않았다.
+- 한국 시각: **2026-10-28 20:47:33 빌드 시작 → 20:55:09 빌드 성공 → 20:55:10 서명·검증 완료.** 새 체크아웃에서 **`clean assembleRelease --no-build-cache --rerun-tasks -x test`** 실행. **BUILD SUCCESSFUL / 7m 35s / 51 tasks(50 executed, clean 1 up-to-date)**. 공식 배포 체크섬을 확인한 JDK 21.0.2·Gradle 9.3.1·Android SDK 36.1·Build Tools 36.0.0 사용. 앱 산출물은 새로 생성했으며 이전 APK는 재사용하지 않았다.
+- 파일명: **`NamuFarm-initial-1.1.30-b257b93-update.apk`**, 크기 **13,976,575 bytes**.
+- APK SHA-256: **`071a0eb4efe6ed724b3db14c2032f8a222c3b971a8df3d96bbcf31264f0c13b6`**.
+- 서명: 저장소 **`scripts/sign_initial_apk.py`**와 기존 초기 앱 키 사용. 인증서 SHA-256 **`a31a78a895be8f89bacb2c7b355f413e1cacecfbfd769b257801fcb619e616e1`** 일치. 이전 1.1.29 APK는 인증서·업데이트 versionCode 비교에만 사용했다. 개인키·비밀번호는 저장소/로그에 기록하지 않았다.
+- 확인: 패키지 **`com.example.namufarm.original`**, versionCode **33** / versionName **1.1.30**, 비디버그 릴리스, apksigner 검증, zipalign 정렬, ZIP 무결성, 견적 도장 자산 원본 일치. 기존 앱 위에 업데이트 설치할 APK로 전달한다.
+- 미실행: 자동시험·단위/계측시험·GitHub Actions·실제 문자/메일·고객 접수/삭제 시험·휴대폰 실제 설치/실행. assembleRelease 기본 lintVital은 실행됐다. 서버 재배포·홈페이지 게시·나피 빌드·고객자료 변경 없음.
+- 기록 반영 전에 최신 main을 다시 받아 확인하고 기존 STATUS 내용을 보존해 이 빌드 절만 추가했다.
