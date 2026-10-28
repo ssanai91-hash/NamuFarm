@@ -286,7 +286,10 @@ private fun QuoteRequestCard(request: WebQuoteRequestEntity, name: String, phone
                     verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     if (status == "견적확정") {
                         NamuStatusBadge(badge)
-                        Text(date, fontSize = 13.sp, color = NamuColors.muted)
+                        // The date is already at the top right; show the quote number instead of repeating it.
+                        val receipt = request.receiptNumber
+                        Text(if (receipt.isNotBlank()) receipt.substringBefore('-') + "-" + receipt.takeLast(4) else date,
+                            fontSize = 13.sp, color = NamuColors.muted)
                     } else {
                         if (request.formalQuoteRequested) NamuStatusBadge("공식견적서")
                         val receipt = request.receiptNumber
