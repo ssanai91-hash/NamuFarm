@@ -1065,3 +1065,15 @@ Room 엔티티의 NOT NULL·열 이름·복합 기본키 순서를 위 SQL과 �
 - **실행 주체 ‘나(ssanai91@gmail.com)’·접근 ‘모든 사용자’는 기존과 동일.** 다른 `.gs` 파일·`appsscript.json`·스크립트 속성·기존 연결/기기 등록·시트/고객자료·홈페이지 서버 주소는 바꾸지 않았다. 새 배포나 새 URL을 만들지 않았다.
 - **미실행:** 자동시험/Actions, `setupCustomerInquiries` 등 스크립트 함수 실행, 실제 문의 접수·삭제/시트 확인·기기 동기화·문자/메일·실기기 검증. 웹 배포 성공 UI만 확인했으며 삭제 기능의 실제 정상 동작을 검증했다고 간주하지 않는다.
 - 다음 사용자 확인: 앱 1.1.26(또는 이후 버전)에서 **시험용 문의 → 휴지통/삭제**, 서버 시트 `[관리자 삭제]`·다른 기기/나피 불러오기 후 사라짐·엑셀 행 제외·통신 중단 후 ‘결과 확인’. 기존 앱 삭제나 기존 자료 초기화는 하지 않는다.
+
+
+## 2026-10-28 Android 1.1.27(30) 새 빌드·기존 키 서명 완료
+
+- 사용자 요청: 최신 main Android 컴파일 및 업데이트 APK 제공. 빌드 소스는 `0a71e3ee42eb0b5649eb42f28d4487a3b11f6e29`이며, `046fe6c`의 문의 카드 상태 글자·휴지통 버튼 간격 변경을 포함한다. 새 main 체크아웃에서 `git pull --ff-only origin main` 후 versionName **1.1.27**, versionCode **30**을 확인했다. 앱 코드는 수정하지 않았다.
+- 한국 시각: **2026-10-28 11:05:54 빌드 시작 → 11:12:52 빌드 성공 → 11:13:07 서명·파일 확인 완료.** 최초 의존성 연결 실패 후 현재 연결 설정으로 재시도했다. 새 체크아웃에서 `clean assembleRelease --no-build-cache --rerun-tasks -x test` 실행, **BUILD SUCCESSFUL / 6m 57s / 51 tasks(50 executed, clean 1 up-to-date)**. JDK 21.0.2·Gradle 9.3.1·Android SDK 36.1·Build Tools 36.0.0 사용. 과거 APK/앱 빌드 산출물은 재사용하지 않았다.
+- 파일: **`NamuFarm-initial-1.1.27-0a71e3e-update.apk`**, **13,960,191 bytes**.
+- APK SHA-256: **`64975cafaffa08bf18fae2bde22d49c134b3c2ab2861fa7f29708d85334918c9`**.
+- 서명: 저장소 `scripts/sign_initial_apk.py`와 기존 초기 앱 키 사용. 인증서 SHA-256 **`a31a78a895be8f89bacb2c7b355f413e1cacecfbfd769b257801fcb619e616e1`** 확인. 이전 1.1.26 APK는 인증서·업데이트 versionCode 비교에만 사용했다.
+- 확인: 패키지 **`com.example.namufarm.original`**, versionName **1.1.27** / versionCode **30**, 릴리스 비디버그, APK 서명 검증, zipalign, ZIP 무결성, 견적 도장 자산 원본 일치. 앱 삭제 없이 기존 설치 위에 업데이트하는 APK다.
+- 미실행: 자동시험·단위/계측시험·고객문의 삭제 시험·실제 고객 접수/문자/메일 시험·GitHub Actions·휴대폰 실제 설치/실행. assembleRelease 기본 lintVital은 실행됐다. 이번 작업은 Android 빌드·서명만 수행했으며 서버 재배포·나피 빌드·고객 DB/엑셀 변경은 하지 않았다.
+- 전달 직전 최신 main을 다시 확인하고 기존 STATUS 내용을 보존해 이 절만 추가했다. APK는 파일로 전달하며 개인키·비밀번호는 저장소에 기록하지 않았다.
