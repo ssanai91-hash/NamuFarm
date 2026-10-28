@@ -8,6 +8,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.CheckBox
+import androidx.compose.material.icons.outlined.CheckBoxOutlineBlank
 import androidx.compose.material.icons.outlined.Info
 import com.example.namufarm.data.remote.inquiryTimestamp
 import com.example.namufarm.data.remote.inquiryLocalTime
@@ -48,6 +50,13 @@ internal fun InitialQuoteScreen(viewModel: InitialQuoteViewModel, connection: In
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<NamuMessage?>(null) }
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+    // Display-only list filter. Remembered on this phone; never hides, moves or deletes saved quotes.
+    val listPrefs = remember(context) { context.getSharedPreferences(CONFIRMED_LIST_PREFS, android.content.Context.MODE_PRIVATE) }
+    var confirmedDays by remember { mutableIntStateOf(listPrefs.getInt("confirmedDays", 31)
+        .takeIf { saved -> CONFIRMED_PERIODS.any { it.first == saved } } ?: 31) }
+    var showClosed by remember { mutableStateOf(listPrefs.getBoolean("showClosed", false)) }
+    fun chooseDays(days: Int) { confirmedDays = days; listPrefs.edit().putInt("confirmedDays", days).apply() }
+    fun chooseClosed(show: Boolean) { showClosed = show; listPrefs.edit().putBoolean("showClosed", show).apply() }
     var result by remember { mutableStateOf<QuoteWorkflowRecord?>(null) }
     var serverResult by remember { mutableStateOf<WebQuoteRequestEntity?>(null) }
     val editing = management.editingRequest
@@ -85,8 +94,25 @@ internal fun InitialQuoteScreen(viewModel: InitialQuoteViewModel, connection: In
     val pending = records.filter { it.confirmationPending }.map { it.request }
     val requests = (pending + inbox.requests.filter { it.status == "신규" })
         .distinctBy { it.requestId }.filter { it.requestId !in confirmedIds }.sortedByDescending { it.sequence }
-    val remoteConfirmed = inbox.requests.filter { it.status in setOf("견적확정", "견적발송완료") &&
-        it.requestId !in confirmedIds }.sortedByDescending { it.sequence }
+    // One list, newest first: phone-confirmed quotes by confirmation time, server-only quotes by receipt time.
+    val latestById = inbox.requests.associateBy { it.requestId }
+    val confirmedRows = (confirmed.map { saved ->
+        val state = latestById[saved.request.requestId]?.status
+        ConfirmedListRow(saved.request.requestId, if (saved.confirmedAt > 0) saved.confirmedAt else requestTime(saved.request),
+            closedState = state?.takeIf { it in CLOSED_QUOTE_STATES }, local = saved,
+            needsAction = saved.confirmationPending || saved.pendingConfirmedDelivery != null || saved.revisedUnsent() ||
+                saved.delivery.smsState in setOf("pending", "unknown", "sending"))
+    } + inbox.requests.filter { it.requestId !in confirmedIds &&
+        (it.status in CONFIRMED_QUOTE_STATES || it.status in CLOSED_QUOTE_STATES) }.map { saved ->
+        ConfirmedListRow("server-${saved.requestId}", requestTime(saved),
+            closedState = saved.status.takeIf { it in CLOSED_QUOTE_STATES }, remote = saved)
+    }).sortedByDescending { it.at }
+    val confirmedCutoff = if (confirmedDays >= CONFIRMED_ALL) Long.MIN_VALUE
+        else System.currentTimeMillis() - confirmedDays * 86_400_000L
+    val confirmedPool = confirmedRows.filter { showClosed || it.closedState == null }
+    // Quotes still waiting for a send/result check are never hidden by the period.
+    val shownConfirmed = confirmedPool.filter { it.needsAction || it.at <= 0 || it.at >= confirmedCutoff }
+    val hiddenConfirmed = confirmedPool.size - shownConfirmed.size
     Scaffold(containerColor = NamuColors.background, contentWindowInsets = WindowInsets(0, 0, 0, 0), topBar = {
         NamuTopBar("견적", masterSyncLabel(inbox.lastSyncAt),
             onSync = { if (!busy && !inbox.busy && !deleting) onSync() })
@@ -94,8 +120,9 @@ internal fun InitialQuoteScreen(viewModel: InitialQuoteViewModel, connection: In
         Column(Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
             NamuSegmented(listOf(NamuSegment("견적요청", requests.size),
-                NamuSegment("확정견적", confirmed.size + remoteConfirmed.size)), selectedTab,
+                NamuSegment("확정견적", shownConfirmed.size)), selectedTab,
                 onSelect = { selectedTab = it })
+            if (selectedTab == 1) ConfirmedPeriodBar(confirmedDays, ::chooseDays, shownConfirmed.size, showClosed, ::chooseClosed)
             message?.let { Text(it.text, color = if (it.isError) MaterialTheme.colorScheme.error
                 else MaterialTheme.colorScheme.primary) }
             if (inbox.deferredCount > 0) Text("이전 암호화 요청 ${inbox.deferredCount}건은 원본 기기에서 확인해주세요.",
@@ -117,18 +144,31 @@ internal fun InitialQuoteScreen(viewModel: InitialQuoteViewModel, connection: In
                         }
                     }
                 } else {
-                    if (confirmed.isEmpty() && remoteConfirmed.isEmpty()) item {
-                        Text("확정된 견적이 없습니다.", Modifier.padding(12.dp))
+                    if (shownConfirmed.isEmpty()) item {
+                        Text(if (confirmedPool.isEmpty()) "확정된 견적이 없습니다."
+                            else "${confirmedPeriodLabel(confirmedDays)}에 확정한 견적이 없습니다.",
+                            Modifier.padding(12.dp), fontSize = 15.sp, color = NamuColors.muted)
                     }
-                    itemsIndexed(confirmed, key = { _, saved -> saved.request.requestId }) { index, saved ->
-                        QuoteRequestCard(saved.request, saved.draft.recipient.customerName, saved.draft.phone,
-                            status = "견적확정", date = workflowDate(saved.confirmedAt), at = saved.confirmedAt,
-                            itemCount = saved.draft.rows.count { it.name.isNotBlank() }) { result = saved }
+                    itemsIndexed(shownConfirmed, key = { _, row -> row.key }) { index, row ->
+                        val badge = row.closedState ?: "견적확정"
+                        row.local?.let { saved ->
+                            QuoteRequestCard(saved.request, saved.draft.recipient.customerName, saved.draft.phone,
+                                status = "견적확정", date = workflowDate(saved.confirmedAt), at = row.at, badge = badge,
+                                itemCount = saved.draft.rows.count { it.name.isNotBlank() }) { result = saved }
+                        }
+                        row.remote?.let { saved ->
+                            QuoteRequestCard(saved, saved.customerName, saved.customerPhone, badge = badge,
+                                status = "견적확정", date = "접수 ${inquiryLocalTime(saved.createdAt)}") {
+                                serverResult = saved
+                            }
+                        }
                     }
-                    itemsIndexed(remoteConfirmed, key = { _, saved -> "server-${saved.requestId}" }) { index, saved ->
-                        QuoteRequestCard(saved, saved.customerName, saved.customerPhone,
-                            status = "견적확정", date = "접수 ${inquiryLocalTime(saved.createdAt)}") {
-                            serverResult = saved
+                    if (hiddenConfirmed > 0) item {
+                        OutlinedButton(onClick = { chooseDays(CONFIRMED_ALL) },
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 50.dp), shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(1.dp, NamuColors.primary)) {
+                            Text("지난 견적 ${hiddenConfirmed}건 더 보기", color = NamuColors.primary,
+                                fontSize = 16.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -218,7 +258,7 @@ private fun requestedSpeciesCount(request: WebQuoteRequestEntity): Int? = runCat
 @Composable
 private fun QuoteRequestCard(request: WebQuoteRequestEntity, name: String, phone: String,
     status: String, date: String, pending: Boolean = false, enabled: Boolean = true,
-    itemCount: Int? = requestedSpeciesCount(request),
+    badge: String = status, itemCount: Int? = requestedSpeciesCount(request),
     at: Long = runCatching { inquiryTimestamp(request.createdAt) }.getOrDefault(0L), onClick: () -> Unit) {
     val items = remember(request.itemsJson) { runCatching {
         com.google.gson.Gson().fromJson(request.itemsJson, Array<com.example.namufarm.data.WebQuoteItem>::class.java).toList()
@@ -245,7 +285,7 @@ private fun QuoteRequestCard(request: WebQuoteRequestEntity, name: String, phone
                 } else FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     if (status == "견적확정") {
-                        NamuStatusBadge("견적확정")
+                        NamuStatusBadge(badge)
                         Text(date, fontSize = 13.sp, color = NamuColors.muted)
                     } else {
                         if (request.formalQuoteRequested) NamuStatusBadge("공식견적서")
@@ -259,6 +299,54 @@ private fun QuoteRequestCard(request: WebQuoteRequestEntity, name: String, phone
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 NamuSmsButton(phone, Modifier.size(42.dp), enabled = enabled, iconSize = 18.dp)
                 NamuCallButton(phone, Modifier.size(42.dp), enabled = enabled, iconSize = 18.dp)
+            }
+        }
+    }
+}
+
+private const val CONFIRMED_LIST_PREFS = "namufarm_quote_list"
+private const val CONFIRMED_ALL = 9999
+private val CONFIRMED_PERIODS = listOf(7 to "1주", 31 to "1개월", 92 to "3개월", CONFIRMED_ALL to "전체")
+
+private class ConfirmedListRow(val key: String, val at: Long, val closedState: String?,
+    val local: QuoteWorkflowRecord? = null, val remote: WebQuoteRequestEntity? = null, val needsAction: Boolean = false)
+
+private fun requestTime(request: WebQuoteRequestEntity): Long =
+    runCatching { inquiryTimestamp(request.createdAt) }.getOrDefault(0L)
+
+private fun confirmedPeriodLabel(days: Int): String = when (days) {
+    7 -> "최근 1주"; 31 -> "최근 1개월"; 92 -> "최근 3개월"; else -> "전체 기간"
+}
+
+/** Large, evenly spaced period buttons under the tabs, plus an opt-in for paid/closed quotes. */
+@Composable
+private fun ConfirmedPeriodBar(days: Int, onDays: (Int) -> Unit, shown: Int,
+    showClosed: Boolean, onShowClosed: (Boolean) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            CONFIRMED_PERIODS.forEach { (value, label) ->
+                val active = value == days
+                Surface(onClick = { onDays(value) }, modifier = Modifier.weight(1f).height(44.dp),
+                    shape = RoundedCornerShape(12.dp), color = if (active) NamuColors.primary else Color.White,
+                    border = BorderStroke(1.dp, if (active) NamuColors.primary else NamuColors.border),
+                    shadowElevation = if (active) 1.dp else 0.dp) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(label, fontSize = 16.sp, fontWeight = if (active) FontWeight.Bold else FontWeight.Medium,
+                            color = if (active) Color.White else NamuColors.muted)
+                    }
+                }
+            }
+        }
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text("${if (days >= CONFIRMED_ALL) "전체" else confirmedPeriodLabel(days)} · 견적 ${shown}건",
+                Modifier.weight(1f).padding(start = 2.dp), fontSize = 14.sp, color = NamuColors.muted)
+            Surface(onClick = { onShowClosed(!showClosed) }, shape = RoundedCornerShape(10.dp), color = Color.Transparent) {
+                Row(Modifier.heightIn(min = 40.dp).padding(horizontal = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Icon(if (showClosed) Icons.Outlined.CheckBox else Icons.Outlined.CheckBoxOutlineBlank, null,
+                        Modifier.size(22.dp), tint = if (showClosed) NamuColors.primary else NamuColors.muted)
+                    Text("입금된 견적도 보기", fontSize = 14.sp, color = NamuColors.text)
+                }
             }
         }
     }
