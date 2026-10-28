@@ -213,6 +213,21 @@ fun SplashScreen(onTimeout: () -> Unit) {
             Text("나무팜 NamuFarm", fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF2E7D32))
             Text("재고 및 견적 관리 시스템", fontSize = 14.sp, color = Color(0xFF388E3C))
         }
+        // B안: 화면 맨 아래 회사 정보. 공식견적서 발행자 정보와 같은 값(설정 변경 시 함께 바뀜).
+        val context = androidx.compose.ui.platform.LocalContext.current
+        val issuer = remember(context) {
+            runCatching { com.example.namufarm.quotation.QuoteIssuerSettings(context).load() }
+                .getOrDefault(com.example.namufarm.quotation.QuoteIssuer())
+        }
+        Column(Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 40.dp),
+            horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            val owner = listOf(issuer.businessName.trim(),
+                issuer.representative.trim().takeIf { it.isNotEmpty() }?.let { "대표 $it" }.orEmpty())
+                .filter { it.isNotEmpty() }.joinToString(" · ")
+            if (owner.isNotEmpty()) Text(owner, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = Color(0xFF2E7D32))
+            if (issuer.businessNumber.isNotBlank()) Text("사업자등록번호 ${issuer.businessNumber.trim()}",
+                fontSize = 13.sp, color = Color(0xFF5E8B68))
+        }
     }
 }
 
