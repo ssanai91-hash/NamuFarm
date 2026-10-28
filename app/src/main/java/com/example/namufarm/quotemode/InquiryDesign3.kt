@@ -149,7 +149,8 @@ internal fun InquiryListCard(row: CustomerInquiryRemote, pending: Boolean, hasDr
 /** Admin delete: small red trash button at the right end of the card's top row. */
 @Composable
 private fun InquiryDeleteButton(onDelete: () -> Unit) {
-    IconButton(onClick = onDelete, modifier = Modifier.size(36.dp)
+    // Extra left gap so the trash button does not touch the status text ("초안 저장됨").
+    IconButton(onClick = onDelete, modifier = Modifier.padding(start = 10.dp).size(36.dp)
         .background(Color(0xFFFDECEC), RoundedCornerShape(10.dp))) {
         Icon(Icons.Outlined.Delete, "문의 삭제", tint = NamuColors.danger, modifier = Modifier.size(19.dp))
     }
