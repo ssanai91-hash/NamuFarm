@@ -2753,6 +2753,20 @@ body { background:#ffffff; }
 .purpose-option svg { width: 1.5rem; height: 1.5rem; flex-shrink: 0; stroke-width: 1.8; }
 .purpose-option[aria-pressed=true] { border-color: var(--forest); background: #e8f2e8; color: var(--forest); box-shadow: inset 0 0 0 1px var(--forest); }
 .purpose-option:hover { border-color: #527f62; background: #f3f8f2; }
+/* Theme cards: tinted icon tile + theme name + one-line copy (never wraps). */
+.purpose-option { justify-content: flex-start; text-align: left; }
+.purpose-icon { display: grid; place-items: center; flex-shrink: 0; width: 2.6rem; height: 2.6rem; border-radius: .7rem; background: var(--purpose-tint, #e8f2e8); color: #1d5a3c; }
+.purpose-option[data-purpose=fruit] { --purpose-tint: #fbe9df; }
+.purpose-option[data-purpose=hedge] { --purpose-tint: #e3efe1; }
+.purpose-option[data-purpose=flower] { --purpose-tint: #fbe6ec; }
+.purpose-option[data-purpose=shade] { --purpose-tint: #e2ede6; }
+.purpose-option[data-purpose=garden] { --purpose-tint: #e6eef4; }
+.purpose-option[data-purpose=lawn] { --purpose-tint: #eef4dc; }
+.purpose-option[aria-pressed=true] .purpose-icon { box-shadow: inset 0 0 0 1px rgba(35,106,70,.35); }
+.purpose-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.3; }
+.purpose-text strong { font-size: 1.08rem; font-weight: 750; color: #1f3b2d; white-space: nowrap; }
+.purpose-text small { font-size: .86rem; font-weight: 500; color: #5d6f64; white-space: nowrap; }
+.purpose-option[aria-pressed=true] .purpose-text small { color: var(--forest); }
 .catalog-result-intro { margin: 1.65rem 0 .75rem; }
 .catalog-result-intro h3 { color: #193f2e; font-size: 1.4rem; line-height: 1.35; font-weight: 800; }
 .catalog-result-intro .catalog-results-heading { margin: .3rem 0 0; color: #56705d; }
@@ -2761,8 +2775,12 @@ body { background:#ffffff; }
   .catalog-mode-tabs { margin-bottom: 1.3rem; }
   .catalog-mode-tabs button { font-size: .98rem; }
   .purpose-options { gap: .55rem; }
-  .purpose-option { flex-direction: column; gap: .25rem; min-height: 4.5rem; padding: .5rem .2rem; font-size: 1rem; }
+  .purpose-option { flex-direction: column; justify-content: center; text-align: center; gap: .3rem; min-height: 4.5rem; padding: .6rem .15rem .55rem; font-size: 1rem; }
   .purpose-option svg { width: 1.4rem; height: 1.4rem; }
+  .purpose-icon { width: 2.35rem; height: 2.35rem; border-radius: .65rem; }
+  .purpose-text { align-items: center; }
+  .purpose-text strong { font-size: 1rem; }
+  .purpose-text small { font-size: .78rem; letter-spacing: -.01em; }
   .catalog-section .catalog-grid { grid-template-columns: repeat(2,minmax(0,1fr)); gap: .5rem; }
   .catalog-section .catalog-grid .catalog-card { min-width: 0; min-height: 3.3rem; }
   .catalog-section .catalog-grid .catalog-card-name { font-size: 1rem; }

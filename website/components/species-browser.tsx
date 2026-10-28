@@ -54,8 +54,8 @@ export default function SpeciesBrowser({ lines, onSelect, onRemove, notice, lock
         <button type="button" aria-pressed={mode === "planting"} onClick={() => { setMode("planting"); setPage(0); }}>심는 시기</button>
       </div>
       {mode === "purpose" ? <div className="catalog-purpose-controls">
-        <p className="purpose-prompt">어떤 용도로 찾으세요?</p>
-        <div className="purpose-options" role="group" aria-label="나무 용도">{purposes.map(item => { const Icon = purposeIcons[item.id]; return <button key={item.id} type="button" className="purpose-option" aria-pressed={purpose === item.id} onClick={() => choosePurpose(item.id)}><Icon aria-hidden="true" /><span>{item.label}</span></button>; })}</div>
+        <p className="purpose-prompt">어떤 정원을 꿈꾸세요?</p>
+        <div className="purpose-options" role="group" aria-label="나무 용도">{purposes.map(item => { const Icon = purposeIcons[item.id]; return <button key={item.id} type="button" className="purpose-option" data-purpose={item.id} aria-pressed={purpose === item.id} onClick={() => choosePurpose(item.id)}><span className="purpose-icon"><Icon aria-hidden="true" /></span><span className="purpose-text"><strong>{item.theme}</strong><small>{item.copy}</small></span></button>; })}</div>
       </div> : mode === "planting" ? <div className="planting-controls">
         <div className="planting-heading"><h3>지금 심을 나무가 궁금하세요?</h3><Popover open={monthPickerOpen} onOpenChange={setMonthPickerOpen}>
           <PopoverTrigger asChild><button type="button" className="planting-month" aria-label={`심는 시기 안내 월 선택, 현재 ${month}월`} aria-describedby="planting-month-help">{month}월<ChevronDown aria-hidden="true" /></button></PopoverTrigger>
