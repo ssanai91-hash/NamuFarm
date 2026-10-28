@@ -28,6 +28,17 @@ def local_time(value):
     return iso_date(value).astimezone(SEOUL).strftime('%Y-%m-%d %H:%M') if value else ''
 
 
+SMS_OPT_OUT_CODES = ('1061', '2061', '3061')  # 서버 CustomerInquiries.gs INQUIRY_SMS_OPT_OUT과 동일
+SMS_BLOCKED_MESSAGE = '고객이 문자 수신거부(080)를 한 번호라 문자를 보낼 수 없습니다. 메일이나 전화로 안내해주세요.'
+
+
+def sms_blocked(row):
+    """True once SOLAPI reported a free opt-out block for an SMS reply to this inquiry."""
+    def blocked(x):
+        return isinstance(x, dict) and x.get('channel') == 'sms' and str(x.get('statusCode') or '') in SMS_OPT_OUT_CODES
+    return blocked(row.get('delivery')) or any(h.get('kind') == 'reply' and blocked(h) for h in row.get('history', []) if isinstance(h, dict))
+
+
 def validate_row(value):
     require(isinstance(value, dict), '문의 응답을 확인할 수 없습니다.')
     r = copy.deepcopy(value)
@@ -241,7 +252,14 @@ class InquiryService:
         return r
 
     def _execute(self, identifier, operation):
-        result = self.manager.api.call(operation['action'], **operation['payload'])
+        try:
+            result = self.manager.api.call(operation['action'], **operation['payload'])
+        except UserError as error:
+            if getattr(error, 'code', None) == 'SMS_BLOCKED' and operation['action'] == 'send_inquiry_reply':
+                # The server refused before sending or changing anything; the pending send can be dropped.
+                self.store.write('operations', identifier, None)
+                raise UserError(SMS_BLOCKED_MESSAGE, code='SMS_BLOCKED') from error
+            raise
         r = self._ack(identifier, result)
         action, p = operation['action'], operation['payload']
         if action == 'save_inquiry_reply':
@@ -292,6 +310,7 @@ class InquiryService:
         draft = self.draft(row)
         require(draft['text'].strip(), '답변을 입력해주세요.')
         require(channel != 'email' or row['inquiry']['customerEmail'], '고객이 이메일을 남기지 않았습니다.')
+        require(channel != 'sms' or not sms_blocked(row), SMS_BLOCKED_MESSAGE)
         self.remember(identifier, draft['text'], channel)
         self.save_reply(identifier)
         row = self.row(identifier)

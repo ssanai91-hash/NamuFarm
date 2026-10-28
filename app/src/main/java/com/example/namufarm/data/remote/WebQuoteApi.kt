@@ -83,6 +83,7 @@ object WebQuoteValidator {
             "DEVICE_LIMIT" -> "등록 가능한 기기 수가 찼습니다. 서버 관리자에게 등록 기기 정리를 요청해주세요."
             "BUSY" -> "서버가 다른 요청을 처리 중입니다. 잠시 후 다시 동기화해주세요."
             "INVALID" -> "요청 형식이 맞지 않습니다. 앱과 서버 버전을 확인해주세요."
+            "SMS_BLOCKED" -> CustomerInquiryRemote.SMS_BLOCKED_MESSAGE
             else -> "서버 응답을 확인하지 못했어요. 저장된 기록을 유지하며 다시 시도할 수 있습니다."
         })
     }

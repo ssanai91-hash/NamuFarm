@@ -15,12 +15,14 @@ data class CustomerInquiryReply(val text: String? = null, val channel: String? =
 data class CustomerInquiryDelivery(
     val id: String? = null, val channel: String? = null, val state: String? = null,
     val messageId: String? = null, val startedAt: String? = null,
-    val sentAt: String? = null, val statusCode: String? = null
+    val sentAt: String? = null, val statusCode: String? = null,
+    /** Fixed server explanation for a rejection/failure code (never provider text). */
+    val statusMessage: String? = null
 )
 data class CustomerInquiryHistory(
     val kind: String? = null, val id: String? = null, val text: String? = null,
     val channel: String? = null, val at: String? = null, val state: String? = null,
-    val status: String? = null, val note: String? = null
+    val status: String? = null, val note: String? = null, val statusCode: String? = null
 )
 data class CustomerInquiryRemote(
     val kind: String? = null, val requestId: String? = null,
@@ -69,8 +71,14 @@ data class CustomerInquiryRemote(
 
     val blockedDelivery: Boolean get() = delivery?.state in setOf("sending", "pending", "unknown")
     val deliveryLabel: String get() = DELIVERY_LABELS[delivery?.state] ?: "발송 전"
+    /** SOLAPI free opt-out block seen for an SMS reply to this inquiry; the server refuses further SMS. */
+    val smsBlocked: Boolean get() = (delivery?.channel == "sms" && delivery?.statusCode in SMS_OPT_OUT_CODES) ||
+        history.orEmpty().any { it?.kind == "reply" && it.channel == "sms" && it.statusCode in SMS_OPT_OUT_CODES }
 
     companion object {
+        /** Same codes as server INQUIRY_SMS_OPT_OUT. */
+        val SMS_OPT_OUT_CODES = setOf("1061", "2061", "3061")
+        const val SMS_BLOCKED_MESSAGE = "고객이 문자 수신거부(080)를 한 번호라 문자를 보낼 수 없습니다. 메일이나 전화로 안내해주세요."
         val UUID = Regex("[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}")
         val DELIVERY_LABELS = mapOf("sending" to "발송 확인 필요", "pending" to "문자 결과 대기",
             "unknown" to "발송 결과 불명", "sent" to "메일 발송 완료",

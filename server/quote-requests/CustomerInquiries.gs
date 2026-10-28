@@ -157,12 +157,20 @@ function saveInquiryReply_(body) {
 }
 function inquiryMailBody_(raw,number) {return '[나무팜 고객문의 답변]\n문의번호: '+number+'\n\n'+raw.inquiry.customerName+'님, 문의주셔서 감사합니다.\n\n[문의 내용]\n'+raw.inquiry.message+'\n\n[답변]\n'+raw.reply.text;}
 /** Send only the saved draft to the stored customer. Never auto-resend an uncertain send. */
+/** SOLAPI free opt-out (080) block codes. Once seen for this inquiry, SMS replies stay blocked. */
+const INQUIRY_SMS_OPT_OUT=['1061','2061','3061'];
+function inquirySmsOptedOut_(raw) {
+  const blocked=x=>x && x.channel==='sms' && INQUIRY_SMS_OPT_OUT.includes(String(x.statusCode||''));
+  return blocked(raw.delivery) || (raw.history||[]).some(h=>h.kind==='reply' && blocked(h));
+}
 function sendInquiryReply_(body) {
   assert_(INQUIRY_UUID.test(body.deliveryId) && Number.isSafeInteger(body.revision),'INVALID');
   return lock_(()=>{
     const record=inquiryRecord_(body.requestId),raw=JSON.parse(record.row[IC.raw]);assert_(!raw.expired,'CONFLICT');
     if(raw.delivery && raw.delivery.id===body.deliveryId || (raw.history||[]).some(h=>h.kind==='reply' && h.id===body.deliveryId))return {inquiry:inquiryResponse_(record.row),duplicate:true};
     assert_(Number(record.row[IC.revision])===body.revision && raw.reply.text.length>0 && (!raw.delivery || raw.delivery.state==='failed'),'CONFLICT');
+    // Rejected before any state change: nothing is sent, so clients may drop the pending send.
+    if(raw.reply.channel==='sms' && inquirySmsOptedOut_(raw))fail_('SMS_BLOCKED');
     const message=raw.reply.channel==='email'?inquiryMailBody_(raw,record.row[IC.number]):'[나무팜 고객문의 답변]\n문의번호: '+record.row[IC.number]+'\n\n'+raw.reply.text;
     if(raw.reply.channel==='email'){assert_(raw.inquiry.customerEmail && MailApp.getRemainingDailyQuota()>0,'NOT_READY');}
     else assert_(quoteSmsSettings_().configured,'NOT_READY');

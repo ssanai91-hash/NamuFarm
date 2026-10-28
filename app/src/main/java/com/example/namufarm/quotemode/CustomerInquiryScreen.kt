@@ -213,6 +213,11 @@ private fun InquiryDetailDialog(row: CustomerInquiryRemote, state: CustomerInqui
                                     }
                                 }
                                 Text("${row.inquiryNumber} · ${row.deliveryLabel}", fontSize = 13.sp, color = muted)
+                                // Why the last send failed (fixed server text), and the opt-out block notice.
+                                val reason = row.delivery?.takeIf { it.state == "failed" }?.statusMessage?.takeIf { it.isNotBlank() }
+                                if (reason != null || row.smsBlocked) Text(
+                                    if (row.smsBlocked) "수신거부 번호라 문자는 보낼 수 없어요. 메일·전화로 안내해주세요." else reason.orEmpty(),
+                                    fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = NamuColors.danger)
                             }
                         }
                         HorizontalDivider(color = line)
@@ -279,7 +284,7 @@ private fun InquiryDetailDialog(row: CustomerInquiryRemote, state: CustomerInqui
                     if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth(), color = green, trackColor = line)
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         InquirySendButton("문자", Icons.Outlined.Sms, green,
-                            editable && !conflict && draft.text.isNotBlank(), Modifier.weight(1f)) { prepareReply("sms") }
+                            editable && !conflict && draft.text.isNotBlank() && !row.smsBlocked, Modifier.weight(1f)) { prepareReply("sms") }
                         InquirySendButton("메일", Icons.Outlined.Email, green,
                             editable && !conflict && draft.text.isNotBlank() && !row.inquiry?.customerEmail.isNullOrBlank(),
                             Modifier.weight(1f)) { prepareReply("email") }

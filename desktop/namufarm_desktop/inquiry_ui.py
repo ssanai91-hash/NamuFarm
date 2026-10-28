@@ -6,7 +6,7 @@ from PySide6.QtWidgets import (QWidget, QDialog, QVBoxLayout, QHBoxLayout, QLabe
 
 from .app import table, fill_table, Task
 from .errors import UserError
-from .inquiries import InquiryService, DELIVERY_LABELS, local_time
+from .inquiries import InquiryService, DELIVERY_LABELS, local_time, sms_blocked
 from .ui_theme import fit_window, scroll_dialog
 from .ui_theme import align_table, StatusDelegate
 from .presentation import phone_text, date_text
@@ -303,6 +303,9 @@ class InquiryDialog(QDialog):
         delivery = DELIVERY_LABELS.get(d.get('state'), '아직 발송하지 않았습니다.')
         if d.get('statusMessage'):
             delivery += ' · ' + d['statusMessage']
+        blocked = sms_blocked(r)
+        if blocked:
+            delivery += ' · 수신거부 번호라 문자는 보낼 수 없어요. 메일·전화로 안내해주세요.'
         conflict = draft['baseRevision'] != r['revision']
         self.info.setText(delivery + (' · 다른 기기 변경 있음. 최신 답변과 내 초안을 확인해주세요.' if conflict else ' · 입력 내용은 이 PC에 자동 보관됩니다.'))
         history = ['현재 서버 답변\n' + (r['reply']['text'] or '(없음)')]
@@ -318,8 +321,10 @@ class InquiryDialog(QDialog):
         ready = not self.task
         for w in (self.reply, self.close_button, self.history_toggle): w.setEnabled(ready)
         self.save.setEnabled(ready and not uncertain and not conflict and (not pending or pending['action']=='save_inquiry_reply'))
-        self.sms.setEnabled(ready and not uncertain and not pending and not conflict)
-        self.email.setEnabled(self.sms.isEnabled() and bool(q['customerEmail']))
+        can_send = ready and not uncertain and not pending and not conflict
+        self.sms.setEnabled(can_send and not blocked)
+        self.sms.setToolTip('수신거부 번호라 문자를 보낼 수 없습니다.' if blocked else '')
+        self.email.setEnabled(can_send and bool(q['customerEmail']))
         self.check_button.setEnabled(ready and bool(pending or uncertain))
         self.rebase.setVisible(conflict and (not pending or pending['action']=='save_inquiry_reply'))
         self.rebase.setEnabled(ready and not uncertain)

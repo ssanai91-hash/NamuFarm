@@ -133,7 +133,12 @@ class CustomerInquiryRepository(private val db: CustomerInquiryDatabase, private
     private suspend fun execute(operation: CustomerInquiryOperationEntity): CustomerInquiryRemote {
         val payload = fields(operation)
         // Local editor text is recovery metadata, never part of the server contract.
-        val result = call(operation.action, payload.filterKeys { it != "localDraftText" })
+        val result = try { call(operation.action, payload.filterKeys { it != "localDraftText" }) }
+        catch (error: WebQuoteResponseException) {
+            // Refused before sending or changing anything, so the pending send is safe to drop.
+            if (error.responseCode == "SMS_BLOCKED" && operation.action == "send_inquiry_reply") dao.deleteOperation(operation.requestId)
+            throw error
+        }
         val value = checkNotNull(result.inquiry) { "문의 처리 응답을 확인하지 못했습니다. 결과 확인을 눌러주세요." }.checked()
         val deleting = operation.action == "delete_customer_inquiry"
         check(value.requestId == operation.requestId && (value.expired == true) == deleting) { "문의 처리 결과를 확인할 수 없습니다." }
@@ -188,6 +193,7 @@ class CustomerInquiryRepository(private val db: CustomerInquiryDatabase, private
 
     suspend fun send(id: String, channel: String, preparedText: String, sourceDraft: CustomerInquiryDraftEntity) {
         val current = row(id)
+        check(channel != "sms" || !current.smsBlocked) { CustomerInquiryRemote.SMS_BLOCKED_MESSAGE }
         check(draft(current).text.isNotBlank() && preparedText.isNotBlank()) { "답변을 입력해주세요." }
         // Saving and sending are separate durable operations. A failed save never sends.
         save(id, channel, preparedText, sourceDraft)

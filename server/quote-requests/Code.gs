@@ -70,7 +70,7 @@ function doPost(e) {
     return json_(Object.assign({ ok: true }, value));
   } catch (error) {
     // Do not leak customer data, sheet identifiers, or credentials in responses/logs.
-    const code = ['INVALID','UNAUTHORIZED','CONFLICT','RATE_LIMITED','NOT_READY','DEVICE_LIMIT','BUSY','INVALID_ACTION','UPGRADE_REQUIRED'].indexOf(error.code) >= 0 ? error.code : 'UNAVAILABLE';
+    const code = ['INVALID','UNAUTHORIZED','CONFLICT','RATE_LIMITED','NOT_READY','DEVICE_LIMIT','BUSY','INVALID_ACTION','UPGRADE_REQUIRED','SMS_BLOCKED'].indexOf(error.code) >= 0 ? error.code : 'UNAVAILABLE';
     return json_({ ok: false, code: code });
   }
 }

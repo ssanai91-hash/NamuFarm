@@ -91,7 +91,8 @@ class ScriptApi:
                             "UPGRADE_REQUIRED": "앱과 서버를 최신 버전으로 업데이트해주세요.",
                             "INVALID_ACTION": "현재 연결된 Apps Script /exec 배포가 이전 버전입니다. 기존 웹앱을 새 버전으로 다시 배포해주세요.",
                             "UNAVAILABLE": "Apps Script 실행 중 오류가 발생했습니다. Apps Script의 실행 기록에서 실패 원인을 확인해주세요.",
-                            "INVALID": "입력값과 앱·서버 버전을 확인해주세요.", "BUSY": "서버가 처리 중입니다. 잠시 후 동기화해주세요."}
+                            "INVALID": "입력값과 앱·서버 버전을 확인해주세요.", "BUSY": "서버가 처리 중입니다. 잠시 후 동기화해주세요.",
+                            "SMS_BLOCKED": "고객이 문자 수신거부를 한 번호입니다. 메일이나 전화로 안내해주세요."}
                 if code == "UNAVAILABLE" and payload is not None and payload.get("action") in ("send_quote_sms", "send_quote_email", "send_sales_report_email"):
                     error = failure("")
                     error.code = code

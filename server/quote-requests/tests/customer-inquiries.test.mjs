@@ -145,3 +145,17 @@ test('admin delete wipes personal data, emits a deleted tombstone once, and surv
   const all=f.context.listCustomerInquiries_({afterSequence:0}).inquiries;assert.equal(all.length,1);assert.equal(all[0].deleted,true);
   assert.equal(f.post({action:'delete_customer_inquiry',requestId:uuid(1),eventId:uuid(53)}).code,'UNAUTHORIZED');
 });
+
+test('free opt-out (080) block keeps SMS replies blocked; email remains available; nothing is resent',()=>{
+  const f=fixture();f.context.setupCustomerInquiries();f.post(f.body(1));
+  let attempts=0;
+  f.context.sendQuoteSms_=()=>{attempts++;const e=new Error('UNAVAILABLE');e.code='UNAVAILABLE';e.deliveryRejected=true;e.statusCode='1061';e.statusMessage='무료 수신거부로 발송이 차단되었습니다. 재발송하지 마세요.';throw e;};
+  const draft=f.context.saveInquiryReply_({requestId:uuid(1),eventId:uuid(60),revision:1,replyText:'문자 답변',replyChannel:'sms'});
+  const failed=f.context.sendInquiryReply_({requestId:uuid(1),deliveryId:uuid(61),revision:draft.inquiry.revision});
+  assert.equal(failed.inquiry.delivery.state,'failed');assert.equal(failed.inquiry.delivery.statusCode,'1061');
+  assert.throws(()=>f.context.sendInquiryReply_({requestId:uuid(1),deliveryId:uuid(62),revision:failed.inquiry.revision}),e=>e.code==='SMS_BLOCKED');
+  assert.equal(attempts,1);
+  const mail=f.context.saveInquiryReply_({requestId:uuid(1),eventId:uuid(63),revision:failed.inquiry.revision,replyText:'메일 답변',replyChannel:'email'});
+  assert.equal(f.context.sendInquiryReply_({requestId:uuid(1),deliveryId:uuid(64),revision:mail.inquiry.revision}).inquiry.delivery.state,'sent');
+  assert.equal(attempts,1);
+});
