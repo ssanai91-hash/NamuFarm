@@ -1267,3 +1267,9 @@ Room 엔티티의 NOT NULL·열 이름·복합 기본키 순서를 위 SQL과 �
 - 서명: 초기 앱 JKS에서 keytool로 실제 인증서를 내보내 SHA-256 `a31a78a895be8f89bacb2c7b355f413e1cacecfbfd769b257801fcb619e616e1`과 일치함을 확인했다. 새 키·디버그 키 사용 없음. APK 서명·패키지/버전/비디버그/정렬/ZIP 무결성은 미생성으로 미실행.
 - 미실행: 자동시험·Actions·실제 고객 접수·문자/메일 시험·Apps Script 변경/재배포·푸시 시험·실기기 설치. Firebase 콘솔 추가 변경 없음.
 - 후속 최소 수정 제안(미적용): app/build.gradle.kts 상단에 `import java.util.Properties` 추가, 9행 생성자를 `Properties()`로 변경. 사용자 승인 또는 후속 수정 커밋 이후 동일 명령으로 재빌드한다.
+
+## 2026-10-30 Android 1.1.34 빌드 스크립트 오류 수정 · 코드만
+
+- GPT 빌드에서 `app/build.gradle.kts`의 `java.util.Properties()`가 `Unresolved reference 'util'`로 실패(`d8b20b3` 기록). Gradle 스크립트 안에서 `java`가 Java 확장 객체로 해석되는 문제(Claude 실수).
+- 수정: 파일 맨 위 `import java.util.Properties`, `Properties()`로 사용. 앱 코드·버전(1.1.34/37) 변경 없음. 빌드는 GPT가 이어서 진행.
+

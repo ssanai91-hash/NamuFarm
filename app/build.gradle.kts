@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -6,7 +8,7 @@ plugins {
 
 // Firebase push settings are read from local.properties on the build PC (never committed).
 // firebase.appId / firebase.apiKey / firebase.projectId / firebase.senderId — empty means push disabled.
-val localFirebase = java.util.Properties().apply {
+val localFirebase = Properties().apply {
     rootProject.file("local.properties").takeIf { it.isFile }?.inputStream()?.use { load(it) }
 }
 fun firebaseValue(key: String): String = localFirebase.getProperty(key, "").trim().replace("\"", "")
