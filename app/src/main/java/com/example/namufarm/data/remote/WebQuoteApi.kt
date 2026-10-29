@@ -46,7 +46,9 @@ data class WebQuoteRemote(
     val encryptedRequest: com.example.namufarm.privacy.PrivacyEnvelope? = null,
     val expired: Boolean? = null, val expiresAt: Long? = null, val status: String? = null,
     val receiptNumber: String? = null,
-    val quotePricing: com.google.gson.JsonObject? = null
+    val quotePricing: com.google.gson.JsonObject? = null,
+    /** Seller delete tombstone (always with expired=true). */
+    val deleted: Boolean? = null
 )
 data class WebQuoteItemRemote(val species: String? = null, val specification: String? = null, val quantity: Int? = null)
 
@@ -88,7 +90,8 @@ object WebQuoteValidator {
         })
     }
     data class Page(val rows: List<WebQuoteRequestEntity>, val cursor: Long, val expiredIds: List<String>,
-        val deferred: List<com.example.namufarm.data.DeferredWebRequestEntity> = emptyList())
+        val deferred: List<com.example.namufarm.data.DeferredWebRequestEntity> = emptyList(),
+        val deletedIds: List<String> = emptyList())
     fun page(response: WebQuoteEnvelope, after: Long): List<WebQuoteRequestEntity> = checkedPage(response, after).rows
     fun checkedPage(response: WebQuoteEnvelope, after: Long, decrypt: ((WebQuoteRemote) -> WebQuoteRemote)? = null): Page {
         checkResponse(response)
@@ -98,6 +101,7 @@ object WebQuoteValidator {
         var previous = after
         val seen = mutableSetOf<String>()
         val expiredIds = mutableListOf<String>()
+        val deletedIds = mutableListOf<String>()
         val deferred = mutableListOf<com.example.namufarm.data.DeferredWebRequestEntity>()
         val checked = rows.mapNotNull { nullable ->
             val outer = checkNotNull(nullable)
@@ -112,7 +116,11 @@ object WebQuoteValidator {
             SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC"); isLenient = false }.parse(created)
             // Archived rows use status="보관종료" and expired=true. They must be
             // removed from the local inbox, not rejected as an unknown active status.
-            if (outer.expired == true) { expiredIds += id; return@mapNotNull null }
+            if (outer.expired == true) {
+                expiredIds += id
+                if (outer.deleted == true) deletedIds += id
+                return@mapNotNull null
+            }
             val requestStatus = outer.status ?: "신규"
             check(requestStatus in setOf("신규", "견적확정", "견적발송완료", "입금확인", "배송완료", "구매취소")) {
                 "견적 처리 상태가 맞지 않아 가져오지 못했습니다."
@@ -155,7 +163,7 @@ object WebQuoteValidator {
                     check(Regex("(NAMU|NFQ)-[0-9]{8}-[0-9]{4,16}").matches(it)) { "견적접수번호를 확인해주세요." }
                 }.orEmpty(), quotePricingJson = outer.quotePricing?.toString().orEmpty())
         }
-        return Page(checked, previous, expiredIds, deferred)
+        return Page(checked, previous, expiredIds, deferred, deletedIds)
     }
     private fun text(value: String?, max: Int, min: Int): String = checkNotNull(value).also { check(it.length in min..max && it == it.trim()) { "견적에 저장된 글자 형식을 확인해주세요." } }
 }

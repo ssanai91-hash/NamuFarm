@@ -146,12 +146,12 @@ function twoTabPriceConfirm_(body){
   }else twoTabMoveConfirmed_(body.requestId,pricing);
   return {updated:true,requestId:body.requestId,status:'견적확정'};
 }
-function twoTabClose_(id){
+function twoTabClose_(id,deleted){
   const rec=twoTabRecord_(id);
   if(!rec || JSON.parse(rec.row[15]).expired===true)return;
   const next=rec.row.slice();next[1]=twoTabNextSeq_(twoTabRecords_());
   for(let i=3;i<=8;i++)next[i]='';
-  next[9]='보관종료';next[10]='STOPPED';next[14]='';next[15]='{"expired":true}';
+  next[9]='보관종료';next[10]='STOPPED';next[14]='';next[15]=deleted?'{"expired":true,"deleted":true}':'{"expired":true}';
   quoteWriteVerified_(rec.sheet,rec.index+2,next);
 }
 function twoTabPurgeExpired_(){

@@ -30,6 +30,8 @@ class InitialQuoteViewModel(
     private val mutable = MutableStateFlow(InitialQuoteUiState(busy = true))
     val uiState = mutable.asStateFlow()
     init {
+        // A quote the seller deleted on another phone/PC also leaves this phone's confirmed list.
+        connection.onServerDeleted = { ids -> ids.forEach { runCatching { store.remove(it) } } }
         viewModelScope.launch(Dispatchers.IO) {
             var firstCache = true
             try {
@@ -74,6 +76,29 @@ class InitialQuoteViewModel(
                 val current = connection.latestRequest(id)
                 check(current?.status == "신규") { "이미 처리된 요청입니다. 가져오기 후 다시 확인해주세요." }
                 connection.close(id); store.remove(id)
+                mutable.update { it.copy(editingRequest = null, deleteFeedback = InitialDeleteFeedback("success", id)) }
+            } catch (e: CancellationException) { throw e }
+            catch (e: Exception) {
+                mutable.update { it.copy(deleteFeedback = InitialDeleteFeedback("error", id, e.message)) }
+            } finally { mutable.update { it.copy(busy = false) } }
+        }
+    }
+    /**
+     * Seller (admin) delete from the list's trash button. The server tombstone removes the quote on every
+     * phone and PC. Paid/closed quotes stay with their sale. Never sends or resends a message.
+     */
+    fun adminDelete(id: String) {
+        if (mutable.value.busy) return
+        mutable.update { it.copy(busy = true, deleteFeedback = InitialDeleteFeedback("deleting", id)) }
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val current = connection.latestRequest(id)
+                check(current == null || current.status !in com.example.namufarm.quotation.CLOSED_QUOTE_STATES) {
+                    "입금확인된 견적은 매매에서 관리하므로 여기서 삭제할 수 없어요."
+                }
+                // Already gone on the server (deleted elsewhere or expired): only this phone's record remains.
+                if (current != null) connection.close(id, admin = true)
+                store.remove(id)
                 mutable.update { it.copy(editingRequest = null, deleteFeedback = InitialDeleteFeedback("success", id)) }
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) {

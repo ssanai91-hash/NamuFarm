@@ -21,6 +21,8 @@ class InitialQuoteConnection(
     private val dao = database.inbox()
     private val mutex = Mutex()
     private val gson = Gson()
+    /** Called after a complete snapshot with seller-deleted request IDs (drop local confirmed records). */
+    @Volatile var onServerDeleted: (Set<String>) -> Unit = {}
     fun localRequests() = dao.requests()
     fun deferredCount() = dao.deferredCount()
     fun observeCache() = combine(dao.observeRequests(), dao.observeDeferredCount()) { requests, deferred ->
@@ -42,6 +44,7 @@ class InitialQuoteConnection(
         val rows = mutableListOf<WebQuoteRequestEntity>()
         val deferred = mutableListOf<DeferredWebRequestEntity>()
         val ids = mutableSetOf<String>()
+        val deletedIds = mutableSetOf<String>()
         var cursor = 0L
         var snapshot: String? = null
         var total = -1
@@ -68,6 +71,7 @@ class InitialQuoteConnection(
             check(ids.size <= total)
             rows += page.rows
             deferred += page.deferred
+            deletedIds += page.deletedIds
             cursor = page.cursor
             if (response.hasMore == false) {
                 check(ids.size == total && cursor <= watermark) { "견적 목록을 전부 받지 못했습니다." }
@@ -77,6 +81,7 @@ class InitialQuoteConnection(
                     dao.insertRequests(rows.map { it.copy(readAt = readTimes[it.requestId]) })
                     dao.insertDeferred(deferred)
                 }
+                if (deletedIds.isNotEmpty()) onServerDeleted(deletedIds)
                 return rows.size
             }
         }
@@ -113,8 +118,9 @@ class InitialQuoteConnection(
             "서버의 발송완료 응답을 확인하지 못했습니다. 다시 보내지 말고 결과를 확인해주세요."
         }
     }
-    suspend fun close(id: String) = mutex.withLock {
-        val response = gateway.request("close_request", mapOf("requestId" to id))
+    suspend fun close(id: String, admin: Boolean = false) = mutex.withLock {
+        val response = gateway.request("close_request",
+            if (admin) mapOf("requestId" to id, "reason" to "admin_delete") else mapOf("requestId" to id))
         check(response.get("closed")?.asBoolean == true && response.get("requestId")?.asString == id) {
             "견적요청 삭제 결과를 확인하지 못했습니다."
         }

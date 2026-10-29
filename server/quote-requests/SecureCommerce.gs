@@ -125,7 +125,8 @@ function quoteResponseRow_(row) {
   const expires=Date.parse(String(row[2]))+QUOTE_RETENTION_MS,raw=JSON.parse(row[15]);
   const result={requestId:String(row[0]),sequence:Number(row[1]),createdAt:String(row[2]),expiresAt:expires,status:String(row[9]||'신규')};
   if(row[16])Object.assign(result,receiptDetails_(row));
-  if(raw.expired===true || expires<=Date.now())return Object.assign(result,{expired:true});
+  // deleted=true marks a seller delete, so other phones also drop their confirmed-quote records.
+  if(raw.expired===true || expires<=Date.now())return Object.assign(result,{expired:true},raw.deleted===true?{deleted:true}:{});
   const stored=quoteStoredData_(raw);
   if(stored.request)assert_(stored.request.requestId===result.requestId,'NOT_READY');
   return Object.assign(result,stored.request || stored,
@@ -171,8 +172,14 @@ function snapshotRequests_(body) {
 }
 function closeRequest_(body) {
   assert_(UUID_PATTERN.test(body.requestId));
+  // Seller (admin) delete from the quote list. Paid/closed quotes stay with their sale records.
+  const admin=body.reason==='admin_delete';
   return lock_(()=>{
-    if(twoBookActive_()){twoTabClose_(body.requestId);return {closed:true,requestId:body.requestId};}
+    if(twoBookActive_()){
+      if(admin){const rec=twoTabRecord_(body.requestId);
+        assert_(!rec || JSON.parse(rec.row[15]).expired===true || ['신규','견적확정','견적발송완료'].includes(String(rec.row[9]||'신규')),'CONFLICT');}
+      twoTabClose_(body.requestId,admin);return {closed:true,requestId:body.requestId};
+    }
     if(quoteStorageConfigured_()){closeIndexedQuote_(body.requestId);return {closed:true,requestId:body.requestId};}
     const sheet=sheet_(); const rows=rows_(sheet); const i=rows.findIndex(r=>r[0]===body.requestId);
     if (i>=0) expireQuoteRow_(sheet,rows[i],i); return {closed:true,requestId:body.requestId};});

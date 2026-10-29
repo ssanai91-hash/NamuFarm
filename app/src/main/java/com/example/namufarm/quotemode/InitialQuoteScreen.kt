@@ -2,6 +2,7 @@ package com.example.namufarm.quotemode
 
 import com.example.namufarm.ui.theme.*
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -10,6 +11,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CheckBox
 import androidx.compose.material.icons.outlined.CheckBoxOutlineBlank
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Info
 import com.example.namufarm.data.remote.inquiryTimestamp
 import com.example.namufarm.data.remote.inquiryLocalTime
@@ -59,6 +61,7 @@ internal fun InitialQuoteScreen(viewModel: InitialQuoteViewModel, connection: In
     fun chooseClosed(show: Boolean) { showClosed = show; listPrefs.edit().putBoolean("showClosed", show).apply() }
     var result by remember { mutableStateOf<QuoteWorkflowRecord?>(null) }
     var serverResult by remember { mutableStateOf<WebQuoteRequestEntity?>(null) }
+    var deleteTarget by remember { mutableStateOf<QuoteDeleteTarget?>(null) }
     val editing = management.editingRequest
     val deleting = inbox.deleteFeedback?.phase == "deleting"
     LaunchedEffect(management.message) {
@@ -71,10 +74,19 @@ internal fun InitialQuoteScreen(viewModel: InitialQuoteViewModel, connection: In
     }
     LaunchedEffect(inbox.deleteFeedback) {
         val feedback = inbox.deleteFeedback
-        if (feedback?.phase == "success" && editing?.requestId == feedback.requestId) {
-            viewModel.dismissManualQuote(); message = NamuMessage("견적요청을 삭제했습니다.")
+        if (feedback?.phase == "success") {
+            if (editing?.requestId == feedback.requestId) viewModel.dismissManualQuote()
+            message = NamuMessage("견적을 삭제했습니다. 다른 휴대폰과 나피에서는 동기화 때 함께 지워집니다.")
+            try { records = withContext(Dispatchers.IO) { workflow.records() } }
+            catch (e: CancellationException) { throw e } catch (_: Exception) { }
         }
         if (feedback?.phase == "error") message = NamuMessage(feedback.error ?: "삭제하지 못했습니다.", true)
+    }
+    // Seller deletes from other devices arrive with a sync and remove local confirmed records.
+    LaunchedEffect(inbox.requests) {
+        if (!recordsReady) return@LaunchedEffect
+        try { records = withContext(Dispatchers.IO) { workflow.records() } }
+        catch (e: CancellationException) { throw e } catch (_: Exception) { }
     }
     val confirmed = records.filter { it.confirmedAt > 0 || it.revision > 0 }.sortedByDescending { it.confirmedAt }
     val confirmedIds = confirmed.map { it.request.requestId }.toSet()
@@ -139,7 +151,9 @@ internal fun InitialQuoteScreen(viewModel: InitialQuoteViewModel, connection: In
                         QuoteRequestCard(request, request.customerName, request.customerPhone,
                             status = "견적 대기", date = inquiryLocalTime(request.createdAt),
                             pending = records.any { it.request.requestId == request.requestId && it.confirmationPending },
-                            enabled = !busy && !inbox.busy && !deleting) {
+                            enabled = !busy && !inbox.busy && !deleting,
+                            onDelete = { deleteTarget = QuoteDeleteTarget(request.requestId, request.customerName,
+                                records.any { it.request.requestId == request.requestId && it.confirmationPending }) }) {
                             viewModel.useWebRequestForQuote(request); message = null
                         }
                     }
@@ -151,14 +165,22 @@ internal fun InitialQuoteScreen(viewModel: InitialQuoteViewModel, connection: In
                     }
                     itemsIndexed(shownConfirmed, key = { _, row -> row.key }) { index, row ->
                         val badge = row.closedState ?: "견적확정"
+                        // Paid/closed quotes are managed in 매매, so they get no trash button.
+                        val canDelete = row.closedState == null && !busy && !inbox.busy && !deleting
                         row.local?.let { saved ->
                             QuoteRequestCard(saved.request, saved.draft.recipient.customerName, saved.draft.phone,
                                 status = "견적확정", date = workflowDate(saved.confirmedAt), at = row.at, badge = badge,
-                                itemCount = saved.draft.rows.count { it.name.isNotBlank() }) { result = saved }
+                                itemCount = saved.draft.rows.count { it.name.isNotBlank() },
+                                onDelete = if (row.closedState == null) ({ deleteTarget = QuoteDeleteTarget(
+                                    saved.request.requestId, saved.draft.recipient.customerName, row.needsAction) }) else null,
+                                deleteEnabled = canDelete) { result = saved }
                         }
                         row.remote?.let { saved ->
                             QuoteRequestCard(saved, saved.customerName, saved.customerPhone, badge = badge,
-                                status = "견적확정", date = "접수 ${inquiryLocalTime(saved.createdAt)}") {
+                                status = "견적확정", date = "접수 ${inquiryLocalTime(saved.createdAt)}",
+                                onDelete = if (row.closedState == null) ({ deleteTarget = QuoteDeleteTarget(
+                                    saved.requestId, saved.customerName, false) }) else null,
+                                deleteEnabled = canDelete) {
                                 serverResult = saved
                             }
                         }
@@ -248,7 +270,22 @@ internal fun InitialQuoteScreen(viewModel: InitialQuoteViewModel, connection: In
             workflow, connection, ::changedConfirmed) { serverResult = null }
         else InitialConfirmedQuoteDialog(saved, null, onDismiss = { serverResult = null })
     }
+    deleteTarget?.let { target ->
+        AlertDialog(onDismissRequest = { deleteTarget = null }, containerColor = Color.White,
+            title = { Text("견적 삭제", fontWeight = FontWeight.Bold) },
+            text = { Text("${target.name.ifBlank { "이름 없음" }} 님 견적을 삭제할까요?\n\n" +
+                "서버와 휴대폰·PC(나피)에서 모두 지워지며 되돌릴 수 없습니다. 고객에게 문자·메일은 보내지 않습니다." +
+                if (target.unresolved) "\n\n보낸 결과를 아직 확인하지 않은 기록도 함께 지워집니다." else "",
+                fontSize = 16.sp) },
+            confirmButton = { TextButton(enabled = !busy && !inbox.busy && !deleting,
+                onClick = { deleteTarget = null; message = null; viewModel.adminDelete(target.id) }) {
+                Text("삭제", color = NamuColors.danger, fontWeight = FontWeight.Bold, fontSize = 16.sp) } },
+            dismissButton = { TextButton(onClick = { deleteTarget = null }) { Text("취소", fontSize = 16.sp) } })
+    }
 }
+
+/** Card trash button target: request ID, customer name and whether an unchecked send result would be lost. */
+private data class QuoteDeleteTarget(val id: String, val name: String, val unresolved: Boolean)
 
 private fun requestedSpeciesCount(request: WebQuoteRequestEntity): Int? = runCatching {
     org.json.JSONArray(request.itemsJson).length()
@@ -259,7 +296,8 @@ private fun requestedSpeciesCount(request: WebQuoteRequestEntity): Int? = runCat
 private fun QuoteRequestCard(request: WebQuoteRequestEntity, name: String, phone: String,
     status: String, date: String, pending: Boolean = false, enabled: Boolean = true,
     badge: String = status, itemCount: Int? = requestedSpeciesCount(request),
-    at: Long = runCatching { inquiryTimestamp(request.createdAt) }.getOrDefault(0L), onClick: () -> Unit) {
+    at: Long = runCatching { inquiryTimestamp(request.createdAt) }.getOrDefault(0L),
+    onDelete: (() -> Unit)? = null, deleteEnabled: Boolean = enabled, onClick: () -> Unit) {
     val items = remember(request.itemsJson) { runCatching {
         com.google.gson.Gson().fromJson(request.itemsJson, Array<com.example.namufarm.data.WebQuoteItem>::class.java).toList()
     }.getOrDefault(emptyList()) }
@@ -268,38 +306,45 @@ private fun QuoteRequestCard(request: WebQuoteRequestEntity, name: String, phone
     val extra = ((itemCount ?: items.size) - 1).coerceAtLeast(0)
     Surface(color = Color.White, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp),
         border = BorderStroke(1.dp, NamuColors.border)) {
-        Row(Modifier.padding(start = 14.dp, end = 10.dp, top = 12.dp, bottom = 12.dp),
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Column(Modifier.weight(1f).clickable(enabled = enabled, onClick = onClick),
-                verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(name.ifBlank { "이름 없음" }, Modifier.weight(1f), fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold, color = NamuColors.text)
-                    Text(shortNamuTime(at), fontSize = 13.sp, color = NamuColors.muted)
-                }
-                Text(representative + if (extra > 0) " 외 ${extra}종" else "", fontSize = 15.sp, color = NamuColors.text)
-                if (pending) Row(verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Icon(Icons.Outlined.Info, null, Modifier.size(18.dp), tint = NamuColors.danger)
-                    Text("견적완료 확인 필요", fontSize = 13.sp, color = NamuColors.danger)
-                } else FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    if (status == "견적확정") {
-                        NamuStatusBadge(badge)
-                        // The date is already at the top right; show the quote number instead of repeating it.
-                        val receipt = request.receiptNumber
-                        Text(if (receipt.isNotBlank()) receipt.substringBefore('-') + "-" + receipt.takeLast(4) else date,
-                            fontSize = 13.sp, color = NamuColors.muted)
-                    } else {
-                        if (request.formalQuoteRequested) NamuStatusBadge("공식견적서")
-                        val receipt = request.receiptNumber
-                        if (receipt.isNotBlank()) Text(receipt.substringBefore('-') + "-" + receipt.takeLast(4),
-                            fontSize = 13.sp, color = NamuColors.muted)
-                    }
+        Column(Modifier.clickable(enabled = enabled, onClick = onClick)
+            .padding(start = 14.dp, end = 10.dp, top = 10.dp, bottom = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            // Top: name · date · (admin) trash, like the inquiry cards.
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(name.ifBlank { "이름 없음" }, Modifier.weight(1f), fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold, color = NamuColors.text)
+                Text(shortNamuTime(at), fontSize = 13.sp, color = NamuColors.muted)
+                if (onDelete != null) IconButton(onClick = onDelete, enabled = deleteEnabled,
+                    modifier = Modifier.padding(start = 6.dp).size(36.dp)
+                        .background(Color(0xFFFDECEC), RoundedCornerShape(10.dp))) {
+                    Icon(Icons.Outlined.Delete, "견적 삭제", tint = NamuColors.danger, modifier = Modifier.size(19.dp))
                 }
             }
-            // Slightly smaller contact buttons so the card text keeps its width.
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(representative + if (extra > 0) " 외 ${extra}종" else "", fontSize = 15.sp, color = NamuColors.text)
+            // Bottom: status/number on the left, contact buttons lowered to this line on the right.
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Box(Modifier.weight(1f)) {
+                    if (pending) Row(verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Icon(Icons.Outlined.Info, null, Modifier.size(18.dp), tint = NamuColors.danger)
+                        Text("견적완료 확인 필요", fontSize = 13.sp, color = NamuColors.danger)
+                    } else FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        if (status == "견적확정") {
+                            NamuStatusBadge(badge)
+                            // The date is already at the top right; show the quote number instead of repeating it.
+                            val receipt = request.receiptNumber
+                            Text(if (receipt.isNotBlank()) receipt.substringBefore('-') + "-" + receipt.takeLast(4) else date,
+                                fontSize = 13.sp, color = NamuColors.muted, modifier = Modifier.align(Alignment.CenterVertically))
+                        } else {
+                            if (request.formalQuoteRequested) NamuStatusBadge("공식견적서")
+                            val receipt = request.receiptNumber
+                            if (receipt.isNotBlank()) Text(receipt.substringBefore('-') + "-" + receipt.takeLast(4),
+                                fontSize = 13.sp, color = NamuColors.muted, modifier = Modifier.align(Alignment.CenterVertically))
+                        }
+                    }
+                }
+                // Slightly smaller contact buttons so the card text keeps its width.
                 NamuSmsButton(phone, Modifier.size(42.dp), enabled = enabled, iconSize = 18.dp)
                 NamuCallButton(phone, Modifier.size(42.dp), enabled = enabled, iconSize = 18.dp)
             }
