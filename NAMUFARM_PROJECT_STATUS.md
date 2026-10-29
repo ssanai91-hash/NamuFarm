@@ -1218,3 +1218,17 @@ Room 엔티티의 NOT NULL·열 이름·복합 기본키 순서를 위 SQL과 �
 - **미실행:** 자동시험·단위/계측시험·GitHub Actions·실제 문자/메일·고객 견적 접수/삭제 시험·휴대폰 실제 설치/실행. assembleRelease 기본 lintVital은 빌드 과정에 포함됐다. Apps Script 재배포·홈페이지 게시·나피 빌드·고객자료 변경 없음.
 - **사용자 적용 순서:** Apps Script **`SecureCommerce.gs`·`TwoTabQuotes.gs`**를 최신 main 내용으로 반영하고 **기존 배포 ID·URL을 유지해 새 버전으로 재배포한 뒤**, Android **1.1.33**을 기존 앱 위에 업데이트 설치한다. 앞선 운영 버전 39 확인은 1.1.32 당시 서버 기준이며, 이번 1.1.33의 견적 삭제 표시 변경 반영에는 위 두 파일 재배포가 필요하다.
 - 기록 반영 전 최신 main을 다시 받아 확인하고 기존 STATUS 내용을 보존해 이 빌드 기록만 추가했다.
+
+
+## 2026-10-29 Apps Script 버전 40 재배포 완료 · Android 1.1.33 견적 관리자 삭제
+
+- 사용자 요청으로 Google 재인증 후 운영 프로젝트 **`나무팜_견적접수_운영서버_복구`**의 기존 웹 앱 배포를 **버전 39 → 40**으로 갱신했다. **2026-10-29 16:17 한국 시각** 배포 관리에서 **‘배포가 업데이트되었습니다.’ / ‘프로젝트가 배포됨’** 성공 상태와 **버전 40**을 직접 확인했다.
+- 반영 소스: 작업 시점 main **`2c35deda12bd01a557a8c6a700d01901c3ed6eb2`**에 포함된 **`98d8959`** 서버 변경의 두 파일만 반영. 기존 운영 소스를 백업한 뒤 편집기에 붙여 넣고, 각 파일 전체 선택·복사 결과가 GitHub 원본과 **완전히 일치**하는지 확인해 저장했다. 저장 완료 후 기존 배포에 새 버전을 적용했다.
+  - `server/quote-requests/SecureCommerce.gs`: Git blob **`090dd259da4273ca828c93795d7d754cb4b8fc9a`**, 57,271자, SHA-256 **`5c72f695084f9614b923b2e31e320371c55b73e982747c5e90ab8c5ca803dc13`**.
+  - `server/quote-requests/TwoTabQuotes.gs`: Git blob **`8ee8eb7a93ad153e4eb41c99d7a13f440284d1d4`**, 7,143자, SHA-256 **`b789ba75464b70ffbb98f1ff5ae4401b78749d2f3028ad5f3911d1d58475ebea`**.
+- 새 설명: **견적 관리자 삭제·다른 기기 삭제 표시 동기화 · main 98d8959 · Android 1.1.33**.
+- **기존 배포 ID 유지:** `AKfycbzY7JKzXYmS9APLNFDt15k8dv09zb4EXKFHOOv_T1vpFmkr6TLwbqGznGLgpd2cIVgD`.
+- **기존 웹 앱 URL 유지:** `https://script.google.com/macros/s/AKfycbzY7JKzXYmS9APLNFDt15k8dv09zb4EXKFHOOv_T1vpFmkr6TLwbqGznGLgpd2cIVgD/exec`.
+- 실행 주체 **나(ssanai91@gmail.com)**·접근 **모든 사용자**는 기존 설정 그대로이며 변경하지 않았다. 다른 `.gs` 파일·manifest·스크립트 속성·기기 등록·시트/고객자료도 변경하지 않았다. 새 배포 ID를 만들지 않았다.
+- 미실행: 자동시험·Actions·스크립트 함수 직접 실행·실제 견적/문의 접수·삭제·문자/메일·실기기 검증. 배포 성공 및 반영한 소스 일치를 확인했으며, 실제 삭제·다른 기기 동기화는 사용자가 확인한다.
+- 다음 순서: Android **1.1.33(36)**을 기존 앱 위에 업데이트 설치 → 시험용 견적 카드에서 휴지통/삭제 → 다른 휴대폰·나피에서 불러오기 후 사라짐 확인. 앞선 버전 39 확인과 재인증 시간 초과 이후, 이번 재시도에서 새 서버 반영을 완료했다.
