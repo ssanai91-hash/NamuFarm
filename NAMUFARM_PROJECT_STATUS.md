@@ -1255,3 +1255,15 @@ Room 엔티티의 NOT NULL·열 이름·복합 기본키 순서를 위 SQL과 �
 - 인증서: 초기 앱 서명 백업에 포함된 인증서의 SHA-256이 `a31a78a895be8f89bacb2c7b355f413e1cacecfbfd769b257801fcb619e616e1`과 일치함을 확인. APK 서명·패키지/버전/비디버그/정렬/ZIP 무결성 확인은 APK 미생성으로 미실행.
 - 미실행: 자동시험, Actions, 실제 고객 접수, 문자·메일 시험, Apps Script 변경·재배포, setupPushNotifications/sendTestPushNotification 실행, 실기기 알림 시험.
 - 다음 작업: 네트워크와 Android 빌드 도구가 준비된 PC에서 동일 소스·명령으로 빌드 후 기존 초기 키와 scripts/sign_initial_apk.py로 서명·검증. Firebase SDK/플러그인 추가 안내는 적용하지 않음. 서버 설정은 PUSH_SETUP.md 순서로 사용자가 수행한다.
+
+## 2026-10-30 07:17 KST Android 1.1.34(37) 재빌드 · 환경 다운로드 해결 · Gradle 스크립트 오류로 중단
+
+- 사용자 첨부 설정 파일의 초기 앱 패키지와 일치하는 client 항목 1개 및 Firebase 필수 4개 값 존재를 비공개 확인. 해당 값을 local.properties에만 기록. JSON·local.properties·Firebase 값은 커밋/로그 출력하지 않았다.
+- 체크아웃: main `c578528b0d8594c99084c603457424103bf26f07` (`git pull --ff-only`). 직전 기록 추가만 포함되며 앱 소스는 `f52e72218c9a77573529308a795fdd2b256aacb8`과 동일. versionCode 37 / versionName 1.1.34. 앱 코드 수정 없음.
+- 환경: 기본 프록시와 환경 제공 CA를 Java에 명시해 Gradle 9.3.1·Java 21 다운로드 및 기존 플러그인 해석을 진행했다. Android SDK 36.1 / Build Tools 36.0.0 설치. 인증서 검증을 끄거나 저장소·플러그인 버전을 바꾸지 않았다.
+- 실행: `bash gradlew clean assembleRelease --no-build-cache --rerun-tasks -x test` (재시도에는 환경 시스템 속성과 `--refresh-dependencies` 추가). Windows E: 폴더에는 접근하지 않았다.
+- 최종 빌드 실패: `app/build.gradle.kts:9:26 Unresolved reference 'util'`. 문제 줄: `val localFirebase = java.util.Properties().apply {`. 이어서 10행 `Cannot infer type for type parameter 'R'` / `Unresolved reference 'load'`, 12행 `Unresolved reference 'getProperty'`. 앱 Gradle 스크립트 컴파일에서 총 4개 오류. 요청된 코드 수정 금지에 따라 그대로 중단했다.
+- 예정 파일명: `NamuFarm-initial-1.1.34-f52e722-update.apk`. APK 미생성, 크기·SHA-256: 해당 없음. firebase-messaging 24.1.0 앱 의존성 검증·BuildConfig 생성물 확인에는 도달하지 못함.
+- 서명: 초기 앱 JKS에서 keytool로 실제 인증서를 내보내 SHA-256 `a31a78a895be8f89bacb2c7b355f413e1cacecfbfd769b257801fcb619e616e1`과 일치함을 확인했다. 새 키·디버그 키 사용 없음. APK 서명·패키지/버전/비디버그/정렬/ZIP 무결성은 미생성으로 미실행.
+- 미실행: 자동시험·Actions·실제 고객 접수·문자/메일 시험·Apps Script 변경/재배포·푸시 시험·실기기 설치. Firebase 콘솔 추가 변경 없음.
+- 후속 최소 수정 제안(미적용): app/build.gradle.kts 상단에 `import java.util.Properties` 추가, 9행 생성자를 `Properties()`로 변경. 사용자 승인 또는 후속 수정 커밋 이후 동일 명령으로 재빌드한다.
