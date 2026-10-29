@@ -1203,3 +1203,18 @@ Room 엔티티의 NOT NULL·열 이름·복합 기본키 순서를 위 SQL과 �
 - **다른 기기:** Android는 동기화 때 `deleted:true` 견적의 휴대폰 확정견적 기록도 정리(30일 보관 종료분은 기존처럼 유지). 나피는 기존 보관 종료 처리로 목록에서 제거(나피 코드 변경 없음, PC에서 확인 필요).
 - 미실행: 컴파일·APK·서명·서버 시험. 운영 반영은 Apps Script `SecureCommerce.gs`·`TwoTabQuotes.gs` 반영 후 기존 배포 ID로 재배포 → Android 1.1.33 업데이트. 재배포 전에도 삭제는 동작하지만 다른 휴대폰의 확정견적 기록은 남을 수 있음.
 
+
+
+## 2026-10-29 Android 1.1.33(36) 새 빌드·기존 초기 앱 키 서명 완료
+
+- 사용자 지정 최신 main **`98d89593971c7e1864185c4216e2ec208e57b98e`**를 새 체크아웃으로 받고 `git pull --ff-only origin main` 후 versionName **1.1.33**, versionCode **36** 확인. 견적 카드 관리자 삭제·문자/전화 버튼 아랫줄 배치·서버 `deleted:true` 처리 변경을 포함한다. 저장소 코드는 추가 수정하지 않았다.
+- 한국 시각: **2026-10-29 14:05:49 빌드 시작 → 14:11:18 빌드 명령 성공(exit 0) → 14:11:20 기존 키 서명·검증 완료.** 새 체크아웃에서 **`clean assembleRelease --no-build-cache --rerun-tasks -x test`** 실행(`--no-daemon --max-workers=2 --console=plain --stacktrace` 부가 옵션). 이전 앱 산출물은 재사용하지 않았다. JDK 21.0.2·Gradle 9.3.1·Android SDK 36.1·Build Tools 36.0.0 사용.
+- 최초 시도는 Android SDK 플랫폼 설치 폴더 중첩 때문에 컴파일 전 의존성 설정에서 실패했다. SDK 플랫폼 파일을 정상 경로로 정리하고 package.xml을 유지한 뒤 동일 원본으로 다시 빌드했다. 앱·서버 코드는 바꾸지 않았다.
+- 파일명: **`NamuFarm-initial-1.1.33-98d8959-update.apk`**.
+- 크기: **13,976,575 bytes**.
+- APK SHA-256: **`9c235dddf0ceb40b27b96b5cf878d9b798e860284c21132ecb70dc3657f056ac`**.
+- 서명: 저장소 **`scripts/sign_initial_apk.py`**와 기존 초기 앱 키 사용. 인증서 SHA-256 **`a31a78a895be8f89bacb2c7b355f413e1cacecfbfd769b257801fcb619e616e1`** 일치. 이전 1.1.32 APK는 인증서·versionCode 비교에만 사용했다. 개인키·비밀번호는 저장소/로그에 기록하지 않았다.
+- 확인: 패키지 **`com.example.namufarm.original`**, versionCode **36** / versionName **1.1.33**, 비디버그 릴리스, apksigner 검증, zipalign 정렬, ZIP 무결성, 견적 도장 자산 원본 일치. APK를 이 대화의 직접 다운로드 파일로 전달한다.
+- **미실행:** 자동시험·단위/계측시험·GitHub Actions·실제 문자/메일·고객 견적 접수/삭제 시험·휴대폰 실제 설치/실행. assembleRelease 기본 lintVital은 빌드 과정에 포함됐다. Apps Script 재배포·홈페이지 게시·나피 빌드·고객자료 변경 없음.
+- **사용자 적용 순서:** Apps Script **`SecureCommerce.gs`·`TwoTabQuotes.gs`**를 최신 main 내용으로 반영하고 **기존 배포 ID·URL을 유지해 새 버전으로 재배포한 뒤**, Android **1.1.33**을 기존 앱 위에 업데이트 설치한다. 앞선 운영 버전 39 확인은 1.1.32 당시 서버 기준이며, 이번 1.1.33의 견적 삭제 표시 변경 반영에는 위 두 파일 재배포가 필요하다.
+- 기록 반영 전 최신 main을 다시 받아 확인하고 기존 STATUS 내용을 보존해 이 빌드 기록만 추가했다.
