@@ -1180,3 +1180,14 @@ Room 엔티티의 NOT NULL·열 이름·복합 기본키 순서를 위 SQL과 �
 - 전달: 이 대화의 실제 파일 직접 다운로드 링크로 APK와 ZIP을 제공. Android는 기존 앱 위에 업데이트 설치, 나피는 앱 종료 후 EXE와 `_runtime`을 함께 교체하고 기존 `자료` 폴더를 보존한다.
 - **사용자 적용 순서:** (1) Apps Script `Code.gs`·`CustomerInquiries.gs`·`SecureCommerce.gs`를 반영해 기존 배포 ID로 새 버전을 직접 배포. (2) Android 1.1.32와 나피 0.5.11을 함께 업데이트(앱 삭제·자료 초기화 불필요). (3) 휴대폰에 남은 ‘결과 확인 중’ 문의 카드의 휴지통 → 삭제를 다시 눌러 기존 동일 삭제 요청을 진행. (4) 다른 휴대폰·나피에서 불러온 뒤 해당 문의가 사라졌는지 직접 확인.
 - 기록 반영 직전 `git pull --ff-only origin main`으로 main이 동일함을 다시 확인했으며 이 빌드 기록만 추가한다.
+
+
+## 2026-10-29 Apps Script 운영 배포 39 최신 코드 확인 · 재배포 불필요
+
+- 사용자 요청에 따라 **2026-10-29 13:25 한국 시각** 운영 프로젝트의 배포 관리와 프로젝트 기록을 직접 확인했다. 활성 웹 앱은 **버전 39**, 설명은 **SOLAPI 거절 사유·080 수신거부 문자 재발송 차단 · main e7457ff · Android 1.1.31 / 나피 0.5.11**였다.
+- 편집 중인 HEAD가 아니라 **프로젝트 기록에서 버전 39를 선택**하고, `Code.gs`·`CustomerInquiries.gs`·`SecureCommerce.gs` 각각 전체 선택/복사로 전체 소스를 읽어 SHA-256을 비교했다. 세 파일 모두 현재 main `a69258cf185f4e7cef7aae7c0d0bad3a441ae992`의 원본과 완전히 일치했다. `e7457ff`와 최신 main 사이 세 서버 파일 차이도 없다.
+  - `Code.gs` 28,651자 / SHA-256 `00771a03ec5573af3d3a258942bac9bf5da88fa5af22ae2bac3439183e11d2a1`
+  - `CustomerInquiries.gs` 19,316자 / SHA-256 `739e1c7f4d816dd8513a6bdf6ea591184d084204eaa3784a4cdedbda287567fb`
+  - `SecureCommerce.gs` 56,782자 / SHA-256 `120978b4548abbf8cb9b7fca98e169be7596237724c1125455e09d3ee158d9b7`
+- 기존 배포 ID **`AKfycbzY7JKzXYmS9APLNFDt15k8dv09zb4EXKFHOOv_T1vpFmkr6TLwbqGznGLgpd2cIVgD`** 및 `/exec` URL, 실행 주체·접근 설정 유지 확인. 이번 작업에서는 **서버 소스 저장·새 버전 생성·재배포·권한 변경을 하지 않았다.** 이미 최신 서버 코드가 배포돼 있어 추가 재배포가 필요하지 않다. Android 1.1.32의 삭제 허용 목록 수정은 앱 내부 변경이다.
+- 실제 문의 접수/삭제·서버 함수 실행·문자/메일·자동시험·Actions 미실행. 다음은 Android 1.1.32·나피 0.5.11 업데이트 후 남은 삭제 카드에서 동일 삭제 요청 재시도 및 다른 기기에서 불러오기 확인이다.
