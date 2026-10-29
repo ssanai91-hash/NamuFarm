@@ -1243,3 +1243,15 @@ Room 엔티티의 NOT NULL·열 이름·복합 기본키 순서를 위 SQL과 �
 - 미실행: 컴파일·APK·서명·서버 시험·Firebase 설정·Apps Script 재배포·실기기 알림 확인.
 - 확인 필요: 운영 Apps Script가 기본 GCP 프로젝트면 FCM 호출이 403일 수 있음 → PUSH_SETUP.md 5번(GCP 프로젝트를 Firebase 프로젝트로 변경 후 재승인).
 
+
+## 2026-10-30 Android 1.1.34(37) 빌드 시도 · Firebase 앱 등록 완료 · 네트워크 오류로 APK 미생성
+
+- 소스 커밋: `f52e72218c9a77573529308a795fdd2b256aacb8` (main). 새 체크아웃 후 `git pull --ff-only`로 최신 상태 확인. 앱 코드는 수정하지 않았다.
+- 빌드 시도 시각: 2026-10-30 07:06 KST 전후.
+- Firebase: 기존 프로젝트에 `com.example.namufarm.original` / 나무팜 초기앱을 등록하고 설정 JSON을 다운로드했다. 필수 네 값 존재 확인. JSON에 client가 두 개여서 초기 앱과 일치하는 항목(client[1])을 선택해 이 빌드 환경의 local.properties에만 기록했다. Firebase 값·JSON·local.properties는 커밋하지 않았다. 사용자 Windows PC의 E: 폴더는 이 환경에서 접근하지 않았다.
+- 실행: `bash gradlew clean assembleRelease --no-build-cache --rerun-tasks -x test` (체크아웃의 gradlew에 실행 권한이 없어 bash로 실행; 파일 권한·코드는 변경하지 않음).
+- 실패 원문: `java.net.SocketException: Network is unreachable`. Gradle 9.3.1 배포 ZIP 다운로드 단계에서 중단. firebase-messaging 24.1.0 의존성 다운로드·컴파일에는 도달하지 못했다. 의존성·플러그인·소스 우회 수정 없음.
+- 예정 파일명: `NamuFarm-initial-1.1.34-f52e722-update.apk`. 결과: 미생성. APK 크기·SHA-256: 해당 없음. BuildConfig.FIREBASE_PROJECT_ID 생성물 확인: 컴파일 전 중단으로 미실행.
+- 인증서: 초기 앱 서명 백업에 포함된 인증서의 SHA-256이 `a31a78a895be8f89bacb2c7b355f413e1cacecfbfd769b257801fcb619e616e1`과 일치함을 확인. APK 서명·패키지/버전/비디버그/정렬/ZIP 무결성 확인은 APK 미생성으로 미실행.
+- 미실행: 자동시험, Actions, 실제 고객 접수, 문자·메일 시험, Apps Script 변경·재배포, setupPushNotifications/sendTestPushNotification 실행, 실기기 알림 시험.
+- 다음 작업: 네트워크와 Android 빌드 도구가 준비된 PC에서 동일 소스·명령으로 빌드 후 기존 초기 키와 scripts/sign_initial_apk.py로 서명·검증. Firebase SDK/플러그인 추가 안내는 적용하지 않음. 서버 설정은 PUSH_SETUP.md 순서로 사용자가 수행한다.
