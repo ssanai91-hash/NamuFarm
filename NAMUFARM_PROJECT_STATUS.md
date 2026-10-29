@@ -1232,3 +1232,14 @@ Room 엔티티의 NOT NULL·열 이름·복합 기본키 순서를 위 SQL과 �
 - 실행 주체 **나(ssanai91@gmail.com)**·접근 **모든 사용자**는 기존 설정 그대로이며 변경하지 않았다. 다른 `.gs` 파일·manifest·스크립트 속성·기기 등록·시트/고객자료도 변경하지 않았다. 새 배포 ID를 만들지 않았다.
 - 미실행: 자동시험·Actions·스크립트 함수 직접 실행·실제 견적/문의 접수·삭제·문자/메일·실기기 검증. 배포 성공 및 반영한 소스 일치를 확인했으며, 실제 삭제·다른 기기 동기화는 사용자가 확인한다.
 - 다음 순서: Android **1.1.33(36)**을 기존 앱 위에 업데이트 설치 → 시험용 견적 카드에서 휴지통/삭제 → 다른 휴대폰·나피에서 불러오기 후 사라짐 확인. 앞선 버전 39 확인과 재인증 시간 초과 이후, 이번 재시도에서 새 서버 반영을 완료했다.
+
+## 2026-10-30 새 견적·문의 휴대폰 알림(FCM, A안) · Android 1.1.34(37)·서버 · 코드만, 미빌드·미재배포·미설정
+
+- 사용자 결정: A안(Firebase 푸시, 거의 즉시). 설정 순서는 `server/quote-requests/PUSH_SETUP.md`.
+- **Android:** firebase-messaging 24.1.0 추가(google-services 플러그인 미사용, 앱이 직접 초기화). Firebase 값은 빌드 PC `local.properties`의 `firebase.appId/apiKey/projectId/senderId`에서만 읽어 BuildConfig로 넣음(커밋 안 함). 값이 없으면 알림 기능만 꺼지고 기존과 동일.
+  - 새 `push/NamuPush.kt`: Application에서 초기화, 알림 채널 2개(새 견적요청·새 고객문의), 토큰을 `register_push`로 서버 등록(WorkManager, 네트워크 연결 시·실패 재시도), 받은 데이터 알림을 “새 견적요청/새 고객문의가 들어왔어요”로 표시(이름·전화번호 없음, 잠금화면 비공개). 누르면 해당 탭을 열고 목록 동기화.
+  - Android 13+ 알림 권한은 기존 전화 권한 요청과 같은 흐름에서 한 번 요청. 매니페스트에 Application·메시징 서비스·POST_NOTIFICATIONS 추가. 패키지·DB·서명 변경 없음.
+- **서버:** 기존 견적 푸시(대기열·1분 트리거)는 그대로. 새 문의 접수 시 `INQUIRY_PUSH_QUEUE`(문의 ID만, 최대 50, 실패 재시도 최대 8회)에 넣고 같은 1분 트리거가 `customer_inquiry` 데이터 알림 발송. 알림 실패가 접수를 막지 않음. 편집기 전용 `setupPushNotifications`(속성·트리거 확인)·`sendTestPushNotification`(고객자료 없는 시험 알림) 추가.
+- 미실행: 컴파일·APK·서명·서버 시험·Firebase 설정·Apps Script 재배포·실기기 알림 확인.
+- 확인 필요: 운영 Apps Script가 기본 GCP 프로젝트면 FCM 호출이 403일 수 있음 → PUSH_SETUP.md 5번(GCP 프로젝트를 Firebase 프로젝트로 변경 후 재승인).
+

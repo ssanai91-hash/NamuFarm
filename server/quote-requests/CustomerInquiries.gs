@@ -123,8 +123,18 @@ function submitCustomerInquiry_(body) {
     const stored=Number(props.getProperty(key)||0),count=Math.max(stored,floor)+1;assert_(Number.isSafeInteger(count) && count>0,'NOT_READY');props.setProperty(key,String(count));
     const sheet=inquirySheet_(day.slice(0,4),true),raw={inquiry:input,reply:{text:'',channel:input.customerEmail?'email':'sms'},delivery:null,history:[]};
     const row=[input.requestId,'INQ-'+day+'-'+String(count).padStart(4,'0'),inquirySequence_(),created,receiptTime_(created),input.category,cell_(input.customerName),cell_(input.customerPhone),cell_(input.customerEmail),cell_(input.message),'open','',raw.reply.channel,'',created,1,'',body.fingerprint,JSON.stringify(raw)];
-    inquiryWrite_(sheet,sheet.getLastRow()+1,row);return Object.assign(inquiryReceipt_(row),{duplicate:false});
+    inquiryWrite_(sheet,sheet.getLastRow()+1,row);
+    try{inquiryPushEnqueue_(input.requestId);}catch(_){} // A push problem never blocks the customer's receipt.
+    return Object.assign(inquiryReceipt_(row),{duplicate:false});
   });
+}
+/** New-inquiry push outbox: inquiry IDs only (no personal data), bounded; sent by the minute trigger. */
+function inquiryPushEnqueue_(id) {
+  const props=PropertiesService.getScriptProperties();
+  if(!props.getProperty('FIREBASE_PROJECT_ID'))return;
+  const queue=JSON.parse(props.getProperty('INQUIRY_PUSH_QUEUE')||'[]').filter(job=>job && job.id!==id).slice(-49);
+  queue.push({id:id,attempts:0,next:0});
+  props.setProperty('INQUIRY_PUSH_QUEUE',JSON.stringify(queue));
 }
 /** Authenticated app delta feed, across ALL years, including expiry tombstones. */
 function listCustomerInquiries_(body) {

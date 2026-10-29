@@ -4,6 +4,13 @@ plugins {
     id("com.google.devtools.ksp")
 }
 
+// Firebase push settings are read from local.properties on the build PC (never committed).
+// firebase.appId / firebase.apiKey / firebase.projectId / firebase.senderId — empty means push disabled.
+val localFirebase = java.util.Properties().apply {
+    rootProject.file("local.properties").takeIf { it.isFile }?.inputStream()?.use { load(it) }
+}
+fun firebaseValue(key: String): String = localFirebase.getProperty(key, "").trim().replace("\"", "")
+
 android {
     namespace = "com.example.namufarm"
     compileSdk {
@@ -16,12 +23,16 @@ android {
         applicationId = "com.example.namufarm.original"
         minSdk = 24
         targetSdk = 36
-        versionCode = 36
-        versionName = "1.1.33"
+        versionCode = 37
+        versionName = "1.1.34"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         buildConfigField("String", "PAYMENT_ACCOUNT_TEXT", "\"농협 328-12-035671 / 오진웅\"")
+        buildConfigField("String", "FIREBASE_APP_ID", "\"${firebaseValue("firebase.appId")}\"")
+        buildConfigField("String", "FIREBASE_API_KEY", "\"${firebaseValue("firebase.apiKey")}\"")
+        buildConfigField("String", "FIREBASE_PROJECT_ID", "\"${firebaseValue("firebase.projectId")}\"")
+        buildConfigField("String", "FIREBASE_SENDER_ID", "\"${firebaseValue("firebase.senderId")}\"")
         buildConfigField("String", "WEB_REQUEST_SCRIPT_URL", "\"https://script.google.com/macros/s/AKfycbzY7JKzXYmS9APLNFDt15k8dv09zb4EXKFHOOv_T1vpFmkr6TLwbqGznGLgpd2cIVgD/exec\"")
 
     }
@@ -75,6 +86,8 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")
+    // New quote / inquiry push notifications (initialized manually; no google-services plugin).
+    implementation("com.google.firebase:firebase-messaging:24.1.0")
 }
 
 // 파일 제일 밑바닥 빈 공간에 추가!

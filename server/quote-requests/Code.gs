@@ -348,7 +348,99 @@ function registerPush_(body, hash) {
 function listRequests_(body) { return body.snapshot === true ? snapshotRequests_(body) : listEncryptedRequests_(body); }
 
 /** Durable outbox; FCM network I/O never holds the request-submission lock. */
-function dispatchQuoteNotifications() { dispatchNotifications_(null); }
+function dispatchQuoteNotifications() {
+  dispatchNotifications_(null);
+  try { dispatchInquiryNotifications_(); } catch (_) {} // Inquiry pushes never block quote pushes.
+}
+/**
+ * Owner-only (run from the editor, never via doPost): checks FIREBASE_PROJECT_ID and makes sure the
+ * one-minute push trigger exists. Changes no customer data.
+ */
+function setupPushNotifications() {
+  const props = PropertiesService.getScriptProperties(); const project = props.getProperty('FIREBASE_PROJECT_ID') || '';
+  if (!/^[a-z0-9-]+$/.test(project)) throw new Error('스크립트 속성 FIREBASE_PROJECT_ID에 Firebase 프로젝트 ID를 넣어주세요.');
+  if (!ScriptApp.getProjectTriggers().some(t => t.getHandlerFunction() === 'dispatchQuoteNotifications'))
+    ScriptApp.newTrigger('dispatchQuoteNotifications').timeBased().everyMinutes(1).create();
+  const count = pushTargets_(props).length;
+  console.log('알림 준비 완료 · 프로젝트 ' + project + ' · 등록된 휴대폰 ' + count + '대');
+  return { project:project, phones:count };
+}
+/** Owner-only test: sends one generic "new quote" push to registered phones. No customer data. */
+function sendTestPushNotification() {
+  const props = PropertiesService.getScriptProperties(); const project = props.getProperty('FIREBASE_PROJECT_ID') || '';
+  if (!/^[a-z0-9-]+$/.test(project)) throw new Error('FIREBASE_PROJECT_ID가 없습니다.');
+  const targets = pushTargets_(props);
+  if (!targets.length) throw new Error('등록된 휴대폰이 없습니다. 새 앱을 한 번 열어 알림을 허용해주세요.');
+  const result = sendPushData_(project, targets, { type:'quote_request', requestId:'test' });
+  // 403 PERMISSION_DENIED / SERVICE_DISABLED usually means this script is not linked to the Firebase Cloud project.
+  console.log('시험 알림 ' + (result.ok ? '전송 요청 성공' : '실패 ' + result.lastError) + ' · 휴대폰 ' + targets.length + '대');
+  return result.ok;
+}
+/** Registered phones (common-key subscriptions + legacy devices), one entry per distinct FCM token. */
+function pushTargets_(props) {
+  const devices = JSON.parse(props.getProperty('DEVICES') || '{}');
+  const subscriptions = JSON.parse(props.getProperty('PUSH_SUBSCRIPTIONS') || '{}');
+  const seen = new Set();
+  return Object.entries(subscriptions).map(([id,value]) => ['push:'+id,value]).concat(Object.entries(devices))
+    .filter(entry => { const token = entry[1].fcmToken; if (!token || seen.has(token)) return false; seen.add(token); return true; });
+}
+/** Data-only push (type + ID). Returns {ok, expiredTokens}; an unregistered phone is not a retryable failure. */
+function sendPushData_(project, targets, data) {
+  let ok = true, lastError = ''; const expiredTokens = [];
+  targets.forEach(([, device]) => {
+    try {
+      const response = UrlFetchApp.fetch('https://fcm.googleapis.com/v1/projects/'+project+'/messages:send', {
+        method:'post', contentType:'application/json', headers:{ Authorization:'Bearer '+ScriptApp.getOAuthToken() }, muteHttpExceptions:true,
+        payload:JSON.stringify({ message:{ token:device.fcmToken, data:data, android:{ priority:'high', ttl:'86400s' } } })
+      });
+      if (response.getResponseCode() >= 300) {
+        let unregistered = false, status = '';
+        try { const body = JSON.parse(response.getContentText()); status = String((body.error && body.error.status) || '');
+          unregistered = !!(body.error && (body.error.details || []).some(d => d.errorCode === 'UNREGISTERED')); } catch (_) {}
+        if (unregistered) expiredTokens.push(device.fcmToken); else { ok = false; lastError = response.getResponseCode() + ' ' + status; }
+      }
+    } catch (_) { ok = false; lastError = 'NETWORK'; }
+  });
+  return { ok:ok, expiredTokens:expiredTokens, lastError:lastError };
+}
+function dispatchInquiryNotifications_() {
+  const work = lock_(() => {
+    const props = PropertiesService.getScriptProperties(); const project = props.getProperty('FIREBASE_PROJECT_ID');
+    if (!project || !/^[a-z0-9-]+$/.test(project)) return null;
+    const queue = JSON.parse(props.getProperty('INQUIRY_PUSH_QUEUE') || '[]'); const now = Date.now();
+    const due = queue.filter(job => job && Number(job.next || 0) <= now).slice(0, 10);
+    if (!due.length) return null;
+    const targets = pushTargets_(props); if (!targets.length) return null;
+    due.forEach(job => { job.next = now + 600000; }); // Lease so an overlapping run does not resend.
+    props.setProperty('INQUIRY_PUSH_QUEUE', JSON.stringify(queue));
+    return { project:project, targets:targets, ids:due.map(job => job.id) };
+  });
+  if (!work) return;
+  const results = {}; const expired = new Set();
+  work.ids.forEach(id => {
+    const result = sendPushData_(work.project, work.targets, { type:'customer_inquiry', requestId:String(id) });
+    results[id] = result.ok; result.expiredTokens.forEach(token => expired.add(token));
+  });
+  lock_(() => {
+    const props = PropertiesService.getScriptProperties();
+    const queue = JSON.parse(props.getProperty('INQUIRY_PUSH_QUEUE') || '[]').filter(job => {
+      if (!job || !(job.id in results)) return !!job;
+      if (results[job.id]) return false;
+      job.attempts = (Number(job.attempts) || 0) + 1;
+      job.next = Date.now() + Math.min(21600000, Math.pow(2, Math.min(job.attempts, 12)) * 60000);
+      return job.attempts < 8;
+    });
+    props.setProperty('INQUIRY_PUSH_QUEUE', JSON.stringify(queue));
+    if (expired.size) {
+      const devices = JSON.parse(props.getProperty('DEVICES') || '{}');
+      const subscriptions = JSON.parse(props.getProperty('PUSH_SUBSCRIPTIONS') || '{}');
+      Object.values(devices).forEach(device => { if (expired.has(device.fcmToken)) device.fcmToken = ''; });
+      Object.keys(subscriptions).forEach(id => { if (expired.has(subscriptions[id].fcmToken)) delete subscriptions[id]; });
+      props.setProperty('DEVICES', JSON.stringify(devices));
+      props.setProperty('PUSH_SUBSCRIPTIONS', JSON.stringify(subscriptions));
+    }
+  });
+}
 function dispatchNotifications_(onlyId) {
   const work = lock_(() => {
     const props = PropertiesService.getScriptProperties(); const project = props.getProperty('FIREBASE_PROJECT_ID');
