@@ -54,8 +54,6 @@ class MainActivity : ComponentActivity() {
 
     // 🚨 통화 상태를 실시간으로 감시할 스파이(리시버)
     private var phoneStateReceiver: BroadcastReceiver? = null
-    // "quote" / "inquiry" when opened from a new-request push notification.
-    private val pushOpen = mutableStateOf<String?>(null)
 
     // 🚨 앱 시작 시 권한을 물어보는 런처
     private val requestPermissionLauncher = registerForActivityResult(
@@ -133,9 +131,6 @@ class MainActivity : ComponentActivity() {
 
         // 🚨 4. 권한 체크 및 통화 감시자 작동 시작!
         checkAndRequestPermissions()
-        // 새 견적·문의 알림: Firebase 설정이 있는 빌드에서만 기기 등록(없으면 기존과 동일).
-        pushOpen.value = intent?.getStringExtra(com.example.namufarm.push.NamuPush.EXTRA_OPEN)
-        if (com.example.namufarm.push.NamuPush.init(this)) com.example.namufarm.push.NamuPush.scheduleRegister(this)
 
         setContent {
             val navController = rememberNavController()
@@ -147,8 +142,7 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 composable("modes") {
-                    com.example.namufarm.quotemode.InitialAppModes(viewModel, quoteViewModel, inquiryViewModel, backupController,
-                        pushOpen = pushOpen.value, onPushOpened = { pushOpen.value = null })
+                    com.example.namufarm.quotemode.InitialAppModes(viewModel, quoteViewModel, inquiryViewModel, backupController)
                 }
             }
         }
@@ -160,27 +154,14 @@ class MainActivity : ComponentActivity() {
         val hasPhoneState = ContextCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED
         val hasCallLog = ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CALL_LOG) == PackageManager.PERMISSION_GRANTED
 
-        // Android 13+ asks once for notification permission, in the same dialog sequence (only one request at a time).
-        val needsNotification = com.example.namufarm.push.NamuPush.configured &&
-            android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU &&
-            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-
         if (hasPhoneState && hasCallLog) {
             registerPhoneStateReceiver() // 이미 권한 있으면 바로 감시자 투입
-            if (needsNotification) requestPermissionLauncher.launch(arrayOf(Manifest.permission.POST_NOTIFICATIONS))
         } else {
             // 없으면 권한 요청 팝업 띄우기
             requestPermissionLauncher.launch(
-                arrayOf(Manifest.permission.READ_PHONE_STATE, Manifest.permission.READ_CALL_LOG) +
-                    if (needsNotification) arrayOf(Manifest.permission.POST_NOTIFICATIONS) else emptyArray()
+                arrayOf(Manifest.permission.READ_PHONE_STATE, Manifest.permission.READ_CALL_LOG)
             )
         }
-    }
-
-    override fun onNewIntent(intent: Intent) {
-        super.onNewIntent(intent)
-        setIntent(intent)
-        intent.getStringExtra(com.example.namufarm.push.NamuPush.EXTRA_OPEN)?.let { pushOpen.value = it }
     }
 
     private fun registerPhoneStateReceiver() {

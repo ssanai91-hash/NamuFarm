@@ -29,8 +29,7 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun InitialAppModes(management: ManagementViewModel, quote: InitialQuoteViewModel,
-                    inquiry: CustomerInquiryViewModel, backupController: com.example.namufarm.data.DataBackupController? = null,
-                    pushOpen: String? = null, onPushOpened: () -> Unit = {}) {
+                    inquiry: CustomerInquiryViewModel, backupController: com.example.namufarm.data.DataBackupController? = null) {
     val pager = rememberPagerState(initialPage = 0, pageCount = { 4 })
     val scope = rememberCoroutineScope()
     val inbox by quote.uiState.collectAsState()
@@ -47,15 +46,6 @@ fun InitialAppModes(management: ManagementViewModel, quote: InitialQuoteViewMode
         else move(page)
     }
     BackHandler(enabled = pager.currentPage != 0) { move(0) }
-    // Tapping a new-request notification opens that tab and fetches the latest list.
-    LaunchedEffect(pushOpen) {
-        when (pushOpen) {
-            "quote" -> { pager.scrollToPage(0); quote.refresh() }
-            "inquiry" -> { pager.scrollToPage(1); inquiry.refresh() }
-            else -> return@LaunchedEffect
-        }
-        onPushOpened()
-    }
     // Swiping to the farm page uses the same unsent-cart confirmation as tapping its tab.
     LaunchedEffect(pager.currentPage) {
         if (pager.currentPage == 3 && stock.estimateCart.isNotEmpty()) {
