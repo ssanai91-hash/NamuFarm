@@ -1157,3 +1157,11 @@ Room 엔티티의 NOT NULL·열 이름·복합 기본키 순서를 위 SQL과 �
 - 시험: `tests/customer-inquiries.test.mjs`에 시험 1개 추가(작성만, 실행 안 함). `node` 구문 확인·`py_compile`만. Android 컴파일·나피 실행 미실행.
 - **운영 반영 순서:** Apps Script `Code.gs`·`CustomerInquiries.gs`(+ `89da325`의 `SecureCommerce.gs`) 반영 후 기존 배포 ID로 새 버전 재배포 → Android 1.1.31·나피 0.5.11 업데이트. 구버전 앱·나피는 `SMS_BLOCKED`를 몰라 수신거부 번호에 문자 재발송을 시도하면 ‘결과 확인’ 대기로 남을 수 있으므로 함께 업데이트한다.
 
+## 2026-10-29 Android 1.1.32(35) — 문의 삭제 ‘Failed requirement.’ 수정 · 코드만, 미빌드
+
+- 증상(사용자 실기기): 문의 휴지통 → 삭제 시 ‘Failed requirement.’ 표시, 카드는 ‘결과 확인 중’.
+- 원인: 1.1.26에서 삭제 기능을 넣으며 `CustomerInquiryConnection.inquiryAction`의 허용 작업 목록에 `delete_customer_inquiry`를 빠뜨림(Claude 실수). 서버 호출 **전**에 앱 안에서 막혀 서버·다른 기기에는 아무 변경 없음.
+- 수정: 허용 목록에 추가, 이후 같은 종류 오류는 작업 이름이 담긴 한국어 문구로 표시. versionCode 34 → **35**, versionName 1.1.31 → **1.1.32**.
+- 기존 휴대폰에 남은 삭제 대기 기록은 그대로 두어도 됨: 1.1.32 업데이트 후 같은 카드의 휴지통 → 삭제(또는 상세의 결과 확인)를 누르면 저장된 같은 삭제 요청으로 서버 삭제가 진행된다. 앱 삭제·자료 초기화 불필요.
+- 서버·나피 변경 없음. 컴파일·APK·서명 미실행.
+
