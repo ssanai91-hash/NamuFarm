@@ -1165,3 +1165,18 @@ Room 엔티티의 NOT NULL·열 이름·복합 기본키 순서를 위 SQL과 �
 - 기존 휴대폰에 남은 삭제 대기 기록은 그대로 두어도 됨: 1.1.32 업데이트 후 같은 카드의 휴지통 → 삭제(또는 상세의 결과 확인)를 누르면 저장된 같은 삭제 요청으로 서버 삭제가 진행된다. 앱 삭제·자료 초기화 불필요.
 - 서버·나피 변경 없음. 컴파일·APK·서명 미실행.
 
+## 2026-10-29 Android 1.1.32(35)·나피 0.5.11 로컬 빌드 완료
+
+- 소스: 새 체크아웃에서 `git pull --ff-only`로 최신 main **`de97796cdb75efcae88233320426b86c8f4d050c`** 확인. Android versionCode **35** / versionName **1.1.32**, 나피 두 버전 파일 **0.5.11** 확인. 앱·나피·서버 코드는 추가 수정하지 않았다. 기존 DB·엑셀·초안·전송 대기와 서버 URL·배포 ID를 변경하지 않았다.
+- **Android:** 한국 시각 **2026-10-29 10:57:37 시작 → 11:00:27 빌드 성공 → 11:00:42 서명 완료**, 11:01:04 ZIP·도장 자산 검증 완료. 새 체크아웃에서 `clean :app:assembleRelease --no-daemon --no-build-cache --rerun-tasks --max-workers=1 -x test` 실행. **BUILD SUCCESSFUL / 2m 49s / 51 tasks(50 executed, 1 up-to-date)**. JDK 21.0.2·Gradle 9.3.1·Android SDK 36.1·Build Tools 36.0.0 사용. 기존 deprecated API 경고와 native debug symbol strip 경고가 있으나 빌드는 성공했다.
+  - 파일: **`NamuFarm-initial-1.1.32-de97796-update.apk`**, **13,976,575 bytes**.
+  - SHA-256: **`36719996fc231290d767fa8886dc932e62f12839019c590a16868a8bb6c684ec`**.
+  - `scripts/sign_initial_apk.py`와 기존 초기 앱 키로 서명. 인증서 SHA-256 **`a31a78a895be8f89bacb2c7b355f413e1cacecfbfd769b257801fcb619e616e1`** 일치. 기존 1.1.31 APK는 인증서·versionCode 비교에만 사용했다. 개인키·비밀번호는 저장소와 로그에 기록하지 않았다.
+  - 패키지 **`com.example.namufarm.original`**, versionCode **35**, versionName **1.1.32**, 비디버그 릴리스, apksigner·zipalign·ZIP 무결성·견적 도장 자산 원본 일치 확인.
+- **나피:** 한국 시각 **2026-10-29 10:57:38경 시작 → 10:58:25 패키징 완료**, 10:59:02 검증 완료. 저장소 `desktop/build_windows_portable.py`로 기존 Windows x64 방식(MinGW launcher + CPython 3.12.10 embedded + Windows wheels)으로 새 빌드. EXE와 `_runtime` 포함. 전체 앱 소스와 main 원본 일치, EXE PE x64, ZIP 무결성, 고객 DB·엑셀·서명키 미포함 확인.
+  - 파일: **`Napi-0.5.11-Windows-x64.zip`**, **268,106,969 bytes**.
+  - SHA-256: **`ffd22d7be22345a60ab11c04809b16a8e4f2b48daa3dd509301dbfa41c7926cf`**.
+- **미실행:** 자동시험·단위/계측시험·GitHub Actions·실제 고객 문자/메일·접수/삭제 시험·Android 실기기 설치/실행·Windows 실행. assembleRelease의 기본 lintVital은 빌드 과정에 포함됐다. Apps Script 재배포·홈페이지 게시 없음.
+- 전달: 이 대화의 실제 파일 직접 다운로드 링크로 APK와 ZIP을 제공. Android는 기존 앱 위에 업데이트 설치, 나피는 앱 종료 후 EXE와 `_runtime`을 함께 교체하고 기존 `자료` 폴더를 보존한다.
+- **사용자 적용 순서:** (1) Apps Script `Code.gs`·`CustomerInquiries.gs`·`SecureCommerce.gs`를 반영해 기존 배포 ID로 새 버전을 직접 배포. (2) Android 1.1.32와 나피 0.5.11을 함께 업데이트(앱 삭제·자료 초기화 불필요). (3) 휴대폰에 남은 ‘결과 확인 중’ 문의 카드의 휴지통 → 삭제를 다시 눌러 기존 동일 삭제 요청을 진행. (4) 다른 휴대폰·나피에서 불러온 뒤 해당 문의가 사라졌는지 직접 확인.
+- 기록 반영 직전 `git pull --ff-only origin main`으로 main이 동일함을 다시 확인했으며 이 빌드 기록만 추가한다.
