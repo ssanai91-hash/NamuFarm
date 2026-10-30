@@ -19,6 +19,7 @@ PATHS = {
     "refresh": '<path d="M20 10a8 8 0 0 0-14-4L3 9m0-6v6h6m-5 5a8 8 0 0 0 14 4l3-3m0 6v-6h-6"/>',
     "trash": '<path d="M3 6h18M9 6V3h6v3M6 6l1 15h10l1-15M10 10v7M14 10v7"/>',
     "plus": '<path d="M12 4v16M4 12h16"/>',
+    "search": '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/>',
     "open": '<path d="M14 3h7v7M21 3l-11 11M10 5H4v15h15v-6"/>',
     "mail": '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 6 9 7 9-7"/>',
     "message": '<path d="M4 4h16v12H9l-5 4zM8 8h8M8 12h6"/>',
