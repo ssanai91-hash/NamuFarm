@@ -1380,3 +1380,18 @@ Room 엔티티의 NOT NULL·열 이름·복합 기본키 순서를 위 SQL과 �
 - 나피: 재고 탭 왼쪽 초성 아래 ‘20주 이하 N건 ›’ 버튼(있을 때만). 누르면 농원·묘목·남은 수량 표, 두 번 누르면 농원별로 그 농원 선택.
 - 저장·DB·서버 변경 없음. 컴파일·APK·EXE 미실행.
 
+
+## 2026-10-31 Android 1.1.38(41) · 나피 0.5.15 — 20주 이하 재고 표시 배포본 빌드 완료
+
+- 소스 커밋: `a7c2299ce786c0665502d29f723061b881c8e99b` (main). 새 체크아웃에서 `git pull --ff-only` 확인. Android 1.1.38 / versionCode 41, 나피 pyproject.toml·__init__.py 0.5.15. 앱 코드 추가 수정 없음.
+- Android 빌드 시각(KST): 2026-10-31T18:41:13.350317+09:00 시작 → 2026-10-31T18:44:03.175376+09:00 완료. `clean assembleRelease --no-build-cache --rerun-tasks -x test` 실행. 환경 프록시·신뢰 CA 시스템 속성과 `--no-daemon --console=plain` 추가. `BUILD SUCCESSFUL in 2m 49s` (51 actionable tasks: 50 executed, 1 up-to-date). 기존 경고는 수정하지 않음.
+- APK: `NamuFarm-initial-1.1.38-a7c2299-update.apk`, 14,025,727 bytes. SHA-256 `e371be2c36ac9bdd8e82eb79989c512cb5e7560098e97bc840fa2e6861cd84da`.
+- Android 서명: `scripts/sign_initial_apk.py` + 기존 초기 앱 키. 인증서 SHA-256 `a31a78a895be8f89bacb2c7b355f413e1cacecfbfd769b257801fcb619e616e1` 일치. 서명 시각 2026-10-31T18:44:27.650391+09:00 (KST). 이전 1.1.37 APK와 동일 인증서 및 상위 versionCode 확인. 새 키·디버그 키 사용 없음.
+- APK 검증: 패키지 `com.example.namufarm.original`, versionName 1.1.38 / versionCode 41, 릴리스 비디버그, apksigner 서명, zipalign 4바이트 정렬, ZIP 전체 CRC 무결성 통과. 빌드 기본 Lint 검사 통과.
+- 나피 빌드 시각(KST): 2026-10-31T18:41:13.351052+09:00 시작 → 2026-10-31T18:41:51.257867+09:00 완료. `desktop/build_windows_portable.py` 변경 없이 실행. MinGW GCC 13-posix로 Windows x64 GUI EXE 새 컴파일 후 CPython 3.12.10 및 기존과 동일한 Windows 휠 실행환경 포함. 종료 코드 0.
+- 나피 EXE: `NamuFarm-PC.exe`, 19,456 bytes. SHA-256 `acd784b17f2f62c8418c5e2a240702e52d5b6e550331b09986f7238dd62951b9`.
+- 나피 전체 ZIP: `Napi-0.5.15-Windows-x64.zip`, 268,113,352 bytes. SHA-256 `d018aba97929e54ef7b8d5d602d84e7eee35ab8a65ab9231b293f674f34fa89f`.
+- 나피 기본 검증: 소스 문법(빌드 도구 기본 확인), PE32+ AMD64 GUI 형식, ASLR/NX 플래그, Python·QtSvg·Qt 플랫폼 DLL·직인 이미지 포함, 변경 소스·버전·BUILD-INFO 일치, ZIP 전체 CRC 무결성 통과. 실제 Windows 실행은 미확인. 기존 자료 폴더·DB·엑셀·서버 변경 없음.
+- 전달: APK·나피 EXE·전체 실행환경 ZIP 직접 다운로드. Android는 기존 앱 삭제 없이 업데이트. 나피는 종료 후 EXE와 _runtime을 함께 교체하고 기존 자료 폴더 보존.
+- 사용자 확인: 재고 요약의 ‘20주 이하 N건’ 표시 및 클릭 시 농원·묘목·남은 수량 목록. 실제 UI·저장·동기화 동작은 사용자 확인 대상.
+- 미실행: 자동시험·GitHub Actions·실제 고객 문자/메일 시험·운영 고객 접수 시험·실기기 설치/화면 동작 시험·Windows 실제 실행·홈페이지 게시·Apps Script 변경/재배포.
