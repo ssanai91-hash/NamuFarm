@@ -465,6 +465,13 @@ class NurseryPage(QWidget):
             grid.addWidget(btn, index // 7, index % 7)
             self.stock_initial_buttons[title] = btn
         left.addLayout(grid)
+        # 20주 이하 남은 재고 (전체 농원 기준). 누르면 목록, 고르면 그 농원 재고로 이동.
+        self.stock_low = QPushButton('')
+        self.stock_low.setStyleSheet('QPushButton{color:#9A2A22;font-weight:700;background:#FBE9E7;'
+                                     'border:1px solid #E7B4AE;border-radius:8px;min-height:32px;}')
+        self.stock_low.clicked.connect(self.show_low_stock)
+        self.stock_low.hide()
+        left.addWidget(self.stock_low)
         self.stock_list = QListWidget()
         self.stock_list.setIconSize(QSize(32, 32))
         self.stock_list.setSpacing(2)
@@ -514,6 +521,44 @@ class NurseryPage(QWidget):
         species = {r['_key']: r for r in state.get('species', []) if not r.get('_deleted')}
         rows = [r for r in state.get('inventory', []) if r['quantity'] > 0]
         return farms, species, rows
+
+    def _low_stock(self):
+        farms, species, rows = self._stock_maps()
+        totals = {}
+        for r in rows:
+            totals[(r['farmKey'], r['speciesKey'])] = totals.get((r['farmKey'], r['speciesKey']), 0) + r['quantity']
+        items = [(farms.get(f, {}).get('farmName', '농원 없음'), species.get(sp, {}).get('speciesName', '묘목 없음'), total, f)
+                 for (f, sp), total in totals.items() if total <= 20]
+        return sorted(items, key=lambda i: (i[2], i[0]))
+
+    def show_low_stock(self):
+        items = self._low_stock()
+        if not items:
+            return
+        dialog = QDialog(self)
+        dialog.setWindowTitle(f'20주 이하 남은 재고 {len(items)}건')
+        dialog.setMinimumWidth(520)
+        box = QVBoxLayout(dialog)
+        box.addWidget(QLabel('농원·묘목별 합계 수량 기준입니다. 두 번 누르면 그 농원 재고로 이동합니다.'))
+        grid = table(['농원', '묘목', '남은 수량'])
+        grid.setIconSize(QSize(24, 24))
+        fill_table(grid, [(farm, plant, f'{total:,}주') for farm, plant, total, _ in items])
+        for index, (farm, plant, total, _) in enumerate(items):
+            grid.item(index, 0).setIcon(farm_avatar(farm, 24))
+            grid.item(index, 2).setForeground(QColor('#9A2A22'))
+        box.addWidget(grid, 1)
+        def open_farm(*_):
+            index = grid.currentRow()
+            if 0 <= index < len(items):
+                farm_name, farm_key = items[index][0], items[index][3]
+                self.stock_mode, self.stock_initial, self.stock_key, self.stock_show_all = 'farm', stock_initial(farm_name), farm_key, False
+                dialog.accept()
+                self.refresh_stock()
+        grid.itemDoubleClicked.connect(open_farm)
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        buttons.rejected.connect(dialog.reject)
+        box.addWidget(buttons)
+        dialog.exec()
 
     def choose_stock_mode(self, value):
         if value != self.stock_mode:
@@ -590,6 +635,9 @@ class NurseryPage(QWidget):
             self.stock_more.show()
         else:
             self.stock_more.hide()
+        low = len(self._low_stock())
+        self.stock_low.setText(f'20주 이하 {low}건 ›')
+        self.stock_low.setVisible(low > 0)
         for value, btn in self.stock_mode_buttons.items():
             btn.setChecked(value == self.stock_mode)
         stocked_keys = {r['farmKey' if by_farm else 'speciesKey'] for r in rows}

@@ -171,7 +171,12 @@ internal fun StockFarmList(state: ManagementUiState, initial: String, onSelect: 
         StockEntry("f${farm.farmId}", farm.farmName, rows.map { it.speciesId }.distinct().size, rows.sumOf { it.quantity.toLong() }, farm)
     }
     val stockedFarms = state.allSellingInventory.map { it.farmId }.distinct().size
-    val lowCount = state.allSellingInventory.groupBy { it.farmId to it.speciesId }.count { (_, rows) -> rows.sumOf { it.quantity.toLong() } <= NamuColors.LOW_STOCK }
+    // 20주 이하 남은 (농원·묘목) 묶음. 이름·수량은 눌렀을 때 목록으로 보여준다.
+    val lowItems = state.allSellingInventory.groupBy { it.farmId to it.speciesId }
+        .mapNotNull { (_, rows) -> rows.sumOf { it.quantity.toLong() }.takeIf { it <= NamuColors.LOW_STOCK }?.let { rows.first() to it } }
+        .sortedWith(compareBy({ it.second }, { it.first.farmName }))
+    val lowCount = lowItems.size
+    var showLow by remember { mutableStateOf(false) }
     StockBrowseList(entries, "farm-$initial", NamuConcept.SPECIES, "종", "재고 없음 · 눌러서 입력",
         moreLabel = { "재고 없는 농원도 보기 · ${it}곳" }, onlyLabel = "재고 있는 농원만 보기",
         leading = { NamuFarmAvatar(it.name) },
@@ -180,9 +185,31 @@ internal fun StockFarmList(state: ManagementUiState, initial: String, onSelect: 
             NamuSummaryBand(NamuConcept.FARM.visual, "재고 있는 농원 ${stockedFarms}곳") {
                 NamuCountChip(NamuConcept.SPECIES, "${state.allSellingInventory.map { it.speciesId }.distinct().size}종")
                 NamuCountChip(NamuConcept.STOCK, "${farmNumber(state.allSellingInventory.sumOf { it.quantity.toLong() })}주")
-                if (lowCount > 0) Text("부족 $lowCount", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color(0xFF9A2A22))
+                if (lowCount > 0) Surface(onClick = { showLow = true }, shape = RoundedCornerShape(8.dp),
+                    color = Color(0xFFFBE9E7), border = BorderStroke(1.dp, Color(0xFFE7B4AE))) {
+                    Text("${NamuColors.LOW_STOCK}주 이하 ${lowCount}건 ›", Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                        fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color(0xFF9A2A22))
+                }
             }
         })) { onSelect(it.payload as FarmEntity) }
+    if (showLow) FarmSheet("${NamuColors.LOW_STOCK}주 이하 남은 재고 ${lowCount}건", onClose = { showLow = false }) {
+        Text("농원·묘목별 합계 수량 기준입니다. 누르면 그 농원 재고로 이동해요.", fontSize = 14.sp, color = NamuColors.muted)
+        lowItems.forEach { (row, total) ->
+            val farm = state.farmList.firstOrNull { it.farmId == row.farmId }
+            Surface(onClick = { showLow = false; farm?.let(onSelect) }, shape = RoundedCornerShape(12.dp),
+                border = BorderStroke(1.dp, NamuColors.border), color = Color.White) {
+                Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    NamuFarmAvatar(row.farmName, 36.dp)
+                    Column(Modifier.weight(1f)) {
+                        Text(row.farmName, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        Text(row.speciesName, fontSize = 14.sp, color = Color(0xFF4A5A52))
+                    }
+                    Text("${farmNumber(total)}주", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = Color(0xFF9A2A22))
+                }
+            }
+        }
+    }
 }
 
 /** 묘목별: species under the initial → tap shows which farms hold it. */
