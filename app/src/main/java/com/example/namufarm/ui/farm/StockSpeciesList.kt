@@ -52,8 +52,9 @@ internal fun StockSpeciesList(state: ManagementUiState, initial: String, search:
                         else -> "${rows.size}개 규격 · ${farmNumber(total)}주"
                     }
                     Row(Modifier.fillMaxWidth().clickable(enabled = enabled) { onSelect(item) }
-                        .heightIn(min = 48.dp).padding(start = 12.dp, end = 8.dp, top = 12.dp, bottom = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically) {
+                        .heightIn(min = 48.dp).padding(start = 10.dp, end = 8.dp, top = 10.dp, bottom = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        NamuSpeciesTile(item.speciesName, item.category)
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                             Text(item.speciesName, fontSize = 17.sp, fontWeight = FontWeight.Bold)
                             Text(detail, fontSize = 14.sp, fontWeight = if (low) FontWeight.Bold else FontWeight.Normal,

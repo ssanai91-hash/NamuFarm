@@ -127,7 +127,7 @@ internal fun InitialQuoteScreen(viewModel: InitialQuoteViewModel, connection: In
     val hiddenConfirmed = confirmedPool.size - shownConfirmed.size
     Scaffold(containerColor = NamuColors.background, contentWindowInsets = WindowInsets(0, 0, 0, 0), topBar = {
         NamuTopBar("견적", masterSyncLabel(inbox.lastSyncAt),
-            onSync = { if (!busy && !inbox.busy && !deleting) onSync() })
+            onSync = { if (!busy && !inbox.busy && !deleting) onSync() }, concept = NamuConcept.QUOTE)
     }) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -306,9 +306,12 @@ private fun QuoteRequestCard(request: WebQuoteRequestEntity, name: String, phone
     val extra = ((itemCount ?: items.size) - 1).coerceAtLeast(0)
     Surface(color = Color.White, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp),
         border = BorderStroke(1.dp, NamuColors.border)) {
-        Column(Modifier.clickable(enabled = enabled, onClick = onClick)
-            .padding(start = 14.dp, end = 10.dp, top = 10.dp, bottom = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(Modifier.clickable(enabled = enabled, onClick = onClick)
+            .padding(start = 12.dp, end = 10.dp, top = 10.dp, bottom = 10.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        // Colour icon of the main seedling's use (열매·꽃·울타리…), so the quote is recognisable at a glance.
+        NamuSpeciesTile(items.firstOrNull()?.species.orEmpty(), size = 44.dp)
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             // Top: name · date · (admin) trash, like the inquiry cards.
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(name.ifBlank { "이름 없음" }, Modifier.weight(1f), fontSize = 18.sp,
@@ -348,6 +351,7 @@ private fun QuoteRequestCard(request: WebQuoteRequestEntity, name: String, phone
                 NamuSmsButton(phone, Modifier.size(42.dp), enabled = enabled, iconSize = 18.dp)
                 NamuCallButton(phone, Modifier.size(42.dp), enabled = enabled, iconSize = 18.dp)
             }
+        }
         }
     }
 }

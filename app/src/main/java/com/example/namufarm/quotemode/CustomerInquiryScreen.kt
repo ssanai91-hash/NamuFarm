@@ -69,7 +69,7 @@ fun CustomerInquiryScreen(viewModel: CustomerInquiryViewModel) {
                 row.inquiry?.message).any { it.orEmpty().contains(search.trim(), ignoreCase = true) })
     }
     Scaffold(containerColor = Canvas, contentWindowInsets = WindowInsets(0, 0, 0, 0), topBar = {
-        NamuTopBar("문의", masterSyncLabel(state.lastSyncAt), onSync = { if (!state.busy) viewModel.refresh() })
+        NamuTopBar("문의", masterSyncLabel(state.lastSyncAt), onSync = { if (!state.busy) viewModel.refresh() }, concept = NamuConcept.INQUIRY)
     }) { padding ->
     Column(Modifier.fillMaxSize().padding(padding).padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         val filters = listOf("open", "closed", "all")

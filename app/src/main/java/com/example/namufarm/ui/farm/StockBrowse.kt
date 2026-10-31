@@ -3,6 +3,7 @@ package com.example.namufarm.ui.farm
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -52,21 +53,23 @@ internal fun stockInitialOf(name: String, db: String? = null): String {
 
 @Composable
 internal fun StockModeToggle(mode: String, onMode: (String) -> Unit) {
-    Surface(shape = RoundedCornerShape(12.dp), border = BorderStroke(1.5.dp, NamuColors.primary), color = Color.White) {
-        Row(Modifier.fillMaxWidth().height(46.dp)) {
-            listOf(Triple(STOCK_BY_FARM, "농원별", Icons.Outlined.Storefront), Triple(STOCK_BY_SPECIES, "묘목별", Icons.Outlined.Park))
-                .forEach { (value, label, icon) -> StockModeButton(label, icon, mode == value, Modifier.weight(1f)) { onMode(value) } }
-        }
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        listOf(Triple(STOCK_BY_FARM, "농원별", NamuConcept.FARM), Triple(STOCK_BY_SPECIES, "묘목별", NamuConcept.SPECIES))
+            .forEach { (value, label, concept) -> StockModeButton(label, concept, mode == value, Modifier.weight(1f)) { onMode(value) } }
     }
 }
 
+/** The chosen view takes its word colour (농원 청록 · 묘목 초록). */
 @Composable
-private fun StockModeButton(label: String, icon: ImageVector, active: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    Surface(onClick = onClick, modifier = modifier.fillMaxHeight(), color = if (active) NamuColors.primary else Color.White) {
+private fun StockModeButton(label: String, concept: NamuConcept, active: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    val visual = concept.visual
+    Surface(onClick = onClick, modifier = modifier.height(46.dp), shape = RoundedCornerShape(12.dp),
+        color = if (active) visual.background else Color.White,
+        border = BorderStroke(if (active) 2.dp else 1.dp, if (active) visual.ink else Color(0xFFC9D4CE))) {
         Row(horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-            Icon(icon, null, Modifier.size(19.dp), tint = if (active) Color.White else NamuColors.primary)
+            NamuIconTile(visual, 26.dp)
             Spacer(Modifier.width(6.dp))
-            Text(label, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = if (active) Color.White else NamuColors.primary)
+            Text(label, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = if (active) visual.ink else NamuColors.text)
         }
     }
 }
@@ -95,12 +98,14 @@ internal fun StockChosungGrid(selected: String, available: (String) -> Boolean, 
     }
 }
 
-private class StockEntry(val key: String, val name: String, val count: Int, val total: Long, val payload: Any)
+private class StockEntry(val key: String, val name: String, val count: Int, val total: Long, val payload: Any,
+    val category: String? = null)
 
 /** Shared list: stocked entries only by default; the bottom button expands to all and back. */
 @Composable
-private fun StockBrowseList(entries: List<StockEntry>, resetKey: String, unit: String, emptyHint: String,
-    moreLabel: (Int) -> String, onlyLabel: String, onClick: (StockEntry) -> Unit) {
+private fun StockBrowseList(entries: List<StockEntry>, resetKey: String, countConcept: NamuConcept, unit: String, emptyHint: String,
+    moreLabel: (Int) -> String, onlyLabel: String, leading: @Composable (StockEntry) -> Unit,
+    header: (@Composable () -> Unit)? = null, onClick: (StockEntry) -> Unit) {
     var showAll by rememberSaveable(resetKey) { mutableStateOf(false) }
     val sorted = entries.sortedWith(compareBy({ it.count == 0 }, { it.name }))
     val stocked = sorted.filter { it.count > 0 }
@@ -110,18 +115,24 @@ private fun StockBrowseList(entries: List<StockEntry>, resetKey: String, unit: S
     Box(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 12.dp)) {
         if (shown.isEmpty()) NamuEmptyState("이 초성에는 항목이 없어요")
         else LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            if (header != null) item(key = "header") { header() }
             item(key = "list") {
                 NamuCard {
                     Column(Modifier.padding(horizontal = 4.dp)) {
                         shown.forEachIndexed { index, entry ->
                             val low = entry.count > 0 && entry.total <= NamuColors.LOW_STOCK
                             Row(Modifier.fillMaxWidth().clickable { onClick(entry) }.heightIn(min = 48.dp)
-                                .padding(start = 12.dp, end = 8.dp, top = 12.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                .padding(start = 10.dp, end = 8.dp, top = 10.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                leading(entry)
+                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                                     Text(entry.name, fontSize = 17.sp, fontWeight = FontWeight.Bold)
-                                    Text(if (entry.count == 0) emptyHint else "${entry.count}$unit · ${farmNumber(entry.total)}주" + if (low) " 남음" else "",
-                                        fontSize = 14.sp, fontWeight = if (low) FontWeight.Bold else FontWeight.Normal,
-                                        color = if (entry.count == 0) Color(0xFF9AA59F) else if (low) Color(0xFF9A2A22) else Color(0xFF4A5A52))
+                                    if (entry.count == 0) Text(emptyHint, fontSize = 14.sp, color = Color(0xFF9AA59F))
+                                    else Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        NamuCountChip(countConcept, "${entry.count}$unit")
+                                        NamuCountChip(NamuConcept.STOCK, "${farmNumber(entry.total)}주" + if (low) " 남음" else "",
+                                            color = if (low) Color(0xFF9A2A22) else Color(0xFF4A5A52), bold = low)
+                                    }
                                 }
                                 FarmChevron()
                             }
@@ -152,8 +163,19 @@ internal fun StockFarmList(state: ManagementUiState, initial: String, onSelect: 
         val rows = state.allSellingInventory.filter { it.farmId == farm.farmId }
         StockEntry("f${farm.farmId}", farm.farmName, rows.map { it.speciesId }.distinct().size, rows.sumOf { it.quantity.toLong() }, farm)
     }
-    StockBrowseList(entries, "farm-$initial", "종", "재고 없음 · 눌러서 입력",
-        moreLabel = { "재고 없는 농원도 보기 · ${it}곳" }, onlyLabel = "재고 있는 농원만 보기") { onSelect(it.payload as FarmEntity) }
+    val stockedFarms = state.allSellingInventory.map { it.farmId }.distinct().size
+    val lowCount = state.allSellingInventory.groupBy { it.farmId to it.speciesId }.count { (_, rows) -> rows.sumOf { it.quantity.toLong() } <= NamuColors.LOW_STOCK }
+    StockBrowseList(entries, "farm-$initial", NamuConcept.SPECIES, "종", "재고 없음 · 눌러서 입력",
+        moreLabel = { "재고 없는 농원도 보기 · ${it}곳" }, onlyLabel = "재고 있는 농원만 보기",
+        leading = { NamuFarmAvatar(it.name) },
+        header = if (stockedFarms == 0) null else ({
+            // 오늘 재고 요약 띠 (all farms, not only this initial).
+            NamuSummaryBand(NamuConcept.FARM.visual, "재고 있는 농원 ${stockedFarms}곳") {
+                NamuCountChip(NamuConcept.SPECIES, "${state.allSellingInventory.map { it.speciesId }.distinct().size}종")
+                NamuCountChip(NamuConcept.STOCK, "${farmNumber(state.allSellingInventory.sumOf { it.quantity.toLong() })}주")
+                if (lowCount > 0) Text("부족 $lowCount", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color(0xFF9A2A22))
+            }
+        })) { onSelect(it.payload as FarmEntity) }
 }
 
 /** 묘목별: species under the initial → tap shows which farms hold it. */
@@ -161,10 +183,12 @@ internal fun StockFarmList(state: ManagementUiState, initial: String, onSelect: 
 internal fun StockSpeciesOverview(state: ManagementUiState, initial: String, onSelect: (SpeciesEntity) -> Unit) {
     val entries = state.allSpeciesList.filter { (it.isActive ?: 1) == 1 && stockInitialOf(it.speciesName, it.chosung) == initial }.map { species ->
         val rows = state.allSellingInventory.filter { it.speciesId == species.speciesId }
-        StockEntry("s${species.speciesId}", species.speciesName, rows.map { it.farmId }.distinct().size, rows.sumOf { it.quantity.toLong() }, species)
+        StockEntry("s${species.speciesId}", species.speciesName, rows.map { it.farmId }.distinct().size, rows.sumOf { it.quantity.toLong() },
+            species, species.category)
     }
-    StockBrowseList(entries, "species-$initial", "개 농원", "재고 없음 · 눌러서 농원 고르기",
-        moreLabel = { "다른 묘목에 재고 입력 · ${it}종" }, onlyLabel = "재고 있는 묘목만 보기") { onSelect(it.payload as SpeciesEntity) }
+    StockBrowseList(entries, "species-$initial", NamuConcept.FARM, "곳", "재고 없음 · 눌러서 농원 고르기",
+        moreLabel = { "다른 묘목에 재고 입력 · ${it}종" }, onlyLabel = "재고 있는 묘목만 보기",
+        leading = { NamuSpeciesTile(it.name, it.category) }) { onSelect(it.payload as SpeciesEntity) }
 }
 
 /** 농원별 상세: the farm's stocked species (existing list) under a back header. */
@@ -205,8 +229,9 @@ internal fun StockSpeciesFarmsPage(state: ManagementUiState, species: SpeciesEnt
                 val farm = farms[row.farmId]
                 val low = row.quantity <= NamuColors.LOW_STOCK
                 NamuCard(onClick = { farm?.let(onEdit) }) {
-                    Row(Modifier.padding(start = 16.dp, end = 10.dp, top = 12.dp, bottom = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(Modifier.padding(start = 12.dp, end = 10.dp, top = 12.dp, bottom = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        NamuFarmAvatar(row.farmName)
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                             Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Text(row.farmName, Modifier.weight(1f), fontSize = 17.sp, fontWeight = FontWeight.Bold)

@@ -76,9 +76,16 @@ fun InitialAppModes(management: ManagementViewModel, quote: InitialQuoteViewMode
                                         }
                                     }, label = { Text(label, fontSize = 13.sp,
                                         fontWeight = if (pager.currentPage == index) FontWeight.Bold else FontWeight.Normal) },
-                                    colors = NavigationBarItemDefaults.colors(indicatorColor = NamuColors.navPill,
-                                        selectedIconColor = NamuColors.primary, selectedTextColor = NamuColors.text,
-                                        unselectedIconColor = NamuColors.muted, unselectedTextColor = NamuColors.muted))
+                                    // Each menu keeps its own colour (견적 살구·문의 파랑·매매 분홍·농원 초록); the open one is strongest.
+                                    colors = run {
+                                        val visual = listOf(com.example.namufarm.quotemode.components.NamuConcept.QUOTE,
+                                            com.example.namufarm.quotemode.components.NamuConcept.INQUIRY,
+                                            com.example.namufarm.quotemode.components.NamuConcept.SALE,
+                                            com.example.namufarm.quotemode.components.NamuConcept.SPECIES)[index].visual
+                                        NavigationBarItemDefaults.colors(indicatorColor = visual.background,
+                                            selectedIconColor = visual.ink, selectedTextColor = NamuColors.text,
+                                            unselectedIconColor = visual.ink.copy(alpha = 0.55f), unselectedTextColor = NamuColors.muted)
+                                    })
                             }
                         }
                     }

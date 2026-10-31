@@ -104,7 +104,7 @@ fun ManagementModeScreen(viewModel: ManagementViewModel, onBack: () -> Unit,
                 else -> {
                     NamuTopBar("농원·묘목", masterSyncLabel(state.lastMasterSyncAt), onSync = {
                         viewModel.syncInventoryWithMasters()
-                    }, actions = { backupController?.let { BackupMenu(it) } })
+                    }, concept = NamuConcept.SPECIES, actions = { backupController?.let { BackupMenu(it) } })
                     FarmTopArea(state, view, onView = { view = it }) {
                         if (view == 0) {
                             StockModeToggle(stockMode) { stockMode = it }

@@ -52,8 +52,9 @@ internal fun FarmTopArea(state: ManagementUiState, view: Int, onView: (Int) -> U
         Column {
             Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                NamuSegmented(listOf(NamuSegment("재고"), NamuSegment("농원", state.farmList.size),
-                    NamuSegment("묘목", state.allSpeciesList.size)), view, onView)
+                NamuSegmented(listOf(NamuSegment("재고", concept = NamuConcept.STOCK),
+                    NamuSegment("농원", state.farmList.size, concept = NamuConcept.FARM),
+                    NamuSegment("묘목", state.allSpeciesList.size, concept = NamuConcept.SPECIES)), view, onView)
                 content()
             }
             HorizontalDivider(color = NamuColors.border)

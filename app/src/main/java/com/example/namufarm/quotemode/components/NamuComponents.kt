@@ -266,7 +266,8 @@ internal fun NamuSecondaryButton(text: String, onClick: () -> Unit, modifier: Mo
     }
 }
 
-internal data class NamuSegment(val label: String, val count: Int? = null, val countColor: Color = NamuColors.primary)
+internal data class NamuSegment(val label: String, val count: Int? = null, val countColor: Color = NamuColors.primary,
+    val concept: NamuConcept? = null)
 
 @Composable
 internal fun NamuSegmented(options: List<NamuSegment>, selected: Int, onSelect: (Int) -> Unit,
@@ -280,6 +281,7 @@ internal fun NamuSegmented(options: List<NamuSegment>, selected: Int, onSelect: 
                 shadowElevation = if (active) 1.dp else 0.dp) {
                 Row(Modifier.padding(horizontal = 3.dp, vertical = 7.dp),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+                    option.concept?.let { NamuIconTile(it.visual, 22.dp, Modifier.padding(end = 5.dp)) }
                     Text(option.label, fontSize = 15.sp, color = if (active) NamuColors.text else Color(0xFF4A5A52),
                         fontWeight = if (active) FontWeight.Bold else FontWeight.Normal, textAlign = TextAlign.Center,
                         modifier = Modifier.weight(1f, fill = false))
@@ -294,11 +296,12 @@ internal fun NamuSegmented(options: List<NamuSegment>, selected: Int, onSelect: 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun NamuTopBar(title: String, syncText: String? = null, onSync: (() -> Unit)? = null,
-    actions: @Composable RowScope.() -> Unit = {}) {
+    concept: NamuConcept? = null, actions: @Composable RowScope.() -> Unit = {}) {
     Surface(color = Color.White) {
         BoxWithConstraints(Modifier.fillMaxWidth().heightIn(min = 60.dp).padding(start = 20.dp, end = 8.dp)) {
             val actionWidth = maxWidth * 0.76f
             Row(Modifier.fillMaxWidth().heightIn(min = 60.dp), verticalAlignment = Alignment.CenterVertically) {
+                concept?.let { NamuIconTile(it.visual, 32.dp, Modifier.padding(end = 8.dp)) }
                 Text(title, Modifier.weight(1f), fontSize = 22.sp, fontWeight = FontWeight.Bold, color = NamuColors.text)
                 FlowRow(Modifier.widthIn(max = actionWidth), verticalArrangement = Arrangement.Center,
                     horizontalArrangement = Arrangement.End) {

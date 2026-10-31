@@ -364,7 +364,7 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
 
     Scaffold(
         topBar = {
-            NamuTopBar("매매", masterSyncLabel(uiState.lastMasterSyncAt), onSync = { viewModel.syncDataWithGoogleSheet() }) {
+            NamuTopBar("매매", masterSyncLabel(uiState.lastMasterSyncAt), onSync = { viewModel.syncDataWithGoogleSheet() }, concept = NamuConcept.SALE) {
                 if (uiState.pendingSyncCount > 0) TextButton(onClick = { showPendingSyncDialog = true }) {
                     Text("전송 대기 ${uiState.pendingSyncCount}건", fontSize = 13.sp)
                 }
