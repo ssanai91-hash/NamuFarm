@@ -4,14 +4,10 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -38,12 +34,7 @@ internal fun BackupMenu(controller: DataBackupController) {
     }
     Box {
         // 로컬백업 = 휴대폰 자료 전체를 ZIP 파일로 저장(서버와 무관). Labelled instead of the old ⋮ icon.
-        Surface(onClick = { menu = true }, enabled = !state.busy, shape = RoundedCornerShape(22.dp), color = Color.White,
-            border = BorderStroke(1.5.dp, Color(0xFFC9D4CE))) {
-            Box(Modifier.heightIn(min = 44.dp).padding(horizontal = 12.dp), contentAlignment = Alignment.Center) {
-                Text("로컬백업", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color(0xFF4A5A52))
-            }
-        }
+        NamuTopBarButton("로컬백업", { menu = true }, enabled = !state.busy)
         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
             DropdownMenuItem(text = { Text("로컬백업 만들기", fontSize = 16.sp) }, onClick = { menu = false; warning = true })
             DropdownMenuItem(text = { Text("로컬백업에서 복원", fontSize = 16.sp) }, onClick = { menu = false; open.launch(arrayOf("application/zip", "application/x-zip-compressed")) })

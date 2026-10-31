@@ -298,28 +298,38 @@ internal fun NamuSegmented(options: List<NamuSegment>, selected: Int, onSelect: 
 internal fun NamuTopBar(title: String, syncText: String? = null, onSync: (() -> Unit)? = null,
     concept: NamuConcept? = null, actions: @Composable RowScope.() -> Unit = {}) {
     Surface(color = Color.White) {
-        BoxWithConstraints(Modifier.fillMaxWidth().heightIn(min = 60.dp).padding(start = 20.dp, end = 8.dp)) {
-            val actionWidth = maxWidth * 0.76f
+        BoxWithConstraints(Modifier.fillMaxWidth().heightIn(min = 60.dp).padding(start = 20.dp, end = 12.dp)) {
+            val actionWidth = maxWidth * 0.68f
             Row(Modifier.fillMaxWidth().heightIn(min = 60.dp), verticalAlignment = Alignment.CenterVertically) {
                 concept?.let { NamuIconTile(it.visual, 32.dp, Modifier.padding(end = 8.dp)) }
-                Text(title, Modifier.weight(1f), fontSize = 22.sp, fontWeight = FontWeight.Bold, color = NamuColors.text)
-                FlowRow(Modifier.widthIn(max = actionWidth), verticalArrangement = Arrangement.Center,
-                    horizontalArrangement = Arrangement.End) {
-                    Row(verticalAlignment = Alignment.CenterVertically, content = actions)
-                    if (onSync == null) syncText?.let { Text(it, Modifier.padding(vertical = 14.dp), fontSize = 13.sp, color = NamuColors.muted) }
+                // The last-sync time sits under the title so the right-hand buttons stay on one centre line.
+                Column(Modifier.weight(1f).padding(vertical = 6.dp)) {
+                    Text(title, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = NamuColors.text, maxLines = 1)
+                    syncText?.let { Text(it, fontSize = 12.sp, color = NamuColors.muted, maxLines = 1) }
+                }
+                FlowRow(Modifier.widthIn(max = actionWidth).padding(vertical = 6.dp), itemVerticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    actions()
                     // 동기화 = 못 보낸 수정을 서버로 보내고 서버 최신 자료를 받아오기. Labelled so it is never a guess.
-                    onSync?.let { sync -> Column(Modifier.padding(start = 6.dp, top = 6.dp, bottom = 6.dp), horizontalAlignment = Alignment.End) {
-                        Surface(onClick = sync, shape = RoundedCornerShape(22.dp), color = NamuColors.primary) {
-                            Row(Modifier.heightIn(min = 44.dp).padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                                Icon(Icons.Outlined.CloudSync, null, Modifier.size(20.dp), tint = Color.White)
-                                Text("동기화", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                            }
-                        }
-                        syncText?.let { Text(it, Modifier.padding(top = 2.dp, end = 4.dp), fontSize = 12.sp, color = NamuColors.muted) }
-                    } }
+                    onSync?.let { NamuTopBarButton("동기화", it, primary = true, icon = Icons.Outlined.CloudSync) }
                 }
             }
+        }
+    }
+}
+
+/** 상단바 글자 버튼(동기화·로컬백업): same height, minimum width and shape so they line up as a pair. */
+@Composable
+internal fun NamuTopBarButton(text: String, onClick: () -> Unit, primary: Boolean = false, enabled: Boolean = true,
+    icon: ImageVector? = null) {
+    val ink = if (primary) Color.White else Color(0xFF3F4F47)
+    Surface(onClick = onClick, enabled = enabled, shape = RoundedCornerShape(19.dp),
+        color = if (primary) NamuColors.primary else Color.White,
+        border = if (primary) null else BorderStroke(1.5.dp, Color(0xFFC9D4CE))) {
+        Row(Modifier.height(38.dp).widthIn(min = 88.dp).padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally)) {
+            icon?.let { Icon(it, null, Modifier.size(17.dp), tint = ink) }
+            Text(text, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = ink, maxLines = 1)
         }
     }
 }
