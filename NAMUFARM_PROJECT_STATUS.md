@@ -1344,3 +1344,15 @@ Room 엔티티의 NOT NULL·열 이름·복합 기본키 순서를 위 SQL과 �
 - 초성 버튼: 재고가 있는 초성만 진하게, 재고 없는 초성은 흐리게(누르면 위 안내와 입력 버튼). 이름이 하나도 없는 초성은 기존처럼 비활성.
 - Android `ui/farm/StockBrowse.kt`·`ui/ManagementModeScreen.kt`, 나피 `nursery_ui.py`. 저장·DB·서버 변경 없음. 컴파일·APK·EXE 미실행.
 
+
+## 2026-10-31 나피 0.5.13 — 재고 농원별·묘목별 및 색 아이콘 Windows x64 배포본 빌드 완료
+
+- 소스 커밋: `9c690850ddad4f11abafd0124c068da13e38ba39` (main). 새 체크아웃에서 `git pull --ff-only` 확인. pyproject.toml 및 __init__.py 버전 0.5.13. 앱 코드 추가 수정 없음.
+- 빌드 시각(KST): 2026-10-31T17:21:58.489527+09:00 시작 → 2026-10-31T17:22:31.430423+09:00 완료. 저장소의 `desktop/build_windows_portable.py`를 수정 없이 실행, 종료 코드 0. MinGW GCC 13-posix로 Windows x64 GUI 런처 새 컴파일 후 공식 CPython 3.12.10 임베디드 실행환경과 Windows 휠 11개를 함께 패키징. Python ZIP 및 모든 휠의 버전·SHA-256은 기존 0.5.11 배포 입력 기록과 일치. 기존 자료 폴더 및 고객자료 접근·변경 없음.
+- EXE: `NamuFarm-PC.exe`, 19,456 bytes, SHA-256 `5b1cb2e6faa9593c1c21088358014d91e5cdae0a2986e7160ef12e33dead9844`.
+- 전체 ZIP: `Napi-0.5.13-Windows-x64.zip`, 268,112,567 bytes, SHA-256 `fb31fccab3067421014121b0f4ec7fdc554b1818f86eed53d6e8d21dc211238c`.
+- 기본 빌드 검증: 소스 문법(빌드 도구 기본 확인), PE32+ AMD64 GUI 형식 및 ASLR/NX 플래그, QtSvg.pyd·Qt6Svg.dll·qwindows.dll·Python DLL·직인 이미지 포함, visuals.py/nursery_ui.py/workspace.py/ui_icons.py/__init__.py 소스와 배포본 일치, BUILD-INFO 소스 커밋, ZIP 전체 CRC 무결성 확인.
+- 실제 Windows 실행은 미확인(이 환경에서 Windows 실행하지 않음). 실행 성공·화면·서버 동작 검증 완료로 간주하지 않음. 빌드 중 오류 없음. 실행 시 발생하는 오류는 사용자가 전달하면 코드 변경 없이 먼저 확인.
+- 전달: EXE 및 실행환경 포함 전체 ZIP 직접 다운로드. EXE는 _runtime과 함께 사용. 업데이트는 앱 종료 후 EXE와 _runtime을 함께 교체하고 기존 자료 폴더를 보존.
+- 사용자 확인 순서: 묘목관리 → 재고 탭에서 농원별·묘목별 전환 → 초성 → 목록 → 오른쪽 표 → 재고 추가·수정.
+- 미실행: 자동시험·GitHub Actions·실제 문자/메일 시험·운영 서버 동작 시험·홈페이지 게시·Apps Script 변경/재배포. 기존 데이터·DB·엑셀·서버 변경 없음.
