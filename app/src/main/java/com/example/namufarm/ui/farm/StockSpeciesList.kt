@@ -40,16 +40,6 @@ internal fun StockSpeciesList(state: ManagementUiState, initial: String, search:
         if (species.isEmpty()) NamuEmptyState("조건에 맞는 묘목이 없어요")
         else NamuCard {
             LazyColumn(contentPadding = PaddingValues(horizontal = 4.dp)) {
-                if (farmId != null && stockedIds.isNotEmpty() && !filtering) item(key = "stock-filter") {
-                    Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 8.dp, top = 10.dp, bottom = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically) {
-                        Text(if (stockedOnly) "재고 있는 묘목 ${species.size}" else "전체 묘목 ${species.size} · 재고 있는 묘목 먼저",
-                            Modifier.weight(1f), fontSize = 14.sp, color = Color(0xFF4A5A52))
-                        if (!stockedOnly) TextButton(onClick = { showAll = false }) {
-                            Text("재고만 보기", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = NamuColors.primary)
-                        }
-                    }
-                }
                 itemsIndexed(species, key = { _, item -> item.speciesId ?: item.speciesName }) { index, item ->
                     val rows = state.allSellingInventory.filter { it.farmId == state.selectedFarm?.farmId && it.speciesId == item.speciesId }
                     val total = rows.sumOf { it.quantity.toLong() }
@@ -73,11 +63,14 @@ internal fun StockSpeciesList(state: ManagementUiState, initial: String, search:
                     }
                     if (index < species.lastIndex) HorizontalDivider(color = Color(0xFFEDF1EE))
                 }
-                if (stockedOnly && others > 0) item(key = "show-all") {
-                    OutlinedButton(onClick = { showAll = true },
+                // No description line above the list (사용자 확정 시안); the toggle lives at the bottom.
+                val toggle = if (stockedOnly && others > 0) "다른 묘목에 재고 입력 · ${others}종" to true
+                    else if (!stockedOnly && !filtering && farmId != null && stockedIds.isNotEmpty()) "재고 있는 묘목만 보기" to false else null
+                if (toggle != null) item(key = "stock-toggle") {
+                    OutlinedButton(onClick = { showAll = toggle.second },
                         modifier = Modifier.fillMaxWidth().padding(8.dp).heightIn(min = 50.dp),
                         shape = RoundedCornerShape(12.dp), border = BorderStroke(1.dp, NamuColors.primary)) {
-                        Text("다른 묘목에 재고 입력 · ${others}종", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = NamuColors.primary)
+                        Text(toggle.first, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = NamuColors.primary)
                     }
                 }
             }

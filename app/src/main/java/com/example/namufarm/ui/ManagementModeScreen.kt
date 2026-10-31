@@ -39,6 +39,11 @@ fun ManagementModeScreen(viewModel: ManagementViewModel, onBack: () -> Unit,
     var search by rememberSaveable { mutableStateOf("") }
     var initial by rememberSaveable { mutableStateOf("전체") }
     var speciesPurpose by rememberSaveable { mutableStateOf("") }
+    // 재고 탭: 농원별·묘목별 보기와 초성(기본 ㄱ). Separate from the 묘목 tab's own search/initial.
+    var stockMode by rememberSaveable { mutableStateOf(STOCK_BY_FARM) }
+    var stockInitial by rememberSaveable { mutableStateOf("ㄱ") }
+    var stockSpeciesId by rememberSaveable { mutableStateOf<Int?>(null) }
+    var specReturn by rememberSaveable { mutableStateOf("list") }
     var originalRowJson by rememberSaveable { mutableStateOf<String?>(null) }
     var baseline by rememberSaveable { mutableStateOf("") }
     var showLeaveConfirm by remember { mutableStateOf(false) }
@@ -53,7 +58,8 @@ fun ManagementModeScreen(viewModel: ManagementViewModel, onBack: () -> Unit,
     fun back() {
         when (page) {
             "input" -> if (stockInputKey(state) != baseline) showLeaveConfirm = true else leaveInput()
-            "spec" -> page = "list"
+            "spec" -> page = specReturn
+            "farmStock", "speciesFarms" -> page = "list"
             else -> onBack()
         }
     }
@@ -85,23 +91,41 @@ fun ManagementModeScreen(viewModel: ManagementViewModel, onBack: () -> Unit,
                     baseline = stockInputKey(viewModel.uiState.value)
                     page = "input"
                 })
+                "farmStock" -> StockFarmPage(state, onBack = ::back) { species ->
+                    viewModel.selectSpecies(species); specReturn = "farmStock"; page = "spec"
+                }
+                "speciesFarms" -> {
+                    val species = state.allSpeciesList.firstOrNull { it.speciesId == stockSpeciesId }
+                    if (species != null) StockSpeciesFarmsPage(state, species, onBack = ::back) { farm ->
+                        viewModel.selectFarmForStock(farm); viewModel.selectSpecies(species)
+                        specReturn = "speciesFarms"; page = "spec"
+                    } else LaunchedEffect(Unit) { page = "list" } // The species was removed by a sync.
+                }
                 else -> {
                     NamuTopBar("농원·묘목", masterSyncLabel(state.lastMasterSyncAt), onSync = {
                         viewModel.syncInventoryWithMasters()
                     }, actions = { backupController?.let { BackupMenu(it) } })
                     FarmTopArea(state, view, onView = { view = it }) {
-                        if (view != 2) FarmPicker(state, viewModel::selectFarmForStock)
-                        if (view != 1) {
+                        if (view == 0) {
+                            StockModeToggle(stockMode) { stockMode = it }
+                            StockChosungGrid(stockInitial, available = { ch ->
+                                if (stockMode == STOCK_BY_FARM) state.farmList.any { stockInitialOf(it.farmName) == ch }
+                                else state.allSpeciesList.any { (it.isActive ?: 1) == 1 && stockInitialOf(it.speciesName, it.chosung) == ch }
+                            }) { stockInitial = it }
+                        }
+                        if (view == 2) {
                             FarmSearch(search, onChange = { search = it })
-                            if (view == 2) SpeciesPurposeFilter(speciesPurpose) { speciesPurpose = it }
+                            SpeciesPurposeFilter(speciesPurpose) { speciesPurpose = it }
                             NamuChosungRow(initial, state.allSpeciesList.size, onSelect = { initial = it }, available = { ch ->
                                 state.allSpeciesList.any { namuMatchesInitial(it.speciesName, it.chosung, ch) }
                             })
                         }
                     }
                     when (view) {
-                        0 -> StockSpeciesList(state, initial, search) { species ->
-                            viewModel.selectSpecies(species); page = "spec"
+                        0 -> if (stockMode == STOCK_BY_FARM) StockFarmList(state, stockInitial) { farm ->
+                            viewModel.selectFarmForStock(farm); page = "farmStock"
+                        } else StockSpeciesOverview(state, stockInitial) { species ->
+                            stockSpeciesId = species.speciesId; page = "speciesFarms"
                         }
                         1 -> FarmList(viewModel)
                         2 -> SpeciesList(viewModel, initial, search, speciesPurpose)

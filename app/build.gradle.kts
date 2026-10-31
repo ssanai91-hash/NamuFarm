@@ -16,8 +16,8 @@ android {
         applicationId = "com.example.namufarm.original"
         minSdk = 24
         targetSdk = 36
-        versionCode = 37
-        versionName = "1.1.34"
+        versionCode = 38
+        versionName = "1.1.35"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
