@@ -1288,3 +1288,15 @@ Room 엔티티의 NOT NULL·열 이름·복합 기본키 순서를 위 SQL과 �
 - 수정(`ui/farm/StockSpeciesList.kt`만): 재고가 있는 농원을 고르면 그 농원의 재고 묘목만 표시(‘재고 있는 묘목 N’). 맨 아래 ‘다른 묘목에 재고 입력 · N종’을 누르면 전체 묘목(재고 있는 묘목 먼저) 표시, ‘재고만 보기’로 돌아감. 검색어·초성 선택 시에는 전체 묘목에서 찾기(재고 있는 것 먼저). 재고 없는 농원은 기존처럼 전체 표시.
 - 저장·동기화·DB·서버 변경 없음. 컴파일·APK·서명 미실행.
 
+
+## 2026-10-31 Android 1.1.34(37) 재고 목록 — 릴리스 빌드·기존 초기 앱 키 서명 완료
+
+- 소스 커밋: `6dd0349ea0eb572e692681d403dc9306bdcffb2b` (main). 새 체크아웃에서 `git pull --ff-only` 확인. 앱 코드 변경 없음. Firebase·알림 설정 추가 없음.
+- 빌드 시각: 2026-10-31T15:07:59.244547+09:00 시작 → 2026-10-31T15:15:05.435625+09:00 완료(KST). `clean assembleRelease --no-build-cache --rerun-tasks -x test` 실행. Gradle 9.3.1 / Java 21 / Android SDK 36.1 / Build Tools 36.0.0. `BUILD SUCCESSFUL in 7m 5s` (51 actionable tasks: 50 executed, 1 up-to-date). 초기 플러그인 다운로드 실패 후 환경 프록시·신뢰 CA를 명시해 재시도; 저장소·플러그인·앱 소스는 수정하지 않음. 추가 옵션 `--no-daemon --console=plain --info`.
+- 파일명: `NamuFarm-initial-1.1.34-6dd0349-update.apk`
+- 크기: 13,992,959 bytes.
+- APK SHA-256: `474d75bfec8b8385b31c2bf5b9a62954618271973eddac9d9f5b28b819dd65c6`
+- 서명: `scripts/sign_initial_apk.py`와 기존 초기 앱 키 사용. 인증서 SHA-256 `a31a78a895be8f89bacb2c7b355f413e1cacecfbfd769b257801fcb619e616e1` 일치. 새 키·디버그 키 사용 없음. 서명 완료 시각 2026-10-31T15:15:28.165266+09:00 (KST).
+- APK 검증: 패키지 `com.example.namufarm.original`, versionName 1.1.34 / versionCode 37, 릴리스 비디버그, apksigner 서명 검증, zipalign 4바이트 정렬, ZIP 전체 CRC 무결성 모두 통과. 기존 1.1.33 APK 인증서 일치 및 상위 versionCode 확인.
+- 전달: 이 대화에서 직접 다운로드 가능한 APK 제공. 기존 앱을 삭제하지 않고 업데이트 설치. 실제 재고 목록·검색·초성·전체 보기 전환은 사용자가 직접 확인.
+- 미실행: 자동시험·GitHub Actions·실제 고객 접수·문자/메일 시험·실기기 설치/화면 동작 시험·Apps Script 변경/재배포·홈페이지 게시. 릴리스 빌드에 기본 포함된 Lint 검사는 통과.
