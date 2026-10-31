@@ -1356,3 +1356,18 @@ Room 엔티티의 NOT NULL·열 이름·복합 기본키 순서를 위 SQL과 �
 - 전달: EXE 및 실행환경 포함 전체 ZIP 직접 다운로드. EXE는 _runtime과 함께 사용. 업데이트는 앱 종료 후 EXE와 _runtime을 함께 교체하고 기존 자료 폴더를 보존.
 - 사용자 확인 순서: 묘목관리 → 재고 탭에서 농원별·묘목별 전환 → 초성 → 목록 → 오른쪽 표 → 재고 추가·수정.
 - 미실행: 자동시험·GitHub Actions·실제 문자/메일 시험·운영 서버 동작 시험·홈페이지 게시·Apps Script 변경/재배포. 기존 데이터·DB·엑셀·서버 변경 없음.
+
+## 2026-10-31 Android 1.1.37(40) · 나피 0.5.14 — 재고 목록 정리 배포본 빌드 완료
+
+- 새 main 체크아웃에서 `git pull --ff-only`: `42a40190b4967909248809e8218967dd80c7835a`. 요청 변경 커밋 `d2d2ec7dd53555d6aace008a1b85fa17d3280f60` 포함. 추가 커밋 42a4019는 0.5.13 빌드 기록만이며 app/desktop 소스는 d2d2ec7과 동일함을 확인. 코드 수정 없음. Android 1.1.37 / versionCode 40, 나피 pyproject.toml·__init__.py 0.5.14 확인.
+- Android 빌드 시각(KST): 2026-10-31T17:29:53.479089+09:00 시작 → 2026-10-31T17:32:37.618117+09:00 완료. 새 체크아웃에서 `clean assembleRelease --no-build-cache --rerun-tasks -x test` 실행. 환경 프록시·신뢰 CA 시스템 속성과 `--no-daemon --console=plain` 추가. `BUILD SUCCESSFUL in 2m 43s` (51 actionable tasks: 50 executed, 1 up-to-date). 기존 경고는 수정하지 않음.
+- APK: `NamuFarm-initial-1.1.37-d2d2ec7-update.apk`, 14,025,727 bytes. SHA-256 `b8051253fd731b6c10b60e840aeb6a7d2a21054870309e00bdef79082fb2658d`.
+- Android 서명: `scripts/sign_initial_apk.py` + 기존 초기 앱 키. 인증서 SHA-256 `a31a78a895be8f89bacb2c7b355f413e1cacecfbfd769b257801fcb619e616e1` 일치. 서명 시각 2026-10-31T17:33:14.524329+09:00 (KST). 이전 1.1.36 APK와 동일 인증서 및 상위 versionCode 확인. 새 키·디버그 키 사용 없음.
+- APK 검증: 패키지 `com.example.namufarm.original`, versionName 1.1.37 / versionCode 40, 릴리스 비디버그, apksigner 서명, zipalign 4바이트 정렬, ZIP 전체 CRC 무결성 통과. 빌드 기본 Lint 검사 통과.
+- 나피 빌드 시각(KST): 2026-10-31T17:29:53.478317+09:00 시작 → 2026-10-31T17:30:31.737394+09:00 완료. 저장소 `desktop/build_windows_portable.py`를 변경 없이 실행. MinGW GCC 13-posix로 Windows x64 GUI 런처 컴파일 후 공식 CPython 3.12.10 임베디드 및 이전과 동일한 Windows 휠 실행환경을 포함. 종료 코드 0. 0.5.13 재빌드 없이 0.5.14만 생성.
+- 나피 EXE: `NamuFarm-PC.exe`, 19,456 bytes. SHA-256 `6c29959f1fd0406dfc58df6de76f1a8c8543fb2897e84904eeba7da27ec67b37`.
+- 나피 전체 ZIP: `Napi-0.5.14-Windows-x64.zip`, 268,112,774 bytes. SHA-256 `8f6443f8a7e557cd6685158d01472d5ed1214e742d5c9e4b971b91c9b95640c6`.
+- 나피 기본 검증: 빌드 도구의 소스 문법 확인, PE32+ AMD64 GUI 형식, ASLR/NX 플래그, Python·QtSvg·Qt 플랫폼 DLL·직인 이미지 포함, 변경 소스 및 버전·BUILD-INFO 일치, ZIP 전체 CRC 무결성 통과. 기존 자료 폴더·DB·엑셀·서버 변경 없음. 실제 Windows 실행은 미확인.
+- 전달: APK·나피 EXE·실행환경 포함 전체 ZIP 직접 다운로드. Android는 기존 앱 삭제 없이 업데이트. 나피는 종료 후 EXE와 _runtime을 함께 교체하고 기존 자료 폴더 보존.
+- 사용자 확인: 재고 있는 농원·묘목만 목록에 표시되는지, 재고 없는 초성이 흐리게 표시되는지 확인. 실제 UI·저장·동기화 동작은 사용자 확인 대상.
+- 미실행: 자동시험·GitHub Actions·실제 고객 문자/메일 시험·운영 고객 접수 시험·실기기 설치/화면 동작 시험·Windows 실제 실행·홈페이지 게시·Apps Script 변경/재배포.
