@@ -306,9 +306,17 @@ internal fun NamuTopBar(title: String, syncText: String? = null, onSync: (() -> 
                 FlowRow(Modifier.widthIn(max = actionWidth), verticalArrangement = Arrangement.Center,
                     horizontalArrangement = Arrangement.End) {
                     Row(verticalAlignment = Alignment.CenterVertically, content = actions)
-                    syncText?.let { Text(it, Modifier.padding(vertical = 14.dp), fontSize = 13.sp, color = NamuColors.muted) }
-                    onSync?.let { sync -> IconButton(onClick = sync, modifier = Modifier.size(48.dp)) {
-                        Icon(Icons.Outlined.CloudSync, "동기화", Modifier.size(24.dp), tint = NamuColors.primary)
+                    if (onSync == null) syncText?.let { Text(it, Modifier.padding(vertical = 14.dp), fontSize = 13.sp, color = NamuColors.muted) }
+                    // 동기화 = 못 보낸 수정을 서버로 보내고 서버 최신 자료를 받아오기. Labelled so it is never a guess.
+                    onSync?.let { sync -> Column(Modifier.padding(start = 6.dp, top = 6.dp, bottom = 6.dp), horizontalAlignment = Alignment.End) {
+                        Surface(onClick = sync, shape = RoundedCornerShape(22.dp), color = NamuColors.primary) {
+                            Row(Modifier.heightIn(min = 44.dp).padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                                Icon(Icons.Outlined.CloudSync, null, Modifier.size(20.dp), tint = Color.White)
+                                Text("동기화", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                            }
+                        }
+                        syncText?.let { Text(it, Modifier.padding(top = 2.dp, end = 4.dp), fontSize = 12.sp, color = NamuColors.muted) }
                     } }
                 }
             }
@@ -376,7 +384,7 @@ internal fun NamuDashedAdd(text: String, onClick: () -> Unit, modifier: Modifier
 }
 
 internal fun masterSyncLabel(at: Long?): String? = at?.let {
-    java.text.SimpleDateFormat("HH:mm", Locale.KOREA).format(java.util.Date(it)) + " 동기화"
+    "마지막 " + java.text.SimpleDateFormat("HH:mm", Locale.KOREA).format(java.util.Date(it))
 }
 
 internal fun shortNamuTime(at: Long): String {

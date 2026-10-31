@@ -4,12 +4,14 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -35,19 +37,25 @@ internal fun BackupMenu(controller: DataBackupController) {
         uri?.let { scope.launch { controller.inspectArchive(it) } }
     }
     Box {
-        IconButton(onClick = { menu = true }, enabled = !state.busy, modifier = Modifier.size(48.dp)) { Icon(Icons.Outlined.MoreVert, "자료 백업 메뉴") }
+        // 로컬백업 = 휴대폰 자료 전체를 ZIP 파일로 저장(서버와 무관). Labelled instead of the old ⋮ icon.
+        Surface(onClick = { menu = true }, enabled = !state.busy, shape = RoundedCornerShape(22.dp), color = Color.White,
+            border = BorderStroke(1.5.dp, Color(0xFFC9D4CE))) {
+            Box(Modifier.heightIn(min = 44.dp).padding(horizontal = 12.dp), contentAlignment = Alignment.Center) {
+                Text("로컬백업", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color(0xFF4A5A52))
+            }
+        }
         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-            DropdownMenuItem(text = { Text("자료 백업 만들기") }, onClick = { menu = false; warning = true })
-            DropdownMenuItem(text = { Text("백업에서 복원") }, onClick = { menu = false; open.launch(arrayOf("application/zip", "application/x-zip-compressed")) })
+            DropdownMenuItem(text = { Text("로컬백업 만들기", fontSize = 16.sp) }, onClick = { menu = false; warning = true })
+            DropdownMenuItem(text = { Text("로컬백업에서 복원", fontSize = 16.sp) }, onClick = { menu = false; open.launch(arrayOf("application/zip", "application/x-zip-compressed")) })
         }
     }
-    if (warning) AlertDialog(onDismissRequest = { warning = false }, title = { Text("자료 백업 만들기") },
-        text = { Text("백업 파일에는 고객 전화번호·주소가 들어 있어요. 다른 사람과 공유하지 말고 안전한 곳에 보관하세요.\n백업 중 저장 작업을 잠시 멈추고 완료 후 화면을 다시 엽니다.") },
+    if (warning) AlertDialog(onDismissRequest = { warning = false }, title = { Text("로컬백업 만들기") },
+        text = { Text("휴대폰 자료 전체를 ZIP 파일 하나로 저장해요. 서버로 올라가지 않아요.\n백업 파일에는 고객 전화번호·주소가 들어 있어요. 다른 사람과 공유하지 말고 안전한 곳에 보관하세요.\n백업 중 저장 작업을 잠시 멈추고 완료 후 화면을 다시 엽니다.") },
         confirmButton = { TextButton(onClick = { warning = false; create.launch(controller.filename()) }) { Text("저장 위치 선택") } },
         dismissButton = { TextButton(onClick = { warning = false }) { Text("취소") } })
     if (!state.busy) state.preview?.let { preview ->
         val rows = preview.manifest.databases.first { it.name == "NamuFarm.db" }.rows
-        FarmSheet("백업에서 복원", controller::dismissPreview) {
+        FarmSheet("로컬백업에서 복원", controller::dismissPreview) {
             Text("백업 시각 · " + SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.KOREA).format(Date(preview.manifest.createdAt)))
             Text("농원 ${rows["farm_info"] ?: 0} · 묘목 ${rows["species"] ?: 0} · 재고 ${rows["farm_inventory"] ?: 0}\n" +
                 "매매 견적 ${rows["quote_list"] ?: 0} · 주문 ${rows["order_list"] ?: 0} · 전송 대기 ${rows["pending_sync"] ?: 0}", fontSize = 15.sp)
