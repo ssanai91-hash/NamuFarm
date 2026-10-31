@@ -1403,3 +1403,14 @@ Room 엔티티의 NOT NULL·열 이름·복합 기본키 순서를 위 SQL과 �
 - 농원·묘목의 `⋮`을 테두리 **[로컬백업]** 버튼으로. 메뉴 이름 ‘로컬백업 만들기 / 로컬백업에서 복원’, 안내문에 “서버로 올라가지 않아요” 추가.
 - 동기화·백업·복원 동작, 저장, DB, 서버 변경 없음. 표시 시각 기준(수동 전체 동기화 성공 시각)도 그대로.
 - 미확인: 좁은 화면에서 두 버튼이 한 줄에 들어가는지(넘치면 동기화 버튼이 아래 줄로 내려감) — 실기기 확인 필요.
+
+## 2026-10-31 Android 1.1.39(42) — 상단 동기화·로컬백업 글자 버튼 빌드 완료
+
+- 소스 커밋: `d2f4dc9587d5215b3fc7f29777cd908d5e3195b6` (main). 새 체크아웃에서 `git pull --ff-only` 확인. 앱 코드 추가 수정 없음. 나피 변경·빌드 없음.
+- 빌드 시각(KST): 2026-10-31T20:23:36.091351+09:00 시작 → 2026-10-31T20:26:10.359974+09:00 완료. `clean assembleRelease --no-build-cache --rerun-tasks -x test` 실행. 환경 프록시·신뢰 CA 시스템 속성과 `--no-daemon --console=plain` 추가. `BUILD SUCCESSFUL in 2m 33s` (51 actionable tasks: 50 executed, 1 up-to-date). 기존 경고는 수정하지 않음.
+- APK: `NamuFarm-initial-1.1.39-d2f4dc9-update.apk`, 14,025,727 bytes. SHA-256 `859c535eeb726ae91bee2b5b20073aaac6ce6d9557aa811a4b7c9a4709c28351`.
+- 서명: `scripts/sign_initial_apk.py` + 기존 초기 앱 키. 인증서 SHA-256 `a31a78a895be8f89bacb2c7b355f413e1cacecfbfd769b257801fcb619e616e1` 일치. 서명 시각 2026-10-31T20:26:21.580531+09:00 (KST). 이전 1.1.38 APK와 동일 인증서 및 상위 versionCode 확인. 새 키·디버그 키 사용 없음.
+- 검증: 패키지 `com.example.namufarm.original`, versionName 1.1.39 / versionCode 42, 릴리스 비디버그, apksigner 서명, zipalign 4바이트 정렬, ZIP 전체 CRC 무결성 통과. 빌드 기본 Lint 검사 통과. 서명·검증 후 추적 파일의 코드 변경 없음 확인.
+- 전달: APK 직접 다운로드. 기존 앱 삭제 없이 업데이트.
+- 사용자 확인 대상: 공통 상단바의 초록 ‘동기화’ 글자 버튼과 ‘마지막 HH:mm’, 농원·묘목 ‘로컬백업’ 버튼의 만들기/복원 메뉴. 실기기 동작은 미확인.
+- 미실행: 자동시험·GitHub Actions·실제 고객 문자/메일 시험·운영 고객 접수 시험·실기기 설치/화면 동작 시험·나피 빌드·홈페이지 게시·Apps Script 변경/재배포.
