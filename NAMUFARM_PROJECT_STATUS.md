@@ -1421,3 +1421,14 @@ Room 엔티티의 NOT NULL·열 이름·복합 기본키 순서를 위 SQL과 �
 - 공통 `NamuTopBarButton` 추가: 두 버튼 모두 높이 38dp·최소 너비 88dp·14sp 굵은 글씨·같은 둥근 모양. 동기화는 초록 채움+아이콘, 로컬백업은 흰 바탕 테두리.
 - 상단바 버튼 줄을 세로 가운데 정렬(`itemVerticalAlignment`), 버튼 간격 8dp. 마지막 동기화 시각(`마지막 HH:mm`)은 버튼 아래가 아니라 화면 제목 아래 작은 글씨로 옮겨 버튼 줄 높이가 흔들리지 않게 함.
 - 동작·저장·DB·서버 변경 없음. 견적·문의·매매 화면 동기화 버튼도 같은 크기로 바뀜.
+
+## 2026-10-31 Android 1.1.40(43) — 상단 로컬백업·동기화 버튼 크기·정렬 빌드 완료
+
+- 소스 커밋: `74533a6f6e3de6bf74e046ce12894cc92f11010c` (main). 새 체크아웃에서 `git pull --ff-only` 확인. 앱 코드 추가 수정 없음. 나피 변경·빌드 없음.
+- 빌드 시각(KST): 2026-10-31T20:38:13.315353+09:00 시작 → 2026-10-31T20:40:33.312786+09:00 완료. `clean assembleRelease --no-build-cache --rerun-tasks -x test` 실행. 환경 프록시·신뢰 CA 시스템 속성과 `--no-daemon --console=plain` 추가. `BUILD SUCCESSFUL in 2m 19s` (51 actionable tasks: 50 executed, 1 up-to-date). 기존 경고는 수정하지 않음. FlowRow itemVerticalAlignment 관련 컴파일 오류 발생 없음.
+- APK: `NamuFarm-initial-1.1.40-74533a6-update.apk`, 14,025,727 bytes. SHA-256 `0fd092c0ecae2c645557c8fce19f29d2b2c867f6df148c4e1164734dc4c17037`.
+- 서명: `scripts/sign_initial_apk.py` + 기존 초기 앱 키. 인증서 SHA-256 `a31a78a895be8f89bacb2c7b355f413e1cacecfbfd769b257801fcb619e616e1` 일치. 서명 시각 2026-10-31T20:40:46.955284+09:00 (KST). 이전 1.1.39 APK와 동일 인증서 및 상위 versionCode 확인. 새 키·디버그 키 사용 없음.
+- 검증: 패키지 `com.example.namufarm.original`, versionName 1.1.40 / versionCode 43, 릴리스 비디버그, apksigner 서명, zipalign 4바이트 정렬, ZIP 전체 CRC 무결성 통과. 빌드 기본 Lint 검사 통과. 서명·검증 후 추적 파일의 코드 변경 없음 확인.
+- 전달: APK 직접 다운로드. 기존 앱 삭제 없이 업데이트.
+- 사용자 확인 대상: 공통 NamuTopBarButton의 로컬백업·동기화 버튼 높이 38dp·최소 너비·모양 및 한 줄 가운데 정렬, 제목 아래 마지막 동기화 시각. 실기기 동작은 미확인.
+- 미실행: 자동시험·GitHub Actions·실제 고객 문자/메일 시험·운영 고객 접수 시험·실기기 설치/화면 동작 시험·나피 빌드·홈페이지 게시·Apps Script 변경/재배포.
