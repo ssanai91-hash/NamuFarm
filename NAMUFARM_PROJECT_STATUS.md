@@ -1317,3 +1317,15 @@ Room 엔티티의 NOT NULL·열 이름·복합 기본키 순서를 위 SQL과 �
 - 견적 화면 요약 띠는 탭 숫자(견적요청·확정견적)와 같은 내용이라 넣지 않음.
 - 아이콘은 앱 안 벡터만 사용(사진·외부 그림 없음). 저장·동기화·DB·서버 변경 없음. 컴파일·APK·서명 미실행.
 
+
+## 2026-10-31 Android 1.1.36(39) — 재고 농원별·묘목별 보기 및 색 아이콘 APK 빌드·서명 완료
+
+- 소스 커밋: `f407fe3ac060b8a7e1653857145a3bef3e9df32c` (main). 새 체크아웃에서 `git pull --ff-only` 확인. 1.1.35 변경 포함, 앱 코드 추가 수정 없음.
+- 빌드 시각(KST): 2026-10-31T17:09:59.886694+09:00 시작 → 2026-10-31T17:12:32.384038+09:00 완료. `clean assembleRelease --no-build-cache --rerun-tasks -x test` 실행, 환경용 프록시·신뢰 CA 시스템 속성과 `--no-daemon --console=plain` 추가. Gradle 9.3.1 / Java 21 / Android SDK 36.1 / Build Tools 36.0.0. `BUILD SUCCESSFUL in 2m 32s` (51 actionable tasks: 50 executed, 1 up-to-date). 컴파일 오류 없음, 기존 경고는 수정하지 않음.
+- 파일명: `NamuFarm-initial-1.1.36-f407fe3-update.apk`
+- 크기: 14,025,727 bytes.
+- APK SHA-256: `8f088baa1239d8aff2a28135bdb360fdce1fd4e93f65890a3928bac723661a86`
+- 서명: `scripts/sign_initial_apk.py` 및 기존 초기 앱 키. 인증서 SHA-256 `a31a78a895be8f89bacb2c7b355f413e1cacecfbfd769b257801fcb619e616e1` 일치. 서명 완료 시각 2026-10-31T17:12:57.138669+09:00 (KST). 새 키·디버그 키 사용 없음.
+- 검증: 패키지 `com.example.namufarm.original`, versionName 1.1.36 / versionCode 39, 릴리스 비디버그, apksigner 서명, zipalign 4바이트 정렬, ZIP 전체 CRC 무결성 모두 통과. 이전 1.1.34 APK와 인증서 일치 및 상위 versionCode 확인.
+- 전달: 직접 다운로드 APK. 기존 앱을 삭제하지 않고 업데이트 설치. 농원별·묘목별 재고 탐색과 색 아이콘 실제 화면은 사용자가 확인.
+- 미실행: 자동시험·GitHub Actions·실제 고객 접수·문자/메일 시험·실기기 설치/화면 동작 시험·홈페이지 게시·Apps Script 변경/재배포. 릴리스 빌드에 기본 포함된 Lint 검사 통과.
