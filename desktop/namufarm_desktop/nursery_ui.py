@@ -552,7 +552,7 @@ class NurseryPage(QWidget):
             entries.append((key, name, len(others), sum(r['quantity'] for r in mine), record))
         entries.sort(key=lambda e: (e[2] == 0, e[1]))
         stocked = [e for e in entries if e[2]]
-        only_stock = not self.stock_show_all and bool(stocked)  # nothing stocked: show all to allow a first entry
+        only_stock = not self.stock_show_all  # stocked only (농원별·묘목별 같음); the bottom button opens the rest
         self.stock_entries = stocked if only_stock else entries
         self._stock_refreshing = True
         try:
@@ -571,6 +571,11 @@ class NurseryPage(QWidget):
                 self.stock_list.addItem(item)
                 if key == self.stock_key:
                     current = index
+            if not self.stock_entries and entries:
+                hint = QListWidgetItem('이 초성에는 재고가 없어요')
+                hint.setFlags(Qt.ItemFlag.NoItemFlags)
+                hint.setForeground(QColor('#7B8A83'))
+                self.stock_list.addItem(hint)
             if current < 0:
                 self.stock_key = None
             self.stock_list.setCurrentRow(current)
@@ -587,9 +592,14 @@ class NurseryPage(QWidget):
             self.stock_more.hide()
         for value, btn in self.stock_mode_buttons.items():
             btn.setChecked(value == self.stock_mode)
+        stocked_keys = {r['farmKey' if by_farm else 'speciesKey'] for r in rows}
         for title, btn in self.stock_initial_buttons.items():
             btn.setChecked(title == self.stock_initial)
             btn.setEnabled(any(stock_initial(r[name_key]) == title for r in source.values()))
+            # Only initials with stock look active; the others stay clickable (first entry) but faint.
+            has_stock = any(k in stocked_keys and stock_initial(r[name_key]) == title for k, r in source.items())
+            btn.setStyleSheet('QPushButton{padding-left:2px;padding-right:2px;}' +
+                              ('' if has_stock or title == self.stock_initial else 'QPushButton{color:#B3BCB7;}'))
         self.filter_stock()
 
     def filter_stock(self, *_):

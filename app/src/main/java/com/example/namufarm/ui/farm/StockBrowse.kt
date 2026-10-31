@@ -76,20 +76,23 @@ private fun StockModeButton(label: String, concept: NamuConcept, active: Boolean
 
 /** 14 initials, 7 per row, always fully visible (no search box, no 전체). */
 @Composable
-internal fun StockChosungGrid(selected: String, available: (String) -> Boolean, onSelect: (String) -> Unit) {
+internal fun StockChosungGrid(selected: String, available: (String) -> Boolean, stocked: (String) -> Boolean = { true },
+    onSelect: (String) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
         NAMU_INITIALS.chunked(7).forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                 row.forEach { initial ->
                     val active = initial == selected
                     val enabled = available(initial)
+                    // Only initials with stock look active; the others stay tappable (to add a first stock) but faint.
+                    val faint = !enabled || !stocked(initial)
                     Surface(onClick = { onSelect(initial) }, enabled = enabled, modifier = Modifier.weight(1f).height(42.dp),
                         shape = RoundedCornerShape(12.dp),
-                        border = BorderStroke(1.dp, if (!enabled) Color(0xFFE3E8E5) else if (active) NamuColors.primary else Color(0xFFC9D4CE)),
-                        color = if (!enabled) Color(0xFFF6F7F6) else if (active) NamuColors.primary else Color.White) {
+                        border = BorderStroke(1.dp, if (active) NamuColors.primary else if (faint) Color(0xFFE3E8E5) else Color(0xFFC9D4CE)),
+                        color = if (active) NamuColors.primary else if (faint) Color(0xFFF6F7F6) else Color.White) {
                         Box(contentAlignment = Alignment.Center) {
                             Text(initial, fontSize = 16.sp, fontWeight = FontWeight.Bold,
-                                color = if (!enabled) Color(0xFF9AA59F) else if (active) Color.White else Color(0xFF1F573B))
+                                color = if (active) Color.White else if (faint) Color(0xFFB3BCB7) else Color(0xFF1F573B))
                         }
                     }
                 }
@@ -109,14 +112,18 @@ private fun StockBrowseList(entries: List<StockEntry>, resetKey: String, countCo
     var showAll by rememberSaveable(resetKey) { mutableStateOf(false) }
     val sorted = entries.sortedWith(compareBy({ it.count == 0 }, { it.name }))
     val stocked = sorted.filter { it.count > 0 }
-    // Nothing in stock under this initial: show everything so a first stock can be entered.
-    val onlyStock = !showAll && stocked.isNotEmpty()
+    // Only stocked entries by default (농원별·묘목별 같음); the bottom button opens the rest for a first entry.
+    val onlyStock = !showAll
     val shown = if (onlyStock) stocked else sorted
     Box(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 12.dp)) {
-        if (shown.isEmpty()) NamuEmptyState("이 초성에는 항목이 없어요")
+        if (sorted.isEmpty()) NamuEmptyState("이 초성에는 항목이 없어요")
         else LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             if (header != null) item(key = "header") { header() }
-            item(key = "list") {
+            if (shown.isEmpty()) item(key = "empty") {
+                Text("이 초성에는 재고가 없어요", Modifier.fillMaxWidth().padding(vertical = 20.dp), fontSize = 16.sp,
+                    color = NamuColors.muted, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+            }
+            if (shown.isNotEmpty()) item(key = "list") {
                 NamuCard {
                     Column(Modifier.padding(horizontal = 4.dp)) {
                         shown.forEachIndexed { index, entry ->

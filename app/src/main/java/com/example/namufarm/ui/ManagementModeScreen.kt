@@ -108,9 +108,14 @@ fun ManagementModeScreen(viewModel: ManagementViewModel, onBack: () -> Unit,
                     FarmTopArea(state, view, onView = { view = it }) {
                         if (view == 0) {
                             StockModeToggle(stockMode) { stockMode = it }
+                            val stockedFarmIds = state.allSellingInventory.map { it.farmId }.toSet()
+                            val stockedSpeciesIds = state.allSellingInventory.map { it.speciesId }.toSet()
                             StockChosungGrid(stockInitial, available = { ch ->
                                 if (stockMode == STOCK_BY_FARM) state.farmList.any { stockInitialOf(it.farmName) == ch }
                                 else state.allSpeciesList.any { (it.isActive ?: 1) == 1 && stockInitialOf(it.speciesName, it.chosung) == ch }
+                            }, stocked = { ch ->
+                                if (stockMode == STOCK_BY_FARM) state.farmList.any { it.farmId in stockedFarmIds && stockInitialOf(it.farmName) == ch }
+                                else state.allSpeciesList.any { it.speciesId in stockedSpeciesIds && stockInitialOf(it.speciesName, it.chosung) == ch }
                             }) { stockInitial = it }
                         }
                         if (view == 2) {
