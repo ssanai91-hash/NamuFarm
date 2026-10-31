@@ -1,7 +1,8 @@
 """Nursery pages read the PC cache; only an explicit sync uses the server."""
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QSize, Qt, Signal
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (QButtonGroup, QCheckBox, QComboBox, QDialog, QDialogButtonBox,
-    QFormLayout, QGridLayout, QHBoxLayout, QLabel, QLCDNumber, QLineEdit, QMessageBox,
+    QFormLayout, QGridLayout, QHBoxLayout, QLabel, QLCDNumber, QLineEdit, QListWidget, QListWidgetItem, QMessageBox,
     QPushButton, QSizePolicy, QSpinBox, QTabWidget, QVBoxLayout, QWidget)
 
 from .app import table, fill_table
@@ -10,6 +11,17 @@ from .nursery import INITIALS, NurseryStore, initial
 from .species_purposes import (PURPOSES, category_error, format_category, matches_purpose, parse_category,
                                suggest_purpose_labels)
 from .ui_theme import TOKENS
+from .visuals import CONCEPTS, concept_icon, farm_avatar, species_icon
+
+# English initials follow how the letter is read in Korean (JB → 제이 → ㅈ), as in the Android app.
+_LATIN_INITIALS = dict(zip("ABCDEFGHIJKLMNOPQRSTUVWXYZ", "ㅇㅂㅅㄷㅇㅇㅈㅇㅇㅈㅋㅇㅇㅇㅇㅍㅋㅇㅇㅌㅇㅂㄷㅇㅇㅈ"))
+
+
+def stock_initial(name):
+    first = initial(name or "")
+    if first in INITIALS:
+        return first
+    return _LATIN_INITIALS.get((name or " ").strip()[:1].upper(), "ㅇ")
 
 
 class DigitalClock(QLCDNumber):
@@ -142,6 +154,7 @@ class NurseryPage(QWidget):
         self.search.textChanged.connect(self.refresh_local)
         tools.addWidget(self.search, 1)
         self.add_button = QPushButton('농원 추가' if kind == 'farms' else '묘목 추가')
+        self.add_button.setIcon(concept_icon('농원' if kind == 'farms' else '묘목', 22))
         self.edit_button = QPushButton('수정')
         self.delete_button = QPushButton('농원 삭제' if kind == 'farms' else '사용 중지')
         self.sync_button = QPushButton('동기화')
@@ -176,6 +189,7 @@ class NurseryPage(QWidget):
             layout.addLayout(initials)
         self.table = table(['순번', '농원명', '주소', '전화번호', '메모', '상태'] if kind == 'farms' else
                            ['순번', '묘목명', '초성', '농원사용명', '분류', '사용', '메모', '상태'])
+        self.table.setIconSize(QSize(26, 26))
         self.table.itemSelectionChanged.connect(self.update_controls)
         self.table.itemDoubleClicked.connect(lambda _: self.edit(self.selected()))
         if kind == 'species':
@@ -195,8 +209,8 @@ class NurseryPage(QWidget):
             purposes.addStretch()
             species_layout.addLayout(purposes)
             species_layout.addWidget(self.table, 1)
-            self.tabs.addTab(species_list, '묘목 목록')
-            self.tabs.addTab(self.build_stock(), '농원별 재고')
+            self.tabs.addTab(species_list, concept_icon('묘목', 22), '묘목 목록')
+            self.tabs.addTab(self.build_stock(), concept_icon('재고', 22), '재고 (농원별·묘목별)')
             layout.addWidget(self.tabs, 1)
         else:
             layout.addWidget(self.table, 1)
@@ -256,6 +270,12 @@ class NurseryPage(QWidget):
         self.table.setUpdatesEnabled(False)
         try:
             fill_table(self.table, display)
+            # 이름 칸 색 아이콘: 농원은 첫 글자 동그라미, 묘목은 용도 아이콘.
+            for index, row in enumerate(self.rows):
+                cell = self.table.item(index, 1)
+                if cell is not None:
+                    cell.setIcon(farm_avatar(row['farmName'], 26) if self.kind == 'farms' else
+                                 species_icon(row['speciesName'], row.get('category', ''), 26))
         finally:
             self.table.setUpdatesEnabled(True)
         self.table.clearSelection()
@@ -282,8 +302,7 @@ class NurseryPage(QWidget):
         self.delete_button.setEnabled(ready and self.selected() is not None)
         self.conflict_button.setEnabled(ready and bool((self.state or {}).get('conflict')))
         if hasattr(self, 'stock_add'):
-            parents = self.farm_picker.currentData() and self.species_picker.currentData()
-            self.stock_add.setEnabled(bool(ready and parents))
+            self.stock_add.setEnabled(bool(ready and self.stock_key))
             selected = 0 <= self.stock_table.currentRow() < len(self.stock_rows)
             self.stock_edit.setEnabled(ready and selected)
             self.stock_zero.setEnabled(ready and selected)
@@ -403,55 +422,221 @@ class NurseryPage(QWidget):
             self.owner.run_job('충돌 내용 확인 중…', lambda: self.store().conflict_preview(), show, False)
 
     def build_stock(self):
+        """재고: [농원별 | 묘목별] + 초성 7×2(기본 ㄱ) 왼쪽 목록, 오른쪽은 기존 재고 표 (2026-10-31 확정, Android와 같은 방식)."""
+        self.stock_mode, self.stock_initial, self.stock_key, self.stock_show_all = 'farm', INITIALS[0], None, False
+        self.stock_entries = []
         page = QWidget()
-        layout = QVBoxLayout(page)
-        pickers = QHBoxLayout()
-        self.farm_picker, self.species_picker = QComboBox(), QComboBox()
-        for title, picker in (('농원', self.farm_picker), ('묘목', self.species_picker)):
-            pickers.addWidget(QLabel(title))
-            pickers.addWidget(picker, 1)
-            picker.currentIndexChanged.connect(self.filter_stock)
-        layout.addLayout(pickers)
+        outer = QHBoxLayout(page)
+        left_box = QWidget()
+        left_box.setMaximumWidth(380)
+        left = QVBoxLayout(left_box)
+        left.setContentsMargins(0, 0, 8, 0)
+        modes = QHBoxLayout()
+        mode_group = QButtonGroup(page)
+        mode_group.setExclusive(True)
+        self.stock_mode_buttons = {}
+        for value, title, word in (('farm', '농원별', '농원'), ('species', '묘목별', '묘목')):
+            background, ink, _ = CONCEPTS[word]
+            btn = QPushButton(title)
+            btn.setCheckable(True)
+            btn.setChecked(value == self.stock_mode)
+            btn.setIcon(concept_icon(word, 24))
+            btn.setIconSize(QSize(24, 24))
+            btn.setStyleSheet('QPushButton{min-height:40px;font-weight:700;border:1px solid #C9D4CE;border-radius:10px;'
+                              f'background:#FFFFFF;}}QPushButton:checked{{background:{background};color:{ink};border:2px solid {ink};}}')
+            btn.clicked.connect(lambda checked=False, v=value: self.choose_stock_mode(v))
+            mode_group.addButton(btn)
+            modes.addWidget(btn, 1)
+            self.stock_mode_buttons[value] = btn
+        left.addLayout(modes)
+        grid = QGridLayout()
+        grid.setSpacing(5)
+        initial_group = QButtonGroup(page)
+        initial_group.setExclusive(True)
+        self.stock_initial_buttons = {}
+        for index, title in enumerate(INITIALS):
+            btn = QPushButton(title)
+            btn.setCheckable(True)
+            btn.setChecked(title == self.stock_initial)
+            btn.setObjectName('filterTab')
+            btn.setStyleSheet('QPushButton{padding-left:2px;padding-right:2px;}')
+            btn.clicked.connect(lambda checked=False, v=title: self.choose_stock_initial(v))
+            initial_group.addButton(btn)
+            grid.addWidget(btn, index // 7, index % 7)
+            self.stock_initial_buttons[title] = btn
+        left.addLayout(grid)
+        self.stock_list = QListWidget()
+        self.stock_list.setIconSize(QSize(32, 32))
+        self.stock_list.setSpacing(2)
+        self.stock_list.setAccessibleName('재고 목록')
+        self.stock_list.currentRowChanged.connect(self.choose_stock_entry)
+        left.addWidget(self.stock_list, 1)
+        self.stock_more = QPushButton('')
+        self.stock_more.clicked.connect(self.toggle_stock_all)
+        left.addWidget(self.stock_more)
+        outer.addWidget(left_box, 0)
+        right = QVBoxLayout()
+        heading = QHBoxLayout()
+        self.stock_title_icon = QLabel()
+        self.stock_title = QLabel('왼쪽에서 농원이나 묘목을 골라주세요.')
+        self.stock_title.setStyleSheet('font-size:18px;font-weight:700;')
+        heading.addWidget(self.stock_title_icon)
+        heading.addWidget(self.stock_title, 1)
+        heading.addWidget(QLabel('정렬'))
+        self.stock_sort = QComboBox()
+        self.stock_sort.addItems(['수량 많은 순', '도매가 싼 순', '이름순'])
+        self.stock_sort.currentIndexChanged.connect(self.filter_stock)
+        heading.addWidget(self.stock_sort)
+        right.addLayout(heading)
+        self.stock_summary = QLabel('')
+        right.addWidget(self.stock_summary)
         self.stock_table = table(['농원', '묘목', '등급', '연생', '규격', '재배형태', '수량', '도매단가', '판매단가', '상태'])
+        self.stock_table.setIconSize(QSize(24, 24))
         self.stock_table.itemSelectionChanged.connect(self.update_controls)
         self.stock_table.itemDoubleClicked.connect(lambda _: self.edit_stock(True))
-        layout.addWidget(self.stock_table, 1)
+        right.addWidget(self.stock_table, 1)
         actions = QHBoxLayout()
         self.stock_add, self.stock_edit, self.stock_zero = QPushButton('재고 추가'), QPushButton('수량·단가 수정'), QPushButton('재고 삭제')
+        self.stock_add.setIcon(concept_icon('재고', 22))
         self.stock_add.clicked.connect(lambda: self.edit_stock(False))
         self.stock_edit.clicked.connect(lambda: self.edit_stock(True))
         self.stock_zero.clicked.connect(self.zero_stock)
         for btn in (self.stock_add, self.stock_edit, self.stock_zero):
             actions.addWidget(btn)
         actions.addStretch()
-        layout.addLayout(actions)
+        right.addLayout(actions)
+        outer.addLayout(right, 1)
         return page
 
+    def _stock_maps(self):
+        state = self.state or {}
+        farms = {r['_key']: r for r in state.get('farms', []) if not r.get('_deleted')}
+        species = {r['_key']: r for r in state.get('species', []) if not r.get('_deleted')}
+        rows = [r for r in state.get('inventory', []) if r['quantity'] > 0]
+        return farms, species, rows
+
+    def choose_stock_mode(self, value):
+        if value != self.stock_mode:
+            self.stock_mode, self.stock_initial, self.stock_key, self.stock_show_all = value, INITIALS[0], None, False
+        self.refresh_stock()
+
+    def choose_stock_initial(self, value):
+        self.stock_initial, self.stock_key, self.stock_show_all = value, None, False
+        self.refresh_stock()
+
+    def toggle_stock_all(self):
+        self.stock_show_all = not self.stock_show_all
+        self.refresh_stock()
+
+    def choose_stock_entry(self, index):
+        if getattr(self, '_stock_refreshing', False):
+            return
+        self.stock_key = self.stock_entries[index][0] if 0 <= index < len(self.stock_entries) else None
+        self.filter_stock()
+
     def refresh_stock(self):
-        for picker, kind, name in ((self.farm_picker, 'farms', 'farmName'), (self.species_picker, 'species', 'speciesName')):
-            key = picker.currentData()
-            picker.blockSignals(True)
-            picker.clear()
-            picker.addItem('선택해주세요', None)
-            for row in sorted((self.state or {}).get(kind, []), key=lambda r: r[name]):
-                if not row.get('_deleted') and row.get('isActive', 1):
-                    picker.addItem(row[name], row['_key'])
-            picker.setCurrentIndex(max(0, picker.findData(key)))
-            picker.blockSignals(False)
+        """Left list: entries under the initial; stocked ones only until '…도 보기'."""
+        if not hasattr(self, 'stock_list'):
+            return
+        farms, species, rows = self._stock_maps()
+        by_farm = self.stock_mode == 'farm'
+        source = farms if by_farm else {k: r for k, r in species.items() if r.get('isActive', 1)}
+        name_key = 'farmName' if by_farm else 'speciesName'
+        entries = []
+        for key, record in source.items():
+            name = record[name_key]
+            if stock_initial(name) != self.stock_initial:
+                continue
+            mine = [r for r in rows if r['farmKey' if by_farm else 'speciesKey'] == key]
+            others = {r['speciesKey' if by_farm else 'farmKey'] for r in mine}
+            entries.append((key, name, len(others), sum(r['quantity'] for r in mine), record))
+        entries.sort(key=lambda e: (e[2] == 0, e[1]))
+        stocked = [e for e in entries if e[2]]
+        only_stock = not self.stock_show_all and bool(stocked)  # nothing stocked: show all to allow a first entry
+        self.stock_entries = stocked if only_stock else entries
+        self._stock_refreshing = True
+        try:
+            self.stock_list.clear()
+            current = -1
+            for index, (key, name, count, total, record) in enumerate(self.stock_entries):
+                low = count and total <= 20
+                unit = '종' if by_farm else '곳'
+                detail = f"{count}{unit} · {total:,}주" + (' 남음' if low else '') if count else '재고 없음 · 재고 추가 가능'
+                item = QListWidgetItem(f"{name}\n{detail}")
+                item.setIcon(farm_avatar(name, 32) if by_farm else species_icon(name, record.get('category', ''), 32))
+                if low:
+                    item.setForeground(QColor('#9A2A22'))
+                elif not count:
+                    item.setForeground(QColor('#7B8A83'))
+                self.stock_list.addItem(item)
+                if key == self.stock_key:
+                    current = index
+            if current < 0:
+                self.stock_key = None
+            self.stock_list.setCurrentRow(current)
+        finally:
+            self._stock_refreshing = False
+        hidden = len(entries) - len(self.stock_entries)
+        if only_stock and hidden:
+            self.stock_more.setText(f"재고 없는 농원도 보기 · {hidden}곳" if by_farm else f"다른 묘목도 보기 · {hidden}종")
+            self.stock_more.show()
+        elif not only_stock and stocked:
+            self.stock_more.setText('재고 있는 농원만 보기' if by_farm else '재고 있는 묘목만 보기')
+            self.stock_more.show()
+        else:
+            self.stock_more.hide()
+        for value, btn in self.stock_mode_buttons.items():
+            btn.setChecked(value == self.stock_mode)
+        for title, btn in self.stock_initial_buttons.items():
+            btn.setChecked(title == self.stock_initial)
+            btn.setEnabled(any(stock_initial(r[name_key]) == title for r in source.values()))
         self.filter_stock()
 
     def filter_stock(self, *_):
         if not hasattr(self, 'stock_table'):
             return
-        farms = {r['_key']: r['farmName'] for r in (self.state or {}).get('farms', [])}
-        species = {r['_key']: r['speciesName'] for r in (self.state or {}).get('species', [])}
-        fk, sk = self.farm_picker.currentData(), self.species_picker.currentData()
-        self.stock_rows = [r for r in (self.state or {}).get('inventory', []) if r['quantity'] > 0 and
-            (not fk or fk == r['farmKey']) and (not sk or sk == r['speciesKey'])]
+        farms, species, rows = self._stock_maps()
+        by_farm = self.stock_mode == 'farm'
+        key = self.stock_key
+        self.stock_rows = [r for r in rows if key and r['farmKey' if by_farm else 'speciesKey'] == key]
+        order = self.stock_sort.currentIndex()
+        name_of = (lambda r: species.get(r['speciesKey'], {}).get('speciesName', '')) if by_farm else \
+            (lambda r: farms.get(r['farmKey'], {}).get('farmName', ''))
+        if order == 0:
+            self.stock_rows.sort(key=lambda r: (-r['quantity'], r['wholesalePrice']))
+        elif order == 1:
+            self.stock_rows.sort(key=lambda r: (r['wholesalePrice'], -r['quantity']))
+        else:
+            self.stock_rows.sort(key=lambda r: (name_of(r), -r['quantity']))
+        total = sum(r['quantity'] for r in self.stock_rows)
+        if not key:
+            self.stock_title.setText('왼쪽에서 농원이나 묘목을 골라주세요.')
+            self.stock_title_icon.clear()
+            self.stock_summary.setText('')
+        elif by_farm:
+            farm = farms.get(key, {})
+            self.stock_title.setText(farm.get('farmName', '') + (f"   ☎ {farm['phone']}" if farm.get('phone') else ''))
+            self.stock_title_icon.setPixmap(farm_avatar(farm.get('farmName', ''), 36).pixmap(36, 36))
+            self.stock_summary.setText(f"묘목 {len({r['speciesKey'] for r in self.stock_rows})}종 · 재고 {total:,}주")
+        else:
+            item = species.get(key, {})
+            self.stock_title.setText(item.get('speciesName', ''))
+            self.stock_title_icon.setPixmap(species_icon(item.get('speciesName', ''), item.get('category', ''), 36).pixmap(36, 36))
+            self.stock_summary.setText(f"농원 {len({r['farmKey'] for r in self.stock_rows})}곳 · 재고 {total:,}주")
         pending = {r['key'] for r in (self.state or {}).get('pending', [])}
-        fill_table(self.stock_table, [(farms.get(r['farmKey'], '농원 없음'), species.get(r['speciesKey'], '묘목 없음'),
+        fill_table(self.stock_table, [(farms.get(r['farmKey'], {}).get('farmName', '농원 없음'),
+            species.get(r['speciesKey'], {}).get('speciesName', '묘목 없음'),
             r['quality'], r['age'], r['size'], r['plantType'], f"{r['quantity']:,}", f"{r['wholesalePrice']:,}",
             f"{r['retailPrice']:,}", '전송 대기' if r['_key'] in pending else '동기화됨') for r in self.stock_rows])
+        for index, r in enumerate(self.stock_rows):
+            farm_name = farms.get(r['farmKey'], {}).get('farmName', '')
+            plant = species.get(r['speciesKey'], {})
+            if self.stock_table.item(index, 0):
+                self.stock_table.item(index, 0).setIcon(farm_avatar(farm_name, 24))
+            if self.stock_table.item(index, 1):
+                self.stock_table.item(index, 1).setIcon(species_icon(plant.get('speciesName', ''), plant.get('category', ''), 24))
+            if r['quantity'] <= 20 and self.stock_table.item(index, 6):
+                self.stock_table.item(index, 6).setForeground(QColor('#9A2A22'))
         self.stock_table.clearSelection()
         self.stock_table.setCurrentCell(-1, -1)
         self.update_controls()
@@ -461,12 +646,24 @@ class NurseryPage(QWidget):
         if existing and not 0 <= index < len(self.stock_rows):
             return
         row = self.stock_rows[index] if existing else {}
-        fk, sk = row.get('farmKey', self.farm_picker.currentData()), row.get('speciesKey', self.species_picker.currentData())
-        if not fk or not sk or self.owner.task:
+        fk = row.get('farmKey') or (self.stock_key if self.stock_mode == 'farm' else None)
+        sk = row.get('speciesKey') or (self.stock_key if self.stock_mode == 'species' else None)
+        if not (fk or sk) or self.owner.task:
             return
         dialog = QDialog(self)
         dialog.setWindowTitle('재고 수정' if existing else '재고 추가')
         form = QFormLayout(dialog)
+        other = None
+        if not fk or not sk:
+            # 농원별에서는 묘목을, 묘목별에서는 농원을 골라 새 재고를 넣는다.
+            kind, name_key = ('farms', 'farmName') if not fk else ('species', 'speciesName')
+            other = QComboBox()
+            other.addItem('선택해주세요', None)
+            for record in sorted((self.state or {}).get(kind, []), key=lambda r: r[name_key]):
+                if not record.get('_deleted') and record.get('isActive', 1):
+                    other.addItem(farm_avatar(record[name_key], 22) if kind == 'farms' else
+                                  species_icon(record[name_key], record.get('category', ''), 22), record[name_key], record['_key'])
+            form.addRow('농원' if not fk else '묘목', other)
         inputs = {}
         for key, title, default in (('quality', '등급', '상묘'), ('age', '연생', '1년생'), ('size', '규격', ''), ('plantType', '재배형태', '실생')):
             item = QLineEdit(row.get(key, default))
@@ -488,7 +685,10 @@ class NurseryPage(QWidget):
         def save():
             try:
                 values = {k: v.value() if isinstance(v, QSpinBox) else v.text() for k, v in inputs.items()}
-                self.store().save('inventory', {**values, 'farmKey': fk, 'speciesKey': sk}, row.get('_key'))
+                chosen = other.currentData() if other is not None else None
+                if other is not None and not chosen:
+                    raise UserError('농원을 골라주세요.' if not fk else '묘목을 골라주세요.')
+                self.store().save('inventory', {**values, 'farmKey': fk or chosen, 'speciesKey': sk or chosen}, row.get('_key'))
             except UserError as error:
                 message.setText(str(error))
                 return

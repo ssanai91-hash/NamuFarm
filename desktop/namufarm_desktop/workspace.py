@@ -21,6 +21,7 @@ from . import __version__
 from .ui_theme import (align_table, fit_window, scroll_dialog, scroll_page, workspace_style,
                        CustomerDelegate, StatusDelegate, customer_reference, CompactDateDelegate,
                        NavigationButton, QuoteRemarksDelegate, SequenceDelegate, TOKENS, status_badge, stage_label, size_table_to_rows, collapsible, quote_workbench_style)
+from .visuals import NAV_TINTS
 from .ui_icons import set_button_icon, ui_icon
 from .app import MainWindow, Task, table, fill_table, money, timestamp
 from .commerce import (ISSUER, new_draft, new_manual_draft, draft_amounts, validate_draft, quote_html, quote_document_html, shipping_html,
@@ -3804,7 +3805,7 @@ class SellerWindow(MainWindow):
             widget = NavigationButton(title)
             widget.clicked.connect(lambda checked=False, i=index: self.navigate(i))
             icons = ("requests", "confirmed", "orders", "shipping", "reports", "farm", "leaf", "requests", "settings")
-            set_button_icon(widget, icons[index], TOKENS["card"], 20)
+            set_button_icon(widget, icons[index], NAV_TINTS[index], 20)  # 메뉴마다 색(견적 살구·판매 분홍·농원 청록·묘목 연두 등)
             widget.setCheckable(True)
             widget.setFixedHeight(44)
             self.nav.append(widget)
