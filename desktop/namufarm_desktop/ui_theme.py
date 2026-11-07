@@ -3,7 +3,7 @@ import re
 
 from PySide6.QtCore import QEvent, Qt, QRectF, QTimer
 from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPalette
-from PySide6.QtWidgets import (QApplication, QHeaderView, QLabel, QLineEdit, QScrollArea,
+from PySide6.QtWidgets import (QApplication, QFrame, QGridLayout, QHeaderView, QLabel, QLineEdit, QScrollArea,
                                QSizePolicy, QTableWidget, QVBoxLayout, QWidget,
                                QStyledItemDelegate, QStyleOptionViewItem, QStyle, QPushButton)
 
@@ -17,6 +17,25 @@ TOKENS = {
     "quote-fg": "#8A5300", "quote-bg": "#FDF1DC", "paid-fg": "#1E6B3F", "paid-bg": "#E3F2E8",
     "ready-fg": "#0B5F56", "ready-bg": "#DFF1EF", "tracking-fg": "#5B3C9E", "tracking-bg": "#EFE9FB",
     "done-fg": "#46545C", "done-bg": "#ECEFF1", "cancel-fg": "#9A2A22", "cancel-bg": "#FBE9E7",
+}
+
+# 2026-11-07 A안: 메뉴마다 색 하나 (견적요청 파랑 · 견적 작업대 주황 · 판매관리 초록 계열).
+# solid 바탕 위 글자는 on, tint 바탕 위 글자는 ink (모두 4.5:1 이상). nav는 어두운 사이드바 위 점·아이콘 색.
+CATEGORY = {
+    "requests": {"solid": "#2563C9", "on": "#FFFFFF", "tint": "#DCE8FB", "ink": "#163D73", "line": "#B9C9F0",
+                 "head": "#EAF1FD", "row": "#F5F9FF", "nav": "#8DB6F5"},
+    "quotes": {"solid": "#F5A623", "on": "#3A2300", "tint": "#FDEFD3", "ink": "#6F4300", "line": "#F0CD8C",
+               "head": "#FDF3E0", "row": "#FFF9EE", "nav": "#F5C46B"},
+    "sales": {"solid": "#23824A", "on": "#FFFFFF", "tint": "#E3F2E8", "ink": "#1E6B3F", "line": "#B8DEC5",
+              "head": "#E8F4EC", "row": "#F4FAF6", "nav": "#7FD8A2"},
+}
+# 판매관리 안의 단계 (입금확인 → 배송준비 → 송장등록 → 배송완료)
+SALES_STAGES = {
+    "입금확인": {"key": "paid", "solid": "#23824A", "on": "#FFFFFF", "ink": "#1E6B3F", "line": "#B8DEC5"},
+    "배송준비": {"key": "ready", "solid": "#0E7C7B", "on": "#FFFFFF", "ink": "#0B5F56", "line": "#A6D9D7"},
+    "송장등록": {"key": "tracking", "solid": "#6A4BD1", "on": "#FFFFFF", "ink": "#5B3C9E", "line": "#CDBFF3"},
+    "배송완료": {"key": "done", "solid": "#E4E9EC", "on": "#2F3B42", "ink": "#46545C", "line": "#CBD3D8"},
+    "전체 상태": {"key": "all", "solid": "#1C2621", "on": "#FFFFFF", "ink": "#46545C", "line": "#CBD3D8"},
 }
 
 
@@ -40,7 +59,31 @@ def stage_label(stage, parent=None):
     return result
 
 
+def _category_css():
+    """Per-menu colour pills, table heads and sidebar accents (A안)."""
+    rules = []
+    for name, c in CATEGORY.items():
+        page = f'QWidget[category="{name}"]'
+        rules += [
+            f'{page} QPushButton#filterTab{{border-radius:20px;min-height:40px;padding:0 16px;background:@card@;color:{c["ink"]};border:1px solid {c["line"]};}}',
+            f'{page} QPushButton#filterTab:hover{{background:{c["tint"]};}}',
+            f'{page} QPushButton#filterTab:checked{{background:{c["solid"]};color:{c["on"]};border-color:{c["solid"]};font-weight:700;}}',
+            f'{page} QHeaderView::section{{background:{c["head"]};color:{c["ink"]};}}',
+            f'{page} QTableWidget::item:selected{{background:{c["tint"]};color:@text@;}}',
+            f'#sidebar QPushButton[category="{name}"]:checked{{border-left-color:{c["nav"]};}}',
+            f'#sidebar QLabel#navBadge[kind="{name}"]{{background:{c["solid"]};color:{c["on"]};}}',
+        ]
+    for stage, c in SALES_STAGES.items():
+        key = c["key"]
+        rules += [
+            f'QPushButton#stageTab[stage="{key}"]{{border-radius:20px;min-height:40px;padding:0 16px;background:@card@;color:{c["ink"]};border:1px solid {c["line"]};}}',
+            f'QPushButton#stageTab[stage="{key}"]:checked{{background:{c["solid"]};color:{c["on"]};border-color:{c["solid"]};font-weight:700;}}',
+        ]
+    return "\n".join(rules)
+
+
 def _theme(css, large=False, compact=False):
+    css = css.replace("@category-css@", _category_css())
     values = {**TOKENS, **{key: str(value + (2 if large else 0)) for key, value in
               {"body": 15, "small": 13, "title": 22, "section": 17, "action": 17, "total": 28, "detail": 20, "brand": 18}.items()},
               "control-height": str(48 if large else 44),
@@ -120,8 +163,7 @@ QCheckBox::indicator,QRadioButton::indicator{width:20px;height:20px;}
 QTextBrowser{background:@card@;border:1px solid @border@;border-radius:8px;padding:8px;}
 QToolTip{background:@sidebar@;color:@card@;border:0;padding:8px;font-size:@small@px;}
 QPushButton#filterTab:checked{background:@row-selected@;color:@primary@;border-color:@primary@;}
-QPushButton#stageTab{border:0;border-radius:0;border-bottom:3px solid transparent;min-height:48px;padding:0 8px;}
-QPushButton#stageTab:checked{border-bottom-color:@primary@;color:@primary@;}
+@category-css@
 QTabWidget::pane{border:0;border-top:1px solid @border@;}
 QTabBar::tab{background:transparent;border:0;border-bottom:3px solid transparent;padding:8px 16px;min-height:32px;}
 QTabBar::tab:selected{color:@primary@;border-bottom-color:@primary@;}
@@ -330,6 +372,46 @@ class StatusDelegate(RowSelectionDelegate):
         painter.restore()
 
 
+class StageCards(QWidget):
+    """A row of coloured count cards for one menu; display only, never stores data."""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName("stageCards")
+        self._layout = QGridLayout(self)
+        self._layout.setContentsMargins(0, 0, 0, 0)
+        self._layout.setHorizontalSpacing(12)
+        self._cards = {}
+
+    def add(self, key, title, solid, on, caption=""):
+        card = QFrame(self)
+        card.setObjectName("stageCard")
+        card.setStyleSheet(f"QFrame#stageCard{{background:{solid};border:0;border-radius:14px;}}"
+                           f"QFrame#stageCard QLabel{{color:{on};background:transparent;}}")
+        box = QVBoxLayout(card)
+        box.setContentsMargins(18, 14, 18, 14)
+        box.setSpacing(2)
+        large = bool(QApplication.instance() and QApplication.instance().property("namufarmLargeFont"))
+        heading = QLabel(title, card)
+        heading.setStyleSheet(f"font-size:{15 if large else 13}px;font-weight:700;")
+        count = QLabel("0", card)
+        count.setStyleSheet(f"font-size:{34 if large else 30}px;font-weight:700;")
+        note = QLabel(caption, card)
+        note.setWordWrap(True)
+        note.setStyleSheet(f"font-size:{15 if large else 13}px;")
+        for widget in (heading, count, note):
+            box.addWidget(widget)
+        self._layout.addWidget(card, 0, len(self._cards))
+        self._layout.setColumnStretch(len(self._cards), 1)
+        self._cards[key] = (card, count, note)
+        return card
+
+    def set(self, key, count, caption=None, unit="건"):
+        _card, number, note = self._cards[key]
+        number.setText(f"{count:,} {unit}" if unit else str(count))
+        if caption is not None:
+            note.setText(caption)
+
+
 def customer_reference(widget, customer_column, reference_column):
     for row in range(widget.rowCount()):
         customer, reference = widget.item(row, customer_column), widget.item(row, reference_column)
@@ -352,6 +434,7 @@ class DataTable(QTableWidget):
         self._empty_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         self._weights = ()
         self._fitting = False
+        self._stripe = None  # colour, or callable(row) -> colour/None; drawn over the row's left edge
         self.viewport().installEventFilter(self)
         row_height = 64 if QApplication.instance().property("namufarmLargeFont") else 60
         self.verticalHeader().setMinimumSectionSize(row_height)
@@ -408,6 +491,26 @@ class DataTable(QTableWidget):
     def set_empty_message(self, text):
         self._empty_message = text
         self.update_empty_state()
+
+    def set_row_stripe(self, stripe):
+        self._stripe = stripe
+        self.viewport().update()
+
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        if not self._stripe or not self.rowCount():
+            return
+        painter = QPainter(self.viewport())
+        first = max(0, self.rowAt(0))
+        last = self.rowAt(self.viewport().height() - 1)
+        last = self.rowCount() - 1 if last < 0 else last
+        for row in range(first, last + 1):
+            if self.isRowHidden(row):
+                continue
+            color = self._stripe(row) if callable(self._stripe) else self._stripe
+            if color:
+                painter.fillRect(0, self.rowViewportPosition(row), 5, self.rowHeight(row), QColor(color))
+        painter.end()
 
     def setRowCount(self, count):
         super().setRowCount(count)

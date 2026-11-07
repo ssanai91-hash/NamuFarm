@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (QApplication, QBoxLayout, QButtonGroup, QCheckBox
 from . import __version__
 from .ui_theme import (align_table, fit_window, scroll_dialog, scroll_page, workspace_style,
                        CustomerDelegate, StatusDelegate, customer_reference, CompactDateDelegate,
-                       NavigationButton, QuoteRemarksDelegate, SequenceDelegate, TOKENS, status_badge, stage_label, size_table_to_rows, collapsible, quote_workbench_style)
+                       NavigationButton, QuoteRemarksDelegate, SequenceDelegate, TOKENS, CATEGORY, SALES_STAGES, StageCards, status_badge, stage_label, size_table_to_rows, collapsible, quote_workbench_style)
 from .ui_icons import set_button_icon, ui_icon
 from .app import MainWindow, Task, table, fill_table, money, timestamp
 from .commerce import (ISSUER, new_draft, new_manual_draft, draft_amounts, validate_draft, quote_html, quote_document_html, shipping_html,
@@ -3852,7 +3852,13 @@ class SellerWindow(MainWindow):
             widget = NavigationButton(title)
             widget.clicked.connect(lambda checked=False, i=index: self.navigate(i))
             icons = ("requests", "confirmed", "orders", "shipping", "reports", "farm", "leaf", "requests", "settings")
-            set_button_icon(widget, icons[index], "#DCE6E0", 20)  # 2026-11-07 디자인 시스템: 메뉴 아이콘은 한 색, 색은 선택 막대·건수에만
+            category = {self.PAGE_REQUESTS: "requests", self.PAGE_QUOTES: "quotes", self.PAGE_SALES: "sales"}.get(index)
+            # A안: 업무 메뉴는 자기 색(견적요청 파랑·작업대 주황·판매 초록), 나머지는 차분한 밝은 색.
+            tint = CATEGORY[category]["nav"] if category else ("#6FD3D1", "#B9A8F5", "#B9E0A0", "#B9E0A0", "#F0A8CB", "#DCE6E0")[
+                max(0, index - self.PAGE_SHIPPING)]
+            set_button_icon(widget, icons[index], tint, 20)
+            if category:
+                widget.setProperty("category", category)
             widget.setCheckable(True)
             widget.setMinimumHeight(52)
             self.nav.append(widget)
@@ -3864,7 +3870,8 @@ class SellerWindow(MainWindow):
             row_layout.addWidget(widget, 1)
             if index in (self.PAGE_REQUESTS, self.PAGE_QUOTES, self.PAGE_SALES, self.PAGE_SHIPPING, self.PAGE_INQUIRIES):
                 badge = label("0", "navBadge")
-                badge.setProperty("kind", "new" if index == self.PAGE_REQUESTS else "inquiry" if index == self.PAGE_INQUIRIES else "count")
+                badge.setProperty("kind", {self.PAGE_REQUESTS: "requests", self.PAGE_QUOTES: "quotes", self.PAGE_SALES: "sales"}.get(
+                    index, "inquiry" if index == self.PAGE_INQUIRIES else "count"))
                 self.nav_badges[index] = badge
                 row_layout.addWidget(badge)
                 if index == self.PAGE_REQUESTS:
@@ -4148,6 +4155,15 @@ class SellerWindow(MainWindow):
         quick, self.request_quick_buttons = self.filter_buttons(
             (("전체", "all"), ("공식견적서 요청", "formal"), ("오늘 접수", "today")), self.set_request_quick_filter)
         layout.insertLayout(1, quick)
+        # A안: 견적요청은 파랑 하나. 카드도 견적요청 안의 구분(전체·공식견적서·오늘)만 보여 준다.
+        page.setProperty("category", "requests")
+        blue = CATEGORY["requests"]
+        self.request_cards = StageCards(page)
+        self.request_cards.add("all", "견적 기다리는 요청", blue["solid"], blue["on"])
+        self.request_cards.add("formal", "공식견적서 요청", blue["tint"], blue["ink"], "PDF 견적서를 함께 보내야 해요")
+        self.request_cards.add("today", "오늘 접수", blue["tint"], blue["ink"])
+        layout.insertWidget(1, self.request_cards)
+        self.request_table.set_row_stripe(blue["solid"])
         position = layout.indexOf(self.request_table)
         layout.removeWidget(self.request_table)
         self.request_splitter = QSplitter(Qt.Orientation.Horizontal)
@@ -4237,6 +4253,14 @@ class SellerWindow(MainWindow):
                 for key, item in self.request_quick_buttons.items():
                     title = {"all": "전체", "formal": "공식견적서 요청", "today": "오늘 접수"}[key]
                     item.setText(f"{title} {counts[key]:,}")
+                if hasattr(self, "request_cards"):
+                    oldest = min((r["createdAt"] for r in rows), default="")
+                    latest = max((r["createdAt"] for r in rows if record_date(r["createdAt"]) == today), default="")
+                    self.request_cards.set("all", counts["all"],
+                                           ("가장 오래된 요청 · " + date_text(oldest)) if oldest else "새 요청이 없어요")
+                    self.request_cards.set("formal", counts["formal"])
+                    self.request_cards.set("today", counts["today"],
+                                           ("마지막 접수 · " + date_text(latest)) if latest else "오늘 들어온 요청 없음")
             self.refresh_request_detail()
 
     def filter_buttons(self, choices, callback):
@@ -4312,6 +4336,19 @@ class SellerWindow(MainWindow):
         filters.addWidget(self.draft_period)
         filters.addWidget(self.draft_state)
         filters.addWidget(button("초기화", lambda: self.reset_list_filters("draft")))
+        # A안: 견적 작업대는 주황 하나. 카드와 필터는 작업대 안의 구분(입금대기·작성중·전체)만.
+        page.setProperty("category", "quotes")
+        amber = CATEGORY["quotes"]
+        self.draft_cards = StageCards(page)
+        self.draft_cards.add("pending", "입금대기 견적", amber["solid"], amber["on"])
+        self.draft_cards.add("drafting", "작성중", amber["tint"], amber["ink"], "확정 전 견적")
+        self.draft_cards.add("all", "전체 견적", amber["tint"], amber["ink"], "이 PC에 보관된 견적")
+        layout.addWidget(self.draft_cards)
+        state_tabs, self.draft_state_buttons = self.filter_buttons(
+            (("입금대기", "입금대기"), ("작성중", "작성중"), ("전체", "전체 상태")),
+            lambda value: self.draft_state.setCurrentText(value))
+        self.draft_state.hide()
+        layout.addLayout(state_tabs)
         layout.addLayout(filters)
         summary = QHBoxLayout()
         self.draft_filter_summary = label("", "muted", True)
@@ -4336,6 +4373,9 @@ class SellerWindow(MainWindow):
         self.draft_table.set_column_layout(((3, 2, 215), (1, .5, 140), (7, 3, 235), (8, 1, 155), (9, .5, 100)))
         self.draft_table.setItemDelegateForColumn(3, CustomerDelegate(self.draft_table))
         self.draft_table.setItemDelegateForColumn(1, StatusDelegate(self.draft_table))
+        self.draft_table.set_row_stripe(lambda row: (
+            amber["solid"] if 0 <= row < len(getattr(self, "draft_statuses", [])) and self.draft_statuses[row] != "작성중"
+            else amber["line"]))
         self.draft_table.itemSelectionChanged.connect(self.update_controls)
         self.draft_table.itemDoubleClicked.connect(self.open_draft)
         layout.addWidget(self.draft_table)
@@ -4412,9 +4452,18 @@ class SellerWindow(MainWindow):
         tabs, self.sales_filters = self.filter_buttons(
             (("입금확인", "입금확인"), ("배송준비", "배송준비"), ("송장등록", "송장등록"),
              ("배송완료", "배송완료"), ("전체", "전체 상태")), self.set_sales_filter)
-        for tab in self.sales_filters.values():
+        for value, tab in self.sales_filters.items():
             tab.setObjectName("stageTab")
+            tab.setProperty("stage", SALES_STAGES[value]["key"])
         layout.insertLayout(0, tabs)
+        # A안: 판매관리는 초록 계열. 카드는 판매관리 안의 단계만(입금확인 → 배송완료).
+        page.setProperty("category", "sales")
+        self.sale_cards = StageCards(page)
+        for stage, caption in (("입금확인", "배송 준비로 넘기기"), ("배송준비", "송장 출력 전"),
+                               ("송장등록", "배송 중"), ("배송완료", "받는 분께 도착")):
+            colors = SALES_STAGES[stage]
+            self.sale_cards.add(stage, stage, colors["solid"], colors["on"], caption)
+        layout.insertWidget(0, self.sale_cards)
         self.sales_data_button = button("자료 관리 ▾")
         self.sales_data_menu = QMenu(self)
         self.sales_data_actions = []
@@ -4863,6 +4912,16 @@ class SellerWindow(MainWindow):
         pending_count = sum(status == "견적확정" for _, status in draft_pairs)
         self.pending_quotes_button.setText(f"전체 입금대기 {pending_count:,}건 보기")
         wanted = self.draft_state.currentText()
+        if hasattr(self, "draft_cards"):
+            drafting_count = sum(status == "작성중" for _, status in draft_pairs)
+            pending_total = sum(draft_amounts(d)["total"] for d, status in draft_pairs if status == "견적확정")
+            self.draft_cards.set("pending", pending_count, "합계 " + money(pending_total) if pending_count else "입금을 기다리는 견적 없음")
+            self.draft_cards.set("drafting", drafting_count)
+            self.draft_cards.set("all", total_quotes)
+            for value, widget in self.draft_state_buttons.items():
+                count = {"입금대기": pending_count, "작성중": drafting_count}.get(value, total_quotes)
+                widget.setText(f"{'전체' if value == '전체 상태' else value} {count:,}")
+                widget.setChecked(value == wanted)
         draft_pairs = [(draft, status) for draft, status in draft_pairs
                        if (wanted == "전체 상태" or (wanted == "입금대기" and status == "견적확정") or wanted == status)
                        and self.draft_period.matches(first_date(draft.get("confirmedAt"), draft.get("createdAt")))]
@@ -4936,6 +4995,8 @@ class SellerWindow(MainWindow):
                         for row in self.data.get("sales", []))
             widget.setText(f"{'전체' if value == '전체 상태' else value} {count:,}")
             widget.setChecked(value == wanted)
+            if hasattr(self, "sale_cards") and value != "전체 상태":
+                self.sale_cards.set(value, count)
 
         status_priority = {"입금확인": 0, "배송완료": 1, "구매취소": 2}
         rows = []
@@ -4980,6 +5041,9 @@ class SellerWindow(MainWindow):
         self.sale_filter_summary.setText(
             f"총 {matched_count:,}건 · 표시 {len(rows):,}건 · {self.sale_period.description()} · 입금확인일 기준(이전 자료는 주문일)")
         self.sale_rows = rows
+        self.sale_table.set_row_stripe(lambda row: (
+            SALES_STAGES.get(order_stage(self.sale_rows[row]), SALES_STAGES["배송완료"])["solid"]
+            if 0 <= row < len(self.sale_rows) else None))
         table_rows = []
         for row in rows:
             meta = row["metadata"]
