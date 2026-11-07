@@ -783,7 +783,9 @@ class DeliveryActionButton(QPushButton):
         self.status_badge = label("", "channelStatusBadge")
         self.status_badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.status_badge.setMinimumHeight(28)
-        row.addWidget(self.status_badge)
+        # Natural height, centred: a minimum-only badge must not stretch over the button border.
+        self.status_badge.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
+        row.addWidget(self.status_badge, 0, Qt.AlignmentFlag.AlignVCenter)
         row.addStretch(1)
         symbol = QLabel()
         self.symbol = symbol
@@ -889,7 +891,8 @@ class QuoteDeliveryTools:
                 badge.setObjectName("channelStatusBadge")
                 badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
                 badge.setMinimumHeight(28)
-                badges.addWidget(badge)
+                badge.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
+                badges.addWidget(badge, 0, Qt.AlignmentFlag.AlignVCenter)
             badges.addStretch()
             delivery.addLayout(badges)
             self.sms_button = QPushButton("문자 보내기")
@@ -1748,6 +1751,9 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         self.items.horizontalHeader().setFixedHeight(44)
         visible_rows = min(7, max(3, self.items.rowCount()))
         self.items.setFixedHeight(44 + visible_rows * height + 4)
+        # An Ignored policy drops the table from the card's size hint, so the Maximum-policy card
+        # clipped every row below the header. The height is fixed here, so say so to the layout.
+        self.items.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.align_workbench_notes()
 
     def showEvent(self, event):
