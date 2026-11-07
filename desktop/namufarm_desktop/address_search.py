@@ -91,7 +91,7 @@ class AddressSearchDialog(QDialog):
         self.setObjectName("addressSearchDialog")
         self.setStyleSheet("QDialog#addressSearchDialog{background:#ffffff;border:2px solid #315c47;}"
                            "QDialog#addressSearchDialog QLabel{color:#193c32;font-size:15px;}"
-                           "QDialog#addressSearchDialog QPushButton{min-height:30px;max-height:30px;font-size:14px;padding:0 10px;}")
+                           "QDialog#addressSearchDialog QPushButton{min-height:30px;font-size:14px;padding:0 10px;}")
         self.browser = QWebEngineView(self)
         self.browser.setContextMenuPolicy(Qt.ContextMenuPolicy.NoContextMenu)
         hint_script = QWebEngineScript()

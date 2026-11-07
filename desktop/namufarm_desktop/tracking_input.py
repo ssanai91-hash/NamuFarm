@@ -15,9 +15,9 @@ class TrackingNumberDialog(QDialog):
         self.setWindowModality(Qt.WindowModality.WindowModal)
         self.setStyleSheet("QDialog#trackingInputDialog{background:#f5f8f6;}"
                            "QDialog#trackingInputDialog QLabel{font-size:15px;color:#193c32;}"
-                           "QDialog#trackingInputDialog QLineEdit{font-size:24px;min-height:32px;max-height:32px;padding:6px;}"
-                           "QDialog#trackingInputDialog QPushButton{font-size:22px;min-height:44px;max-height:44px;padding:0 10px;}"
-                           "QDialog#trackingInputDialog QPushButton[keypadAction=\"true\"]{font-size:16px;min-height:34px;max-height:34px;}"
+                           "QDialog#trackingInputDialog QLineEdit{font-size:24px;min-height:32px;padding:6px;}"
+                           "QDialog#trackingInputDialog QPushButton{font-size:22px;min-height:44px;padding:0 10px;}"
+                           "QDialog#trackingInputDialog QPushButton[keypadAction=\"true\"]{font-size:16px;min-height:34px;}"
                            "QDialog#trackingInputDialog QPushButton#applyNumber{background:#25634b;color:white;font-weight:700;}")
         self.number = value
         layout = QVBoxLayout(self)

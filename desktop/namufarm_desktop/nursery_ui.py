@@ -72,7 +72,7 @@ class SpeciesPurposeEditor(QWidget):
             button.setObjectName('filterTab')
             button.setAccessibleName(purpose.label + ' 용도')
             button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-            button.setStyleSheet('QPushButton{min-height:36px;max-height:36px;padding:0 4px;}')
+            button.setStyleSheet('QPushButton{min-height:36px;padding:0 4px;}')
             button.clicked.connect(lambda checked=False, label=purpose.label: self.choose(label, checked))
             self.buttons[purpose.label] = button
             choices.addWidget(button, 1)
@@ -85,7 +85,7 @@ class SpeciesPurposeEditor(QWidget):
         legacy.addWidget(self.legacy_label, 1)
         self.clear_legacy = QPushButton('지우기')
         self.clear_legacy.setAccessibleName('기존 분류 값 지우기')
-        self.clear_legacy.setStyleSheet('QPushButton{min-height:36px;max-height:36px;padding:0 8px;}')
+        self.clear_legacy.setStyleSheet('QPushButton{min-height:36px;padding:0 8px;}')
         self.clear_legacy.clicked.connect(self.remove_legacy)
         legacy.addWidget(self.clear_legacy)
         layout.addLayout(legacy)

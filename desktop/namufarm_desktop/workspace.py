@@ -21,7 +21,6 @@ from . import __version__
 from .ui_theme import (align_table, fit_window, scroll_dialog, scroll_page, workspace_style,
                        CustomerDelegate, StatusDelegate, customer_reference, CompactDateDelegate,
                        NavigationButton, QuoteRemarksDelegate, SequenceDelegate, TOKENS, status_badge, stage_label, size_table_to_rows, collapsible, quote_workbench_style)
-from .visuals import NAV_TINTS
 from .ui_icons import set_button_icon, ui_icon
 from .app import MainWindow, Task, table, fill_table, money, timestamp
 from .commerce import (ISSUER, new_draft, new_manual_draft, draft_amounts, validate_draft, quote_html, quote_document_html, shipping_html,
@@ -88,7 +87,7 @@ def fit_delivery_message(dialog):
         return
     large = bool(QApplication.instance().property("namufarmLargeFont"))
     dialog.message.setMinimumHeight(100)
-    dialog.status.setFixedHeight(42 if large else 38)
+    dialog.status.setMinimumHeight(42 if large else 38)
     layout = dialog.layout()
     layout.setSpacing(4)
     layout.setContentsMargins(12, 8, 12, 8)
@@ -757,7 +756,7 @@ class CustomerInfoValue(QTextBrowser):
         option.setWrapMode(QTextOption.WrapMode.WrapAtWordBoundaryOrAnywhere)
         self.document().setDefaultTextOption(option)
         self.setPlainText(text)
-        self.setFixedHeight(self.fontMetrics().height() + 2)
+        self.setFixedHeight(self.fontMetrics().height() + 4)
 
     def text(self):
         return self.toPlainText()
@@ -783,7 +782,7 @@ class DeliveryActionButton(QPushButton):
         row.setSpacing(6)
         self.status_badge = label("", "channelStatusBadge")
         self.status_badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.status_badge.setFixedHeight(28)
+        self.status_badge.setMinimumHeight(28)
         row.addWidget(self.status_badge)
         row.addStretch(1)
         symbol = QLabel()
@@ -832,7 +831,7 @@ class QuoteDeliveryTools:
         document.addWidget(label("공식견적서", "deliverySectionTitle"))
         if not compact:
             document_hint = label("고객 요청에 따른 공식견적서를 생성합니다.", "deliveryCaption", True)
-            document_hint.setFixedHeight(28)
+            document_hint.setMinimumHeight(28)
             document.addWidget(document_hint)
         document_buttons = QHBoxLayout()
         self.document_buttons_layout = document_buttons
@@ -889,7 +888,7 @@ class QuoteDeliveryTools:
             for badge in (self.sms_status_badge, self.email_status_badge):
                 badge.setObjectName("channelStatusBadge")
                 badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                badge.setFixedHeight(28)
+                badge.setMinimumHeight(28)
                 badges.addWidget(badge)
             badges.addStretch()
             delivery.addLayout(badges)
@@ -2123,7 +2122,7 @@ class DeliveryStatusLog(QLineEdit):
         self.setAccessibleName("현재 전송 상태")
         self.setReadOnly(True)
         large = bool(QApplication.instance().property("namufarmLargeFont"))
-        self.setFixedHeight(42 if large else 38)
+        self.setMinimumHeight(42 if large else 38)
         self.setStyleSheet("""
 QLineEdit#deliveryStatusLog{background:#f5f8f6;color:#314e41;border:2px solid #a6bbaf;border-radius:8px;min-height:0;padding:4px 8px;font-size:@font@px;}
 QLineEdit#deliveryStatusLog[state="pending"]{border-color:#c0a463;}
@@ -3179,18 +3178,18 @@ class CustomerOrderDialog(QDialog):
         identity_height = 48 if large else 44
         self.setStyleSheet(quote_workbench_style(large) + """
 QDialog#quoteWorkbench QLabel#workbenchCaption{padding:4px 8px;}
-QDialog#quoteWorkbench QLineEdit#workbenchCustomerInput{min-height:@input@px;max-height:@input@px;padding:4px 8px;}
+QDialog#quoteWorkbench QLineEdit#workbenchCustomerInput{min-height:@input@px;padding:4px 8px;}
 QDialog#quoteWorkbench QLineEdit#workbenchCustomerInput:focus{padding:3px 7px;}
-QDialog#quoteWorkbench QPushButton{min-height:36px;max-height:36px;padding:0 12px;}
-QDialog#quoteWorkbench QPushButton[deliveryCompletion="true"]{min-height:40px;max-height:40px;font-size:18px;}
-QDialog#quoteWorkbench QWidget#workbenchCustomerRail QLineEdit#workbenchCustomerInput{min-height:@identity@px;max-height:@identity@px;padding:6px 8px;}
+QDialog#quoteWorkbench QPushButton{min-height:36px;padding:0 12px;}
+QDialog#quoteWorkbench QPushButton[deliveryCompletion="true"]{min-height:40px;font-size:18px;}
+QDialog#quoteWorkbench QWidget#workbenchCustomerRail QLineEdit#workbenchCustomerInput{min-height:@identity@px;padding:6px 8px;}
 QDialog#quoteWorkbench QWidget#workbenchCustomerRail QLineEdit#workbenchCustomerInput:focus{padding:5px 7px;}
 QDialog#quoteWorkbench QWidget#workbenchCustomerRail QLineEdit#workbenchCustomerInput[customerName="true"]{font-size:24px;font-weight:600;}
 QDialog#quoteWorkbench QFrame#workbenchShipping{background:#f5f8f6;border:1px solid #d6e1da;border-radius:10px;}
 QDialog#quoteWorkbench QLabel#salesShippingFee{font-size:@freight@px;font-weight:600;color:#193c32;}
-QDialog#quoteWorkbench[compactLayout="true"] QFrame#workbenchShipping QLineEdit#workbenchCustomerInput{font-size:@shipfont@px;min-height:22px;max-height:22px;padding:3px 6px;}
+QDialog#quoteWorkbench[compactLayout="true"] QFrame#workbenchShipping QLineEdit#workbenchCustomerInput{font-size:@shipfont@px;min-height:22px;padding:3px 6px;}
 QDialog#quoteWorkbench[compactLayout="true"] QFrame#workbenchShipping QLineEdit#workbenchCustomerInput:focus{padding:2px 5px;}
-QDialog#quoteWorkbench[compactLayout="true"] QFrame#workbenchShipping QPushButton{font-size:@shipfont@px;min-height:28px;max-height:28px;padding:0 8px;}
+QDialog#quoteWorkbench[compactLayout="true"] QFrame#workbenchShipping QPushButton{font-size:@shipfont@px;min-height:28px;padding:0 8px;}
 QDialog#quoteWorkbench[compactLayout="true"] QFrame#workbenchShipping QLabel#workbenchCaption{font-size:@shipfont@px;padding:3px 6px;}
 QDialog#quoteWorkbench[compactLayout="true"] QFrame#workbenchShipping QLabel#workbenchSectionTitle{font-size:16px;}
 """.replace("@input@", "28" if large else "26").replace("@identity@", "34" if large else "30").replace("@freight@", "22" if large else "20").replace("@shipfont@", "16" if large else "14"))
@@ -3294,14 +3293,14 @@ QDialog#quoteWorkbench[compactLayout="true"] QFrame#workbenchShipping QLabel#wor
 
         def identity_caption(text):
             caption = label(text, "workbenchCaption")
-            caption.setFixedHeight(identity_height)
+            caption.setMinimumHeight(identity_height)
             return caption
 
         for index, (name, caption) in enumerate((("customerName", "고객명"), ("customerPhone", "연락처"),
                                                   ("customerEmail", "이메일"))):
             identity.addWidget(identity_caption(caption), index, 0)
             edit = field(name, caption)
-            edit.setFixedHeight(identity_height)
+            edit.setMinimumHeight(identity_height)
             identity.addWidget(edit, index, 1)
         if self.row["private"].get("quoteDocumentJson"):
             self.customer_fields["customerPhone"].setReadOnly(True)
@@ -3314,7 +3313,7 @@ QDialog#quoteWorkbench[compactLayout="true"] QFrame#workbenchShipping QLabel#wor
             display.setAccessibleName(caption)
             display.setReadOnly(True)
             display.setMinimumWidth(0)
-            display.setFixedHeight(identity_height)
+            display.setMinimumHeight(identity_height)
             display.setCursorPosition(0)
             display.setToolTip(value)
             identity.addWidget(display, index, 1)
@@ -3847,9 +3846,9 @@ class SellerWindow(MainWindow):
             widget = NavigationButton(title)
             widget.clicked.connect(lambda checked=False, i=index: self.navigate(i))
             icons = ("requests", "confirmed", "orders", "shipping", "reports", "farm", "leaf", "requests", "settings")
-            set_button_icon(widget, icons[index], NAV_TINTS[index], 20)  # 메뉴마다 색(견적 살구·판매 분홍·농원 청록·묘목 연두 등)
+            set_button_icon(widget, icons[index], "#DCE6E0", 20)  # 2026-11-07 디자인 시스템: 메뉴 아이콘은 한 색, 색은 선택 막대·건수에만
             widget.setCheckable(True)
-            widget.setFixedHeight(52)
+            widget.setMinimumHeight(52)
             self.nav.append(widget)
             row = QWidget()
             row.setObjectName("navRow")
@@ -3884,7 +3883,7 @@ class SellerWindow(MainWindow):
         self.page_summary.hide()
         self.page_header = QFrame()
         self.page_header.setObjectName("pageHeader")
-        self.page_header.setFixedHeight(68)
+        self.page_header.setMinimumHeight(68)
         header = QHBoxLayout(self.page_header)
         self.page_header_layout = header
         header.setContentsMargins(16, 8, 16, 8)
@@ -3917,7 +3916,7 @@ class SellerWindow(MainWindow):
         content_layout.addWidget(self.error_banner)
         self.server_log_frame = QFrame()  # Same status state/progress owner, moved to the bottom.
         self.server_log_frame.setObjectName("statusBar")
-        self.server_log_frame.setFixedHeight(34)
+        self.server_log_frame.setMinimumHeight(34)
         self.server_log_frame.setProperty("state", "idle")
         self.status_pulse_timer = QTimer(self)
         self.status_pulse_timer.setInterval(550)
@@ -4076,7 +4075,7 @@ class SellerWindow(MainWindow):
         self.brand_panel.layout().setContentsMargins(8, 12, 8, 12)
         nav_height = (48 if large else 44) if compact else (56 if large else 52)
         for nav in self.nav:
-            nav.setFixedHeight(nav_height)
+            nav.setMinimumHeight(nav_height)
         margin = 16 if compact else 24
         self.page_content_layout.setContentsMargins(margin, 0, margin, 0)
         self.page_content_layout.setSpacing(12)

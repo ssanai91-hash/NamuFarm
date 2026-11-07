@@ -2,18 +2,18 @@
 import re
 
 from PySide6.QtCore import QEvent, Qt, QRectF, QTimer
-from PySide6.QtGui import QColor, QPainter, QPalette
+from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPalette
 from PySide6.QtWidgets import (QApplication, QHeaderView, QLabel, QLineEdit, QScrollArea,
                                QSizePolicy, QTableWidget, QVBoxLayout, QWidget,
                                QStyledItemDelegate, QStyleOptionViewItem, QStyle, QPushButton)
 
 
 TOKENS = {
-    "sidebar": "#193C32", "primary": "#2D6A4F", "primary-hover": "#1F573B", "primary-pressed": "#16472E",
-    "accent": "#B6DF9A", "danger": "#B3261E", "text": "#1F2A26", "muted": "#5B6B63",
-    "border": "#DFE5E2", "input-border": "#B9C7C0", "page-bg": "#F4F6F5", "card": "#FFFFFF",
-    "table-head": "#F2F5F3", "row-selected": "#E8F3EC", "nav-selected": "#2A5C49", "nav-caption": "#8FB3A0",
-    "waiting": "#F2D38A", "working-bg": "#FFF7E4", "new-fg": "#1D4F91", "new-bg": "#E7F0FB",
+    "sidebar": "#17362C", "primary": "#2F6B4F", "primary-hover": "#255A42", "primary-pressed": "#1C4A35",
+    "accent": "#B9E0A0", "danger": "#B3261E", "text": "#1C2621", "muted": "#56645C",
+    "border": "#DDE3DE", "input-border": "#84948A", "page-bg": "#F3F5F2", "card": "#FFFFFF",
+    "table-head": "#EEF2EE", "row-selected": "#E6F1E9", "nav-selected": "#24493C", "nav-caption": "#9DBFAE",
+    "waiting": "#F2D38A", "working-bg": "#FFF6E0", "new-fg": "#1D4F91", "new-bg": "#E7F0FB",
     "quote-fg": "#8A5300", "quote-bg": "#FDF1DC", "paid-fg": "#1E6B3F", "paid-bg": "#E3F2E8",
     "ready-fg": "#0B5F56", "ready-bg": "#DFF1EF", "tracking-fg": "#5B3C9E", "tracking-bg": "#EFE9FB",
     "done-fg": "#46545C", "done-bg": "#ECEFF1", "cancel-fg": "#9A2A22", "cancel-bg": "#FBE9E7",
@@ -29,7 +29,7 @@ def status_badge(stage):
     size = 15 if QApplication.instance() and QApplication.instance().property("namufarmLargeFont") else 13
     fg, bg = TOKENS[key + "-fg"], TOKENS[key + "-bg"]
     return {"text": text, "foreground": fg, "background": bg,
-            "style": f"color:{fg};background:{bg};border:0;border-radius:8px;padding:4px 10px;font-size:{size}px;font-weight:700;"}
+            "style": f"color:{fg};background:{bg};border:0;border-radius:6px;padding:4px 10px;font-size:{size}px;font-weight:700;"}
 
 
 def stage_label(stage, parent=None):
@@ -42,7 +42,7 @@ def stage_label(stage, parent=None):
 
 def _theme(css, large=False, compact=False):
     values = {**TOKENS, **{key: str(value + (2 if large else 0)) for key, value in
-              {"body": 15, "small": 13, "title": 22, "section": 16, "action": 17, "total": 26, "detail": 20, "brand": 18}.items()},
+              {"body": 15, "small": 13, "title": 22, "section": 17, "action": 17, "total": 28, "detail": 20, "brand": 18}.items()},
               "control-height": str(48 if large else 44),
               "nav-height": str((48 if large else 44) if compact else (56 if large else 52))}
     for key, value in values.items():
@@ -60,12 +60,12 @@ QMainWindow,#workspace,QDialog{background:@page-bg@;}
 #sidebar QLabel{color:@card@;background:transparent;}
 #sidebar QLabel#brand{font-size:@brand@px;font-weight:700;}
 #sidebar QLabel#navGroup,#sidebar QLabel#navFoot{font-size:@small@px;color:@nav-caption@;}
-#sidebar QPushButton{background:transparent;color:@card@;border:0;border-left:3px solid transparent;border-radius:8px;text-align:left;padding:0 12px;min-height:@nav-height@px;max-height:@nav-height@px;font-size:@body@px;font-weight:600;}
+#sidebar QPushButton{background:transparent;color:@card@;border:0;border-left:3px solid transparent;border-radius:8px;text-align:left;padding:0 12px;min-height:@nav-height@px;font-size:@body@px;font-weight:600;}
 #sidebar QPushButton:checked{background:@nav-selected@;border-left-color:@accent@;}
 #sidebar QPushButton:hover{background:@nav-selected@;}
-#sidebar QPushButton[keyboardFocus="true"]{border:2px dashed @accent@;}
+#sidebar QPushButton[keyboardFocus="true"]{border:2px solid @accent@;}
 #sidebar #navRow{background:transparent;}
-#sidebar QLabel#navBadge{font-size:@small@px;font-weight:700;background:@border@;color:@text@;border-radius:8px;padding:2px 8px;}
+#sidebar QLabel#navBadge{font-size:@small@px;font-weight:700;background:@border@;color:@sidebar@;border-radius:6px;padding:2px 8px;}
 #sidebar QLabel#navBadge[kind="new"]{background:@accent@;}
 #sidebar QLabel#navBadge[kind="inquiry"]{background:@waiting@;}
 QFrame#pageHeader{background:@card@;border:0;border-bottom:1px solid @border@;}
@@ -75,14 +75,14 @@ QLabel#summaryCount,QLabel#summaryCountUnit,QLabel#muted,QLabel#eyebrow,QLabel#s
 QLabel#detailCustomer{font-size:@detail@px;font-weight:700;}
 QLabel#detailQuantity{font-size:@action@px;font-weight:700;}
 QLabel#metricValue,QLabel#quoteTotalValue,QLabel#workbenchTotal{font-size:@total@px;font-weight:700;color:@primary@;}
-QFrame#card,QFrame#hero,QFrame#detailPanel,QFrame#quoteItemsCard,QFrame#customerInfoCard,QFrame#emailAddressCard,QFrame#workbenchDocumentTools{background:@card@;border:1px solid @border@;border-radius:10px;}
+QFrame#card,QFrame#hero,QFrame#detailPanel,QFrame#quoteItemsCard,QFrame#customerInfoCard,QFrame#emailAddressCard,QFrame#workbenchDocumentTools{background:@card@;border:1px solid @border@;border-radius:12px;}
 QFrame#statusBar{background:@card@;border:0;border-top:1px solid @border@;}
 QFrame#statusBar QLabel{font-size:@small@px;}
 QFrame#statusBar[state="working"]{background:@working-bg@;}
 QFrame#statusBar[state="success"] QLabel{color:@primary@;}
 QFrame#errorBanner{background:@cancel-bg@;border:0;border-radius:8px;}
 QFrame#errorBanner QLabel{color:@cancel-fg@;font-size:@small@px;}
-QPushButton{background:@card@;color:@text@;border:1px solid @input-border@;border-radius:8px;min-height:@control-height@px;max-height:@control-height@px;padding:0 16px;font-size:@body@px;font-weight:600;}
+QPushButton{background:@card@;color:@text@;border:1px solid @input-border@;border-radius:8px;min-height:@control-height@px;padding:0 16px;font-size:@body@px;font-weight:600;}
 QPushButton:hover{background:@row-selected@;border-color:@primary@;}
 QPushButton:pressed{background:@border@;}
 QPushButton:focus{border:2px solid @primary@;}
@@ -102,11 +102,11 @@ QLineEdit:disabled,QComboBox:disabled,QPlainTextEdit:disabled{background:@table-
 QComboBox{padding-right:32px;}
 QComboBox::drop-down{subcontrol-origin:padding;subcontrol-position:top right;width:28px;border:0;background:transparent;}
 QComboBox::down-arrow{image:none;width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:6px solid @muted@;margin-right:8px;}
-QTableWidget{background:@card@;alternate-background-color:@card@;border:1px solid @border@;border-radius:10px;gridline-color:@border@;selection-background-color:@row-selected@;selection-color:@text@;font-size:@body@px;}
+QTableWidget{background:@card@;alternate-background-color:@card@;border:1px solid @border@;border-radius:12px;gridline-color:@border@;selection-background-color:@row-selected@;selection-color:@text@;font-size:@body@px;}
 QTableWidget::item{padding:8px;border:0;border-bottom:1px solid @border@;}
 QTableWidget::item:selected{background:@row-selected@;color:@text@;}
 QHeaderView::section{background:@table-head@;color:@muted@;border:0;border-bottom:1px solid @border@;padding:8px;font-size:@small@px;font-weight:700;}
-QGroupBox{background:@card@;border:1px solid @border@;border-radius:10px;margin-top:24px;padding:16px;font-size:@section@px;font-weight:700;}
+QGroupBox{background:@card@;border:1px solid @border@;border-radius:12px;margin-top:24px;padding:16px;font-size:@section@px;font-weight:700;}
 QGroupBox::title{subcontrol-origin:margin;left:16px;padding:0 8px;}
 QScrollArea{border:0;background:transparent;}
 QScrollArea>QWidget>QWidget{background:transparent;}
@@ -120,12 +120,12 @@ QCheckBox::indicator,QRadioButton::indicator{width:20px;height:20px;}
 QTextBrowser{background:@card@;border:1px solid @border@;border-radius:8px;padding:8px;}
 QToolTip{background:@sidebar@;color:@card@;border:0;padding:8px;font-size:@small@px;}
 QPushButton#filterTab:checked{background:@row-selected@;color:@primary@;border-color:@primary@;}
-QPushButton#stageTab{border:0;border-radius:0;border-bottom:3px solid transparent;min-height:48px;max-height:48px;padding:0 8px;}
+QPushButton#stageTab{border:0;border-radius:0;border-bottom:3px solid transparent;min-height:48px;padding:0 8px;}
 QPushButton#stageTab:checked{border-bottom-color:@primary@;color:@primary@;}
 QTabWidget::pane{border:0;border-top:1px solid @border@;}
 QTabBar::tab{background:transparent;border:0;border-bottom:3px solid transparent;padding:8px 16px;min-height:32px;}
 QTabBar::tab:selected{color:@primary@;border-bottom-color:@primary@;}
-QLabel#channelStatusBadge{font-size:@small@px;background:@table-head@;color:@muted@;border-radius:8px;padding:4px 8px;}
+QLabel#channelStatusBadge{font-size:@small@px;background:@table-head@;color:@muted@;border-radius:6px;padding:4px 8px;}
 QLabel#channelStatusBadge[state="pending"]{background:@working-bg@;color:@quote-fg@;}
 QLabel#channelStatusBadge[state="failed"]{background:@cancel-bg@;color:@cancel-fg@;}
 QLabel#channelStatusBadge[state="success"]{background:@paid-bg@;color:@paid-fg@;}
@@ -145,21 +145,21 @@ QDialog#quoteWorkbench #workbenchCustomerRail{background:@page-bg@;}
 QDialog#quoteWorkbench QLabel#workbenchCaption{font-size:@small@px;color:@muted@;background:transparent;border:0;padding:0;}
 QDialog#quoteWorkbench QTextBrowser#workbenchCustomerName,QDialog#quoteWorkbench QTextBrowser#workbenchInfo,QDialog#quoteWorkbench QTextBrowser#workbenchReceipt{background:transparent;border:0;padding:0;font-size:@body@px;}
 QDialog#quoteWorkbench QTextBrowser#workbenchCustomerName,QDialog#quoteWorkbench QTextBrowser#workbenchReceipt{font-weight:700;}
-QDialog#quoteWorkbench QFrame#workbenchDocumentTools{border-radius:10px;}
+QDialog#quoteWorkbench QFrame#workbenchDocumentTools{border-radius:12px;}
 QDialog#quoteWorkbench QTableWidget#workbenchItems{font-size:@body@px;background:@card@;}
 QDialog#quoteWorkbench QTableWidget::item{padding:4px 8px;}
 QDialog#quoteWorkbench #quoteSpeciesEditor QLineEdit{border:0;background:transparent;padding:0;min-height:24px;}
-QDialog#quoteWorkbench #quoteSpeciesEditor QPushButton{background:transparent;border:0;color:@primary@;font-size:@small@px;min-height:24px;max-height:24px;padding:0;}
-QDialog#quoteWorkbench #unitPriceEditor QPushButton{min-width:40px;max-width:40px;min-height:40px;max-height:40px;padding:0;}
-QDialog#quoteWorkbench #unitPriceEditor QLineEdit{min-height:38px;max-height:38px;min-width:64px;padding:0 4px;}
+QDialog#quoteWorkbench #quoteSpeciesEditor QPushButton{background:transparent;border:0;color:@primary@;font-size:@small@px;min-height:24px;padding:0;}
+QDialog#quoteWorkbench #unitPriceEditor QPushButton{min-width:40px;max-width:40px;min-height:40px;padding:0;}
+QDialog#quoteWorkbench #unitPriceEditor QLineEdit{min-height:38px;min-width:64px;padding:0 4px;}
 QDialog#quoteWorkbench QFrame#workbenchFooter{background:@card@;border:0;border-top:1px solid @border@;}
-QDialog#quoteWorkbench #workbenchFooter QPushButton{min-height:52px;max-height:52px;}
+QDialog#quoteWorkbench #workbenchFooter QPushButton{min-height:52px;}
 QDialog#quoteWorkbench QLabel#workbenchTotal{font-size:@total@px;font-weight:700;color:@primary@;}
 QDialog#quoteWorkbench QFrame#workbenchShipping{background:@table-head@;border-radius:8px;}
-QDialog#quoteWorkbench #workbenchShipping QLineEdit{min-height:28px;max-height:28px;}
+QDialog#quoteWorkbench #workbenchShipping QLineEdit{min-height:28px;}
 QDialog#quoteWorkbench #workbenchOriginalText{background:@table-head@;border:1px solid @border@;border-radius:8px;font-size:@small@px;}
-QDialog#quoteWorkbench QPushButton[deliveryCompletion="true"]{min-width:160px;max-width:180px;min-height:52px;max-height:52px;}
-QDialog#quoteWorkbench QPushButton#smsAction,QDialog#quoteWorkbench QPushButton#mailAction{min-height:52px;max-height:52px;font-size:@action@px;padding:0 8px;}
+QDialog#quoteWorkbench QPushButton[deliveryCompletion="true"]{min-width:160px;max-width:180px;min-height:52px;}
+QDialog#quoteWorkbench QPushButton#smsAction,QDialog#quoteWorkbench QPushButton#mailAction{min-height:52px;font-size:@action@px;padding:0 8px;}
 QDialog#quoteWorkbench QLabel#deliveryActionTitle{font-size:@action@px;font-weight:700;}
 QDialog#quoteWorkbench #workbenchCustomerInput{background:@card@;}
 """, large)
@@ -252,19 +252,24 @@ class CustomerDelegate(RowSelectionDelegate):
         style = opt.widget.style() if opt.widget else QApplication.style()
         style.drawControl(QStyle.ControlElement.CE_ItemViewItem, opt, painter, opt.widget)
         painter.save()
-        rect = option.rect.adjusted(8, 3, -8, -3)
-        font = option.font
-        font.setBold(True)
-        painter.setFont(font)
+        rect = option.rect.adjusted(8, 2, -8, -2)
+        # Each line uses its real font height (no half-row split) so large text never overlaps.
+        top_font = QFont(option.font)
+        top_font.setBold(True)
+        sub_font = QFont(option.font)
+        sub_font.setBold(False)
+        sub_font.setPixelSize(15 if QApplication.instance().property('namufarmLargeFont') else 13)
+        top_height, sub_height = QFontMetrics(top_font).height(), QFontMetrics(sub_font).height()
+        gap = 2
+        y = rect.y() + max(0, (rect.height() - top_height - gap - sub_height) / 2)
+        painter.setFont(top_font)
         painter.setPen(QColor(TOKENS['text']))
-        top = QRectF(rect.x(), rect.y(), rect.width(), rect.height() / 2)
+        top = QRectF(rect.x(), y, rect.width(), top_height)
         painter.drawText(top, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
                          painter.fontMetrics().elidedText(primary, Qt.TextElideMode.ElideRight, rect.width()))
-        font.setBold(False)
-        font.setPixelSize(15 if QApplication.instance().property('namufarmLargeFont') else 13)
-        painter.setFont(font)
+        painter.setFont(sub_font)
         painter.setPen(QColor(TOKENS['muted']))
-        bottom = top.translated(0, rect.height() / 2)
+        bottom = QRectF(rect.x(), y + top_height + gap, rect.width(), sub_height)
         painter.drawText(bottom, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
                          painter.fontMetrics().elidedText(str(secondary), Qt.TextElideMode.ElideRight, rect.width()))
         painter.restore()
@@ -308,14 +313,17 @@ class StatusDelegate(RowSelectionDelegate):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(QColor(background))
-        width = min(option.rect.width() - 12, option.fontMetrics.horizontalAdvance(text) + 24)
-        rect = QRectF(0, 0, max(1, width), 30)
-        rect.moveCenter(QRectF(option.rect).center())
-        painter.drawRoundedRect(rect, 8, 8)
-        painter.setPen(QColor(foreground))
-        font = option.font
+        font = QFont(option.font)
         font.setPixelSize(15 if QApplication.instance().property("namufarmLargeFont") else 13)
         font.setBold(True)
+        metrics = QFontMetrics(font)
+        # Badge height follows the bold badge font (+4px top/bottom), never a fixed box.
+        width = min(option.rect.width() - 12, metrics.horizontalAdvance(text) + 24)
+        height = min(option.rect.height() - 4, max(26, metrics.height() + 8))
+        rect = QRectF(0, 0, max(1, width), max(1, height))
+        rect.moveCenter(QRectF(option.rect).center())
+        painter.drawRoundedRect(rect, 6, 6)
+        painter.setPen(QColor(foreground))
         painter.setFont(font)
         painter.drawText(rect, Qt.AlignmentFlag.AlignCenter,
                          painter.fontMetrics().elidedText(text, Qt.TextElideMode.ElideRight, max(1, int(rect.width())-8)))
