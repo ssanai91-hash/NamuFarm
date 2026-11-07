@@ -15,7 +15,7 @@ function inquirySheet_(year,create) {
   const props=PropertiesService.getScriptProperties(),map=inquiryBooks_(); let book;
   if(map[year])book=SpreadsheetApp.openById(map[year]);
   else {
-    assert_(create,'NOT_READY');
+    assert_(create && !NAMUFARM_WEB_REQUEST,'NOT_READY');
     book=SpreadsheetApp.create('나무팜_고객문의_'+year);
     // Register before initialization, so interrupted setup reuses the same private file.
     map[year]=book.getId(); props.setProperty('INQUIRY_BOOKS',JSON.stringify(map));
@@ -175,37 +175,48 @@ function inquirySmsOptedOut_(raw) {
 }
 function sendInquiryReply_(body) {
   assert_(INQUIRY_UUID.test(body.deliveryId) && Number.isSafeInteger(body.revision),'INVALID');
-  return lock_(()=>{
+  const prepared=lock_(()=>{
     const record=inquiryRecord_(body.requestId),raw=JSON.parse(record.row[IC.raw]);assert_(!raw.expired,'CONFLICT');
-    if(raw.delivery && raw.delivery.id===body.deliveryId || (raw.history||[]).some(h=>h.kind==='reply' && h.id===body.deliveryId))return {inquiry:inquiryResponse_(record.row),duplicate:true};
+    if(raw.delivery && raw.delivery.id===body.deliveryId || (raw.history||[]).some(h=>h.kind==='reply' && h.id===body.deliveryId))return {duplicate:true,inquiry:inquiryResponse_(record.row)};
     assert_(Number(record.row[IC.revision])===body.revision && raw.reply.text.length>0 && (!raw.delivery || raw.delivery.state==='failed'),'CONFLICT');
-    // Rejected before any state change: nothing is sent, so clients may drop the pending send.
     if(raw.reply.channel==='sms' && inquirySmsOptedOut_(raw))fail_('SMS_BLOCKED');
     const message=raw.reply.channel==='email'?inquiryMailBody_(raw,record.row[IC.number]):'[나무팜 고객문의 답변]\n문의번호: '+record.row[IC.number]+'\n\n'+raw.reply.text;
-    if(raw.reply.channel==='email'){assert_(raw.inquiry.customerEmail && MailApp.getRemainingDailyQuota()>0,'NOT_READY');}
+    if(raw.reply.channel==='email')assert_(raw.inquiry.customerEmail && MailApp.getRemainingDailyQuota()>0,'NOT_READY');
     else assert_(quoteSmsSettings_().configured,'NOT_READY');
     assert_(raw.reply.channel!=='sms' || message.length<=1000,'INVALID');
     raw.history=raw.history||[];
     raw.history.push({kind:'reply',id:body.deliveryId,text:raw.reply.text,channel:raw.reply.channel,at:new Date().toISOString(),state:'sending'});
     raw.delivery={id:body.deliveryId,channel:raw.reply.channel,state:'sending',startedAt:new Date().toISOString()};
-    inquiryChange_(record,raw,body.deliveryId);
-    try {
-      if(raw.reply.channel==='email') {
-        MailApp.sendEmail({to:raw.inquiry.customerEmail,subject:'[나무팜] 고객문의 답변 · '+record.row[IC.number],body:message,name:'나무팜농원'});
-        raw.delivery.state='sent';raw.delivery.sentAt=new Date().toISOString();record.row[IC.status]='closed';record.row[IC.answered]=raw.delivery.sentAt;
-      } else {
-        // Existing SOLAPI validation/authorization; no quote request ID/state transition.
-        const result=sendQuoteSms_({recipientPhone:raw.inquiry.customerPhone,text:message});
-        assert_(result.messageId,'UNAVAILABLE');
-        raw.delivery.state='pending';raw.delivery.messageId=result.messageId;raw.delivery.sentAt=result.sentAt;
-      }
-    } catch(error) {
-      // A provider rejection is final non-delivery; a timeout may already have sent.
-      raw.delivery.state=error.deliveryRejected?'failed':'unknown';
-      if(error.deliveryRejected){raw.delivery.statusCode=error.statusCode;raw.delivery.statusMessage=error.statusMessage;}
+    inquiryChange_(record,raw,body.deliveryId); // Durable fence before releasing the lock.
+    return {duplicate:false,channel:raw.reply.channel,recipient:raw.reply.channel==='email'?raw.inquiry.customerEmail:raw.inquiry.customerPhone,
+      message:message,number:String(record.row[IC.number])};
+  });
+  if(prepared.duplicate)return prepared;
+  let outcome;
+  // Provider latency must not block website intake, polling or other writes.
+  try {
+    if(prepared.channel==='email'){
+      MailApp.sendEmail({to:prepared.recipient,subject:'[나무팜] 고객문의 답변 · '+prepared.number,body:prepared.message,name:'나무팜농원'});
+      outcome={state:'sent',sentAt:new Date().toISOString()};
+    }else{
+      const result=sendQuoteSms_({recipientPhone:prepared.recipient,text:prepared.message});
+      assert_(result.messageId,'UNAVAILABLE');
+      outcome={state:'pending',messageId:result.messageId,sentAt:result.sentAt};
     }
-    inquiryHistoryDelivery_(raw);
-    inquiryChange_(record,raw,body.deliveryId);return {inquiry:inquiryResponse_(record.row),duplicate:false};
+  }catch(error){
+    outcome={state:error.deliveryRejected?'failed':'unknown'};
+    if(error.deliveryRejected){outcome.statusCode=error.statusCode;outcome.statusMessage=error.statusMessage;}
+  }
+  return lock_(()=>{
+    // Reload instead of writing the stale reservation row. An admin delete wins.
+    const record=inquiryRecord_(body.requestId),raw=JSON.parse(record.row[IC.raw]);
+    if(raw.expired)return {inquiry:inquiryResponse_(record.row),duplicate:false};
+    assert_(raw.delivery && raw.delivery.id===body.deliveryId,'CONFLICT');
+    if(raw.delivery.state!=='sending')return {inquiry:inquiryResponse_(record.row),duplicate:true};
+    Object.assign(raw.delivery,outcome);
+    if(outcome.state==='sent'){record.row[IC.status]='closed';record.row[IC.answered]=outcome.sentAt;}
+    inquiryHistoryDelivery_(raw);inquiryChange_(record,raw,body.deliveryId);
+    return {inquiry:inquiryResponse_(record.row),duplicate:false};
   });
 }
 function inquirySmsStatus_(body) {

@@ -31,12 +31,11 @@ function twoTabRecords_(){
             previous.row[11]===row[11],'NOT_READY');
           const current={sheet,row,index};
           if(name===TWO_CONFIRMED_TAB){
-            // Can also repair a staged pre-cutover confirmed quote that was
-            // copied from the request tab. No live quote exists only here.
-            previous.sheet.getRange(previous.index+2,1,1,18).clearContent();
-            SpreadsheetApp.flush();
+            // Prefer the confirmed copy without mutating a read. The original
+            // request copy is removed only by the explicit move operation.
+            current.requestCopies=(previous.requestCopies||[]).concat([previous]);
             seen.set(id,current);
-          }
+          }else previous.requestCopies=(previous.requestCopies||[]).concat([current]);
         }else seen.set(id,{sheet,row,index});
       });
     });
@@ -68,6 +67,7 @@ function twoTabSubmit_(body,stored){
     assert_(old.row[11]===body.fingerprint,'CONFLICT');
     return Object.assign(receiptDetails_(old.row),{duplicate:true});
   }
+  quoteIntakeLimit_(body,stored.request);
   const now=new Date(),created=now.toISOString(),day=receiptDay_(created);
   const sheet=twoTabSheet_(day.slice(0,4),TWO_REQUEST_TAB);
   const floor=records.reduce((n,r)=>
@@ -117,8 +117,10 @@ function twoTabMoveConfirmed_(id,pricing){
   return confirm;
 }
 function twoTabSetStatus_(id,status){
-  const rec=twoTabRecord_(id);
+  const records=twoTabRecords_(),rec=records.find(record=>record.row[0]===id);
   assert_(rec,'INVALID');
+  // Completed sale updates must not reopen an expired quote tombstone.
+  if(JSON.parse(rec.row[15]).expired===true)return;
   if(status==='견적확정'){
     if(rec.row[9]==='견적확정')return;
     twoTabMoveConfirmed_(id,null);return;
@@ -126,7 +128,7 @@ function twoTabSetStatus_(id,status){
   if(rec.row[9]===status)return;
   assert_(rec.sheet.getName()===TWO_CONFIRMED_TAB &&
     requestStatusTransitionAllowed_(String(rec.row[9]),status),'CONFLICT');
-  const next=rec.row.slice();next[1]=twoTabNextSeq_(twoTabRecords_());next[9]=status;
+  const next=rec.row.slice();next[1]=twoTabNextSeq_(records);next[9]=status;
   quoteWriteVerified_(rec.sheet,rec.index+2,next);
 }
 function twoTabPriceConfirm_(body){
@@ -146,18 +148,23 @@ function twoTabPriceConfirm_(body){
   }else twoTabMoveConfirmed_(body.requestId,pricing);
   return {updated:true,requestId:body.requestId,status:'견적확정'};
 }
-function twoTabClose_(id,deleted){
-  const rec=twoTabRecord_(id);
+function twoTabClose_(id,deleted,records){
+  records=records||twoTabRecords_();
+  const rec=records.find(record=>record.row[0]===id);
   if(!rec || JSON.parse(rec.row[15]).expired===true)return;
-  const next=rec.row.slice();next[1]=twoTabNextSeq_(twoTabRecords_());
+  const next=rec.row.slice();next[1]=twoTabNextSeq_(records);
   for(let i=3;i<=8;i++)next[i]='';
   next[9]='보관종료';next[10]='STOPPED';next[14]='';next[15]=deleted?'{"expired":true,"deleted":true}':'{"expired":true}';
-  quoteWriteVerified_(rec.sheet,rec.index+2,next);
+  quoteWriteVerified_(rec.sheet,rec.index+2,next);rec.row=next;
 }
 function twoTabPurgeExpired_(){
-  twoTabRecords_().forEach(rec=>{
+  const records=twoTabRecords_();
+  records.forEach(rec=>{
+    // Explicit maintenance only: finish an interrupted move's redundant copy.
+    // The confirmed head was validated by twoTabRecords_; reads never clear it.
+    (rec.requestCopies||[]).forEach(copy=>copy.sheet.getRange(copy.index+2,1,1,18).clearContent());
     if(JSON.parse(rec.row[15]).expired!==true &&
       Date.parse(String(rec.row[2]))+QUOTE_RETENTION_MS<=Date.now())
-      twoTabClose_(rec.row[0]);
+      twoTabClose_(rec.row[0],false,records);
   });
 }

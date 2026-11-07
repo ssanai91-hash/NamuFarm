@@ -253,6 +253,7 @@ function submitIndexedQuote_(body,stored) {
   }
   const now=Date.now();
   if(!entry){
+    quoteIntakeLimit_(body,stored.request);
     const created=new Date(now).toISOString(),day=receiptTime_(created).slice(0,10);
     const sheet=annualLedgersEnabled_()?annualQuoteSheet_(day):PropertiesService.getScriptProperties().getProperty('QUOTE_STORAGE_MODE')==='monthly-v1'?quoteDaySheet_(day):sheet_();
     const floor=entries.filter(e=>e.values[QI.day]===day).reduce((n,e)=>Math.max(n,Number(e.values[QI.receipt].split('-')[2])),0);

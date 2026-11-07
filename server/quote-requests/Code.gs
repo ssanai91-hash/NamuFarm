@@ -11,6 +11,7 @@ const RFQ_RECEIPT_HEADERS = ['견적접수번호','접수시각(한국)'];
 const RFQ_RECEIPT_PATTERN = /^(?:NAMU|NFQ)-(\d{8})-(\d{4,16})$/;
 
 function doPost(e) {
+  NAMUFARM_WEB_REQUEST=true;
   try {
     const text = e && e.postData && e.postData.contents;
     assert_(typeof text === 'string' && text.length <= 3000000, 'INVALID');
@@ -31,7 +32,16 @@ function doPost(e) {
     else if (body.action === 'connect_app') value = connectApp_(body);
     else {
       const device = authenticateApp_(body);
-      if (body.action === 'list_requests') value = listRequests_(body);
+      if(['get_confirmed_quote','revise_confirmed_quote','reserve_quote_delivery','confirm_quote_delivery',
+        'cancel_quote_delivery','confirm_quote_payment'].includes(body.action))assert_(twoBookActive_(),'NOT_READY');
+      if (body.action === 'sync_head') value = syncHead_();
+      else if (body.action === 'get_confirmed_quote') value = getConfirmedQuote_(body);
+      else if (body.action === 'revise_confirmed_quote') value = reviseConfirmedQuote_(body);
+      else if (body.action === 'reserve_quote_delivery') value = reserveConfirmedDelivery_(body);
+      else if (body.action === 'confirm_quote_delivery') value = confirmConfirmedDelivery_(body);
+      else if (body.action === 'cancel_quote_delivery') value = cancelConfirmedDelivery_(body);
+      else if (body.action === 'confirm_quote_payment') value = confirmQuotePayment_(body);
+      else if (body.action === 'list_requests') value = listRequests_(body);
       else if (body.action === 'list_customer_inquiries') value = listCustomerInquiries_(body);
       else if (body.action === 'save_inquiry_reply') value = saveInquiryReply_(body);
       else if (body.action === 'send_inquiry_reply') value = sendInquiryReply_(body);
@@ -71,14 +81,16 @@ function doPost(e) {
   } catch (error) {
     // Do not leak customer data, sheet identifiers, or credentials in responses/logs.
     const code = ['INVALID','UNAUTHORIZED','CONFLICT','RATE_LIMITED','NOT_READY','DEVICE_LIMIT','BUSY','INVALID_ACTION','UPGRADE_REQUIRED','SMS_BLOCKED'].indexOf(error.code) >= 0 ? error.code : 'UNAVAILABLE';
+    console.warn(JSON.stringify({event:'api_error',code:code}));
     return json_({ ok: false, code: code });
-  }
+  } finally { NAMUFARM_WEB_REQUEST=false; }
 }
 function doGet(e) {
-  if (e && e.parameter && e.parameter.action === 'content_library') {
-    return json_(publicContentLibrary_());
-  }
-  return json_(secureServiceInfo_());
+  NAMUFARM_WEB_REQUEST=true;
+  try {
+    if (e && e.parameter && e.parameter.action === 'content_library')return json_(publicContentLibrary_());
+    return json_(secureServiceInfo_());
+  } finally { NAMUFARM_WEB_REQUEST=false; }
 }
 function json_(value) { return ContentService.createTextOutput(JSON.stringify(value)).setMimeType(ContentService.MimeType.JSON); }
 function fail_(code) { const error = new Error(code); error.code = code; throw error; }
@@ -455,7 +467,11 @@ function dispatchNotifications_(onlyId) {
         seenTokens.add(token); return true;
       });
     if (!targets.length) return null;
-    const now = Date.now(); const lease = new Date(now + 600000).toISOString();
+    const now = Date.now(),sequence=props.getProperty('LAST_SEQUENCE')||'0';
+    if(!onlyId && props.getProperty('QUOTE_PUSH_SCANNED_SEQUENCE')===sequence &&
+      Number(props.getProperty('QUOTE_PUSH_NEXT_SCAN')||0)>now)return null;
+    let nextScan=now+3600000;
+    const lease = new Date(now + 600000).toISOString();
     const batch = [];
     const records=twoBookActive_()
       ? twoTabRecords_().filter(r=>r.row[9]==='신규' &&
@@ -464,11 +480,16 @@ function dispatchNotifications_(onlyId) {
     for(const candidate of records){
       if(batch.length >= (onlyId ? 1 : 10))break;
       const {sheet,row,index}=candidate.entry?quoteRecord_(candidate.entry,candidate.cache,false):candidate;
+      if(row[10]==='PENDING')nextScan=Math.min(nextScan,Math.max(now+60000,Date.parse(String(row[13]))||now));
       if ((onlyId && row[0] !== onlyId) || row[10] !== 'PENDING' || Date.parse(String(row[2])) + 30*86400000 <= now || Date.parse(String(row[13])) > now) continue;
       sheet.getRange(index+2,14,1,1).setValues([[lease]]);
       batch.push({ id:String(row[0]), lease:lease });
     }
     SpreadsheetApp.flush();
+    if(!onlyId){
+      props.setProperty('QUOTE_PUSH_SCANNED_SEQUENCE',sequence);
+      props.setProperty('QUOTE_PUSH_NEXT_SCAN',String(batch.length?now+60000:nextScan));
+    }
     return { project:project, targets:targets, batch:batch };
   });
   if (!work) return;

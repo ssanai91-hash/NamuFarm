@@ -35,7 +35,8 @@ function secureServiceInfo_() {
     encryptionReady:false,customerDataStorage:'plain',sellerKey:key,retentionDays:30,requestDeletionSync:true,saleDeletionSync:true,
     receiptFormat:'NAMU-YYYYMMDD-NNNN',receiptTimeZone:'Asia/Seoul',connectionFile:true,requestSnapshot:true,
     connectionAuth:'auto-v1',quoteReadMode:twoBookActive_()?'annual-two-tabs':'legacy-storage',legacyDeviceAuth:true,
-    quoteDeliveryIdempotency:1,quoteEmail:true,quoteEmailSender:QUOTE_SENDER_EMAIL,salesReportEmail:true,
+    quoteDeliveryIdempotency:1,quoteEmail:true,salesReportEmail:true,
+    syncHead:1,confirmedQuoteVersion:twoBookActive_()?1:0,confirmedQuotePayment:twoBookActive_()?1:0,
     customerInquiry:1,customerInquiryWorkflow:2,customerInquiryDelete:1,customerInquiryReady:typeof customerInquiryReady_==='function' && customerInquiryReady_(),
     quoteSms:true,quoteSmsProvider:'SOLAPI',soldNumberReservation:1,soldDisplayNumbers:1,
     commerceStates:['입금확인','배송완료','구매취소']};
@@ -74,7 +75,7 @@ function namedRows_(sheet, count) { return sheet.getLastRow() > 1 ? sheet.getRan
 function setupPrivacyStorage_() {
     namedSheet_(SALE_SHEET,SALE_HEADERS,true); namedSheet_(SALE_EVENT_SHEET,SALE_EVENT_HEADERS,true);
     if (!ScriptApp.getProjectTriggers().some(t => t.getHandlerFunction() === 'purgeExpiredCustomerData')) {
-      ScriptApp.newTrigger('purgeExpiredCustomerData').timeBased().everyMinutes(5).create();
+      ScriptApp.newTrigger('purgeExpiredCustomerData').timeBased().everyHours(1).create();
     }
     PropertiesService.getScriptProperties().setProperty('PRIVACY_SETUP','1');
 }
@@ -110,6 +111,7 @@ function commitQuoteRequest_(body,stored) {
     assert_(receiptColumnsReady_(sheet),'NOT_READY');
     if (existingIndex>=0) { const existing=rows[existingIndex]; assert_(existing[11]===body.fingerprint,'CONFLICT');
       return Object.assign(assignReceipt_(sheet,existing,existingIndex,rows),{duplicate:true}); }
+    quoteIntakeLimit_(body,stored.request);
     const now = Date.now();
     const props=PropertiesService.getScriptProperties(); const seq=rows.reduce((m,r)=>Math.max(m,Number(r[1])||0),Number(props.getProperty('LAST_SEQUENCE'))||0)+1;
     assert_(Number.isSafeInteger(seq),'NOT_READY'); props.setProperty('LAST_SEQUENCE',String(seq));
@@ -130,7 +132,8 @@ function quoteResponseRow_(row) {
   const stored=quoteStoredData_(raw);
   if(stored.request)assert_(stored.request.requestId===result.requestId,'NOT_READY');
   return Object.assign(result,stored.request || stored,
-    stored.quotePricing?{quotePricing:stored.quotePricing}:{});
+    stored.quotePricing?{quotePricing:stored.quotePricing}:{},
+    raw.quoteVersion?{quoteVersion:raw.quoteVersion}:{});
 }
 function listEncryptedRequests_(body) {
   assert_(Number.isSafeInteger(body.afterSequence) && body.afterSequence>=0);
@@ -178,11 +181,15 @@ function closeRequest_(body) {
     if(twoBookActive_()){
       if(admin){const rec=twoTabRecord_(body.requestId);
         assert_(!rec || JSON.parse(rec.row[15]).expired===true || ['신규','견적확정','견적발송완료'].includes(String(rec.row[9]||'신규')),'CONFLICT');}
-      twoTabClose_(body.requestId,admin);return {closed:true,requestId:body.requestId};
+      twoTabClose_(body.requestId,admin);
+      if(admin)purgeConfirmedQuoteHistory_(body.requestId);
+      return {closed:true,requestId:body.requestId};
     }
-    if(quoteStorageConfigured_()){closeIndexedQuote_(body.requestId);return {closed:true,requestId:body.requestId};}
+    if(quoteStorageConfigured_()){closeIndexedQuote_(body.requestId);if(admin)purgeConfirmedQuoteHistory_(body.requestId);return {closed:true,requestId:body.requestId};}
     const sheet=sheet_(); const rows=rows_(sheet); const i=rows.findIndex(r=>r[0]===body.requestId);
-    if (i>=0) expireQuoteRow_(sheet,rows[i],i); return {closed:true,requestId:body.requestId};});
+    if (i>=0) expireQuoteRow_(sheet,rows[i],i);
+    if(admin)purgeConfirmedQuoteHistory_(body.requestId);
+    return {closed:true,requestId:body.requestId};});
 }
 function expireQuoteRow_(sheet,row,index) {
   // An already imported phone only asks for sequences beyond its committed cursor.
@@ -426,7 +433,10 @@ function saveQuotePricing_(body) {
 function updateRequestStatus_(body) {
   assert_(UUID_PATTERN.test(body.requestId) && ['견적확정','견적발송완료'].includes(body.status));
   return lock_(()=>{
-    updateLinkedRequestStatus_(body.requestId,body.status);
+    const record=confirmedRecord_(body.requestId,true),raw=JSON.parse(record.row[15]);
+    if(raw.quoteVersion){
+      assert_(body.status==='견적확정' && record.row[9]==='견적확정','UPGRADE_REQUIRED');
+    }else updateLinkedRequestStatus_(body.requestId,body.status);
     return {updated:true,requestId:body.requestId,status:body.status};
   });
 }
@@ -622,8 +632,9 @@ function quoteSmsStatus_(body) {
     /^[12]/.test(code) && code!=='2000' ||
     /^3/.test(code) && code!=='3000';
   const state=success?'success':failed?'failed':'pending';
-  return {checked:true,messageId:messageId,state:state,final:state!=='pending',success:success,
+  const status={checked:true,messageId:messageId,state:state,final:state!=='pending',success:success,
     statusCode:code,statusMessage:quoteSmsReason_(code),updatedAt:new Date().toISOString()};
+  confirmedSmsResult_(body,status);return status;
 }
 
 /** Durable deletion receipts contain no customer data. PENDING retries finish
@@ -760,6 +771,7 @@ function purgeExpiredCustomerData() {
     else if(quoteStorageConfigured_())purgeIndexedQuotes_();
     else {const sheet=sheet_();rows_(sheet).forEach((r,i)=>{if(Date.parse(String(r[2]))+QUOTE_RETENTION_MS<=Date.now() && JSON.parse(r[15]).expired!==true)expireQuoteRow_(sheet,r,i);});}
     purgeArchivedQuoteCopies_();
+    purgeConfirmedQuoteHistory_();
     const records=saleRecords_();const events=namedSheet_(SALE_EVENT_SHEET,SALE_EVENT_HEADERS,false);
     records.forEach(({row:r,sheet:sales,index:i})=>{
       const meta=JSON.parse(r[15]); if(meta.archived || !['배송완료','구매취소','판매완료','주문취소'].includes(meta.status) || Date.parse(String(r[14]))>Date.now())return;
@@ -792,6 +804,7 @@ function quoteDeliveryFingerprint_(body,channel) {
   const recipient=channel==='sms'?String(body.recipientPhone||'').replace(/\D/g,''):String(body.recipientEmail||'').trim();
   // Include attachments and all message-affecting fields, not just the plain text.
   return hash_(canonical_({channel:channel,recipient:recipient,requestId:String(body.requestId||''),
+    ...(body.expectedRevision!==undefined?{expectedRevision:body.expectedRevision,quoteFingerprint:body.quoteFingerprint}:{}),
     text:body.text||'',subject:body.subject||'',bodyText:body.bodyText||'',bodyHtml:body.bodyHtml||'',
     senderName:body.senderName||'',quoteNumber:body.quoteNumber||'',
     attachmentName:body.attachmentName||'',attachmentBase64:body.attachmentBase64||''}));
@@ -812,7 +825,12 @@ function quoteDeliveryResult_(saved,body,channel) {
 }
 function quoteDelivery_(body,channel,send) {
   assert_(body && typeof body==='object','INVALID');
-  if(body.deliveryId===undefined)return send(); // Android/legacy contract.
+  if(body.deliveryId===undefined){
+    if(body.requestId && channel!=='report_email')lock_(()=>{
+      assert_(!JSON.parse(confirmedRecord_(body.requestId).row[15]).quoteVersion,'UPGRADE_REQUIRED');
+    });
+    return send(); // Unmigrated Android/legacy contract.
+  }
   assert_(typeof body.deliveryId==='string' && QUOTE_DELIVERY_ID.test(body.deliveryId),'INVALID');
   assert_(!body.requestId || UUID_PATTERN.test(body.requestId),'INVALID');
   const recipient=channel==='sms'?String(body.recipientPhone||'').replace(/\D/g,''):String(body.recipientEmail||'').trim();
@@ -823,10 +841,17 @@ function quoteDelivery_(body,channel,send) {
     const rows=namedRows_(sheet,10),index=rows.findIndex(row=>row[0]===id);
     if(index>=0){
       const row=rows[index];assert_(row[6]===fingerprint,'CONFLICT');
-      if(row[3]==='SENT')return Object.assign(quoteDeliveryResult_(JSON.parse(row[9]),body,channel),{duplicate:true});
-      if(row[3]==='REJECTED')return Object.assign({ok:true},JSON.parse(row[9]));
+      if(row[3]==='SENT'){
+        confirmedFinishSend_(String(row[2]),id,channel,JSON.parse(row[9]),'SENT');
+        return Object.assign(quoteDeliveryResult_(JSON.parse(row[9]),body,channel),{duplicate:true});
+      }
+      if(row[3]==='REJECTED'){
+        confirmedFinishSend_(String(row[2]),id,channel,JSON.parse(row[9]),'REJECTED');
+        return Object.assign({ok:true},JSON.parse(row[9]));
+      }
       return {ok:true,sent:false,state:'unknown',deliveryId:id};
     }
+    confirmedStartSend_(body,channel);
     const recipient=channel==='sms'?String(body.recipientPhone||'').replace(/\D/g,''):String(body.recipientEmail||'');
     const nextRow=sheet.getLastRow()+1;
     if(nextRow>sheet.getMaxRows())sheet.insertRowsAfter(sheet.getMaxRows(),Math.max(100,nextRow-sheet.getMaxRows()));
@@ -851,6 +876,7 @@ function quoteDelivery_(body,channel,send) {
   }
   // Persist only non-personal result fields. Reconstruct contacts from the matching caller payload.
   const stored={sent:true,deliveryId:id,sentAt:result.sentAt||new Date().toISOString()};
+  if(body.expectedRevision!==undefined){stored.quoteRevision=body.expectedRevision;stored.quoteFingerprint=body.quoteFingerprint;}
   ['accepted','messageId','state','statusCode','statusMessage','groupId','remainingDailyQuota'].forEach(key=>{
     if(result[key]!==undefined)stored[key]=result[key];
   });
@@ -864,6 +890,7 @@ function quoteDeliveryFinish_(id,state,result) {
   assert_(index>=0,'NOT_READY');const row=rows[index];
   row[3]=state;row[4]=result.messageId||'';row[8]=result.sentAt||new Date().toISOString();row[9]=JSON.stringify(result);
   sheet.getRange(index+2,1,1,10).setValues([row]);SpreadsheetApp.flush();
+  confirmedFinishSend_(String(row[2]),id,String(row[1]),result,state);
 }
 function sendQuoteSms_(body) {return quoteDelivery_(body,'sms',()=>sendQuoteSms_Legacy_(body));}
 function sendQuoteEmail_(body) {return quoteDelivery_(body,'email',()=>sendQuoteEmail_Legacy_(body));}
@@ -873,6 +900,7 @@ function quoteDeliveryStatus_(body) {
   return lock_(()=>{
     const row=namedRows_(namedSheet_(QUOTE_DELIVERY_SHEET,QUOTE_DELIVERY_HEADERS,true),10).find(row=>row[0]===body.deliveryId);
     if(!row)return {found:false};
+    if(['SENT','REJECTED'].includes(row[3]))confirmedFinishSend_(String(row[2]),body.deliveryId,String(row[1]),JSON.parse(row[9]),String(row[3]));
     const result={found:true,state:String(row[3]).toLowerCase(),channel:row[1],messageId:row[4]||'',sentAt:row[3]==='SENT'?row[8]:''};
     if(row[3]==='REJECTED'){
       const saved=JSON.parse(row[9]);

@@ -40,11 +40,13 @@ function annualLedgerBook_(kind,year) {
   const table=namedSheet_(ANNUAL_FILES,ANNUAL_FILE_HEADERS,true);
   let entry=annualFileEntries_().find(e=>e.values[0]===kind && String(e.values[1])===String(year));
   if(!entry){
+    assert_(!NAMUFARM_WEB_REQUEST,'NOT_READY');
     entry={values:[kind,String(year),'',Utilities.getUuid(),'RESERVED',new Date().toISOString()],index:table.getLastRow()-1};
     quoteWriteVerified_(table,entry.index+2,entry.values);
   }
   const v=entry.values;
   if(!v[2]){
+    assert_(!NAMUFARM_WEB_REQUEST,'NOT_READY');
     if(v[4]==='RESERVED'){
       v[4]='CREATING';quoteWriteVerified_(table,entry.index+2,v);
       const file=Drive.Files.create({name:'나무팜_'+(kind==='quote'?'견적':'주문')+'_'+year,
@@ -68,18 +70,11 @@ function annualEnsureTabs_(book,kind){
   if(kind==='quote'){
     [TWO_REQUEST_TAB,TWO_CONFIRMED_TAB].forEach(name=>
       quoteEnsureHeaderSheet_(book,name,RFQ_HEADERS.concat(RFQ_RECEIPT_HEADERS)));
-    // Keep only the two business tabs. Never discard a nonempty unknown tab.
-    book.getSheets().filter(sheet=>
-      ![TWO_REQUEST_TAB,TWO_CONFIRMED_TAB].includes(sheet.getName())).forEach(sheet=>{
-      assert_(sheet.getLastRow()===0,'CONFLICT');
-      book.deleteSheet(sheet);
-    });
+    // Owner memo tabs are outside the API. Preserve them, including empty tabs.
   }else{
     for(let month=1;month<=12;month++)
       quoteEnsureHeaderSheet_(book,String(month).padStart(2,'0')+'월',SALE_HEADERS);
-    book.getSheets().filter(sheet=>
-      !/^((0[1-9])|(1[0-2]))월$/.test(sheet.getName()) &&
-      sheet.getLastRow()===0).forEach(sheet=>book.deleteSheet(sheet));
+    // Preserve owner memo tabs; only 01월~12월 are API storage.
   }
 }
 function annualActiveBook_(kind,year){
@@ -89,6 +84,7 @@ function annualActiveBook_(kind,year){
     const book=SpreadsheetApp.openById(registry[key].id);
     annualEnsureTabs_(book,kind);return book;
   }
+  assert_(!NAMUFARM_WEB_REQUEST,'NOT_READY');
   const tokenKey='TWO_BOOK_CREATE_'+kind+'_'+year;
   let token=props.getProperty(tokenKey);
   if(!token){
@@ -169,6 +165,7 @@ function saleRecords_() {
  * the same quote and order. The binding survives cancellation and completion.
  */
 function reserveSaleSource_(body,records,existing,commit) {
+  if(!commit)confirmedSaleGuard_(body,existing);
   if(!annualLedgersEnabled_())return;
   const source=body.sourceRequestId,number=body.metadata.orderNumber;
   const table=namedSheet_(SALE_SOURCES,SALE_SOURCE_HEADERS,false),bindings=namedRows_(table,2);
@@ -196,6 +193,7 @@ function reserveSaleSource_(body,records,existing,commit) {
 }
 function saleRequestSaved_(body) {
   if(!body.sourceRequestId)return;
+  confirmedSaleSaved_(body);
   // Preserve the original confirmed quote for review, while changing its
   // status so Android's quote-only inbox no longer shows a paid sale.
   if(twoBookActive_()){
