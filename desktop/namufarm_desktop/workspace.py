@@ -763,8 +763,11 @@ class CustomerInfoValue(QTextBrowser):
         return self.toPlainText()
 
     def heightForWidth(self, width):
-        self.document().setTextWidth(max(1, width))
-        return int(self.document().size().height()) + 2
+        self.ensurePolished()
+        self.document().setDefaultFont(self.font())
+        margins = self.contentsMargins()
+        self.document().setTextWidth(max(1, width - margins.left() - margins.right()))
+        return max(self.fontMetrics().height(), int(self.document().size().height())) + 4
 
 
 class DeliveryActionButton(QPushButton):
@@ -795,6 +798,17 @@ class DeliveryActionButton(QPushButton):
         for child in (self.status_badge, symbol, self.title_label):
             child.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         self.setMinimumWidth(0)
+
+    def sizeHint(self):
+        hint = super().sizeHint()
+        if hasattr(self, "title_label"):
+            # The native button hint only measures its empty text, not our child labels.
+            content = self.layout().sizeHint()
+            hint = hint.expandedTo(QSize(content.width() + 24, content.height() + 16))
+        return hint
+
+    def minimumSizeHint(self):
+        return self.sizeHint()
 
     def refresh_symbol(self):
         color = TOKENS["muted"] if not self.isEnabled() else TOKENS["primary"]
@@ -962,6 +976,8 @@ class QuoteDeliveryTools:
             action.setToolTip(text)
         if hasattr(self, "update_completion_availability"):
             self.update_completion_availability()
+        if getattr(self, "_workbench_ready", False) and not self._workbench_closed:
+            self._workbench_fit_timer.start(0)
 
 
 
@@ -1229,7 +1245,7 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         header.setObjectName("workbenchHeader")
         header.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         heading = QHBoxLayout(header)
-        header.setFixedHeight(60)
+        header.setMinimumHeight(72)
         heading.setContentsMargins(16, 8, 16, 8)
         heading.setSpacing(16)
         heading.addWidget(label("견적 작업대", "workbenchTitle"))
@@ -1249,7 +1265,7 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         self.customer_scroll.setObjectName("workbenchCustomerScroll")
         self.customer_scroll.setWidgetResizable(True)
         self.customer_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.customer_scroll.setFixedWidth(330)
+        self.customer_scroll.setFixedWidth(360)
         rail = QWidget()
         rail.setObjectName("workbenchCustomerRail")
         customer = QVBoxLayout(rail)
@@ -1541,6 +1557,7 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         customer.removeWidget(self.workbench_customer_heading)
         customer.removeItem(self.workbench_identity)
         info_card = QFrame()
+        self.workbench_info_card = info_card
         info_card.setObjectName("card")
         info_layout = QVBoxLayout(info_card)
         info_layout.setContentsMargins(16, 16, 16, 16)
@@ -1559,24 +1576,32 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         self.generate_quote_button.setText("견적서 PDF 생성")
         self.generate_quote_button.setProperty("role", "outline")
         self.workbench_items_panel.setObjectName("card")
-        self.workbench_items_panel.layout().setContentsMargins(8, 8, 8, 8)
+        self.workbench_items_panel.layout().setContentsMargins(16, 16, 16, 16)
+        self.workbench_items_panel.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
+        self.workbench_content_layout.setStretch(0, 0)
+        self.workbench_content_layout.addStretch(1)
         self.workbench_items_hint.setText("묘목명·규격·수량을 확인해주세요")
         self.remove_item_button.hide()
         self.workbench_total_rule.hide()
         self.workbench_delivery_rule.hide()
         self.workbench_original_area.setMaximumHeight(84)
         self.request_note_view.setFixedHeight(36)
-        self.workbench_footer.setFixedHeight(84)
+        self.workbench_footer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         footer = self.workbench_footer.layout()
-        footer.setContentsMargins(16, 8, 16, 8)
-        footer.setSpacing(8)
+        footer.setContentsMargins(16, 12, 16, 12)
+        footer.setSpacing(16)
         footer.removeWidget(self.working_save_status)
         self.working_save_status.setWordWrap(True)
         note_layout.addWidget(self.working_save_status)
         footer.removeWidget(self.save_working_button)
         footer.removeWidget(self.close_button)
-        footer.addWidget(self.save_working_button)
-        footer.addWidget(self.close_button)
+        information = QWidget()
+        self.workbench_footer_information = information
+        information_row = QHBoxLayout(information)
+        information_row.setContentsMargins(0, 0, 0, 0)
+        information_row.setSpacing(12)
+        information_row.addWidget(self.close_button)
+        information_row.addWidget(self.save_working_button)
         self.close_button.setProperty("role", "text")
         self.workbench_summary.layout().removeWidget(self.amount_detail)
         self.workbench_summary.layout().removeWidget(self.total)
@@ -1591,25 +1616,29 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         amounts.addWidget(self.total)
         summary.setMinimumWidth(160)
         summary.setMaximumWidth(240)
-        footer.addWidget(summary, 1)
-        divider = QFrame()
-        divider.setFixedWidth(1)
-        divider.setStyleSheet(f"background:{TOKENS['border']};")
-        footer.addWidget(divider)
+        information_row.addWidget(summary, 1)
+        footer.addWidget(information, 1)
         delivery = self.delivery_send_layout.parent()
         if isinstance(delivery, QVBoxLayout):
             delivery.removeItem(self.delivery_send_layout)
         self.workbench_content_layout.removeItem(self.delivery_tools_layout)
-        self.delivery_send_layout.setSpacing(8)
+        self.delivery_send_layout.setSpacing(12)
         self.delivery_send_layout.removeWidget(self.confirm_button)
-        footer.addLayout(self.delivery_send_layout)
+        actions = QWidget()
+        self.workbench_footer_actions = actions
+        action_row = QHBoxLayout(actions)
+        action_row.setContentsMargins(0, 0, 0, 0)
+        action_row.setSpacing(12)
+        action_row.addLayout(self.delivery_send_layout)
+        action_row.setAlignment(self.delivery_send_layout, Qt.AlignmentFlag.AlignTop)
         completion = QVBoxLayout()
         completion.setContentsMargins(0, 0, 0, 0)
-        completion.setSpacing(0)
+        completion.setSpacing(4)
         completion.addWidget(self.confirm_button)
         self.completion_hint = label("전송 확인 후 누를 수 있어요", "muted")
         completion.addWidget(self.completion_hint)
-        footer.addLayout(completion)
+        action_row.addLayout(completion)
+        footer.addWidget(actions)
         self.shipping_status.setToolTip("후불이면 합계에 포함하지 않아요")
 
     def update_completion_availability(self):
@@ -1674,42 +1703,52 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
             return
         fit_quote_density(self)
         large = bool(QApplication.instance().property("namufarmLargeFont"))
-        # Leave room for the table plus both scrollbars in short, narrow windows.
-        self.customer_scroll.setFixedWidth(330)
         self._workbench_fit_timer.start(0)
         compact = self.height() < 900
         if compact == getattr(self, "_workbench_compact", None):
             return
         self._workbench_compact = compact
         self.workbench_items_hint.setVisible(not compact)
-        self.workbench_footer.layout().setContentsMargins(16, 8, 16, 8)
         customer = self.customer_scroll.widget().layout()
         customer.setContentsMargins(16, 8 if compact else 12, 16, 8 if compact else 10)
         customer.setSpacing(8 if compact else 10)
-        self.workbench_identity.setVerticalSpacing(4)
+        self.workbench_identity.setVerticalSpacing(8)
 
     def fit_workbench_rows(self):
         if not getattr(self, "_workbench_ready", False) or self._workbench_closed or not self.isVisible():
             return
         large = bool(QApplication.instance().property("namufarmLargeFont"))
-        self.customer_scroll.setFixedWidth(330)
+        compact = self.width() < 1400
+        rail_width = (360 if compact else 400) + (20 if large else 0)
+        self.customer_scroll.setFixedWidth(rail_width)
         self.document_buttons_layout.setDirection(QBoxLayout.Direction.TopToBottom)
+        caption_width = max(76, *(caption.sizeHint().width() for caption in self.customer_captions.values()))
         for caption in self.customer_captions.values():
-            caption.setFixedWidth(76)
+            caption.setFixedWidth(caption_width)
+        rail_margins = self.customer_scroll.widget().layout().contentsMargins()
+        card_margins = self.workbench_info_card.layout().contentsMargins()
+        value_width = max(80, self.customer_scroll.viewport().width() - rail_margins.left()
+                          - rail_margins.right() - card_margins.left() - card_margins.right()
+                          - caption_width - self.workbench_identity.horizontalSpacing())
         for value in self.customer_values.values():
-            value.setMaximumWidth(198)
-            value.setFixedHeight(value.heightForWidth(198))
+            value.setMaximumWidth(value_width)
+            value.setFixedHeight(value.heightForWidth(value_width))
         for action in (self.sms_button, self.email_button):
-            action.setFixedWidth(220 if large else 200)
             action.title_label.setStyleSheet(f"font-size:{19 if large else 17}px;font-weight:700;")
             action.status_badge.setStyleSheet(f"font-size:{15 if large else 13}px;padding:2px 4px;")
+            action.updateGeometry()
             action.refresh_symbol()
+        footer = self.workbench_footer.layout()
+        required_width = (self.workbench_footer_information.minimumSizeHint().width()
+                          + self.workbench_footer_actions.minimumSizeHint().width() + 48)
+        footer.setDirection(QBoxLayout.Direction.TopToBottom if self.width() < required_width
+                            else QBoxLayout.Direction.LeftToRight)
         height = 68 if large else 64
         self.items.verticalHeader().setMinimumSectionSize(height)
         self.items.verticalHeader().setDefaultSectionSize(height)
         self.items.horizontalHeader().setFixedHeight(44)
-        self.items.setMinimumHeight(44 + 3 * height)
-        self.items.setMaximumHeight(16777215)
+        visible_rows = min(7, max(3, self.items.rowCount()))
+        self.items.setFixedHeight(44 + visible_rows * height + 4)
         self.align_workbench_notes()
 
     def showEvent(self, event):
@@ -1739,6 +1778,8 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
                 self.note, self.workbench_original_area, self.sms_button,
                 self.customer_scroll.viewport())):
             self._workbench_notes_timer.start(0)
+            if watched is self.customer_scroll.viewport() and event.type() == QEvent.Type.Resize:
+                self._workbench_fit_timer.start(0)
         return super().eventFilter(watched, event)
 
     def align_workbench_notes(self):
@@ -2913,6 +2954,8 @@ class QuoteDeliveryDialog(QuoteDialog):
         self.save_note_button.setEnabled(editable)
         self.confirm_button.setEnabled(editable)
         self.confirm_button.setText("입금확인 완료" if self.payment_registered else "입금확인")
+        self.completion_hint.setText("실제 입금을 확인해주세요")
+        self.completion_hint.setVisible(not self.payment_registered)
         self.shipping_cod.setEnabled(False)
         self.shipping_prepaid.setEnabled(False)
         self.shipping_fee_editor.setEnabled(False)
@@ -3774,17 +3817,16 @@ class SellerWindow(MainWindow):
         sidebar = QFrame()
         sidebar.setObjectName("sidebar")
         self.sidebar = sidebar
-        sidebar.setFixedWidth(232)
+        sidebar.setMinimumWidth(0)
         side = QVBoxLayout(sidebar)
-        side.setContentsMargins(8, 16, 8, 16)
-        side.setSpacing(8)
+        side.setContentsMargins(16, 24, 16, 24)
+        side.setSpacing(10)
         self.brand_panel = QFrame()
         brand_layout = QHBoxLayout(self.brand_panel)
         brand_layout.setContentsMargins(8, 8, 8, 8)
-        leaf = QPushButton()
-        leaf.setEnabled(False)
+        leaf = QLabel()
         leaf.setFixedSize(24, 24)
-        set_button_icon(leaf, "leaf", TOKENS["accent"], 24)
+        leaf.setPixmap(ui_icon("leaf", TOKENS["accent"]).pixmap(24, 24))
         brand_layout.addWidget(leaf)
         brand_words = QVBoxLayout()
         self.brand_label = label("나무팜 판매관리", "brand")
@@ -3807,13 +3849,13 @@ class SellerWindow(MainWindow):
             icons = ("requests", "confirmed", "orders", "shipping", "reports", "farm", "leaf", "requests", "settings")
             set_button_icon(widget, icons[index], NAV_TINTS[index], 20)  # 메뉴마다 색(견적 살구·판매 분홍·농원 청록·묘목 연두 등)
             widget.setCheckable(True)
-            widget.setFixedHeight(44)
+            widget.setFixedHeight(52)
             self.nav.append(widget)
             row = QWidget()
             row.setObjectName("navRow")
             row_layout = QHBoxLayout(row)
             row_layout.setContentsMargins(0, 0, 0, 0)
-            row_layout.setSpacing(0)
+            row_layout.setSpacing(8)
             row_layout.addWidget(widget, 1)
             if index in (self.PAGE_REQUESTS, self.PAGE_QUOTES, self.PAGE_SALES, self.PAGE_SHIPPING, self.PAGE_INQUIRIES):
                 badge = label("0", "navBadge")
@@ -3823,7 +3865,13 @@ class SellerWindow(MainWindow):
                 if index == self.PAGE_REQUESTS:
                     self.request_nav_badge = badge
             side.addWidget(row)
-        outer.addWidget(sidebar)
+        self.sidebar_scroll = QScrollArea()
+        self.sidebar_scroll.setObjectName("sidebarScroll")
+        self.sidebar_scroll.setWidgetResizable(True)
+        self.sidebar_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.sidebar_scroll.setFixedWidth(280)
+        self.sidebar_scroll.setWidget(sidebar)
+        outer.addWidget(self.sidebar_scroll)
         content = QWidget()
         content_layout = QVBoxLayout(content)
         self.page_content_layout = content_layout
@@ -4008,11 +4056,12 @@ class SellerWindow(MainWindow):
 
     def update_responsive_layout(self):
         # Qt geometry is in logical pixels: 1920x1200 at 150% is about 1280x800.
-        compact = self.width() < 1440 or self.height() < 850
         app = QApplication.instance()
         large = bool(app.property("namufarmLargeFont"))
+        narrow = self.width() < 1440
+        compact = narrow or self.height() < (960 if large else 900)
         stacked_tools = self.width() < 1240
-        state = (compact, large, stacked_tools)
+        state = (compact, large, stacked_tools, narrow)
         if state == getattr(self, "_responsive_state", None):
             return
         self._responsive_state = state
@@ -4020,14 +4069,20 @@ class SellerWindow(MainWindow):
         style = workspace_style(large, compact)
         app.setStyleSheet(style)
         self.setStyleSheet(style)
-        self.sidebar.setFixedWidth(232)
-        self.sidebar.layout().setSpacing(8)
-        self.sidebar.layout().setContentsMargins(8, 16, 8, 16)
-        self.brand_panel.layout().setContentsMargins(8, 8, 8, 8)
-        self.page_content_layout.setContentsMargins(16, 0, 16, 0)
-        self.page_content_layout.setSpacing(8)
-        self.page_header_layout.setSpacing(8)
-        self.sales_toolbar.setDirection(QBoxLayout.Direction.LeftToRight)
+        self.sidebar_scroll.setFixedWidth((248 if narrow else 280) + (20 if large else 0))
+        self.sidebar.layout().setSpacing(6 if compact else 10)
+        self.sidebar.layout().setContentsMargins(12 if compact else 16, 16 if compact else 24,
+                                                12 if compact else 16, 16 if compact else 24)
+        self.brand_panel.layout().setContentsMargins(8, 12, 8, 12)
+        nav_height = (48 if large else 44) if compact else (56 if large else 52)
+        for nav in self.nav:
+            nav.setFixedHeight(nav_height)
+        margin = 16 if compact else 24
+        self.page_content_layout.setContentsMargins(margin, 0, margin, 0)
+        self.page_content_layout.setSpacing(12)
+        self.page_header_layout.setSpacing(12)
+        self.sales_toolbar.setDirection(QBoxLayout.Direction.TopToBottom if stacked_tools
+                                        else QBoxLayout.Direction.LeftToRight)
         # Do not restyle a modal editor's deliberately short item rows.
         for widget in self.stack.findChildren(QTableWidget):
             polish_table(widget)
