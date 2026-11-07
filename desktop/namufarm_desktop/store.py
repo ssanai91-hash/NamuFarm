@@ -197,6 +197,14 @@ class Vault:
             scope = "workspace:" + name
             db.execute("INSERT OR REPLACE INTO config VALUES (?,?)", (scope, self._seal(value, scope)))
 
+    def save_quote_deletion(self, quotes, drafts, dismissed):
+        """Remove local copies and retain their dismissal in one transaction."""
+        with self.mutex, self._db() as db:
+            for name, value in (("confirmed_quotes", quotes), ("drafts", drafts),
+                                ("dismissed_server_quotes", sorted(set(dismissed)))):
+                scope = "workspace:" + name
+                db.execute("INSERT OR REPLACE INTO config VALUES (?,?)", (scope, self._seal(value, scope)))
+
     def rows(self, kind):
         with self.mutex, self._db() as db:
             return [self._open(blob, kind + ":" + index) for index, blob in db.execute("SELECT id,body FROM cache WHERE kind=?", (kind,))]
@@ -243,6 +251,29 @@ class Vault:
                 db.execute("INSERT INTO cache VALUES ('requests',?,?)", (index, self._seal(row, "requests:" + index)))
             marker.update(requests=cursor, deletedRequests=sorted(deleted),
                           quoteReadMode=quote_read_mode)
+            db.execute("INSERT OR REPLACE INTO config VALUES ('snapshot',?)", (self._seal(marker, "snapshot"),))
+
+    def merge_requests(self, requests, cursor, removed, quote_read_mode=None):
+        """Apply validated incremental pages and the new cursor in one transaction.
+
+        Rows are merged by request UUID; an older sequence never replaces a newer copy.
+        Expired rows from the server are removed from the request cache only (local
+        confirmed quotes and their Excel copy are separate and untouched).
+        """
+        with self.mutex, self._db() as db:
+            marker = self._read_snapshot_marker(db)
+            require(cursor >= marker["requests"] and marker.get("quoteReadMode") == quote_read_mode,
+                    "문의 접수 순번이 이전 상태입니다. 전체 가져오기를 눌러주세요.")
+            for request_id in removed:
+                db.execute("DELETE FROM cache WHERE kind='requests' AND id=?", (self._index("requests", request_id),))
+            for row in requests:
+                index = self._index("requests", row["requestId"])
+                old = db.execute("SELECT body FROM cache WHERE kind='requests' AND id=?", (index,)).fetchone()
+                if old and self._open(old[0], "requests:" + index).get("sequence", 0) >= row["sequence"]:
+                    continue
+                db.execute("DELETE FROM cache WHERE kind='requests' AND id=?", (index,))
+                db.execute("INSERT INTO cache VALUES ('requests',?,?)", (index, self._seal(row, "requests:" + index)))
+            marker.update(requests=cursor)
             db.execute("INSERT OR REPLACE INTO config VALUES ('snapshot',?)", (self._seal(marker, "snapshot"),))
 
     def queue(self, operation, optimistic=None):
@@ -298,26 +329,37 @@ class Vault:
             with self._db() as db:
                 names = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
                 sales = db.execute("SELECT COUNT(*) FROM outbox").fetchone()[0]
+                notice_keys = ["sales:" + row[0] for row in db.execute("SELECT id FROM outbox")]
                 inquiry_ids = set()
                 if "inquiry_operations" in names:
                     for key, blob in db.execute("SELECT id,body FROM inquiry_operations"):
                         op = self._open(blob, "inquiry_operations:" + key)
                         inquiry_ids.add(op.get("payload", {}).get("requestId") or key)
+                        notice_keys.append("inquiry_operation:" + key)
                 if "inquiry_records" in names:
                     for key, blob in db.execute("SELECT id,body FROM inquiry_records"):
                         row = self._open(blob, "inquiry_records:" + key)
                         if (row.get("delivery") or {}).get("state") in ("sending", "pending", "unknown"):
                             inquiry_ids.add(row.get("requestId") or key)
+                            notice_keys.append("inquiry_delivery:" + key + ":" + str(row["delivery"].get("id", "")))
             nursery = self.preference("nursery-v1", {}) or {}
             pending = nursery.get("pending", [])
             masters = sum(op.get("kind") in ("farms", "species") for op in pending)
             inventory = sum(op.get("kind") == "inventory" for op in pending)
             other_nursery = len(pending) - masters - inventory
-            quote = int(bool(self.preference("quote_write_pending")))
+            notice_keys.extend("nursery:" + str(op.get("id") or op.get("key", "")) for op in pending)
+            quote_write = self.preference("quote_write_pending")
+            quote = int(bool(quote_write))
+            if quote_write:
+                notice_keys.append("quote:" + canonical([quote_write.get("action"), quote_write.get("payload"),
+                                                         (quote_write.get("draft") or {}).get("id"), quote_write.get("status")]))
             delivery = 0
             for name in ("quote_delivery", "payment_delivery"):
-                for row in (self.preference(name, {}) or {}).values():
-                    delivery += bool(row.get("pendingDelivery") or row.get("smsState") in ("sending", "pending", "unknown"))
+                for identifier, row in (self.preference(name, {}) or {}).items():
+                    if row.get("pendingDelivery") or row.get("smsState") in ("sending", "pending", "unknown"):
+                        delivery += 1
+                        notice_keys.append(name + ":" + identifier + ":" + canonical([
+                            (row.get("pendingDelivery") or {}).get("id"), row.get("smsMessageId")]))
             snapshots = []
             folder = self.path.parent / "백업"
             if folder.is_dir():
@@ -328,7 +370,9 @@ class Vault:
             counts = {"sales": sales, "masters": masters, "inventory": inventory,
                       "inquiries": len(inquiry_ids), "quote": quote, "delivery": delivery, "other": other_nursery}
             return {"path": str(self.path.parent.resolve()), "lastSyncAt": last, "counts": counts,
-                    "totalPending": sum(counts.values()), "backupPath": str(folder.resolve()),
+                    "totalPending": sum(counts.values()),
+                    "pendingSignature": self._index("pending_notice", canonical(sorted(notice_keys))),
+                    "backupPath": str(folder.resolve()),
                     "backupCount": len(snapshots), "lastBackupAt": max(snapshots, default=0)}
 
     def save_local_sales(self, sales, operations, hidden, *, quotes=None, marker=None, sold_labels=None):
