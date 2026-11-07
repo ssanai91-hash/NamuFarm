@@ -284,8 +284,7 @@ class MainWindow(QMainWindow):
         self.build_reports()
         self.build_connection()
         self.timer = QTimer(self)
-        # Each tick reads only the server's change counter; rows are downloaded when it moved.
-        self.timer.setInterval(60 * 1000)
+        self.timer.setInterval(10 * 60 * 1000)
         self.timer.timeout.connect(self.auto_sync)
         self.timer.start()
         self.update_controls()
@@ -466,16 +465,7 @@ class MainWindow(QMainWindow):
 
     def auto_sync(self):
         if self.manager and self.data["paired"] and self.auto_check.isChecked() and not self.task and not self.dirty and not self.conflict:
-            self.run_job("AUTO SYNC  >  변경 확인 중…", self.manager.auto_sync, self.auto_synced)
-
-    def auto_synced(self, value):
-        """No change: keep the screen and selection as they are."""
-        if value is None:
-            self.message.setText("변경 없음 · 확인 " + timestamp(datetime.now(SEOUL).timestamp() * 1000))
-            return
-        self.apply_view(value)
-        self.conflict = bool(value.get("salesSyncConflict"))
-        self.message.setText(value.get("transferNotice") or "SYNC OK  >  서버 동기화 완료 · " + timestamp(datetime.now(SEOUL).timestamp() * 1000))
+            self.run_job("AUTO SYNC  >  서버 동기화 중…", self.manager.auto_sync)
 
     def apply_view(self, value):
         self.data = value
@@ -971,7 +961,7 @@ class MainWindow(QMainWindow):
         self.copy_button.clicked.connect(self.open_request_copy)
         set_button_icon(self.copy_button, "folder")
         local_layout.addWidget(self.copy_button, 0, Qt.AlignmentFlag.AlignLeft)
-        self.auto_check = QCheckBox("1분마다 새 견적 확인 · 바뀐 요청만 가져오기 · 판매자료 서버 반영")
+        self.auto_check = QCheckBox("10분마다 견적요청 가져오기 · 판매자료 서버 반영")
         self.auto_check.setToolTip("최신 자료를 가져오고 전송 대기 중인 변경사항을 서버에 반영합니다.")
         self.auto_check.setChecked(True)
         self.large_font_check = QCheckBox("큰 글씨로 보기")
@@ -1097,40 +1087,20 @@ class MainWindow(QMainWindow):
         dialog.exec()
 
     def closeEvent(self, event: QCloseEvent):
-        was_active = self.timer.isActive()
-        self.timer.stop()
-        try:
-            if self.task:
-                self.message.setText("현재 처리가 끝난 뒤 프로그램을 닫아주세요.")
-                event.ignore()
-            elif self.allow_discard():
-                if self.manager and not getattr(self, "demo_mode", False):
-                    try:
-                        vault = self.manager.vault
-                        info = vault.storage_status()
-                        signature = info["pendingSignature"] if info["totalPending"] else None
-                        if signature and signature != vault.preference("exit_pending_notice_signature"):
-                            names = (("sales", "판매·삭제 전송"), ("masters", "농원·묘목 전송"),
-                                     ("inventory", "재고 전송"), ("inquiries", "고객문의 처리 확인"),
-                                     ("quote", "견적 저장 확인"), ("delivery", "문자·메일 결과 확인"),
-                                     ("other", "기타 농원 전송"))
-                            details = "\n".join(f"• {title}: {info['counts'][key]:,}건" for key, title in names if info["counts"][key])
-                            QMessageBox.information(self, "자료 확인 안내",
-                                f"전송·확인 대기 {info['totalPending']:,}건이 남아 있습니다.\n\n{details}\n\n"
-                                "새 작업이 없어도 이전 발송의 결과 확인이 남아 있을 수 있습니다.\n"
-                                "전송 대기는 동기화, 발송 결과는 해당 견적·문의의 ‘결과 확인’에서 확인해주세요.\n"
-                                "기록은 보존되며, 같은 대기 내역은 종료할 때 반복 안내하지 않습니다.")
-                        if signature != vault.preference("exit_pending_notice_signature"):
-                            # This remembers the notice only. No outbox or delivery record is cleared.
-                            vault.save_preference("exit_pending_notice_signature", signature)
-                    except Exception:
-                        QMessageBox.information(self, "자료 보관 안내", "전송·확인 대기를 확인하지 못했습니다. 자료 보관 상태를 확인해주세요.")
-                event.accept()
-            else:
-                event.ignore()
-        finally:
-            if was_active and not event.isAccepted():
-                self.timer.start()
+        if self.task:
+            self.message.setText("현재 처리가 끝난 뒤 프로그램을 닫아주세요.")
+            event.ignore()
+        elif self.allow_discard():
+            if self.manager and not getattr(self, "demo_mode", False):
+                try:
+                    pending = self.manager.vault.storage_status()["totalPending"]
+                    if pending:
+                        QMessageBox.information(self, "전송 대기 안내", f"전송 대기 {pending:,}건이 있습니다. 다음 실행 때 동기화해주세요.")
+                except Exception:
+                    QMessageBox.information(self, "자료 보관 안내", "전송 대기를 확인하지 못했습니다. 다음 실행 때 자료 보관 상태와 동기화를 확인해주세요.")
+            event.accept()
+        else:
+            event.ignore()
 
 
 def main():

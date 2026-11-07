@@ -23,10 +23,7 @@ ACTION_LABELS = {"list_customer_inquiries": "고객문의 불러오기", "save_i
                  "sms_profile": "문자 발신 설정 확인",
                  "quote_delivery_status": "발송 결과 확인", "send_quote_sms": "견적 문자 전송", "quote_sms_status": "문자 전송 결과 확인",
                  "list_requests": "문의 목록 조회",
-                 "list_sales": "판매 목록 조회", "sales_report": "판매 통계 조회",
-                 "sync_head": "변경 확인", "get_confirmed_quote": "확정견적 확인",
-                 "revise_confirmed_quote": "확정견적 저장", "reserve_quote_delivery": "견적 발송 예약",
-                 "cancel_quote_delivery": "발송 예약 취소", "confirm_quote_payment": "입금확인 저장"}
+                 "list_sales": "판매 목록 조회", "sales_report": "판매 통계 조회"}
 
 
 def validate_url(url):

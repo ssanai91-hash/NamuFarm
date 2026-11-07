@@ -40,11 +40,9 @@ def stage_label(stage, parent=None):
     return result
 
 
-def _theme(css, large=False, compact=False):
+def _theme(css, large=False):
     values = {**TOKENS, **{key: str(value + (2 if large else 0)) for key, value in
-              {"body": 15, "small": 13, "title": 22, "section": 16, "action": 17, "total": 26, "detail": 20, "brand": 18}.items()},
-              "control-height": str(48 if large else 44),
-              "nav-height": str((48 if large else 44) if compact else (56 if large else 52))}
+              {"body": 15, "small": 13, "title": 22, "section": 16, "action": 17, "total": 26, "detail": 20, "brand": 18}.items()}}
     for key, value in values.items():
         css = css.replace("@" + key + "@", value)
     return css
@@ -56,11 +54,10 @@ def workspace_style(large=False, compact=False):
 QWidget{font-family:'Malgun Gothic','NanumGothic',sans-serif;font-size:@body@px;color:@text@;}
 QMainWindow,#workspace,QDialog{background:@page-bg@;}
 #sidebar{background:@sidebar@;border:0;}
-#sidebarScroll{background:@sidebar@;border:0;}
 #sidebar QLabel{color:@card@;background:transparent;}
 #sidebar QLabel#brand{font-size:@brand@px;font-weight:700;}
 #sidebar QLabel#navGroup,#sidebar QLabel#navFoot{font-size:@small@px;color:@nav-caption@;}
-#sidebar QPushButton{background:transparent;color:@card@;border:0;border-left:3px solid transparent;border-radius:8px;text-align:left;padding:0 12px;min-height:@nav-height@px;max-height:@nav-height@px;font-size:@body@px;font-weight:600;}
+#sidebar QPushButton{background:transparent;color:@card@;border:0;border-left:3px solid transparent;border-radius:8px;text-align:left;padding:0 8px;min-height:44px;max-height:44px;font-size:@body@px;font-weight:600;}
 #sidebar QPushButton:checked{background:@nav-selected@;border-left-color:@accent@;}
 #sidebar QPushButton:hover{background:@nav-selected@;}
 #sidebar QPushButton[keyboardFocus="true"]{border:2px dashed @accent@;}
@@ -82,12 +79,12 @@ QFrame#statusBar[state="working"]{background:@working-bg@;}
 QFrame#statusBar[state="success"] QLabel{color:@primary@;}
 QFrame#errorBanner{background:@cancel-bg@;border:0;border-radius:8px;}
 QFrame#errorBanner QLabel{color:@cancel-fg@;font-size:@small@px;}
-QPushButton{background:@card@;color:@text@;border:1px solid @input-border@;border-radius:8px;min-height:@control-height@px;max-height:@control-height@px;padding:0 16px;font-size:@body@px;font-weight:600;}
+QPushButton{background:@card@;color:@text@;border:1px solid @input-border@;border-radius:8px;min-height:44px;max-height:44px;padding:0 16px;font-size:@body@px;font-weight:600;}
 QPushButton:hover{background:@row-selected@;border-color:@primary@;}
 QPushButton:pressed{background:@border@;}
 QPushButton:focus{border:2px solid @primary@;}
 QPushButton:disabled{background:@table-head@;color:@muted@;border-color:@border@;}
-QPushButton#primary,QPushButton[role="primary"]{background:@primary@;color:@card@;border-color:@primary@;font-size:@action@px;}
+QPushButton#primary,QPushButton[role="primary"]{background:@primary@;color:@card@;border-color:@primary@;font-size:@action@px;min-height:52px;max-height:52px;}
 QPushButton#primary:hover,QPushButton[role="primary"]:hover{background:@primary-hover@;}
 QPushButton#primary:pressed,QPushButton[role="primary"]:pressed{background:@primary-pressed@;}
 QPushButton#primary:disabled,QPushButton[role="primary"]:disabled{background:@border@;color:@muted@;border-color:@border@;}
@@ -130,7 +127,7 @@ QLabel#channelStatusBadge[state="pending"]{background:@working-bg@;color:@quote-
 QLabel#channelStatusBadge[state="failed"]{background:@cancel-bg@;color:@cancel-fg@;}
 QLabel#channelStatusBadge[state="success"]{background:@paid-bg@;color:@paid-fg@;}
 QLabel#emptyState{font-size:@body@px;color:@muted@;background:transparent;padding:24px;}
-""", large, compact)
+""", large)
 
 
 def quote_workbench_style(large=False):
@@ -143,8 +140,6 @@ QDialog#quoteWorkbench QLabel#workbenchBrand{font-size:@action@px;font-weight:70
 QDialog#quoteWorkbench QLabel#workbenchReference{font-size:@small@px;}
 QDialog#quoteWorkbench #workbenchCustomerRail{background:@page-bg@;}
 QDialog#quoteWorkbench QLabel#workbenchCaption{font-size:@small@px;color:@muted@;background:transparent;border:0;padding:0;}
-QDialog#quoteWorkbench QTextBrowser#workbenchCustomerName,QDialog#quoteWorkbench QTextBrowser#workbenchInfo,QDialog#quoteWorkbench QTextBrowser#workbenchReceipt{background:transparent;border:0;padding:0;font-size:@body@px;}
-QDialog#quoteWorkbench QTextBrowser#workbenchCustomerName,QDialog#quoteWorkbench QTextBrowser#workbenchReceipt{font-weight:700;}
 QDialog#quoteWorkbench QFrame#workbenchDocumentTools{border-radius:10px;}
 QDialog#quoteWorkbench QTableWidget#workbenchItems{font-size:@body@px;background:@card@;}
 QDialog#quoteWorkbench QTableWidget::item{padding:4px 8px;}
@@ -153,7 +148,6 @@ QDialog#quoteWorkbench #quoteSpeciesEditor QPushButton{background:transparent;bo
 QDialog#quoteWorkbench #unitPriceEditor QPushButton{min-width:40px;max-width:40px;min-height:40px;max-height:40px;padding:0;}
 QDialog#quoteWorkbench #unitPriceEditor QLineEdit{min-height:38px;max-height:38px;min-width:64px;padding:0 4px;}
 QDialog#quoteWorkbench QFrame#workbenchFooter{background:@card@;border:0;border-top:1px solid @border@;}
-QDialog#quoteWorkbench #workbenchFooter QPushButton{min-height:52px;max-height:52px;}
 QDialog#quoteWorkbench QLabel#workbenchTotal{font-size:@total@px;font-weight:700;color:@primary@;}
 QDialog#quoteWorkbench QFrame#workbenchShipping{background:@table-head@;border-radius:8px;}
 QDialog#quoteWorkbench #workbenchShipping QLineEdit{min-height:28px;max-height:28px;}
