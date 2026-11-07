@@ -4,6 +4,7 @@ import hashlib
 import json
 import re
 import uuid
+import threading
 from time import monotonic
 from datetime import datetime, timezone
 from pathlib import Path
@@ -18,10 +19,12 @@ from .commerce import (validate_draft, order_from_draft, quote_document, trackin
 from .sales_workspace import SalesWorkspace
 from .sold_numbers import SoldNumbers
 from .quote_versions import QuoteVersions, quote_version
+from .server_first import ServerFirst, serialized
 
 
-class Manager(QuoteVersions, SoldNumbers, SalesWorkspace):
+class Manager(ServerFirst, QuoteVersions, SoldNumbers, SalesWorkspace):
     def __init__(self, vault, api=None):
+        self._server_lock = threading.RLock()
         self.vault = vault
         self.credentials = vault.credentials()
         # Keep both legacy credentials and the negotiated common key in the
@@ -138,12 +141,18 @@ class Manager(QuoteVersions, SoldNumbers, SalesWorkspace):
                                         quote_read_mode=self.quote_read_mode)
         self._finish_quote_write()
 
+    @serialized
     def _write_quote_state(self, draft, status, action, payload):
         require(self.credentials.get("paired") is True, "PC를 먼저 연결해주세요.")
         # Check that the existing book is readable before changing the server.
         self._local_quotes()
         self.verify_server()
         pending = self.vault.preference("quote_write_pending")
+        if pending:
+            previous = pending.get("draft") or {}
+            if previous.get("id") != draft["id"] and previous.get("sourceRequestId") != draft.get("sourceRequestId"):
+                self._park_quote_write("다른 견적 저장 계속 · 이전 작업은 복구 기록에 보관")
+                pending = None
         if pending:
             require(pending.get("action") == action and pending.get("payload") == payload,
                     "확인 대기 중인 견적이 있습니다. 먼저 가져오기로 저장을 완료해주세요.")
@@ -156,6 +165,13 @@ class Manager(QuoteVersions, SoldNumbers, SalesWorkspace):
         except OSError:
             # Server acknowledgement is already durable; view exposes the Excel warning.
             pass
+        except UserError as error:
+            pending = self.vault.preference("quote_write_pending")
+            if pending and (pending.get("draft") or {}).get("id") == draft["id"]:
+                pending["lastError"] = str(error)
+                pending["errorAt"] = now_ms()
+                self.vault.save_preference("quote_write_pending", pending)
+            raise
         return self.local_copy_view()
 
     def _confirmed_source(self, draft):
@@ -334,7 +350,6 @@ class Manager(QuoteVersions, SoldNumbers, SalesWorkspace):
         quote_error = ""
         quotes = []
         try:
-            self._finish_quote_write()
             quotes = self._local_quotes()
         except (UserError, OSError) as error:
             quote_error = (str(error) if isinstance(error, UserError) else
@@ -365,14 +380,17 @@ class Manager(QuoteVersions, SoldNumbers, SalesWorkspace):
         if recovery:
             pending = [*pending, {"id": recovery["draft"]["id"], "action": "quote_write"}]
         pending_counts = None
+        pending_summary = None
         try:
-            pending_counts = self.vault.storage_status()["counts"]
+            pending_summary = self.vault.storage_status()
+            pending_counts = pending_summary["counts"]
         except (UserError, OSError):
             quote_error = " · ".join(filter(None, (quote_error, "전송·확인 대기 내역을 확인하지 못했습니다. 자료 보관 상태를 확인해주세요.")))
         return {"requests": sorted(decoded_requests, key=lambda r: r["sequence"], reverse=True),
                 "sales": sorted(decoded_sales, key=lambda r: r["sequence"], reverse=True),
                 "drafts": drafts, "draftExpiryDays": expiry_days, "confirmedQuotes": active, "quoteRecovery": recovery,
                 "copyError": " · ".join(filter(None, (quote_error, sale_error))), "pending": pending, "pendingCounts": pending_counts,
+                "pendingSummary": pending_summary,
                 "paired": self.credentials.get("paired") is True,
                 "transferNotice": " · ".join(filter(None, (getattr(self, "_draft_purge_notice", ""), getattr(self, "transfer_notice", "")))),
                 "salesSyncConflict": bool(getattr(self, "sales_conflict_number", None))}
@@ -393,6 +411,7 @@ class Manager(QuoteVersions, SoldNumbers, SalesWorkspace):
             self._draft_purge_notice = f"30일 지난 작성중 견적 {count:,}건 정리"
         return count
 
+    @serialized
     def save_draft(self, draft):
         try:
             return self._save_draft(draft)
@@ -401,7 +420,6 @@ class Manager(QuoteVersions, SoldNumbers, SalesWorkspace):
 
     def _save_draft(self, draft):
         validate_draft(draft)
-        require(not self.vault.preference("quote_write_pending"), "먼저 가져오기로 견적 저장 확인을 완료해주세요.")
         require(self._sale_for_draft(draft) is None, "구매 확정된 견적은 수정할 수 없습니다.")
         local = next((d for d in self._local_quotes() if d["id"] == draft["id"]), None)
         if local:
@@ -430,9 +448,9 @@ class Manager(QuoteVersions, SoldNumbers, SalesWorkspace):
         self.vault.save_preference("drafts", [copy.deepcopy(draft), *drafts])
         return self.view()
 
+    @serialized
     def save_working_draft(self, draft):
         validate_working_draft(draft)
-        require(not self.vault.preference("quote_write_pending"), "먼저 견적 저장 확인을 완료해주세요.")
         require(self._sale_for_draft(draft) is None, "판매 등록한 견적은 작성중으로 저장할 수 없습니다.")
         require(not any(q["id"] == draft["id"] for q in self._local_quotes()),
                 "확정견적은 묘목정보 수정에서 저장해주세요.")
@@ -731,6 +749,7 @@ class Manager(QuoteVersions, SoldNumbers, SalesWorkspace):
                 not self.payment_delivery_state(identifier).get("pendingDelivery"),
                 "이전 발송 결과를 먼저 확인해주세요.")
 
+    @serialized
     def _dispatch_delivery(self, identifier, channel, recipient, fields, fingerprint, *, payment=False, reservation=None):
         self._require_delivery_server()
         state = self._delivery_state(identifier, channel, payment)
@@ -833,11 +852,12 @@ class Manager(QuoteVersions, SoldNumbers, SalesWorkspace):
         state = self._delivery_state(identifier, channel, payment)
         pending = state.get("pendingDelivery")
         require(pending and pending.get("channel") == channel, "해제할 발송 번호가 없습니다.")
-        state["dismissedDeliveries"] = [*state.get("dismissedDeliveries", []),
-                                        {"id": pending["id"], "dismissedAt": now_ms()}][-20:]
-        state.pop("pendingDelivery")
-        state["deliveryResolution"] = "dismissed"
-        return self._save_delivery_state(identifier, channel, state, payment)
+        scope = "sales_report_delivery" if channel == "report_email" else "payment_delivery" if payment else "quote_delivery"
+        item = next((r for r in self.pending_items() if r["kind"] == "delivery" and r["scope"] == scope
+                     and r["identifier"] == identifier), None)
+        require(item is not None, "대기 내역을 다시 확인해주세요.")
+        self.release_pending_item(item)
+        return self._delivery_state(identifier, channel, payment)
 
     def request_notification_state(self):
         state = self.vault.preference("request_notifications")
@@ -873,9 +893,12 @@ class Manager(QuoteVersions, SoldNumbers, SalesWorkspace):
         history = dict(sorted(history.items(), key=lambda p: p[1], reverse=True)[:2000])
         self.vault.save_preference("shipping_export", {"sender": sender_settings(sender), "history": history})
 
+    @serialized
     def delete_draft(self, identifier):
         require(valid_id(identifier))
-        require(not self.vault.preference("quote_write_pending"), "먼저 가져오기로 견적 저장을 완료해주세요.")
+        pending = self.vault.preference("quote_write_pending") or {}
+        if (pending.get("draft") or {}).get("id") == identifier:
+            self._park_quote_write("로컬 견적 삭제 · 미확인 저장 기록 별도 보관")
         # Local history only: never call close_request or alter the quote ledger.
         quotes = self._local_quotes()
         working = self.vault.preference("drafts", [])
@@ -1142,8 +1165,10 @@ class Manager(QuoteVersions, SoldNumbers, SalesWorkspace):
                     for r in self.vault.rows("sales")), "서버 판매 목록 일부가 누락되어 기존 기록을 유지합니다.")
         return sales, sale_cursor, deleted_sales
 
-    def flush(self, actions=None):
+    def flush(self, actions=None, identifiers=None):
         for operation in self.vault.pending():
+            if identifiers is not None and operation["id"] not in identifiers:
+                continue
             if actions is not None and operation["action"] not in actions:
                 continue
             payload = operation["payload"]
@@ -1170,29 +1195,12 @@ class Manager(QuoteVersions, SoldNumbers, SalesWorkspace):
                 self.inbox_requests = [r for r in self.inbox_requests if r["requestId"] != payload["requestId"]]
             self.vault.acknowledge(operation["id"])
 
-    def sync_requests(self, *, delta=False):
+    @serialized
+    def sync_requests(self, *, delta=False, settle_pending=True):
         require(self.credentials.get("paired") is True, "PC를 먼저 연결해주세요.")
         self.verify_server()
         recovery_error = ""
-        try:
-            if self.vault.preference("quote_write_pending"):
-                self.report_progress("이전 견적 저장 결과를 확인하는 중…")
-            self._resume_quote_write()
-        except OSError:
-            pass
-        except AuthenticationError:
-            raise
-        except UserError as error:
-            recovery_error = str(error)
-        # A pending deletion may be retried without touching an unrelated sale edit.
-        if any(op["action"] == "close_request" for op in self.vault.pending()):
-            try:
-                self.report_progress("이전 삭제 처리 결과를 확인하는 중…")
-                self.flush(actions={"close_request"})
-            except AuthenticationError:
-                raise
-            except UserError as error:
-                recovery_error = str(error)
+        # Pull first. Neither an old write nor a failed deletion may block new requests.
         if delta:
             # Changed rows only. Merged by UUID with the cursor in one transaction; failure keeps the old list.
             marker = self.vault.snapshot_marker()
@@ -1201,15 +1209,22 @@ class Manager(QuoteVersions, SoldNumbers, SalesWorkspace):
             self.vault.merge_requests(requests, cursor, expired, quote_read_mode=self.quote_read_mode)
         else:
             # Confirmed rows are kept too, so quotes confirmed on a phone reach this PC's list.
-            requests, cursor, _expired = self._pages("list_requests", "requests")
+            requests, cursor, expired = self._pages("list_requests", "requests")
             self.report_progress("받은 견적요청을 PC에 저장하는 중…")
-            self.vault.replace_requests(requests, cursor, set(),
+            self.vault.replace_requests(requests, cursor, expired,
                                         quote_read_mode=self.quote_read_mode, authoritative=True)
             self.vault.save_preference("request_full_sync_at", now_ms())
+        if settle_pending:
+            self._park_quote_write("서버 견적 우선 반영 · 미확인 PC 저장은 별도 보관")
+            if not delta:
+                closed = [op for op in self.vault.pending() if op["action"] == "close_request"]
+                if closed:
+                    self.vault.archive_and_update("서버 접수 목록 우선 반영 · 미반영 삭제 요청 보관",
+                                                  {"operations": closed}, operations=closed)
         self.inbox_requests = [r for r in self.vault.rows("requests") if r.get("status", "신규") == "신규"]
         self.purge_expired_drafts()
         try:
-            recovery_error = " · ".join(filter(None, (recovery_error, self._merge_server_quotes())))
+            recovery_error = " · ".join(filter(None, (recovery_error, self._merge_server_quotes(authoritative=settle_pending and not delta))))
         except OSError:
             recovery_error = " · ".join(filter(None, (recovery_error, "확정견적 엑셀 갱신 대기 · 열린 엑셀을 닫아주세요.")))
         except AuthenticationError:
@@ -1227,62 +1242,73 @@ class Manager(QuoteVersions, SoldNumbers, SalesWorkspace):
         return (self.request_snapshot and marker.get("quoteReadMode") == self.quote_read_mode
                 and marker["requests"] > 0 and 0 <= now_ms() - last < 86400000)
 
+    @serialized
     def auto_sync(self):
-        """Timer work is serialized by the UI; never drops local outbox entries.
-
-        Every minute only the server's change counters are read (no sheet scan or lock).
-        A changed request counter downloads the changed rows; once a day the full snapshot.
-        Returns None when nothing changed, so the screen is not redrawn.
-        """
+        """Read server counters and changed areas; never replay an old local write."""
         self.verify_server()
-        changed = True
-        if not self._delta_ready():
-            self.sync_requests()
-        elif self.sync_head_supported:
-            head = self.check_sync_head()["requestSequence"]
-            marker = self.vault.snapshot_marker()
-            last = self._last_head_check
-            # The counter may run ahead of a failed write. Never store it as the cursor;
-            # re-check a stuck value only every 10 minutes.
-            if head > marker["requests"] and (last is None or last[0] != head or monotonic() - last[1] > 600):
-                self._last_head_check = (head, monotonic())
-                self.sync_requests(delta=True)
-            else:
-                changed = False
-        else:
-            self.sync_requests(delta=True)
-        if not changed and not any(op["action"] == "save_sale" for op in self.vault.pending()):
+        head = self.check_sync_head() if self.sync_head_supported else None
+        changed, errors = False, []
+        marker = self.vault.snapshot_marker()
+        if not self._delta_ready() or head is None or head["requestSequence"] > marker["requests"]:
+            try:
+                self.sync_requests(delta=self._delta_ready(), settle_pending=False)
+                changed = True
+            except AuthenticationError:
+                raise
+            except (UserError, OSError) as error:
+                errors.append("견적: " + str(error))
+        if not self.sales_snapshot_verified or (head is not None and head["saleSequence"] > marker.get("sales", 0)):
+            try:
+                self.download_sales()
+                changed = True
+            except AuthenticationError:
+                raise
+            except (UserError, OSError) as error:
+                errors.append("판매: " + str(error))
+        if head is not None and head["inquirySequence"] > getattr(self, "_last_inquiry_head", 0):
+            from .inquiries import InquiryService
+            try:
+                InquiryService(self).sync()
+                self._last_inquiry_head = head["inquirySequence"]
+                changed = True
+            except AuthenticationError:
+                raise
+            except (UserError, OSError) as error:
+                errors.append("문의: " + str(error))
+        if not changed and not errors:
             return None
-        return self._auto_upload_sales(raise_conflict=True)
+        self.transfer_notice = " / ".join(errors) if errors else "서버 최신 자료를 PC에 반영했습니다."
+        result = self.local_copy_view()
+        result["syncErrors"] = errors
+        return result
 
-    def _auto_upload_sales(self, *, raise_conflict=False):
-        pending = [op for op in self.vault.pending() if op["action"] == "save_sale"]
+    def _auto_upload_sales(self, *, raise_conflict=False, order_number=None):
+        pending = [op for op in self.vault.pending() if op["action"] == "save_sale"
+                   and (order_number is None or self._operation_number(op) == order_number)]
         if not pending:
             return self.local_copy_view()
-        if getattr(self, "sales_conflict_number", None):
+        if getattr(self, "sales_conflict_number", None) and self.sales_conflict_number == order_number:
             self.transfer_notice = "판매자료 충돌 해결 필요 · 자동 업로드 중단 · 양쪽 자료 유지"
             return self.local_copy_view()
         try:
-            return self.upload_sales()
+            return self.upload_sales(numbers={order_number} if order_number else None)
         except ConflictError:
             self.transfer_notice = "판매자료 충돌 해결 필요 · 자동 업로드 중단 · 양쪽 자료 유지"
             if raise_conflict:
                 raise
-        except (UserError, OSError):
+        except (UserError, OSError) as error:
             # Local payment/save is committed. Retain each event ID for safe later retry.
             count = sum(op["action"] == "save_sale" for op in self.vault.pending())
             self.transfer_notice = (f"판매자료 서버 반영 대기 {count:,}건" if count else
                                     "판매자료 서버 반영 완료 · 추가 조회는 다음 가져오기에서 확인해주세요.")
+            self.transfer_notice += " · " + str(error)
         return self.local_copy_view()
 
     def sync(self, *, sales_only=False):
         require(self.credentials.get("paired") is True, "PC를 먼저 연결해주세요.")
-        self.verify_server()
-        self._resume_quote_write()
-        if not sales_only:
-            self.sync_requests()
-        return self.download_sales(connected=True)
+        return self.download_sales() if sales_only else self.server_sync()
 
+    @serialized
     def save_sale(self, number, expected_revision, fields, target=None, *, prepare_shipping=False):
         row = next((r for r in self.vault.rows("sales") if r["metadata"]["orderNumber"] == number), None)
         require(row is not None and row["metadata"]["revision"] == expected_revision, "선택한 판매 기록을 새로 조회해주세요.")
@@ -1313,15 +1339,16 @@ class Manager(QuoteVersions, SoldNumbers, SalesWorkspace):
         optimistic.pop("encryptedPersonal", None)
         self.vault.queue({"id": event_id, "action": "save_sale", "payload": payload,
                           "baseFingerprint": row["fingerprint"], "preserveQuote": True}, optimistic)
-        return self.view()
+        return self._auto_upload_sales(order_number=number)
 
     def close_request(self, request_id):
         require(valid_id(request_id))
         require(any(r["requestId"] == request_id for r in self.inbox_requests), "먼저 문의를 다시 조회해주세요.")
         require(self.credentials.get("paired") is True, "PC를 먼저 연결해주세요.")
-        self.vault.queue({"id": str(uuid.uuid4()), "action": "close_request", "payload": {"requestId": request_id}})
+        operation = {"id": str(uuid.uuid4()), "action": "close_request", "payload": {"requestId": request_id}}
+        self.vault.queue(operation)
         self.verify_server()
-        self.flush(actions={"close_request"})
+        self.flush(actions={"close_request"}, identifiers={operation["id"]})
         # A verified deletion acknowledgement is sufficient. A later list pull
         # must not turn a completed deletion into an apparent save failure.
         return self.local_copy_view()

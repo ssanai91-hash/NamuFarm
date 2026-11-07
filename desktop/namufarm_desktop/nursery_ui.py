@@ -362,6 +362,7 @@ class NurseryPage(QWidget):
                 return
             dialog.accept()
             self.changed()
+            self.publish()
         buttons.accepted.connect(save)
         buttons.rejected.connect(dialog.reject)
         dialog.exec()
@@ -371,7 +372,7 @@ class NurseryPage(QWidget):
         if not row or self.owner.task:
             return
         title = '농원 삭제' if self.kind == 'farms' else '묘목 사용 중지'
-        if QMessageBox.question(self, title, title + '할까요?\nPC에 먼저 저장하고 동기화할 때 서버에 반영합니다.',
+        if QMessageBox.question(self, title, title + '할까요?\n저장 후 서버에 바로 반영합니다. 연결 실패 시 PC에 보관합니다.',
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
             return
@@ -381,6 +382,7 @@ class NurseryPage(QWidget):
             else:
                 self.store().save(self.kind, {**row, 'isActive': 0}, row['_key'])
             self.changed()
+            self.publish()
         except UserError as error:
             QMessageBox.warning(self, title, str(error))
 
@@ -389,8 +391,17 @@ class NurseryPage(QWidget):
             return
         def done(count):
             self.changed()
-            self.owner.message.setText('농원·묘목 동기화 완료 · PC 변경 %s건 반영' % count)
-        self.owner.run_job('농원·묘목 동기화 중…', lambda: self.store().sync(), done,
+            self.owner.message.setText('서버 농원·묘목·재고 %s건을 PC에 반영했습니다.' % count)
+        self.owner.run_job('서버에서 농원·묘목·재고를 받는 중…', lambda: self.store().pull(), done,
+                           refresh_on_error=lambda: self.store().read())
+
+    def publish(self):
+        if self.owner.task:
+            return
+        def done(count):
+            self.changed()
+            self.owner.message.setText('서버 저장 완료 · 변경 %s건 반영' % count)
+        self.owner.run_job('농원·묘목·재고 변경을 서버에 저장 중…', lambda: self.store().upload(), done,
                            refresh_on_error=lambda: self.store().read())
 
     def resolve(self):
@@ -752,6 +763,7 @@ class NurseryPage(QWidget):
                 return
             dialog.accept()
             self.changed()
+            self.publish()
         buttons.accepted.connect(save)
         buttons.rejected.connect(dialog.reject)
         dialog.exec()
@@ -768,6 +780,7 @@ class NurseryPage(QWidget):
             row = self.stock_rows[index]
             self.store().save('inventory', {**row, 'quantity': 0}, row['_key'])
             self.changed()
+            self.publish()
         except UserError as error:
             QMessageBox.warning(self, '재고 삭제', str(error))
 

@@ -7,6 +7,7 @@ from pathlib import Path
 from .crypto import canonical
 from .domain import require, valid_id, integer
 from .errors import UserError, ConflictError, AuthenticationError, ENROLLMENT_NOTICE
+from .server_first import serialized
 
 
 class SalesWorkspace:
@@ -26,6 +27,7 @@ class SalesWorkspace:
             self.credentials = {**self.credentials, "paired": True, "url": self.api.url}
             self.vault.save_credentials(self.credentials)
 
+    @serialized
     def _save_paid_sale(self, draft, payload):
         quotes = self._local_quotes()
         # Store the paid status and the new sale in the very same SQLite transaction.
@@ -42,7 +44,7 @@ class SalesWorkspace:
                       "payload": payload, "baseFingerprint": None, "preserveQuote": True}]
         self.vault.save_local_sales([*self.vault.rows("sales"), row], operations,
                                    self.vault.preference("hidden_sales", []), quotes=quotes)
-        return self._auto_upload_sales()
+        return self._auto_upload_sales(order_number=payload["metadata"]["orderNumber"])
 
     def _merge_sales(self, incoming, *, server=False, imported_operations=(), marker=None, quotes=None, sold_labels=None):
         """Union by order number. Conflicting copies are retained locally, never overwritten."""
@@ -109,29 +111,33 @@ class SalesWorkspace:
             if len(conflicts) > 10:
                 self.transfer_notice += f" 외 {len(conflicts) - 10}건"
 
+    @serialized
     def download_sales(self, *, connected=False):
         if not connected:
             self._sales_connection()
         rows, cursor, deleted = self._pages("list_sales", "sales")
         self.vault.backup("download_sales", min_interval=60 * 60)
-        # Missing or remotely deleted rows never erase a local order during a union download.
-        marker = {**self.vault.snapshot_marker(), "sales": cursor, "deletedSales": sorted(deleted)}
-        self._merge_sales(rows, server=True, marker=marker)
+        # Download never uploads an old local edit. Keep it in encrypted recovery history.
+        self.vault.apply_server_sales(rows, cursor, deleted)
+        self.sales_snapshot_verified = True
+        self.sales_conflict_number = None
+        self.transfer_notice = f"서버 판매자료 {len(rows):,}건 반영 · 미반영 PC 수정은 복구 기록에 보관"
         self.purge_expired_drafts()
-        self._prefetch_sold_numbers()
         return self.local_copy_view()
 
-    def upload_sales(self):
+    @serialized
+    def upload_sales(self, numbers=None):
         self._sales_connection()
         remote, _, deleted = self._pages("list_sales", "sales")
         remote = {r["metadata"]["orderNumber"]: r for r in remote}
         local = {r["metadata"]["orderNumber"]: r for r in self.vault.rows("sales")}
-        pending = [op for op in self.vault.pending() if op["action"] == "save_sale"]
-        require(not any(op["action"] == "delete_sale" for op in self.vault.pending()),
-                "이전 버전의 서버 삭제 대기가 있습니다. 로컬에서 해당 주문을 삭제하면 서버 삭제 대기를 취소합니다.")
+        pending = [op for op in self.vault.pending() if op["action"] == "save_sale"
+                   and (numbers is None or self._operation_number(op) in numbers)]
         queued = {self._operation_number(op) for op in pending}
         # Imported revision-1 rows can be backed up even if the originating PC had no journal.
         for number, row in local.items():
+            if numbers is not None and number not in numbers:
+                continue
             if number in queued:
                 continue
             old = remote.get(number)
@@ -179,7 +185,8 @@ class SalesWorkspace:
             if source:
                 remote_sources[source] = number
         # Persist every event before attempting a network write, including imported rows.
-        other = [op for op in self.vault.pending() if op["action"] != "save_sale"]
+        selected_ids = {op["id"] for op in pending}
+        other = [op for op in self.vault.pending() if op["id"] not in selected_ids]
         self.vault.save_local_sales(list(local.values()), [*other, *pending], self.vault.preference("hidden_sales", []))
         sent = 0
         for op in pending:

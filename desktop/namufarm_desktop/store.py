@@ -278,13 +278,68 @@ class Vault:
 
     def queue(self, operation, optimistic=None):
         with self.mutex, self._db() as db:
-            if operation["action"] != "save_sale" and db.execute("SELECT COUNT(*) FROM outbox").fetchone()[0]:
-                raise UserError("먼저 기존 전송 대기를 동기화해주세요.")
             identifier = operation["id"]
             db.execute("INSERT INTO outbox(id,body) VALUES (?,?)", (identifier, self._seal(operation, "outbox:" + identifier)))
             if optimistic is not None:
                 index = self._index("sales", optimistic["metadata"]["orderNumber"])
                 db.execute("INSERT OR REPLACE INTO cache VALUES ('sales',?,?)", (index, self._seal(optimistic, "sales:" + index)))
+
+    def _archive_in_db(self, db, reason, body):
+        scope = "workspace:server_recovery_archive"
+        saved = db.execute("SELECT value FROM config WHERE name=?", (scope,)).fetchone()
+        archive = self._open(saved[0], scope) if saved else []
+        record = {"id": os.urandom(16).hex(), "at": now_ms(), "reason": reason, "body": body}
+        archive.append(record)
+        db.execute("INSERT OR REPLACE INTO config VALUES (?,?)", (scope, self._seal(archive, scope)))
+        return record["id"]
+
+    def archive_and_update(self, reason, body, *, preferences=None, expected=None, operations=()):
+        """Preserve the old intent and change only the reviewed records, atomically."""
+        with self.mutex, self._db() as db:
+            for name, value in (expected or {}).items():
+                scope = "workspace:" + name
+                saved = db.execute("SELECT value FROM config WHERE name=?", (scope,)).fetchone()
+                current = self._open(saved[0], scope) if saved else None
+                require(canonical(current) == canonical(value), "기록이 변경되었습니다. 대기 내역을 다시 열어주세요.")
+            for op in operations:
+                saved = db.execute("SELECT body FROM outbox WHERE id=?", (op["id"],)).fetchone()
+                require(saved is not None and canonical(self._open(saved[0], "outbox:" + op["id"])) == canonical(op),
+                        "대기 작업이 변경되었습니다. 목록을 다시 확인해주세요.")
+            identifier = self._archive_in_db(db, reason, body)
+            for name, value in (preferences or {}).items():
+                scope = "workspace:" + name
+                db.execute("INSERT OR REPLACE INTO config VALUES (?,?)", (scope, self._seal(value, scope)))
+            for op in operations:
+                db.execute("DELETE FROM outbox WHERE id=?", (op["id"],))
+            return identifier
+
+    def apply_server_sales(self, sales, cursor, deleted):
+        """A validated server snapshot replaces the sales replica, regardless of outbox."""
+        with self.mutex, self._db() as db:
+            incoming = {r["metadata"]["orderNumber"]: r for r in sales}
+            old = [self._open(blob, "sales:" + key) for key, blob in
+                   db.execute("SELECT id,body FROM cache WHERE kind='sales'")]
+            operations = [self._open(blob, "outbox:" + key) for key, blob in db.execute("SELECT id,body FROM outbox")]
+            writes = [op for op in operations if op["action"] in ("save_sale", "delete_sale")]
+            dirty = {op.get("payload", {}).get("metadata", {}).get("orderNumber")
+                     or op.get("payload", {}).get("orderNumber") for op in writes}
+            preserved = [r for r in old if r["metadata"]["orderNumber"] in dirty
+                         or r["metadata"]["orderNumber"] not in incoming
+                         or (r["fingerprint"] != incoming[r["metadata"]["orderNumber"]]["fingerprint"]
+                             and r["metadata"]["revision"] >= incoming[r["metadata"]["orderNumber"]]["metadata"]["revision"])]
+            if writes or preserved:
+                self._archive_in_db(db, "서버 판매자료 우선 반영", {"sales": preserved, "operations": writes})
+            db.execute("DELETE FROM cache WHERE kind='sales'")
+            for row in sales:
+                key = self._index("sales", row["metadata"]["orderNumber"])
+                db.execute("INSERT INTO cache VALUES ('sales',?,?)", (key, self._seal(row, "sales:" + key)))
+            for op in writes:
+                db.execute("DELETE FROM outbox WHERE id=?", (op["id"],))
+            scope = "workspace:hidden_sales"
+            db.execute("INSERT OR REPLACE INTO config VALUES (?,?)", (scope, self._seal([], scope)))
+            marker = self._read_snapshot_marker(db)
+            marker.update(sales=cursor, deletedSales=sorted(deleted))
+            db.execute("INSERT OR REPLACE INTO config VALUES ('snapshot',?)", (self._seal(marker, "snapshot"),))
 
     def backup(self, reason, min_interval=None):
         """Keep 30 generated snapshots; only routine downloads may be throttled (seconds)."""
@@ -325,7 +380,9 @@ class Vault:
 
     def storage_status(self):
         """Read-only counts. An unreadable source raises instead of reporting a false zero."""
+        from .server_first import review_key
         with self.mutex:
+            closed = set(self.preference("pending_review_closed", []) or [])
             with self._db() as db:
                 names = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
                 sales = db.execute("SELECT COUNT(*) FROM outbox").fetchone()[0]
@@ -339,7 +396,8 @@ class Vault:
                 if "inquiry_records" in names:
                     for key, blob in db.execute("SELECT id,body FROM inquiry_records"):
                         row = self._open(blob, "inquiry_records:" + key)
-                        if (row.get("delivery") or {}).get("state") in ("sending", "pending", "unknown"):
+                        if ((row.get("delivery") or {}).get("state") in ("sending", "pending", "unknown")
+                                and review_key("inquiry", row["requestId"], row["delivery"]) not in closed):
                             inquiry_ids.add(row.get("requestId") or key)
                             notice_keys.append("inquiry_delivery:" + key + ":" + str(row["delivery"].get("id", "")))
             nursery = self.preference("nursery-v1", {}) or {}
@@ -354,8 +412,12 @@ class Vault:
                 notice_keys.append("quote:" + canonical([quote_write.get("action"), quote_write.get("payload"),
                                                          (quote_write.get("draft") or {}).get("id"), quote_write.get("status")]))
             delivery = 0
-            for name in ("quote_delivery", "payment_delivery"):
-                for identifier, row in (self.preference(name, {}) or {}).items():
+            for name in ("quote_delivery", "payment_delivery", "sales_report_delivery"):
+                saved = self.preference(name, {}) or {}
+                states = {"report": saved} if name == "sales_report_delivery" else saved
+                for identifier, row in states.items():
+                    if review_key(name, identifier, row) in closed:
+                        continue
                     if row.get("pendingDelivery") or row.get("smsState") in ("sending", "pending", "unknown"):
                         delivery += 1
                         notice_keys.append(name + ":" + identifier + ":" + canonical([
@@ -371,6 +433,9 @@ class Vault:
                       "inquiries": len(inquiry_ids), "quote": quote, "delivery": delivery, "other": other_nursery}
             return {"path": str(self.path.parent.resolve()), "lastSyncAt": last, "counts": counts,
                     "totalPending": sum(counts.values()),
+                    "writePending": sales + masters + inventory + quote + other_nursery,
+                    "resultPending": delivery + len(inquiry_ids),
+                    "recoveryCount": len(self.preference("server_recovery_archive", []) or []),
                     "pendingSignature": self._index("pending_notice", canonical(sorted(notice_keys))),
                     "backupPath": str(folder.resolve()),
                     "backupCount": len(snapshots), "lastBackupAt": max(snapshots, default=0)}

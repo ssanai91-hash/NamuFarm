@@ -14,6 +14,7 @@ from .commerce import draft_amounts, new_draft, validate_draft
 from .crypto import canonical
 from .domain import integer, now_ms, require
 from .errors import ConflictError, UserError
+from .server_first import serialized
 
 SERVER_ISSUER_FIELDS = ("businessName", "representative", "businessNumber", "address", "phone",
                         "email", "businessType", "category", "fax")
@@ -179,18 +180,25 @@ class QuoteVersions:
         draft.pop("manualStatus", None)
         return validate_draft(draft)
 
-    def _merge_server_quotes(self):
-        """Hand over web quotes confirmed on another device. Never overwrite an unresolved local edit."""
+    def _merge_server_quotes(self, *, authoritative=False):
+        """The shared server copy wins; replaced local edits remain in recovery history."""
         rows = [r for r in self.vault.rows("requests")
                 if r.get("status") in SERVER_QUOTE_STATES and isinstance(r.get("quotePricing"), dict)
                 and not r.get("expired")]
-        if not rows:
+        if not rows and not authoritative:
             return ""
         quotes = self._local_quotes()
+        if authoritative:
+            sources = {row["requestId"] for row in rows}
+            removed = [q for q in quotes if q.get("serverQuote") and q.get("sourceRequestId") not in sources]
+            if removed:
+                self.vault.archive_and_update("서버 목록에 없는 확정견적 별도 보관", {"quotes": removed})
+                quotes = [q for q in quotes if q not in removed]
+                self.vault.save_preference("confirmed_quotes", quotes)
         by_source = {q.get("sourceRequestId"): q for q in quotes if q.get("sourceRequestId")}
         pending = self.vault.preference("quote_write_pending") or {}
         busy = (pending.get("draft") or {}).get("sourceRequestId")
-        dismissed = set(self.vault.preference("dismissed_server_quotes", []) or [])
+        dismissed = set() if authoritative else set(self.vault.preference("dismissed_server_quotes", []) or [])
         changed, added, skipped = False, [], 0
         for row in rows:
             source = row["requestId"]
@@ -210,24 +218,24 @@ class QuoteVersions:
                 if version is None:
                     continue  # Legacy server copy: keep the existing local contract.
                 previous = local.get("serverQuote") or {}
+                if integer(previous.get("revision", 0), 0) > version["revision"]:
+                    continue  # A read started before a confirmed write completed on this PC.
                 server_key = content_key(row["quotePricing"], version.get("quoteDetails"))
                 same = content_key(server_pricing(local), server_details(local, version.get("quoteDetails"))) == server_key
                 if same:
                     link = self._server_link(row, local)
-                    status = row["status"] if row["status"] in ("견적확정", "견적발송완료") else local["quoteStatus"]
+                    status = row["status"]
                     if local.get("serverQuote") != link or local.get("serverConflict") or local["quoteStatus"] != status:
                         local.update(serverQuote=link, quoteStatus=status)
                         local.pop("serverConflict", None)
                         changed = True
-                elif previous.get("localKey") == local_key(local) and version["revision"] > integer(previous.get("revision", 0), 0):
-                    # Unchanged here since the last link; the other device's newer version wins.
+                else:
+                    # The server is authoritative. Preserve the PC edit before replacing it.
+                    self.vault.archive_and_update("서버 확정견적 우선 반영", {"localQuote": copy.deepcopy(local), "serverQuote": row})
                     updated = self._linked(self._draft_from_server(row, local), row)
-                    updated["quoteStatus"] = row["status"] if row["status"] in ("견적확정", "견적발송완료") else local["quoteStatus"]
+                    updated["quoteStatus"] = row["status"]
                     local.clear()
                     local.update(updated)
-                    changed = True
-                elif (local.get("serverConflict") or {}).get("revision") != version["revision"]:
-                    local["serverConflict"] = {"revision": version["revision"], "fingerprint": version["fingerprint"]}
                     changed = True
             except UserError:
                 skipped += 1
@@ -235,6 +243,7 @@ class QuoteVersions:
             self.vault.save_preference("confirmed_quotes", [*added, *quotes])
         return f"서버 확정견적 {skipped:,}건은 형식이 맞지 않아 PC 목록에 넣지 못했습니다." if skipped else ""
 
+    @serialized
     def resolve_quote_conflict(self, identifier, use_server):
         """'서버 내용 사용' or '이 PC 수정본 저장'. The unchosen copy is archived first."""
         quote = next((q for q in self._local_quotes() if q["id"] == identifier), None)
@@ -258,11 +267,12 @@ class QuoteVersions:
         return self._revise_quote(local, quote["quoteStatus"], server=server)
 
     # ---- writes ----------------------------------------------------------------------
+    @serialized
     def _revise_quote(self, draft, status="견적확정", *, server=None):
         """Create or update the shared version. Same content only links locally."""
         source = draft["sourceRequestId"]
         require(len(draft["items"]) <= 50, "견적은 최대 50품목까지 저장할 수 있습니다.")
-        self._resume_quote_write()
+        self._prepare_quote_action(draft)
         quote = server or self.server_quote(source)
         version = quote_version(quote)
         if version:
@@ -297,6 +307,8 @@ class QuoteVersions:
         draft = copy.deepcopy(pending["draft"])
         if applied == version["revision"]:
             draft = self._linked(draft, quote)
+        else:
+            draft = self._linked(self._draft_from_server(quote, draft), quote)
         status = quote.get("status") if quote.get("status") in ("견적확정", "견적발송완료") else pending["status"]
         return draft, status
 

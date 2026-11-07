@@ -285,7 +285,10 @@ class MainWindow(QMainWindow):
         self.build_connection()
         self.timer = QTimer(self)
         # Each tick reads only the server's change counter; rows are downloaded when it moved.
-        self.timer.setInterval(60 * 1000)
+        self.timer.setInterval(10 * 1000)
+        self.poll_task = None
+        self._close_after_poll = False
+        self._poll_close_timer_was_active = False
         self.timer.timeout.connect(self.auto_sync)
         self.timer.start()
         self.update_controls()
@@ -452,7 +455,7 @@ class MainWindow(QMainWindow):
         self.report_export_button.setEnabled(self.task is None)
         self.resolve_button.setEnabled(paired and pending and self.conflict)
         self.connection_status.setText("연결 정보 저장됨" if self.data["paired"] else "서버 연결 필요")
-        self.pending_status.setText(f"전송 대기 {len(self.data['pending']):,}건 · 자동으로 서버에 반영합니다(실패 시 ‘서버에 올리기’)" if pending else "전송 대기 0건")
+        self.pending_status.setText(f"서버 저장 확인 {len(self.data['pending']):,}건 · 대기 내역에서 개별 확인" if pending else "서버 저장 확인 0건")
 
     def allow_discard(self):
         if not self.dirty:
@@ -465,14 +468,54 @@ class MainWindow(QMainWindow):
                          self.manager.connect)
 
     def auto_sync(self):
-        if self.manager and self.data["paired"] and self.auto_check.isChecked() and not self.task and not self.dirty and not self.conflict:
-            self.run_job("AUTO SYNC  >  변경 확인 중…", self.manager.auto_sync, self.auto_synced)
+        if (self.manager and self.data["paired"] and self.auto_check.isChecked()
+                and not self.task and self.poll_task is None):
+            task = Task(self.manager.auto_sync, None, self)
+            self.poll_task = task
+            task.completed.connect(lambda value, error, conflict: self.background_synced(task, value, error))
+            task.start()
+
+    def background_synced(self, task, value, error):
+        task.wait()
+        self.poll_task = None
+        task.deleteLater()
+        if self._close_after_poll:
+            self._close_after_poll = False
+            if self._poll_close_timer_was_active:
+                self.timer.start()
+            self._poll_close_timer_was_active = False
+            QTimer.singleShot(0, self.close)
+            return
+        if self.task:
+            return  # The foreground job will publish a newer view when it finishes.
+        if error:
+            self.message.setText("새 접수 확인 실패 · 다음 확인 때 다시 시도합니다. " + error)
+            if hasattr(self, "_last_storage_transfer_error"):
+                self._last_storage_transfer_error = error
+                self.refresh_storage_status()
+            return
+        if value is not None:
+            # A foreground/dialog write may have completed after this poll's snapshot.
+            fresh = self.manager.view()
+            fresh["syncErrors"] = value.get("syncErrors", [])
+            if hasattr(self, "_last_storage_transfer_error"):
+                self._last_storage_transfer_error = " / ".join(fresh["syncErrors"])
+            self.auto_synced(fresh)
 
     def auto_synced(self, value):
         """No change: keep the screen and selection as they are."""
         if value is None:
             self.message.setText("변경 없음 · 확인 " + timestamp(datetime.now(SEOUL).timestamp() * 1000))
             return
+        if self.dirty or QApplication.activeModalWidget() is not None:
+            for key in ("requests", "pending", "pendingCounts", "pendingSummary", "paired"):
+                self.data[key] = value.get(key, self.data.get(key))
+            self.refresh_requests()
+            if hasattr(self, "refresh_storage_status"):
+                self.refresh_storage_status()
+            if hasattr(self, "refresh_request_notifications"):
+                self.refresh_request_notifications()
+            return  # Never reset a form the seller is currently editing.
         self.apply_view(value)
         self.conflict = bool(value.get("salesSyncConflict"))
         self.message.setText(value.get("transferNotice") or "SYNC OK  >  서버 동기화 완료 · " + timestamp(datetime.now(SEOUL).timestamp() * 1000))
@@ -971,8 +1014,8 @@ class MainWindow(QMainWindow):
         self.copy_button.clicked.connect(self.open_request_copy)
         set_button_icon(self.copy_button, "folder")
         local_layout.addWidget(self.copy_button, 0, Qt.AlignmentFlag.AlignLeft)
-        self.auto_check = QCheckBox("1분마다 새 견적 확인 · 바뀐 요청만 가져오기 · 판매자료 서버 반영")
-        self.auto_check.setToolTip("최신 자료를 가져오고 전송 대기 중인 변경사항을 서버에 반영합니다.")
+        self.auto_check = QCheckBox("10초마다 서버 변경 확인 · 바뀐 견적·판매·문의 받기")
+        self.auto_check.setToolTip("서버 자료를 PC에 반영합니다. 이전 PC 수정이나 문자·메일은 자동 재전송하지 않습니다.")
         self.auto_check.setChecked(True)
         self.large_font_check = QCheckBox("큰 글씨로 보기")
         local_layout.addWidget(self.auto_check)
@@ -1086,17 +1129,25 @@ class MainWindow(QMainWindow):
                            ("inquiries", "고객문의 대기"), ("quote", "견적 저장 확인"), ("delivery", "견적·입금 안내 결과 확인"), ("other", "기타 농원 대기")):
             form.addRow(title, QLabel(f"{c[key]:,}건"))
         form.addRow("전송·결과 확인 대기 합계", QLabel(f"{info['totalPending']:,}건"))
+        form.addRow("별도 보관한 복구 기록", QLabel(f"{info.get('recoveryCount', 0):,}건"))
         form.addRow("백업 스냅샷", QLabel(f"{info['backupCount']:,}개 · 최근 " + (timestamp(info["lastBackupAt"]) if info["lastBackupAt"] else "기록 없음")))
         backup_label = QLabel(info["backupPath"]); backup_label.setWordWrap(True)
         form.addRow("백업 폴더", backup_label)
         layout.addLayout(form)
-        note = QLabel("다른 PC로 옮기거나 윈도우를 다시 설치하기 전에 전송 대기가 0건인지 확인하세요.\n이 자료는 지금 Windows 계정에서만 열립니다.")
+        note = QLabel("동기화는 서버 자료를 PC에 반영합니다. 미반영 PC 수정과 관리자 해제 내역은 복구 기록에 보관합니다.\nPC를 옮기기 전에는 대기 내역과 복구 기록을 함께 확인하세요. 자료는 지금 Windows 계정에서만 열립니다.")
         note.setWordWrap(True); layout.addWidget(note)
         close = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
         close.rejected.connect(dialog.reject); layout.addWidget(close)
         dialog.exec()
 
     def closeEvent(self, event: QCloseEvent):
+        if self.poll_task is not None:
+            self._poll_close_timer_was_active = self._poll_close_timer_was_active or self.timer.isActive()
+            self.timer.stop()
+            self._close_after_poll = True
+            self.message.setText("서버 확인을 마친 뒤 종료합니다…")
+            event.ignore()
+            return
         was_active = self.timer.isActive()
         self.timer.stop()
         try:
@@ -1118,7 +1169,7 @@ class MainWindow(QMainWindow):
                             QMessageBox.information(self, "자료 확인 안내",
                                 f"전송·확인 대기 {info['totalPending']:,}건이 남아 있습니다.\n\n{details}\n\n"
                                 "새 작업이 없어도 이전 발송의 결과 확인이 남아 있을 수 있습니다.\n"
-                                "전송 대기는 동기화, 발송 결과는 해당 견적·문의의 ‘결과 확인’에서 확인해주세요.\n"
+                                "‘대기 내역’에서 개별 확인하거나 기록을 보관하고 해제할 수 있습니다.\n"
                                 "기록은 보존되며, 같은 대기 내역은 종료할 때 반복 안내하지 않습니다.")
                         if signature != vault.preference("exit_pending_notice_signature"):
                             # This remembers the notice only. No outbox or delivery record is cleared.

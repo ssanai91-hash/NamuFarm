@@ -3845,6 +3845,9 @@ class SellerWindow(MainWindow):
                 side.addWidget(label("업무" if index == self.PAGE_REQUESTS else "관리", "navGroup"))
             if index == self.PAGE_SETTINGS:
                 side.addStretch(1)
+                self.pending_button = button("대기 내역", self.open_pending_center)
+                self.pending_button.setToolTip("서버 저장·발송 결과를 개별 확인하고 관리자 해제")
+                side.addWidget(self.pending_button)
                 self.sidebar_connection = label("● 연결 전", "navFoot")
                 self.sidebar_transfer = label("가져오기 전 · 전송 대기 0건", "navFoot", True)
                 side.addWidget(self.sidebar_connection)
@@ -3908,9 +3911,9 @@ class SellerWindow(MainWindow):
         header.addWidget(self.page_count_number)
         header.addWidget(self.page_count_unit)
         header.addStretch(1)
-        self.sync_button.setText("가져오기 F5")
+        self.sync_button.setText("서버 동기화 F5")
         self.sync_button.setObjectName("syncSecondary")
-        self.sync_button.setToolTip("현재 화면의 기존 가져오기 기능 · F5")
+        self.sync_button.setToolTip("서버 최신 자료를 PC에 반영 · 미반영 PC 수정은 복구 기록에 보관 · F5")
         set_button_icon(self.sync_button, "refresh")
         header.addWidget(self.sync_button)
         self.header_actions = QHBoxLayout()
@@ -4475,6 +4478,7 @@ class SellerWindow(MainWindow):
         self.sales_data_menu.addSeparator()
         self.storage_status_action = self.sales_data_menu.addAction("자료 보관 상태")
         self.storage_status_action.triggered.connect(self.request_storage_status)
+        self.sales_data_menu.addAction("대기 내역 · 복구 기록", self.open_pending_center)
         self.sales_data_button.setMenu(self.sales_data_menu)
         self.sales_data_menu.aboutToShow.connect(self.update_sales_menu)
         self.header_actions.addWidget(self.sales_data_button)
@@ -4755,9 +4759,11 @@ class SellerWindow(MainWindow):
         self.set_status_state("error" if error else "success", "처리 실패" if error else "처리 완료")
         title = getattr(task, "operation_title", "")
         server_transfer = any(token in title for token in (
-            "동기화", "서버 연결", "판매자료를 서버에 올리는", "서버 판매자료를 합치는"))
+            "동기화", "서버 연결", "판매자료를 서버에 올리는", "서버 판매자료를 합치는",
+            "서버 최신 자료를 PC", "서버 판매자료를 PC", "서버에서 농원"))
+        sync_errors = value.get("syncErrors", []) if isinstance(value, dict) else []
         if server_transfer:
-            self._last_storage_transfer_error = str(error or "")
+            self._last_storage_transfer_error = str(error or " / ".join(sync_errors))
         if (not error and isinstance(value, dict) and "requests" in value
                 and server_transfer):
             completed = timestamp(datetime.now(SEOUL).timestamp() * 1000)
@@ -4767,7 +4773,7 @@ class SellerWindow(MainWindow):
                     self.manager.vault.save_preference("storage-last-server-sync-at", int(datetime.now(SEOUL).timestamp() * 1000))
                 except Exception:
                     self.message.setText("서버 반영은 완료했으나 마지막 동기화 시각을 저장하지 못했습니다.")
-            self.set_status_state("success", "동기화 완료")
+            self.set_status_state("error" if sync_errors else "success", "일부 반영 · 확인 필요" if sync_errors else "동기화 완료")
         if self._request_arrival_notice:
             current = getattr(self.message, "details", self.message.text()).strip()
             self.message.setText(
@@ -4786,6 +4792,9 @@ class SellerWindow(MainWindow):
         pending = len(self.data.get("pending", []))
         if isinstance(self.data.get("pendingCounts"), dict):
             pending = sum(self.data["pendingCounts"].values())
+        summary = self.data.get("pendingSummary") or {}
+        write_pending = summary.get("writePending", pending)
+        result_pending = summary.get("resultPending", 0)
         color = "#52645c"
         if getattr(self, "demo_mode", False):
             text = "예시 자료 · 실제 저장·서버 반영은 하지 않습니다."
@@ -4795,7 +4804,7 @@ class SellerWindow(MainWindow):
             local = "입력 중 · PC 저장 필요" if self.dirty else "PC 저장완료"
             if self.data.get("copyError"):
                 local = "로컬 자료 확인 필요"
-            transfer = f"전송·확인 대기 {pending:,}건"
+            transfer = f"서버 저장 확인 {write_pending:,}건 · 발송·문의 확인 {result_pending:,}건"
             if self.task is not None:
                 transfer += " · 처리 중"
             elif self._last_storage_transfer_error:
@@ -4805,18 +4814,20 @@ class SellerWindow(MainWindow):
             if pending or self.dirty or self.data.get("copyError") or self._last_storage_transfer_error:
                 color = "#805a17"
         if hasattr(self, "sidebar_connection"):
-            failed = bool(self._last_storage_transfer_error or self.data.get("copyError"))
-            key = "danger" if failed else "waiting" if pending else "accent"
+            failed = bool(self._last_storage_transfer_error)
+            key = "danger" if failed else "accent"
             self.sidebar_connection.setStyleSheet(f"color:{TOKENS[key]};font-size:13px;")
-            self.sidebar_connection.setText("● " + ("오류" if failed else "서버 반영 대기" if pending else "연결됨" if self.data.get("paired") else "연결 전"))
-            self.sidebar_transfer.setText(self.last_sync_label.text().split(" ")[-1][:5] + f" 가져옴 · 전송·확인 대기 {pending:,}건")
+            self.sidebar_connection.setText("● " + ("서버 확인 필요" if failed else "서버 연결 설정됨" if self.data.get("paired") else "연결 전"))
+            self.sidebar_transfer.setText(f"서버 저장 확인 {write_pending:,}건\n발송·문의 확인 {result_pending:,}건")
+            self.pending_button.setText(f"대기 내역 · {pending:,}건")
+            self.pending_button.setEnabled(bool(self.manager and not self.task and not getattr(self, "demo_mode", False)))
         if hasattr(self, "status_pending"):
             self.status_connection.setText(self.sidebar_connection.text())
-            self.status_pending.setText(f"전송·확인 대기 {pending:,}건")
+            self.status_pending.setText(f"저장 확인 {write_pending:,} · 결과 확인 {result_pending:,}")
             self.status_auto.setText("자동 가져오기 켜짐" if self.auto_check.isChecked() else "자동 가져오기 꺼짐")
         self.storage_status.setText(text)
         self.storage_status.setToolTip(
-            "PC 저장과 서버 백업은 별도입니다. 판매자료는 ‘서버에 올리기’로 반영합니다. "
+            "서버가 원본입니다. 저장한 변경은 즉시 전송을 시도하고, 동기화는 서버 최신 자료를 PC에 반영합니다. "
             "‘엑셀 파일 저장’은 파일 내보내기이며 서버에 전송하지 않습니다.\n" +
             (self._last_storage_transfer_error or self.data.get("copyError", "")))
         large = bool(QApplication.instance().property("namufarmLargeFont"))
@@ -5223,7 +5234,25 @@ class SellerWindow(MainWindow):
 
     def download_sales(self):
         if self.manager and not self.task and self.allow_discard():
-            self.run_job("서버 판매자료를 합치는 중…", self.manager.download_sales, self.sales_transfer_finished)
+            self.run_job("서버 판매자료를 PC에 반영하는 중…", self.manager.download_sales, self.sales_transfer_finished)
+
+    def refresh_storage_status_from_vault(self):
+        if not self.manager:
+            return
+        info = self.manager.vault.storage_status()
+        self.data.update(pendingCounts=info["counts"], pendingSummary=info)
+        self.refresh_storage_status()
+
+    def open_pending_center(self):
+        if not self.manager or self.task or getattr(self, "demo_mode", False):
+            return
+        from .pending_ui import PendingDialog
+        dialog = PendingDialog(self)
+        dialog.exec()
+        if self.dirty:
+            self.auto_synced(self.manager.view())
+        else:
+            self.apply_view(self.manager.view())
 
     def export_local_sales(self):
         if not self.manager or self.task:
@@ -5288,8 +5317,8 @@ class SellerWindow(MainWindow):
 
     def customer_order_saved(self, value, shipping_prepared=False):
         self.apply_view(value)
-        self.message.setText("주소 확인완료 · 배송·송장에서 로젠 XLS 저장 후 발급받은 송장번호를 등록하세요." if shipping_prepared else
-                             "판매 · 고객 관리 내용을 로컬 DB에 저장했습니다. ‘서버에 올리기’로 백업하세요.")
+        self.message.setText(value.get("transferNotice") or ("주소 확인완료 · 배송·송장에서 로젠 XLS 저장 후 발급받은 송장번호를 등록하세요." if shipping_prepared else
+                             "판매 · 고객 관리 내용을 저장했습니다."))
         self.navigate(self.PAGE_SHIPPING if shipping_prepared else self.PAGE_SALES)
 
     def refresh_shipping(self):
@@ -5382,12 +5411,12 @@ class SellerWindow(MainWindow):
 
     def quote_confirmed(self, value):
         self.apply_view(value)
-        self.message.setText("입금확인으로 판매 등록했습니다. 배송을 준비하세요.")
+        self.message.setText(value.get("transferNotice") or "입금확인으로 판매 등록했습니다. 배송을 준비하세요.")
         self.navigate(self.PAGE_SALES)
 
     def quote_finalized(self, value):
         self.apply_view(value)
-        self.message.setText("견적을 확정하고 로컬 DB에 저장했습니다.")
+        self.message.setText("서버의 견적확정 상태를 PC에 반영했습니다.")
         self.navigate(self.PAGE_QUOTES)
 
     def new_manual_quote(self, *args):
@@ -5558,7 +5587,7 @@ class SellerWindow(MainWindow):
 
     def shipping_completed(self, value):
         self.apply_view(value)
-        self.message.setText("배송완료 상태를 로컬 DB에 저장했습니다. ‘서버에 올리기’로 백업하세요.")
+        self.message.setText(value.get("transferNotice") or "배송완료 상태를 저장했습니다.")
 
     def save_tracking(self):
         rows = self.selected_shipping()
@@ -5574,7 +5603,7 @@ class SellerWindow(MainWindow):
 
     def tracking_saved(self, value):
         self.apply_view(value)
-        self.message.setText("송장번호를 로컬 DB에 저장했습니다. ‘서버에 올리기’로 백업하세요.")
+        self.message.setText(value.get("transferNotice") or "송장번호를 저장했습니다.")
 
     def export_shipping(self):
         if not self.manager or self.task or getattr(self, "demo_mode", False) or not self.allow_discard():
@@ -5674,18 +5703,11 @@ class SellerWindow(MainWindow):
         if self.stack.currentIndex() in (self.PAGE_FARMS, self.PAGE_SPECIES, self.PAGE_INQUIRIES):
             self.stack.currentWidget().sync()
             return
-        if self.stack.currentIndex() in (self.PAGE_SALES, self.PAGE_SHIPPING):
-            self.download_sales()
-            return
-        include_sales = self.stack.currentIndex() in (self.PAGE_SALES, self.PAGE_SHIPPING, self.PAGE_REPORTS)
-        self.run_job("SYNC  >  서버 동기화 중…",
-                     lambda: self.manager.connect(include_sales=include_sales))
+        self.run_job("서버 최신 자료를 PC에 반영하는 중…",
+                     lambda: self.manager.connect(include_sales=True))
 
     def auto_sync(self):
-        if self.stack.currentIndex() in (self.PAGE_FARMS, self.PAGE_SPECIES, self.PAGE_INQUIRIES):
-            return
-        if self.manager and self.data["paired"] and self.auto_check.isChecked() and not self.task and not self.dirty and not self.conflict:
-            self.run_job("AUTO SYNC  >  변경 확인 중…", self.manager.auto_sync, self.auto_synced)
+        super().auto_sync()
 
 
 

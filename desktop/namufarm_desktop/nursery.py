@@ -203,6 +203,37 @@ class NurseryStore:
         return remote, versioned
 
     def sync(self):
+        return self.pull()
+
+    def pull(self):
+        """Server -> local only; unsent edits are archived before replacement."""
+        if not self.manager.credentials.get("paired"):
+            self.manager.connect()
+        remote, _ = self._download()
+        with self.vault.mutex:
+            state = self.read()
+            for kind in ("farms", "species"):
+                keys = {r[ID_FIELD[kind]]: r["_key"] for r in state[kind]}
+                for row in remote[kind]:
+                    row["_key"] = keys.get(row[ID_FIELD[kind]], f"{kind}:{row[ID_FIELD[kind]]}")
+            farm_keys = {r["farmId"]: r["_key"] for r in remote["farms"]}
+            species_keys = {r["speciesId"]: r["_key"] for r in remote["species"]}
+            stock_keys = {stock_key(r): r["_key"] for r in state["inventory"] if r.get("farmId")}
+            for row in remote["inventory"]:
+                require(row["quantity"] == 0 or row["farmId"] in farm_keys and row["speciesId"] in species_keys,
+                        "서버 재고의 농원·묘목 연결을 확인해주세요. PC 목록을 유지합니다.")
+                row.update(_key=stock_keys.get(stock_key(row), str(uuid.uuid4())),
+                           farmKey=farm_keys.get(row["farmId"], ""), speciesKey=species_keys.get(row["speciesId"], ""))
+            updated = {**state, **remote, "pending": [], "conflict": None, "syncedAt": int(time.time() * 1000)}
+            if state["pending"]:
+                self.vault.archive_and_update("서버 농원·묘목·재고 우선 반영", {"nursery": state},
+                    preferences={self.NAME: updated}, expected={self.NAME: self.vault.preference(self.NAME)})
+            else:
+                self._write(updated)
+        return sum(len(rows) for rows in remote.values())
+
+    def upload(self):
+        """Explicit save/upload path, separate from the pull-only sync button."""
         # Use the existing connection setup; never swap URLs or clear customer records.
         if not self.manager.credentials.get("paired"):
             self.manager.connect()
