@@ -5340,16 +5340,24 @@ class SellerWindow(MainWindow):
         if not 0 <= index < len(self.draft_rows):
             return
         draft = self.draft_rows[index]
-        if QMessageBox.question(
-                self, "PC 견적 삭제",
-                f"{draft_quote_number(draft)} · {draft['customerName']} 견적을 이 PC에서 삭제할까요?\n"
-                "작성중 초안 또는 이 PC의 확정견적에서만 삭제합니다.\n"
-                "Google Sheets의 견적확정 시트와 판매관리 자료는 그대로 유지합니다.",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
-            return
-        identifier = draft["id"]
-        self.run_job("PC 확정견적 삭제 중…", lambda: self.manager.delete_draft(identifier), self.local_quote_deleted)
+        # A modal question runs Qt's event loop. Keep auto-sync from taking the
+        # worker slot before the seller confirms, which would silently skip deletion.
+        was_active = self.timer.isActive()
+        self.timer.stop()
+        try:
+            if QMessageBox.question(
+                    self, "PC 견적 삭제",
+                    f"{draft_quote_number(draft)} · {draft['customerName']} 견적을 이 PC에서 삭제할까요?\n"
+                    "작성중 초안 또는 이 PC의 확정견적에서만 삭제합니다.\n"
+                    "Google Sheets의 견적확정 시트와 판매관리 자료는 그대로 유지합니다.",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
+                return
+            identifier = draft["id"]
+            self.run_job("PC 확정견적 삭제 중…", lambda: self.manager.delete_draft(identifier), self.local_quote_deleted)
+        finally:
+            if was_active:
+                self.timer.start()
 
     def local_quote_deleted(self, value):
         self.apply_view(value)

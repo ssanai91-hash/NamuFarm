@@ -242,13 +242,13 @@ class Manager(QuoteVersions, SoldNumbers, SalesWorkspace):
             stat = path.stat()
             self._copy_signatures[path] = (signature, stat.st_mtime_ns, stat.st_size)
 
-    def local_copy_view(self):
+    def local_copy_view(self, *, copies=("requests", "sales", "quotes")):
         from .request_excel import write_request_copy
         from .sales_excel import write_sales
         from .confirmed_excel import write_confirmed_quotes
         value = self.view()
         # Excel is an export/restore file; DB remains authoritative if Excel is locked.
-        for name in ("requests", "sales", "quotes"):
+        for name in copies:
             try:
                 if name == "requests":
                     self._write_copy_if_changed(self.request_copy_path, value["requests"],
@@ -878,13 +878,16 @@ class Manager(QuoteVersions, SoldNumbers, SalesWorkspace):
                 any(d["id"] == identifier and d.get("workingCopy") for d in working),
                 "삭제할 견적을 다시 선택해주세요.")
         removed = next((d for d in quotes if d["id"] == identifier), None)
+        dismissed = list(self.vault.preference("dismissed_server_quotes", []) or [])
         if removed and removed.get("sourceRequestId"):
             # A shared confirmed copy must not reappear from the server after this local delete.
-            dismissed = list(self.vault.preference("dismissed_server_quotes", []) or [])
-            self.vault.save_preference("dismissed_server_quotes", [*dismissed, removed["sourceRequestId"]][-5000:])
-        self.vault.save_preference("confirmed_quotes", [d for d in quotes if d["id"] != identifier])
-        self.vault.save_preference("drafts", [d for d in self.vault.preference("drafts", []) if d["id"] != identifier])
-        return self.view()
+            dismissed.append(removed["sourceRequestId"])
+        self.vault.backup("quote_local_delete")
+        self.vault.save_quote_deletion(
+            [d for d in quotes if d["id"] != identifier],
+            [d for d in working if d["id"] != identifier], dismissed)
+        # The DB deletion is authoritative even when the workbook is open in Excel.
+        return self.local_copy_view(copies=("quotes",))
 
     def confirm_draft(self, draft):
         validate_draft(draft)

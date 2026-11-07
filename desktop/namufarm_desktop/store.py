@@ -197,6 +197,14 @@ class Vault:
             scope = "workspace:" + name
             db.execute("INSERT OR REPLACE INTO config VALUES (?,?)", (scope, self._seal(value, scope)))
 
+    def save_quote_deletion(self, quotes, drafts, dismissed):
+        """Remove local copies and retain their dismissal in one transaction."""
+        with self.mutex, self._db() as db:
+            for name, value in (("confirmed_quotes", quotes), ("drafts", drafts),
+                                ("dismissed_server_quotes", sorted(set(dismissed)))):
+                scope = "workspace:" + name
+                db.execute("INSERT OR REPLACE INTO config VALUES (?,?)", (scope, self._seal(value, scope)))
+
     def rows(self, kind):
         with self.mutex, self._db() as db:
             return [self._open(blob, kind + ":" + index) for index, blob in db.execute("SELECT id,body FROM cache WHERE kind=?", (kind,))]
