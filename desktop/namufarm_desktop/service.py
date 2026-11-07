@@ -364,10 +364,15 @@ class Manager(QuoteVersions, SoldNumbers, SalesWorkspace):
         recovery = self.vault.preference("quote_write_pending")
         if recovery:
             pending = [*pending, {"id": recovery["draft"]["id"], "action": "quote_write"}]
+        pending_counts = None
+        try:
+            pending_counts = self.vault.storage_status()["counts"]
+        except (UserError, OSError):
+            quote_error = " · ".join(filter(None, (quote_error, "전송·확인 대기 내역을 확인하지 못했습니다. 자료 보관 상태를 확인해주세요.")))
         return {"requests": sorted(decoded_requests, key=lambda r: r["sequence"], reverse=True),
                 "sales": sorted(decoded_sales, key=lambda r: r["sequence"], reverse=True),
                 "drafts": drafts, "draftExpiryDays": expiry_days, "confirmedQuotes": active, "quoteRecovery": recovery,
-                "copyError": " · ".join(filter(None, (quote_error, sale_error))), "pending": pending,
+                "copyError": " · ".join(filter(None, (quote_error, sale_error))), "pending": pending, "pendingCounts": pending_counts,
                 "paired": self.credentials.get("paired") is True,
                 "transferNotice": " · ".join(filter(None, (getattr(self, "_draft_purge_notice", ""), getattr(self, "transfer_notice", "")))),
                 "salesSyncConflict": bool(getattr(self, "sales_conflict_number", None))}

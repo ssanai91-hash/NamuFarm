@@ -4675,6 +4675,8 @@ class SellerWindow(MainWindow):
         if not hasattr(self, "storage_status"):
             return
         pending = len(self.data.get("pending", []))
+        if isinstance(self.data.get("pendingCounts"), dict):
+            pending = sum(self.data["pendingCounts"].values())
         color = "#52645c"
         if getattr(self, "demo_mode", False):
             text = "예시 자료 · 실제 저장·서버 반영은 하지 않습니다."
@@ -4684,7 +4686,7 @@ class SellerWindow(MainWindow):
             local = "입력 중 · PC 저장 필요" if self.dirty else "PC 저장완료"
             if self.data.get("copyError"):
                 local = "로컬 자료 확인 필요"
-            transfer = f"서버 반영 대기 {pending:,}건"
+            transfer = f"전송·확인 대기 {pending:,}건"
             if self.task is not None:
                 transfer += " · 처리 중"
             elif self._last_storage_transfer_error:
@@ -4698,10 +4700,10 @@ class SellerWindow(MainWindow):
             key = "danger" if failed else "waiting" if pending else "accent"
             self.sidebar_connection.setStyleSheet(f"color:{TOKENS[key]};font-size:13px;")
             self.sidebar_connection.setText("● " + ("오류" if failed else "서버 반영 대기" if pending else "연결됨" if self.data.get("paired") else "연결 전"))
-            self.sidebar_transfer.setText(self.last_sync_label.text().split(" ")[-1][:5] + f" 가져옴 · 전송 대기 {pending:,}건")
+            self.sidebar_transfer.setText(self.last_sync_label.text().split(" ")[-1][:5] + f" 가져옴 · 전송·확인 대기 {pending:,}건")
         if hasattr(self, "status_pending"):
             self.status_connection.setText(self.sidebar_connection.text())
-            self.status_pending.setText(f"전송 대기 {pending:,}건")
+            self.status_pending.setText(f"전송·확인 대기 {pending:,}건")
             self.status_auto.setText("자동 가져오기 켜짐" if self.auto_check.isChecked() else "자동 가져오기 꺼짐")
         self.storage_status.setText(text)
         self.storage_status.setToolTip(
