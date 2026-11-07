@@ -17,9 +17,10 @@ from .commerce import (validate_draft, order_from_draft, quote_document, trackin
                        shipping_problem, shipping_fingerprint, shipping_prepared, shipping_ready, normalize_sms_recipient, validate_working_draft)
 from .sales_workspace import SalesWorkspace
 from .sold_numbers import SoldNumbers
+from .quote_versions import QuoteVersions, quote_version
 
 
-class Manager(SoldNumbers, SalesWorkspace):
+class Manager(QuoteVersions, SoldNumbers, SalesWorkspace):
     def __init__(self, vault, api=None):
         self.vault = vault
         self.credentials = vault.credentials()
@@ -38,6 +39,7 @@ class Manager(SoldNumbers, SalesWorkspace):
         self._server_info_cache = None
         self.progress_callback = None
         self.sales_snapshot_verified = False
+        self._last_head_check = None
         self.inbox_requests = [r for r in vault.rows("requests") if r.get("status", "신규") == "신규"]
         self.purge_expired_drafts()
 
@@ -107,21 +109,32 @@ class Manager(SoldNumbers, SalesWorkspace):
         if not pending:
             return
         if not pending.get("acknowledged"):
+            # Retry the very same operation ID and body; a lost reply never creates a second revision.
             try:
                 response = self.api.call(pending["action"], **pending["payload"])
             except ConflictError:
+                if pending["action"] == "revise_confirmed_quote":
+                    # Keep the seller's edit in the archive; the server copy is shown after the next download.
+                    self._archive_conflict(pending)
                 self.vault.save_preference("quote_write_pending", None)
-                raise UserError("서버의 견적 상태가 변경되어 확정하지 못했습니다. 가져오기로 요청을 다시 확인해주세요.") from None
+                raise UserError("서버의 견적 상태가 변경되어 저장하지 못했습니다. 이 PC의 수정본은 보관했습니다. "
+                                "가져오기로 서버 최신 견적을 확인해주세요.") from None
             source = pending["draft"]["sourceRequestId"]
-            require(response.get("updated") is True and response.get("requestId") == source
-                    and response.get("status") == pending["status"],
-                    "견적 상태 저장을 확인하지 못했습니다. 가져오기로 같은 견적을 다시 확인해주세요.")
+            if pending["action"] == "revise_confirmed_quote":
+                pending["draft"], pending["status"] = self._accept_revision(pending, response)
+            else:
+                require(response.get("updated") is True and response.get("requestId") == source
+                        and response.get("status") == pending["status"],
+                        "견적 상태 저장을 확인하지 못했습니다. 가져오기로 같은 견적을 다시 확인해주세요.")
             pending["acknowledged"] = True
             self.vault.save_preference("quote_write_pending", pending)
             self.inbox_requests = [r for r in self.inbox_requests if r["requestId"] != source]
             marker = self.vault.snapshot_marker()
-            self.vault.replace_requests([r for r in self.vault.rows("requests") if r["requestId"] != source],
-                                        marker["requests"], marker["deletedRequests"],
+            rows = [r for r in self.vault.rows("requests") if r["requestId"] != source]
+            quote = response.get("quote") if pending["action"] == "revise_confirmed_quote" else None
+            if isinstance(quote, dict) and quote_version(quote) is not None:
+                rows.append(copy.deepcopy(quote))  # Keep the shared copy; its sequence is newer.
+            self.vault.replace_requests(rows, marker["requests"], marker["deletedRequests"],
                                         quote_read_mode=self.quote_read_mode)
         self._finish_quote_write()
 
@@ -279,6 +292,10 @@ class Manager(SoldNumbers, SalesWorkspace):
         self.quote_read_mode = mode if mode in ("annual-two-tabs", "legacy-storage") else None
         self.sold_reservation_supported = info.get("soldNumberReservation") == 1
         self.sold_labels_supported = info.get("soldDisplayNumbers") == 1
+        self.sync_head_supported = info.get("syncHead") == 1
+        # Shared confirmed quotes exist only in the current annual two-tab storage.
+        self.quote_versions = (info.get("confirmedQuoteVersion") == 1 and info.get("confirmedQuotePayment") == 1
+                               and self.quote_read_mode == "annual-two-tabs")
         return info
 
     def pair(self, invite):
@@ -383,6 +400,19 @@ class Manager(SoldNumbers, SalesWorkspace):
         require(self._sale_for_draft(draft) is None, "구매 확정된 견적은 수정할 수 없습니다.")
         local = next((d for d in self._local_quotes() if d["id"] == draft["id"]), None)
         if local:
+            link = local.get("serverQuote") or {}
+            # quote_versions reflects the last server check. An offline edit before any check
+            # stays local and is offered as a choice on the next download, never overwritten.
+            if self._versioned(draft) and local["quoteStatus"] in ("견적확정", "견적발송완료"):
+                from .quote_versions import local_key
+                if link.get("fingerprint") and link.get("localKey") == local_key(draft) and not local.get("serverConflict"):
+                    # Cost-only or local-only fields: no shared content changed.
+                    self._store_local_quote({**draft, "serverQuote": link}, local["quoteStatus"])
+                    return self.view()
+                require(not local.get("serverConflict"),
+                        "다른 기기에서 수정한 견적입니다. 목록에서 ‘서버 내용 사용’ 또는 ‘이 PC 수정본 저장’을 먼저 선택해주세요.")
+                # Customer-facing content is shared: save it as a new server version.
+                return self._revise_quote(draft, local["quoteStatus"])
             self._store_local_quote(draft, local["quoteStatus"])
             return self.view()
         if not draft.get("sourceRequestId") and draft.get("manualStatus") in ("견적확정", "견적발송완료"):
@@ -419,7 +449,10 @@ class Manager(SoldNumbers, SalesWorkspace):
         require(valid_id(source), "홈페이지 견적 요청에서 작성한 견적만 견적확정으로 처리할 수 있습니다.")
         pending = self.vault.preference("quote_write_pending")
         request = next((r for r in self.inbox_requests if r["requestId"] == source), None)
-        require((request is not None and request.get("status", "신규") == "신규") or
+        # With shared versions the send step already moved this request to 견적확정.
+        linked = self.quote_versions and any(q.get("sourceRequestId") == source and q.get("serverQuote")
+                                             for q in self._local_quotes())
+        require((request is not None and request.get("status", "신규") == "신규") or linked or
                 (pending is not None and pending["draft"]["sourceRequestId"] == source),
                 "가져오기로 서버의 견적요청을 다시 확인해주세요.")
         pricing = {"items": [{"species": item["species"], "specification": item.get("specification", ""),
@@ -432,6 +465,10 @@ class Manager(SoldNumbers, SalesWorkspace):
                 (draft["shippingFee"] if draft["isPrepaid"] else 0) + draft["taxAmount"] <= 2147483647,
                 "세액을 포함한 견적 총액이 저장 범위를 초과합니다.")
         require(len(canonical(pricing).encode("utf-8")) <= 60000, "견적 품목이나 규격을 줄여주세요.")
+        self.verify_server()
+        if self._versioned(draft):
+            # The shared version may already exist from the send step; same content only links.
+            return self._revise_quote(draft, "견적확정")
         return self._write_quote_state(draft, "견적확정", "save_quote_pricing",
                                        {"requestId": source, "quotePricing": pricing})
 
@@ -504,17 +541,24 @@ class Manager(SoldNumbers, SalesWorkspace):
         """Allow delivery from a current request without advancing its quote state."""
         source = draft.get("sourceRequestId", "")
         if not source:
-            return
+            return None
+        self.verify_server()
         local = next((q for q in self._local_quotes() if q["id"] == draft["id"]), None)
         if local:
             self._confirmed_source(draft)
-            return
-        request = next((r for r in self.inbox_requests if r["requestId"] == source), None)
-        require(request is not None and request.get("status", "신규") == "신규",
-                "가져오기로 서버의 견적요청을 다시 확인해주세요.")
-        # Keep the sent input/identifier recoverable on reopen, even if sending fails.
-        # Confirmed Excel and server status are changed only by confirm_quote().
-        self.save_draft(draft)
+        else:
+            request = next((r for r in self.inbox_requests if r["requestId"] == source), None)
+            require(request is not None and request.get("status", "신규") == "신규",
+                    "가져오기로 서버의 견적요청을 다시 확인해주세요.")
+        if self._versioned(draft):
+            # Shared quotes: the server copy must equal what is sent. This also moves a new
+            # request to 견적확정, so another device cannot quote it with a different price.
+            return self._delivery_version(draft)
+        if not local:
+            # Keep the sent input/identifier recoverable on reopen, even if sending fails.
+            # Confirmed Excel and server status are changed only by confirm_quote().
+            self.save_draft(draft)
+        return None
 
     def payment_delivery_state(self, identifier):
         require(valid_id(identifier), "견적 식별자를 확인해주세요.")
@@ -536,7 +580,9 @@ class Manager(SoldNumbers, SalesWorkspace):
         normalize_sms_recipient(draft.get("customerPhone", "") if recipient_phone is None else recipient_phone)
         # Reserve before sending the notice; unsupported servers must not fail only
         # after the customer was already told their payment was received.
-        self._sold_number_for_draft(draft)
+        number = self._payment_number(draft)
+        # Shared web quote: never tell the customer about a payment another device already registered.
+        self._payment_ready(draft, number)
         return self.send_quote_sms(draft, text, payment=True, recipient_phone=recipient_phone)
 
     def refresh_payment_sms_status(self, identifier):
@@ -549,20 +595,37 @@ class Manager(SoldNumbers, SalesWorkspace):
             draft.get("customerPhone", "") if recipient_phone is None else recipient_phone)
         recipient = recipient_digits
         source = draft.get("sourceRequestId", "")
+        version = None
         if payment:
             self._confirmed_source(draft)
+            # A payment notice is not a quote delivery; shared quotes keep it out of the quote version.
+            if self.quote_versions:
+                source = ""
         else:
-            self._prepare_quote_delivery(draft)
+            version = self._prepare_quote_delivery(draft)
         fields = dict(requestId=source, recipientPhone=recipient, text=text.strip())
+        if version:
+            require(recipient == draft["customerPhone"],
+                    "공유 견적은 견적의 고객 전화번호로만 보낼 수 있습니다. 번호가 다르면 견적의 전화번호를 먼저 수정해주세요.")
+            fields.update(expectedRevision=version["expectedRevision"], quoteFingerprint=version["quoteFingerprint"])
         result, delivery = self._dispatch_delivery(draft["id"], "sms", recipient, fields,
-                                                   quote_delivery_fingerprint(draft), payment=payment)
+                                                   quote_delivery_fingerprint(draft), payment=payment,
+                                                   reservation=version)
         return {**result, "delivery": delivery}
 
     def refresh_quote_sms_status(self, identifier, *, payment=False):
         state = self.payment_delivery_state(identifier) if payment else self.quote_delivery_state(identifier)
         message_id = state.get("smsMessageId", "")
         require(message_id, "확인할 문자 발송 기록이 없습니다.")
-        result = self.api.call("quote_sms_status", messageId=message_id)
+        linked = {"requestId": state.get("smsRequestId", ""), "deliveryId": state.get("smsDeliveryId", "")}
+        if linked["requestId"] and linked["deliveryId"] and not payment:
+            try:
+                result = self.api.call("quote_sms_status", messageId=message_id, **linked)
+            except ConflictError:
+                # A newer delivery replaced this one on the shared quote; read the carrier result only.
+                result = self.api.call("quote_sms_status", messageId=message_id)
+        else:
+            result = self.api.call("quote_sms_status", messageId=message_id)
         require(result.get("checked") is True and result.get("messageId") == message_id,
                 "문자 발송 결과를 확인하지 못했습니다.")
         sms_state = str(result.get("state") or "pending")
@@ -582,7 +645,8 @@ class Manager(SoldNumbers, SalesWorkspace):
         info = self._require_delivery_server()
         require(info.get("quoteEmail") is True,
                 "현재 PC가 연결된 Apps Script 웹앱은 메일 기능 이전 버전입니다. 기존 /exec 배포를 최신 코드로 새 버전 배포해주세요.")
-        require(info.get("quoteEmailSender") == "ssanai91@gmail.com",
+        # Newer servers no longer publish the sender in the public info; email_profile still reports it.
+        require(info.get("quoteEmailSender") in (None, "ssanai91@gmail.com"),
                 "Apps Script 메일 발신 계정을 ssanai91@gmail.com으로 배포해주세요.")
         result = self.api.call("email_profile")
         email = result.get("senderEmail", "")
@@ -610,14 +674,16 @@ class Manager(SoldNumbers, SalesWorkspace):
             attachment_base64 = base64.b64encode(path.read_bytes()).decode("ascii")
 
         source = draft.get("sourceRequestId", "")
-        self._prepare_quote_delivery(draft)
+        version = self._prepare_quote_delivery(draft)
         fields = dict(requestId=source, recipientEmail=recipient,
                       senderName=draft.get("issuer", {}).get("businessName") or "나무팜농원",
                       quoteNumber=draft.get("requestReceiptNumber") or ("PCQ_" + draft["id"][:8]),
                       subject=subject.strip(), bodyText=body_text.strip(), bodyHtml=body_html.strip(),
                       attachmentName=attachment_name, attachmentBase64=attachment_base64)
+        if version:
+            fields.update(expectedRevision=version["expectedRevision"], quoteFingerprint=version["quoteFingerprint"])
         result, delivery = self._dispatch_delivery(draft["id"], "email", recipient, fields,
-                                                   quote_delivery_fingerprint(draft))
+                                                   quote_delivery_fingerprint(draft), reservation=version)
         return {**result, "delivery": delivery}
 
     def send_sales_report_email(self, recipient, attachment_name, attachment_data, subject, body_text):
@@ -660,7 +726,7 @@ class Manager(SoldNumbers, SalesWorkspace):
                 not self.payment_delivery_state(identifier).get("pendingDelivery"),
                 "이전 발송 결과를 먼저 확인해주세요.")
 
-    def _dispatch_delivery(self, identifier, channel, recipient, fields, fingerprint, *, payment=False):
+    def _dispatch_delivery(self, identifier, channel, recipient, fields, fingerprint, *, payment=False, reservation=None):
         self._require_delivery_server()
         state = self._delivery_state(identifier, channel, payment)
         content_hash = hashlib.sha256(canonical(fields).encode("utf-8")).hexdigest()
@@ -673,14 +739,32 @@ class Manager(SoldNumbers, SalesWorkspace):
         else:
             pending = {"id": str(uuid.uuid4()), "channel": channel, "recipient": recipient,
                        "contentHash": content_hash, "quoteFingerprint": fingerprint, "startedAt": now_ms()}
+            if reservation:
+                pending["reservation"] = dict(reservation)
             state["pendingDelivery"] = pending
             self._save_delivery_state(identifier, channel, state, payment)  # Commit BEFORE network.
+        if reservation:
+            # One delivery per shared quote at a time; the same delivery ID makes a retry idempotent.
+            try:
+                self._reserve_delivery(pending.get("reservation") or reservation, pending["id"], channel)
+            except NetworkError:
+                raise UserError("발송 예약 결과를 확인하지 못했습니다. 아직 보내지 않았습니다. "
+                                "같은 내용으로 다시 보내거나 ‘결과 확인’을 눌러주세요.") from None
+            except UserError:
+                state.pop("pendingDelivery", None)
+                self._save_delivery_state(identifier, channel, state, payment)
+                raise
         try:
             result = self.api.call({"sms": "send_quote_sms", "email": "send_quote_email",
                                     "report_email": "send_sales_report_email"}[channel],
                                    **fields, deliveryId=pending["id"])
         except UserError as error:
             if getattr(error, "code", None) in {"INVALID", "NOT_READY", "CONFLICT", "UNAUTHORIZED", "BUSY", "UPGRADE_REQUIRED", "INVALID_ACTION"}:
+                # Rejected before the server's send journal: release this PC's reservation.
+                try:
+                    self._cancel_unsent_reservation(pending)
+                except UserError:
+                    pass
                 state.pop("pendingDelivery", None)
                 self._save_delivery_state(identifier, channel, state, payment)
                 raise
@@ -705,7 +789,9 @@ class Manager(SoldNumbers, SalesWorkspace):
             if channel == "sms":
                 state.update(smsSentAt=0, smsTo=pending["recipient"], senderPhone=result.get("senderPhone", ""),
                              smsMessageId=result["messageId"], smsState="pending", smsQuoteFingerprint=pending["quoteFingerprint"],
-                             smsStatusCode=str(result.get("statusCode", "2000")), smsStatusMessage="문자 발송을 접수했습니다.", smsUpdatedAt=now_ms())
+                             smsStatusCode=str(result.get("statusCode", "2000")), smsStatusMessage="문자 발송을 접수했습니다.", smsUpdatedAt=now_ms(),
+                             # The shared quote records final carrier success only for this exact delivery.
+                             smsDeliveryId=pending["id"], smsRequestId=(pending.get("reservation") or {}).get("requestId", ""))
             else:
                 state.update(emailSentAt=now_ms(), emailTo=pending["recipient"], senderEmail=result.get("senderEmail", "ssanai91@gmail.com"),
                              emailQuoteFingerprint=pending["quoteFingerprint"])
@@ -722,6 +808,8 @@ class Manager(SoldNumbers, SalesWorkspace):
         require(pending and pending.get("channel") == channel, "확인할 발송 번호가 없습니다.")
         result = self.api.call("quote_delivery_status", deliveryId=pending["id"])
         if result.get("found") is False:
+            # No send journal: nothing was sent. Release a shared-quote reservation; never resend here.
+            self._cancel_unsent_reservation(pending)
             return self._resolve_delivery(identifier, channel, state, "not_found", payment=payment)
         require(result.get("found") is True and result.get("channel") == channel, "발송 결과를 확인하지 못했습니다.")
         outcome = result.get("state")
@@ -789,6 +877,11 @@ class Manager(SoldNumbers, SalesWorkspace):
         require(any(d["id"] == identifier for d in quotes) or
                 any(d["id"] == identifier and d.get("workingCopy") for d in working),
                 "삭제할 견적을 다시 선택해주세요.")
+        removed = next((d for d in quotes if d["id"] == identifier), None)
+        if removed and removed.get("sourceRequestId"):
+            # A shared confirmed copy must not reappear from the server after this local delete.
+            dismissed = list(self.vault.preference("dismissed_server_quotes", []) or [])
+            self.vault.save_preference("dismissed_server_quotes", [*dismissed, removed["sourceRequestId"]][-5000:])
         self.vault.save_preference("confirmed_quotes", [d for d in quotes if d["id"] != identifier])
         self.vault.save_preference("drafts", [d for d in self.vault.preference("drafts", []) if d["id"] != identifier])
         return self.view()
@@ -809,11 +902,15 @@ class Manager(SoldNumbers, SalesWorkspace):
                     "이미 판매 · 고객 관리로 이동한 문의입니다.")
 
         self.save_draft(draft)
-        order = order_from_draft(draft, self._sold_number_for_draft(draft))
+        number = self._payment_number(draft)
+        # Shared web quote: claim it online first; a claim by another device stops here.
+        shared = self._claim_quote_payment(draft, number)
+        order = order_from_draft(draft, number)
         private = {"order": order, "quoteDocumentJson": canonical(quote_document(draft))}
         meta, event_id = metadata(order), str(uuid.uuid4())
         payload = {"eventId": event_id, "metadata": meta, "personalData": private,
-                   "fingerprint": customer_digest(meta, private), "protocolVersion": 5, "sourceRequestId": source}
+                   "fingerprint": customer_digest(meta, private), "protocolVersion": 5, "sourceRequestId": source,
+                   **shared}
         require(len(canonical(payload).encode("utf-8")) <= 63000, "견적 품목이나 메모를 줄여주세요.")
         return self._save_paid_sale(draft, payload)
 
@@ -846,12 +943,15 @@ class Manager(SoldNumbers, SalesWorkspace):
             require(state.get("smsState") == "success" and
                     state.get("smsQuoteFingerprint") == quote_delivery_fingerprint(draft),
                     "현재 주문·입금 금액의 문자 전송 성공을 확인한 뒤 판매 등록할 수 있습니다.")
-        order = order_from_draft(draft, self._sold_number_for_draft(draft))
+        number = self._payment_number(draft)
+        # Online only for shared web quotes: the server claim prevents a second device's order.
+        shared = self._claim_quote_payment(draft, number)
+        order = order_from_draft(draft, number)
         private = {"order": order, "quoteDocumentJson": canonical(quote_document(draft))}
         meta, event_id = metadata(order), str(uuid.uuid4())
         payload = {"eventId": event_id, "metadata": meta, "personalData": private,
                    "fingerprint": customer_digest(meta, private), "protocolVersion": 5,
-                   "sourceRequestId": draft.get("sourceRequestId", "")}
+                   "sourceRequestId": draft.get("sourceRequestId", ""), **shared}
         require(len(canonical(payload).encode("utf-8")) <= 63000, "주문 품목이나 메모를 줄여주세요.")
         return self._save_paid_sale(draft, payload)
 
@@ -941,14 +1041,16 @@ class Manager(SoldNumbers, SalesWorkspace):
                     "발행 견적서와 판매 기록이 일치하지 않습니다.")
         return private
 
-    def _pages(self, action, field, inbox_only=False):
-        rows, cursor, references, deleted = [], 0, set(), set()
+    def _pages(self, action, field, inbox_only=False, *, start=0, snapshot=None):
+        """Full snapshot from 0, or an incremental page set after ``start`` (snapshot=False)."""
+        rows, cursor, references, deleted = [], start, set(), set()
         snapshot_id, total, watermark, received = None, None, None, 0
-        snapshot = field == "requests" and self.request_snapshot
+        snapshot = (field == "requests" and self.request_snapshot) if snapshot is None else snapshot
         for _ in range(100):
             label = "견적요청" if field == "requests" else "판매자료"
             self.report_progress(f"{label} 가져오는 중… · {_ + 1}번째")
-            extra = {"snapshot":True, **({"snapshotId":snapshot_id} if snapshot_id else {})} if snapshot else {}
+            extra = ({"snapshot":True, **({"snapshotId":snapshot_id} if snapshot_id else {})} if snapshot else
+                     {"snapshot": False} if field == "requests" else {})
             response = self.api.call(action, afterSequence=cursor, **extra)
             page = response.get(field)
             require(isinstance(page, list) and len(page) <= 100 and type(response.get("hasMore")) is bool
@@ -1060,7 +1162,7 @@ class Manager(SoldNumbers, SalesWorkspace):
                 self.inbox_requests = [r for r in self.inbox_requests if r["requestId"] != payload["requestId"]]
             self.vault.acknowledge(operation["id"])
 
-    def sync_requests(self):
+    def sync_requests(self, *, delta=False):
         require(self.credentials.get("paired") is True, "PC를 먼저 연결해주세요.")
         self.verify_server()
         recovery_error = ""
@@ -1083,20 +1185,66 @@ class Manager(SoldNumbers, SalesWorkspace):
                 raise
             except UserError as error:
                 recovery_error = str(error)
-        requests, cursor, deleted = self._pages("list_requests", "requests", inbox_only=True)
-        self.report_progress("받은 견적요청을 PC에 저장하는 중…")
-        self.vault.replace_requests(requests, cursor, deleted,
-                                    quote_read_mode=self.quote_read_mode, authoritative=True)
-        self.inbox_requests = [r for r in requests if r.get("status", "신규") == "신규"]
+        if delta:
+            # Changed rows only. Merged by UUID with the cursor in one transaction; failure keeps the old list.
+            marker = self.vault.snapshot_marker()
+            requests, cursor, expired = self._pages("list_requests", "requests", start=marker["requests"], snapshot=False)
+            self.report_progress("바뀐 견적요청을 PC에 저장하는 중…")
+            self.vault.merge_requests(requests, cursor, expired, quote_read_mode=self.quote_read_mode)
+        else:
+            # Confirmed rows are kept too, so quotes confirmed on a phone reach this PC's list.
+            requests, cursor, _expired = self._pages("list_requests", "requests")
+            self.report_progress("받은 견적요청을 PC에 저장하는 중…")
+            self.vault.replace_requests(requests, cursor, set(),
+                                        quote_read_mode=self.quote_read_mode, authoritative=True)
+            self.vault.save_preference("request_full_sync_at", now_ms())
+        self.inbox_requests = [r for r in self.vault.rows("requests") if r.get("status", "신규") == "신규"]
         self.purge_expired_drafts()
+        try:
+            recovery_error = " · ".join(filter(None, (recovery_error, self._merge_server_quotes())))
+        except OSError:
+            recovery_error = " · ".join(filter(None, (recovery_error, "확정견적 엑셀 갱신 대기 · 열린 엑셀을 닫아주세요.")))
+        except AuthenticationError:
+            raise
+        except UserError as error:
+            recovery_error = " · ".join(filter(None, (recovery_error, str(error))))
         # Sale numbering is prepared by sales/payment actions, not inbox reads.
         value = self.local_copy_view()
         value["copyError"] = " · ".join(filter(None, (value.get("copyError"), recovery_error)))
         return value
 
+    def _delta_ready(self):
+        marker = self.vault.snapshot_marker()
+        last = self.vault.preference("request_full_sync_at", 0) or 0
+        return (self.request_snapshot and marker.get("quoteReadMode") == self.quote_read_mode
+                and marker["requests"] > 0 and 0 <= now_ms() - last < 86400000)
+
     def auto_sync(self):
-        """Timer work is serialized by the UI; never drops local outbox entries."""
-        self.sync_requests()
+        """Timer work is serialized by the UI; never drops local outbox entries.
+
+        Every minute only the server's change counters are read (no sheet scan or lock).
+        A changed request counter downloads the changed rows; once a day the full snapshot.
+        Returns None when nothing changed, so the screen is not redrawn.
+        """
+        self.verify_server()
+        changed = True
+        if not self._delta_ready():
+            self.sync_requests()
+        elif self.sync_head_supported:
+            head = self.check_sync_head()["requestSequence"]
+            marker = self.vault.snapshot_marker()
+            last = self._last_head_check
+            # The counter may run ahead of a failed write. Never store it as the cursor;
+            # re-check a stuck value only every 10 minutes.
+            if head > marker["requests"] and (last is None or last[0] != head or monotonic() - last[1] > 600):
+                self._last_head_check = (head, monotonic())
+                self.sync_requests(delta=True)
+            else:
+                changed = False
+        else:
+            self.sync_requests(delta=True)
+        if not changed and not any(op["action"] == "save_sale" for op in self.vault.pending()):
+            return None
         return self._auto_upload_sales(raise_conflict=True)
 
     def _auto_upload_sales(self, *, raise_conflict=False):

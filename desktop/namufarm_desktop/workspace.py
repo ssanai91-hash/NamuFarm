@@ -4831,7 +4831,8 @@ class SellerWindow(MainWindow):
         fill_table(self.draft_table, [(
             draft_quote_number(d),
             (status + f" · {self.data['draftExpiryDays'][d['id']]}일 후 정리"
-             if status == "작성중" and self.data.get("draftExpiryDays", {}).get(d["id"], 31) <= 3 else status),
+             if status == "작성중" and self.data.get("draftExpiryDays", {}).get(d["id"], 31) <= 3 else
+             status + " · 서버 확인 필요" if d.get("serverConflict") else status),
             timestamp(d["createdAt"]),
             d["customerName"],
             d["customerPhone"],
@@ -5307,8 +5308,30 @@ class SellerWindow(MainWindow):
         status = self.draft_statuses[index] if index < len(self.draft_statuses) else ""
         if status == "작성중":
             self.edit_quote(draft=draft, request_status="신규")
+        elif draft.get("serverConflict"):
+            self.choose_server_quote(draft)
         else:
             self.open_delivery_quote(draft, status)
+
+    def choose_server_quote(self, draft):
+        """Another device changed this shared quote while this PC has a different copy."""
+        if getattr(self, "demo_mode", False) or not self.manager or self.task:
+            return
+        box = QMessageBox(self)
+        box.setWindowTitle("다른 기기에서 수정한 견적")
+        box.setText(f"{draft_quote_number(draft)} · {draft.get('customerName', '')}\n\n"
+                    "다른 기기에서 이 견적을 수정했고, 이 PC의 내용과 다릅니다.\n"
+                    "사용할 내용을 선택해주세요. 선택하지 않은 내용은 PC 보관함 백업에 남습니다.")
+        server = box.addButton("서버 내용 사용", QMessageBox.ButtonRole.AcceptRole)
+        local = box.addButton("이 PC 수정본 저장", QMessageBox.ButtonRole.DestructiveRole)
+        box.addButton("나중에", QMessageBox.ButtonRole.RejectRole)
+        box.exec()
+        clicked = box.clickedButton()
+        if clicked not in (server, local):
+            return
+        use_server = clicked is server
+        identifier = draft["id"]
+        self.run_job("서버 확정견적과 맞추는 중…", lambda: self.manager.resolve_quote_conflict(identifier, use_server))
 
     def delete_selected_draft(self):
         if getattr(self, "demo_mode", False) or not self.manager or self.task:
@@ -5528,7 +5551,7 @@ class SellerWindow(MainWindow):
         if self.stack.currentIndex() in (self.PAGE_FARMS, self.PAGE_SPECIES, self.PAGE_INQUIRIES):
             return
         if self.manager and self.data["paired"] and self.auto_check.isChecked() and not self.task and not self.dirty and not self.conflict:
-            self.run_job("AUTO SYNC  >  서버 동기화 중…", self.manager.auto_sync)
+            self.run_job("AUTO SYNC  >  변경 확인 중…", self.manager.auto_sync, self.auto_synced)
 
 
 

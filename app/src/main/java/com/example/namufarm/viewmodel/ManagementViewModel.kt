@@ -582,6 +582,52 @@ class ManagementViewModel(
         return currentSeq
     }
 
+    /** Same ORDER_ numbering as 매매 orders on this phone (daily counter). */
+    fun nextWebOrderNumber(context: Context): String {
+        val datePart = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.KOREA).format(java.util.Date())
+        return "ORDER_${datePart}_${String.format("%03d", getNextOrderSequence(context))}"
+    }
+
+    /**
+     * Local 매매 order for a web quote whose payment the server already confirmed under [orderNumber].
+     * Idempotent by order number; the order and its sync entry are one Room transaction.
+     * Web quote rows are not linked to farm stock, so no stock is deducted here.
+     */
+    suspend fun createPaidWebOrder(orderNumber: String, record: com.example.namufarm.quotation.QuoteWorkflowRecord) =
+        withContext(Dispatchers.IO) {
+            val draft = record.draft
+            val lines = draft.validate(com.example.namufarm.quotation.QuoteDelivery.COMPLETE)
+            val amount = com.example.namufarm.quotation.sharedAmount(draft)
+            val tax = if (draft.recipient.formalQuoteRequested) draft.options.taxAmount() else 0L
+            val number = record.request.receiptNumber.ifBlank { record.request.requestId }
+            val order = OrderEntity(
+                orderNumber = orderNumber,
+                orderDate = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.KOREA).format(java.util.Date()),
+                customerPhone = draft.phone.filter(Char::isDigit),
+                totalQty = lines.sumOf { it.orderQty },
+                totalPrice = amount.toInt(),
+                itemSummary = com.example.namufarm.domain.order.OrderSummaryCodec.encode(lines),
+                receiverName = draft.recipient.recipientName.ifBlank { draft.recipient.customerName },
+                note = "웹 견적 $number · 서버 입금확인" + if (tax > 0) " · 세액 포함" else "",
+                status = "입금확인",
+                isPrepaid = draft.prepaid,
+                shippingFee = draft.shipping()
+            )
+            val items = lines.map {
+                SheetOrderItemDto(farm_name = com.example.namufarm.domain.order.OrderSummaryCodec.MANUAL_FARM_LABEL,
+                    species_name = it.speciesName, quality = it.quality, age = it.age, size = it.size,
+                    plant_type = it.plantType, order_qty = it.orderQty, retail_price = it.retailPrice)
+            }
+            syncManager.masters.database.withTransaction {
+                if (dao.getTodayOrders().none { it.orderNumber == orderNumber }) {
+                    dao.insertOrder(order)
+                    enqueuePendingSync(PendingSyncType.ORDER, PendingOrderSyncPayload(order = order, items = items))
+                }
+            }
+            refreshLocalState()
+            _uiState.update { it.copy(todayOrders = dao.getTodayOrders(), message = "입금확인 주문을 매매에 저장했습니다 · $orderNumber") }
+        }
+
     // 🚨 주문 확정 로직 업데이트 (context 파라미터 추가!)
     fun convertQuoteToOrder(quote: QuoteEntity, context: Context) {
         viewModelScope.launch(Dispatchers.IO) {
@@ -631,11 +677,16 @@ class ManagementViewModel(
                 }
             }
 
-            // 1) 로컬 DB 먼저 주문 확정
-            val skipped = syncManager.masters.database.withTransaction {
+            // 1) 주문·견적 삭제·로컬 재고·전송대기를 한 Room 트랜잭션으로 저장한다.
+            // 중간 종료 시 주문만 남고 전송대기가 빠지는 상태를 만들지 않는다. 네트워크는 트랜잭션 밖.
+            val (skipped, pendingId) = syncManager.masters.database.withTransaction {
                 dao.insertOrder(newOrder)
                 dao.deleteQuote(quote)
-                deductLocalInventoryFromSummary(quote.itemSummary)
+                val skippedItems = deductLocalInventoryFromSummary(quote.itemSummary)
+                skippedItems to enqueuePendingSync(
+                    PendingSyncType.ORDER,
+                    PendingOrderSyncPayload(order = newOrder, items = itemsToDeduct)
+                )
             }
             val skippedNotice = if (skipped.isEmpty()) "" else
                 "\n재고 차감을 건너뛴 품목: ${skipped.joinToString(", ")} (숨긴 묘목·삭제된 농원)"
@@ -660,16 +711,7 @@ class ManagementViewModel(
                 )
             }
 
-            // 2) pending 큐 등록
-            val pendingId = enqueuePendingSync(
-                PendingSyncType.ORDER,
-                PendingOrderSyncPayload(
-                    order = newOrder,
-                    items = itemsToDeduct
-                )
-            )
-
-            // 3) 구글시트 업로드는 1번만
+            // 2) 구글시트 업로드는 1번만
             val isCloudSuccess = syncManager.uploadOrderToSheet(
                 orderEntity = newOrder,
                 itemsToDeduct = itemsToDeduct

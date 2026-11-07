@@ -50,7 +50,8 @@ internal fun InitialConfirmedQuoteDialog(request: WebQuoteRequestEntity, draft: 
     originalView: Boolean = false, sendEnabled: Boolean = true, onSms: (() -> Unit)? = null,
     onBeforeFormalSend: suspend (String, QuoteDocument) -> Unit = { _, _ -> },
     onFormalOpened: (String, QuoteDocument) -> Unit = { _, _ -> },
-    onRetryConfirmation: (() -> Unit)? = null, feedback: String? = null) {
+    onRetryConfirmation: (() -> Unit)? = null, feedback: String? = null,
+    onPayment: (() -> Unit)? = null) {
     val context = LocalContext.current
     var formal by remember { mutableStateOf(false) }
     var firstQuote by remember { mutableStateOf(false) }
@@ -110,6 +111,12 @@ internal fun InitialConfirmedQuoteDialog(request: WebQuoteRequestEntity, draft: 
             }
             if (onRetryConfirmation != null) OutlinedButton(onClick = onRetryConfirmation,
                 modifier = Modifier.fillMaxWidth()) { Text("발송완료 결과 확인") }
+            // Shared web quotes only: the server claim keeps PC and other phones from a second order.
+            if (onPayment != null) Button(onClick = onPayment, enabled = sendEnabled,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp), shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = documentBlue)) {
+                Text("입금확인", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            }
             }
         }) {
         LazyColumn(Modifier.fillMaxWidth(), contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp)) {
@@ -117,7 +124,8 @@ internal fun InitialConfirmedQuoteDialog(request: WebQuoteRequestEntity, draft: 
                 if (record != null && record.revision > 0) {
                     Text("수정 ${record.revision}회 · ${resultDate(record.revisedAt)}", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = documentGreen)
                     Surface(color = Color(0xFFFDF1DC), shape = RoundedCornerShape(10.dp)) {
-                        Text("수정한 내용은 이 휴대폰에만 저장돼요. PC 나피에서 입금확인할 때는 PC에서도 같은 내용으로 수정해주세요.",
+                        Text(if (record.shared != null) "수정한 내용은 서버에 저장되어 PC 나피·다른 휴대폰에도 같은 견적으로 보여요."
+                            else "수정한 내용은 이 휴대폰에만 저장돼요. PC 나피에서 입금확인할 때는 PC에서도 같은 내용으로 수정해주세요.",
                             Modifier.padding(12.dp), fontSize = 14.sp, color = Color(0xFF6B4300))
                     }
                     if (record.revisedUnsent()) Text("수정 후 미발송", fontSize = 14.sp, color = NamuColors.danger, fontWeight = FontWeight.Bold)

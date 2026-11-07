@@ -39,12 +39,14 @@ import kotlinx.coroutines.withContext
 @Composable
 internal fun InitialQuoteScreen(viewModel: InitialQuoteViewModel, connection: InitialQuoteConnection,
     inbox: InitialQuoteUiState, onSync: () -> Unit,
-    onRead: (String) -> Unit, onDelete: (String) -> Unit) {
+    onRead: (String) -> Unit, onDelete: (String) -> Unit,
+    newOrderNumber: (() -> String)? = null,
+    onPaidOrder: (suspend (String, QuoteWorkflowRecord) -> Unit)? = null) {
     val context = LocalContext.current
     val store = remember(context) { AndroidQuoteWorkflowStore(context) }
     val workflow = remember(store, connection) { QuoteWorkflow(store, connection::quoteAction, connection::confirmQuote,
         latestRequest = { connection.latestRequest(it.requestId) },
-        markConfirmedDelivered = connection::markConfirmedQuoteDelivered) }
+        markConfirmedDelivered = connection::markConfirmedQuoteDelivered, shared = connection.shared) }
     val management by viewModel.uiState.collectAsState()
     val scope = rememberCoroutineScope()
     var recordsReady by remember { mutableStateOf(false) }
@@ -83,9 +85,10 @@ internal fun InitialQuoteScreen(viewModel: InitialQuoteViewModel, connection: In
         if (feedback?.phase == "error") message = NamuMessage(feedback.error ?: "삭제하지 못했습니다.", true)
     }
     // Seller deletes from other devices arrive with a sync and remove local confirmed records.
+    // Shared versions in the downloaded rows are linked here (no network); different copies wait for a choice.
     LaunchedEffect(inbox.requests) {
         if (!recordsReady) return@LaunchedEffect
-        try { records = withContext(Dispatchers.IO) { workflow.records() } }
+        try { records = withContext(Dispatchers.IO) { workflow.reconcileShared(inbox.requests); workflow.records() } }
         catch (e: CancellationException) { throw e } catch (_: Exception) { }
     }
     val confirmed = records.filter { it.confirmedAt > 0 || it.revision > 0 }.sortedByDescending { it.confirmedAt }
@@ -103,7 +106,11 @@ internal fun InitialQuoteScreen(viewModel: InitialQuoteViewModel, connection: In
     LaunchedEffect(readyRequest?.requestId) {
         readyRequest?.let { onRead(it.requestId); message = null }
     }
-    val pending = records.filter { it.confirmationPending }.map { it.request }
+    // A new request whose shared delivery is reserved stays here until the seller answers '보냈나요?'.
+    fun awaitingAnswer(record: QuoteWorkflowRecord) = record.confirmationPending ||
+        (record.sharedDelivery != null && record.confirmedAt <= 0 && record.revision == 0)
+    val pending = records.filter(::awaitingAnswer).map { it.request }
+    val pendingIds = pending.map { it.requestId }.toSet()
     val requests = (pending + inbox.requests.filter { it.status == "신규" })
         .distinctBy { it.requestId }.filter { it.requestId !in confirmedIds }.sortedByDescending { it.sequence }
     // One list, newest first: phone-confirmed quotes by confirmation time, server-only quotes by receipt time.
@@ -113,8 +120,9 @@ internal fun InitialQuoteScreen(viewModel: InitialQuoteViewModel, connection: In
         ConfirmedListRow(saved.request.requestId, if (saved.confirmedAt > 0) saved.confirmedAt else requestTime(saved.request),
             closedState = state?.takeIf { it in CLOSED_QUOTE_STATES }, local = saved,
             needsAction = saved.confirmationPending || saved.pendingConfirmedDelivery != null || saved.revisedUnsent() ||
-                saved.delivery.smsState in setOf("pending", "unknown", "sending"))
-    } + inbox.requests.filter { it.requestId !in confirmedIds &&
+                saved.delivery.smsState in setOf("pending", "unknown", "sending") ||
+                saved.sharedDelivery != null || saved.sharedConflict != null || saved.sharedPayment?.orderCreated == false)
+    } + inbox.requests.filter { it.requestId !in confirmedIds && it.requestId !in pendingIds &&
         (it.status in CONFIRMED_QUOTE_STATES || it.status in CLOSED_QUOTE_STATES) }.map { saved ->
         ConfirmedListRow("server-${saved.requestId}", requestTime(saved),
             closedState = saved.status.takeIf { it in CLOSED_QUOTE_STATES }, remote = saved)
@@ -150,7 +158,7 @@ internal fun InitialQuoteScreen(viewModel: InitialQuoteViewModel, connection: In
                     itemsIndexed(requests, key = { _, request -> request.requestId }) { index, request ->
                         QuoteRequestCard(request, request.customerName, request.customerPhone,
                             status = "견적 대기", date = inquiryLocalTime(request.createdAt),
-                            pending = records.any { it.request.requestId == request.requestId && it.confirmationPending },
+                            pending = records.any { it.request.requestId == request.requestId && awaitingAnswer(it) },
                             enabled = !busy && !inbox.busy && !deleting,
                             onDelete = { deleteTarget = QuoteDeleteTarget(request.requestId, request.customerName,
                                 records.any { it.request.requestId == request.requestId && it.confirmationPending }) }) {
@@ -250,9 +258,20 @@ internal fun InitialQuoteScreen(viewModel: InitialQuoteViewModel, connection: In
             verifiedDelivery = saved?.delivery, verifyDelivery = true,
             onSave = { draft, action -> handleAction(draft, action) },
             onConfirmSent = { draft, method -> handleAction(draft, QuoteDelivery.COMPLETE, method) },
+            // '아직 안 보냈어요': release a shared reservation so PC/other phones can send.
+            onNotSent = { scope.launch {
+                try { withContext(Dispatchers.IO) { workflow.cancelShared(request.requestId) } }
+                catch (e: CancellationException) { throw e }
+                catch (e: Exception) { message = NamuMessage(e.message ?: "발송 예약을 풀지 못했습니다. 다시 눌러주세요.", true) }
+                finally {
+                    try { records = withContext(Dispatchers.IO) { workflow.records() } }
+                    catch (e: CancellationException) { throw e } catch (_: Exception) { }
+                }
+            } },
             onPrepareDocument = { draft ->
                 withContext(Dispatchers.IO) {
-                    workflow.prepareExternalDelivery(request, draft, QuoteDelivery.SMS)
+                    // A PDF may be shared through any app: it is reserved when the seller confirms sending.
+                    workflow.prepareExternalDelivery(request, draft, QuoteDelivery.SMS, reserve = false)
                 }
                 records = withContext(Dispatchers.IO) { workflow.records() }
             })
@@ -262,12 +281,12 @@ internal fun InitialQuoteScreen(viewModel: InitialQuoteViewModel, connection: In
     }
     result?.let { saved -> ConfirmedQuoteSessionDialog(
         records.firstOrNull { it.request.requestId == saved.request.requestId } ?: saved,
-        workflow, connection, ::changedConfirmed) { result = null } }
+        workflow, connection, ::changedConfirmed, newOrderNumber, onPaidOrder) { result = null } }
     serverResult?.let { saved ->
         val draft = remember(saved) { runCatching { serverConfirmedDraft(saved) }.getOrNull() }
         val local = records.firstOrNull { it.request.requestId == saved.requestId }
         if (local != null || draft != null) ConfirmedQuoteSessionDialog(local ?: QuoteWorkflowRecord(saved, checkNotNull(draft)),
-            workflow, connection, ::changedConfirmed) { serverResult = null }
+            workflow, connection, ::changedConfirmed, newOrderNumber, onPaidOrder) { serverResult = null }
         else InitialConfirmedQuoteDialog(saved, null, onDismiss = { serverResult = null })
     }
     deleteTarget?.let { target ->

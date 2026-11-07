@@ -2,6 +2,7 @@ package com.example.namufarm.quotation
 
 import com.example.namufarm.data.WebQuoteRequestEntity
 import com.google.gson.Gson
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -19,12 +20,15 @@ class ConfirmedQuoteRevisionTest {
         override fun save(record: QuoteWorkflowRecord) { json = Gson().toJson(record) }
     }
     private fun record() = QuoteWorkflowRecord(request, draft, delivery, confirmedAt = 100)
+    // reviseConfirmed is a suspend function since shared server versions (1.1.41).
+    private fun QuoteWorkflow.revise(record: QuoteWorkflowRecord, next: SellerQuoteDraft, latest: WebQuoteRequestEntity) =
+        runBlocking { reviseConfirmed(record, next, latest) }
     private fun workflow(store: MemoryStore) = QuoteWorkflow(store, { _, _ -> error("No server calls") },
         { _, _ -> error("No repricing") }, { 200 })
 
     @Test fun revisionIsLocalAndPreservesOriginalDateRequestAndDelivery() {
         val store = MemoryStore(); store.save(record())
-        val revised = workflow(store).reviseConfirmed(record(), draft.copy(fee = "7000"), latest)
+        val revised = workflow(store).revise(record(), draft.copy(fee = "7000"), latest)
         assertEquals(1, revised.revision); assertEquals(200L, revised.revisedAt)
         assertEquals(100L, revised.confirmedAt); assertEquals(request, revised.request)
         assertEquals(delivery, revised.delivery); assertEquals(draft, revised.originalDraft)
@@ -33,8 +37,8 @@ class ConfirmedQuoteRevisionTest {
     }
     @Test fun secondRevisionNeverOverwritesTheFirstConfirmedDraft() {
         val store = MemoryStore(); store.save(record()); val workflow = workflow(store)
-        val first = workflow.reviseConfirmed(record(), draft.copy(fee = "7000"), latest)
-        val second = workflow.reviseConfirmed(first, first.draft.copy(prepaid = true), latest)
+        val first = workflow.revise(record(), draft.copy(fee = "7000"), latest)
+        val second = workflow.revise(first, first.draft.copy(prepaid = true), latest)
         assertEquals(2, second.revision); assertEquals(draft, second.originalDraft)
         assertEquals(100L, second.confirmedAt)
     }
@@ -49,7 +53,7 @@ class ConfirmedQuoteRevisionTest {
         for (status in listOf("입금확인", "배송완료", "구매취소", "신규")) {
             val store = MemoryStore(); store.save(record()); val before = store.json
             assertThrows(IllegalStateException::class.java) {
-                workflow(store).reviseConfirmed(record(), draft.copy(fee = "7000"), latest.copy(status = status))
+                workflow(store).revise(record(), draft.copy(fee = "7000"), latest.copy(status = status))
             }
             assertEquals(before, store.json)
         }
@@ -62,22 +66,22 @@ class ConfirmedQuoteRevisionTest {
     }
     @Test fun customerFieldsAndOriginalRequestCannotBeChanged() {
         val store = MemoryStore(); store.save(record())
-        assertThrows(IllegalStateException::class.java) { workflow(store).reviseConfirmed(record(), draft.copy(phone = "01099998888"), latest) }
+        assertThrows(IllegalStateException::class.java) { workflow(store).revise(record(), draft.copy(phone = "01099998888"), latest) }
         assertThrows(IllegalStateException::class.java) {
-            workflow(store).reviseConfirmed(record(), draft.copy(recipient = draft.recipient.copy(customerEmail = "other@example.com")), latest)
+            workflow(store).revise(record(), draft.copy(recipient = draft.recipient.copy(customerEmail = "other@example.com")), latest)
         }
-        assertThrows(IllegalStateException::class.java) { workflow(store).reviseConfirmed(record(), draft, latest.copy(message = "다른 원문")) }
+        assertThrows(IllegalStateException::class.java) { workflow(store).revise(record(), draft, latest.copy(message = "다른 원문")) }
         assertEquals(record(), store.records().single())
     }
     @Test fun staleLocalRecordCannotOverwriteAnAlreadySavedRevision() {
         val store = MemoryStore(); store.save(record()); val workflow = workflow(store)
-        val current = workflow.reviseConfirmed(record(), draft.copy(fee = "7000"), latest)
-        assertThrows(IllegalStateException::class.java) { workflow.reviseConfirmed(record(), draft.copy(fee = "8000"), latest) }
+        val current = workflow.revise(record(), draft.copy(fee = "7000"), latest)
+        assertThrows(IllegalStateException::class.java) { workflow.revise(record(), draft.copy(fee = "8000"), latest) }
         assertEquals(current, store.records().single())
     }
     @Test fun serverOnlyRecordDoesNotInventAConfirmationDate() {
         val store = MemoryStore(); val serverOnly = record().copy(request = latest, confirmedAt = 0)
-        val revised = workflow(store).reviseConfirmed(serverOnly, draft.copy(fee = "7000"), latest)
+        val revised = workflow(store).revise(serverOnly, draft.copy(fee = "7000"), latest)
         assertEquals(0L, revised.confirmedAt)
         assertEquals(draft, revised.originalDraft)
     }

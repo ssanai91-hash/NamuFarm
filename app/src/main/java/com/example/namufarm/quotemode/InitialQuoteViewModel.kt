@@ -106,6 +106,18 @@ class InitialQuoteViewModel(
             } finally { mutable.update { it.copy(busy = false) } }
         }
     }
+    /** Launch/resume: change counter only, then changed rows. Quiet when nothing changed or offline. */
+    fun checkForChanges() {
+        if (mutable.value.busy) return
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val count = connection.syncIfChanged() ?: return@launch
+                mutable.update { it.copy(lastSyncAt = System.currentTimeMillis(),
+                    message = if (count > 0) NamuMessage("바뀐 견적 ${count}건을 받았습니다.") else it.message) }
+            } catch (e: CancellationException) { throw e }
+            catch (_: Exception) { } // The sync button shows errors; a failed check keeps local data.
+        }
+    }
     fun useWebRequestForQuote(request: WebQuoteRequestEntity) {
         mutable.update { it.copy(editingRequest = request, deleteFeedback = null) }
     }

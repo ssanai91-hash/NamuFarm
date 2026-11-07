@@ -34,6 +34,9 @@ interface InitialQuoteDao {
     fun requests(): List<WebQuoteRequestEntity>
     @Query("SELECT COUNT(*) FROM deferred_web_request")
     fun deferredCount(): Int
+    /** Incremental sync cursor. Expired rows are deleted locally, so a later download only repeats tombstones. */
+    @Query("SELECT MAX(sequence) FROM web_quote_request")
+    fun maxSequence(): Long?
     @Query("DELETE FROM web_quote_request")
     fun clearRequests()
     @Query("DELETE FROM deferred_web_request")

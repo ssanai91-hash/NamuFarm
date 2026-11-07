@@ -51,6 +51,7 @@ class MainActivity : ComponentActivity() {
 
     // 🚨 뷰모델을 클래스 전역에서 쓸 수 있게 빼줌
     private lateinit var viewModel: ManagementViewModel
+    private var quoteViewModel: com.example.namufarm.quotemode.InitialQuoteViewModel? = null
 
     // 🚨 통화 상태를 실시간으로 감시할 스파이(리시버)
     private var phoneStateReceiver: BroadcastReceiver? = null
@@ -105,10 +106,12 @@ class MainActivity : ComponentActivity() {
         viewModel = ViewModelProvider(this, factory)[ManagementViewModel::class.java]
 
         val quoteConnection = com.example.namufarm.quotemode.InitialQuoteConnection(
-            com.example.namufarm.quotemode.InitialQuoteDatabase.get(this), masterClient)
+            com.example.namufarm.quotemode.InitialQuoteDatabase.get(this), masterClient,
+            getSharedPreferences("quote_sync_v1", Context.MODE_PRIVATE))
         val quoteViewModel = ViewModelProvider(this,
             com.example.namufarm.quotemode.InitialQuoteViewModelFactory(quoteConnection, this))[
                 com.example.namufarm.quotemode.InitialQuoteViewModel::class.java]
+        this.quoteViewModel = quoteViewModel
 
         val inquiryRepository = com.example.namufarm.data.repository.CustomerInquiryRepository(
             com.example.namufarm.data.CustomerInquiryDatabase.get(this),
@@ -188,6 +191,12 @@ class MainActivity : ComponentActivity() {
         // 안드로이드 시스템에 우리 감시자를 정식으로 등록
         val filter = IntentFilter(TelephonyManager.ACTION_PHONE_STATE_CHANGED)
         registerReceiver(phoneStateReceiver, filter)
+    }
+
+    /** On launch and every return to the app: read only the server's change counter, then changed rows. */
+    override fun onResume() {
+        super.onResume()
+        quoteViewModel?.checkForChanges()
     }
 
     override fun onDestroy() {

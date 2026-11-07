@@ -30,6 +30,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun InitialAppModes(management: ManagementViewModel, quote: InitialQuoteViewModel,
                     inquiry: CustomerInquiryViewModel, backupController: com.example.namufarm.data.DataBackupController? = null) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     val pager = rememberPagerState(initialPage = 0, pageCount = { 4 })
     val scope = rememberCoroutineScope()
     val inbox by quote.uiState.collectAsState()
@@ -96,7 +97,9 @@ fun InitialAppModes(management: ManagementViewModel, quote: InitialQuoteViewMode
                 userScrollEnabled = bottomBarVisible && inbox.editingRequest == null && !inbox.busy && !inquiryState.busy) { page ->
                 when (page) {
                     0 -> InitialQuoteScreen(quote, quote.connection, inbox,
-                        onSync = quote::refresh, onRead = quote::read, onDelete = quote::close)
+                        onSync = quote::refresh, onRead = quote::read, onDelete = quote::close,
+                        newOrderNumber = { management.nextWebOrderNumber(context) },
+                        onPaidOrder = management::createPaidWebOrder)
                     1 -> CustomerInquiryScreen(inquiry)
                     2 -> SellingModeScreen(management, onNavigateToManagement = { requestMove(3) }, isActive = pager.currentPage == 2)
                     3 -> ManagementModeScreen(management, onBack = { move(2) }, onBottomBarVisibleChange = { bottomBarVisible = it }, isActive = pager.currentPage == 3, backupController = backupController)

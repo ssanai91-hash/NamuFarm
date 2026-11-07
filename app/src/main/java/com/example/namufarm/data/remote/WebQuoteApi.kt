@@ -47,6 +47,8 @@ data class WebQuoteRemote(
     val expired: Boolean? = null, val expiresAt: Long? = null, val status: String? = null,
     val receiptNumber: String? = null,
     val quotePricing: com.google.gson.JsonObject? = null,
+    /** Shared confirmed quote version (server confirmedQuoteVersion:1); absent on older servers. */
+    val quoteVersion: com.google.gson.JsonObject? = null,
     /** Seller delete tombstone (always with expired=true). */
     val deleted: Boolean? = null
 )
@@ -161,7 +163,13 @@ object WebQuoteValidator {
                 formalQuoteRequested = row.formalQuoteRequested ?: false, recipientName = recipient, replyChannel = channel, status = requestStatus,
                 receiptNumber = row.receiptNumber?.also {
                     check(Regex("(NAMU|NFQ)-[0-9]{8}-[0-9]{4,16}").matches(it)) { "견적접수번호를 확인해주세요." }
-                }.orEmpty(), quotePricingJson = outer.quotePricing?.toString().orEmpty())
+                }.orEmpty(), quotePricingJson = outer.quotePricing?.let { pricing ->
+                    // Keep the shared version beside the pricing in the same row (no DB schema change).
+                    // Readers of the pricing ignore this extra member.
+                    val copy = pricing.deepCopy()
+                    outer.quoteVersion?.let { copy.add("quoteVersion", it) }
+                    copy.toString()
+                }.orEmpty())
         }
         return Page(checked, previous, expiredIds, deferred, deletedIds)
     }

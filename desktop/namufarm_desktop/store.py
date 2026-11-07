@@ -245,6 +245,29 @@ class Vault:
                           quoteReadMode=quote_read_mode)
             db.execute("INSERT OR REPLACE INTO config VALUES ('snapshot',?)", (self._seal(marker, "snapshot"),))
 
+    def merge_requests(self, requests, cursor, removed, quote_read_mode=None):
+        """Apply validated incremental pages and the new cursor in one transaction.
+
+        Rows are merged by request UUID; an older sequence never replaces a newer copy.
+        Expired rows from the server are removed from the request cache only (local
+        confirmed quotes and their Excel copy are separate and untouched).
+        """
+        with self.mutex, self._db() as db:
+            marker = self._read_snapshot_marker(db)
+            require(cursor >= marker["requests"] and marker.get("quoteReadMode") == quote_read_mode,
+                    "문의 접수 순번이 이전 상태입니다. 전체 가져오기를 눌러주세요.")
+            for request_id in removed:
+                db.execute("DELETE FROM cache WHERE kind='requests' AND id=?", (self._index("requests", request_id),))
+            for row in requests:
+                index = self._index("requests", row["requestId"])
+                old = db.execute("SELECT body FROM cache WHERE kind='requests' AND id=?", (index,)).fetchone()
+                if old and self._open(old[0], "requests:" + index).get("sequence", 0) >= row["sequence"]:
+                    continue
+                db.execute("DELETE FROM cache WHERE kind='requests' AND id=?", (index,))
+                db.execute("INSERT INTO cache VALUES ('requests',?,?)", (index, self._seal(row, "requests:" + index)))
+            marker.update(requests=cursor)
+            db.execute("INSERT OR REPLACE INTO config VALUES ('snapshot',?)", (self._seal(marker, "snapshot"),))
+
     def queue(self, operation, optimistic=None):
         with self.mutex, self._db() as db:
             if operation["action"] != "save_sale" and db.execute("SELECT COUNT(*) FROM outbox").fetchone()[0]:

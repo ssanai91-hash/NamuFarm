@@ -62,7 +62,8 @@ private fun displayEditorPhone(raw: String): String {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun ConfirmQuoteSentDialog(onDismiss: () -> Unit, onConfirm: (String) -> Unit,
-    openedChannels: Set<String> = emptySet(), phone: String = "", email: String = "") {
+    openedChannels: Set<String> = emptySet(), phone: String = "", email: String = "",
+    onNotSent: (() -> Unit)? = null) {
     val suggested = when {
         openedChannels.containsAll(setOf("sms", "email")) -> "both"
         "sms" in openedChannels -> "sms"
@@ -96,7 +97,8 @@ internal fun ConfirmQuoteSentDialog(onDismiss: () -> Unit, onConfirm: (String) -
                     }
                 }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                NamuSecondaryButton("아직 안 보냈어요", onDismiss, Modifier.weight(1f))
+                // Explicit '안 보냈어요' releases a shared-quote reservation; swiping away only closes.
+                NamuSecondaryButton("아직 안 보냈어요", onNotSent ?: onDismiss, Modifier.weight(1f))
                 NamuPrimaryButton("견적완료", { onConfirm(selected) }, Modifier.weight(1f), selected != "none")
             }
         }
@@ -157,7 +159,8 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
     verifiedDelivery: QuoteDeliveryRecord? = null, verifyDelivery: Boolean = false,
     onConfirmSent: ((SellerQuoteDraft, String) -> Unit)? = null,
     onPrepareDocument: suspend (SellerQuoteDraft) -> Unit = {}, messageIsError: Boolean = false,
-    openedChannels: Set<String> = emptySet(), confirmedEdit: Boolean = false) {
+    openedChannels: Set<String> = emptySet(), confirmedEdit: Boolean = false,
+    onNotSent: (() -> Unit)? = null) {
     val context = LocalContext.current
     val manualEntry = request == null && !confirmedEdit
     val requestedItems = remember(request?.itemsJson) {
@@ -398,6 +401,7 @@ internal fun ManualQuoteEditor(request: WebQuoteRequestEntity?, saving: Boolean,
     if (confirmSent) ConfirmQuoteSentDialog(
         openedChannels = openedChannels + formalOpenedChannels, phone = displayEditorPhone(draft.phone), email = draft.recipient.customerEmail,
         onDismiss = { confirmSent = false },
+        onNotSent = onNotSent?.let { notSent -> { confirmSent = false; notSent() } },
         onConfirm = { method ->
             confirmSent = false
             if (onConfirmSent == null) submit(QuoteDelivery.COMPLETE)

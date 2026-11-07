@@ -284,7 +284,8 @@ class MainWindow(QMainWindow):
         self.build_reports()
         self.build_connection()
         self.timer = QTimer(self)
-        self.timer.setInterval(10 * 60 * 1000)
+        # Each tick reads only the server's change counter; rows are downloaded when it moved.
+        self.timer.setInterval(60 * 1000)
         self.timer.timeout.connect(self.auto_sync)
         self.timer.start()
         self.update_controls()
@@ -465,7 +466,16 @@ class MainWindow(QMainWindow):
 
     def auto_sync(self):
         if self.manager and self.data["paired"] and self.auto_check.isChecked() and not self.task and not self.dirty and not self.conflict:
-            self.run_job("AUTO SYNC  >  서버 동기화 중…", self.manager.auto_sync)
+            self.run_job("AUTO SYNC  >  변경 확인 중…", self.manager.auto_sync, self.auto_synced)
+
+    def auto_synced(self, value):
+        """No change: keep the screen and selection as they are."""
+        if value is None:
+            self.message.setText("변경 없음 · 확인 " + timestamp(datetime.now(SEOUL).timestamp() * 1000))
+            return
+        self.apply_view(value)
+        self.conflict = bool(value.get("salesSyncConflict"))
+        self.message.setText(value.get("transferNotice") or "SYNC OK  >  서버 동기화 완료 · " + timestamp(datetime.now(SEOUL).timestamp() * 1000))
 
     def apply_view(self, value):
         self.data = value
@@ -961,7 +971,7 @@ class MainWindow(QMainWindow):
         self.copy_button.clicked.connect(self.open_request_copy)
         set_button_icon(self.copy_button, "folder")
         local_layout.addWidget(self.copy_button, 0, Qt.AlignmentFlag.AlignLeft)
-        self.auto_check = QCheckBox("10분마다 견적요청 가져오기 · 판매자료 서버 반영")
+        self.auto_check = QCheckBox("1분마다 새 견적 확인 · 바뀐 요청만 가져오기 · 판매자료 서버 반영")
         self.auto_check.setToolTip("최신 자료를 가져오고 전송 대기 중인 변경사항을 서버에 반영합니다.")
         self.auto_check.setChecked(True)
         self.large_font_check = QCheckBox("큰 글씨로 보기")
