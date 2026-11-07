@@ -85,9 +85,9 @@ def _category_css():
 def _theme(css, large=False, compact=False):
     css = css.replace("@category-css@", _category_css())
     values = {**TOKENS, **{key: str(value + (2 if large else 0)) for key, value in
-              {"body": 15, "small": 13, "title": 22, "section": 17, "action": 17, "total": 28, "detail": 20, "brand": 18}.items()},
+              {"body": 15, "small": 13, "title": 22, "section": 17, "action": 17, "total": 28, "detail": 20, "brand": 20}.items()},
               "control-height": str(48 if large else 44),
-              "nav-height": str((48 if large else 44) if compact else (56 if large else 52))}
+              "nav-height": str((52 if large else 48) if compact else (60 if large else 56))}
     for key, value in values.items():
         css = css.replace("@" + key + "@", value)
     return css
@@ -102,13 +102,18 @@ QMainWindow,#workspace,QDialog{background:@page-bg@;}
 #sidebarScroll{background:@sidebar@;border:0;}
 #sidebar QLabel{color:@card@;background:transparent;}
 #sidebar QLabel#brand{font-size:@brand@px;font-weight:700;}
-#sidebar QLabel#navGroup,#sidebar QLabel#navFoot{font-size:@small@px;color:@nav-caption@;}
-#sidebar QPushButton{background:transparent;color:@card@;border:0;border-left:3px solid transparent;border-radius:8px;text-align:left;padding:0 12px;min-height:@nav-height@px;font-size:@body@px;font-weight:600;}
+#sidebar QLabel#navGroup{font-size:@body@px;font-weight:700;color:@nav-caption@;padding:4px 12px 2px;}
+#sidebar QFrame#navDivider{background:#2E5446;border:0;}
+#sidebar QFrame#sidebarClock{background:#20463A;border:0;border-radius:12px;}
+#sidebar QLabel#sidebarDate{font-size:@body@px;color:@nav-caption@;}
+#sidebar QLabel#sidebarTime{font-size:@title@px;font-weight:700;color:@card@;}
+#sidebar QLabel#navFoot{font-size:@small@px;color:@nav-caption@;}
+#sidebar QPushButton{background:transparent;color:@card@;border:0;border-left:3px solid transparent;border-radius:8px;text-align:left;padding:0 14px;min-height:@nav-height@px;font-size:@action@px;font-weight:600;}
 #sidebar QPushButton:checked{background:@nav-selected@;border-left-color:@accent@;}
 #sidebar QPushButton:hover{background:@nav-selected@;}
 #sidebar QPushButton[keyboardFocus="true"]{border:2px solid @accent@;}
 #sidebar #navRow{background:transparent;}
-#sidebar QLabel#navBadge{font-size:@small@px;font-weight:700;background:@border@;color:@sidebar@;border-radius:6px;padding:2px 8px;}
+#sidebar QLabel#navBadge{font-size:@section@px;font-weight:700;background:@border@;color:@sidebar@;border-radius:10px;padding:0 6px;}
 #sidebar QLabel#navBadge[kind="new"]{background:@accent@;}
 #sidebar QLabel#navBadge[kind="inquiry"]{background:@waiting@;}
 QFrame#pageHeader{background:@card@;border:0;border-bottom:1px solid @border@;}

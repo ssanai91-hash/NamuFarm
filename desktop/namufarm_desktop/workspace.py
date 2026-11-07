@@ -3830,8 +3830,8 @@ class SellerWindow(MainWindow):
         brand_layout = QHBoxLayout(self.brand_panel)
         brand_layout.setContentsMargins(8, 8, 8, 8)
         leaf = QLabel()
-        leaf.setFixedSize(24, 24)
-        leaf.setPixmap(ui_icon("leaf", TOKENS["accent"]).pixmap(24, 24))
+        leaf.setFixedSize(30, 30)
+        leaf.setPixmap(ui_icon("leaf", TOKENS["accent"]).pixmap(30, 30))
         brand_layout.addWidget(leaf)
         brand_words = QVBoxLayout()
         self.brand_label = label("나무팜 판매관리", "brand")
@@ -3842,6 +3842,13 @@ class SellerWindow(MainWindow):
         self.nav, self.nav_badges = [], {}
         for index, (title, _) in enumerate(self.PAGES):
             if index in (self.PAGE_REQUESTS, self.PAGE_REPORTS):
+                if index == self.PAGE_REPORTS:
+                    side.addSpacing(10)
+                    divider = QFrame()
+                    divider.setObjectName("navDivider")
+                    divider.setFixedHeight(1)
+                    side.addWidget(divider)
+                    side.addSpacing(6)
                 side.addWidget(label("업무" if index == self.PAGE_REQUESTS else "관리", "navGroup"))
             if index == self.PAGE_SETTINGS:
                 side.addStretch(1)
@@ -3852,6 +3859,25 @@ class SellerWindow(MainWindow):
                 self.sidebar_transfer = label("가져오기 전 · 전송 대기 0건", "navFoot", True)
                 side.addWidget(self.sidebar_connection)
                 side.addWidget(self.sidebar_transfer)
+                # 2026-11-07 요청: 사이드바에는 서버 대기 내역 대신 날짜·요일·시계 (대기 내역은 판매관리 › 자료 관리).
+                for hidden in (self.pending_button, self.sidebar_connection, self.sidebar_transfer):
+                    hidden.hide()
+                self.sidebar_clock = QFrame()
+                self.sidebar_clock.setObjectName("sidebarClock")
+                clock_layout = QVBoxLayout(self.sidebar_clock)
+                clock_layout.setContentsMargins(14, 12, 14, 12)
+                clock_layout.setSpacing(2)
+                self.sidebar_date = label("", "sidebarDate")
+                self.sidebar_time = label("", "sidebarTime")
+                for clock_label in (self.sidebar_date, self.sidebar_time):
+                    clock_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                    clock_layout.addWidget(clock_label)
+                side.addWidget(self.sidebar_clock)
+                self.update_sidebar_clock()
+                self.sidebar_clock_timer = QTimer(self)
+                self.sidebar_clock_timer.setInterval(1000)
+                self.sidebar_clock_timer.timeout.connect(self.update_sidebar_clock)
+                self.sidebar_clock_timer.start()
             widget = NavigationButton(title)
             widget.clicked.connect(lambda checked=False, i=index: self.navigate(i))
             icons = ("requests", "confirmed", "orders", "shipping", "reports", "farm", "leaf", "requests", "settings")
@@ -3859,11 +3885,11 @@ class SellerWindow(MainWindow):
             # A안: 업무 메뉴는 자기 색(견적요청 파랑·작업대 주황·판매 초록), 나머지는 차분한 밝은 색.
             tint = CATEGORY[category]["nav"] if category else ("#6FD3D1", "#B9A8F5", "#B9E0A0", "#B9E0A0", "#F0A8CB", "#DCE6E0")[
                 max(0, index - self.PAGE_SHIPPING)]
-            set_button_icon(widget, icons[index], tint, 20)
+            set_button_icon(widget, icons[index], tint, 22)
             if category:
                 widget.setProperty("category", category)
             widget.setCheckable(True)
-            widget.setMinimumHeight(52)
+            widget.setMinimumHeight(56)
             self.nav.append(widget)
             row = QWidget()
             row.setObjectName("navRow")
@@ -3875,8 +3901,13 @@ class SellerWindow(MainWindow):
                 badge = label("0", "navBadge")
                 badge.setProperty("kind", {self.PAGE_REQUESTS: "requests", self.PAGE_QUOTES: "quotes", self.PAGE_SALES: "sales"}.get(
                     index, "inquiry" if index == self.PAGE_INQUIRIES else "count"))
+                # Square count box: same width and height, centred beside the menu.
+                badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                badge.setFixedHeight(38)
+                badge.setMinimumWidth(38)
+                badge.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
                 self.nav_badges[index] = badge
-                row_layout.addWidget(badge)
+                row_layout.addWidget(badge, 0, Qt.AlignmentFlag.AlignVCenter)
                 if index == self.PAGE_REQUESTS:
                     self.request_nav_badge = badge
             side.addWidget(row)
@@ -4084,12 +4115,12 @@ class SellerWindow(MainWindow):
         style = workspace_style(large, compact)
         app.setStyleSheet(style)
         self.setStyleSheet(style)
-        self.sidebar_scroll.setFixedWidth((248 if narrow else 280) + (20 if large else 0))
+        self.sidebar_scroll.setFixedWidth((264 if narrow else 296) + (20 if large else 0))
         self.sidebar.layout().setSpacing(6 if compact else 10)
         self.sidebar.layout().setContentsMargins(12 if compact else 16, 16 if compact else 24,
                                                 12 if compact else 16, 16 if compact else 24)
         self.brand_panel.layout().setContentsMargins(8, 12, 8, 12)
-        nav_height = (48 if large else 44) if compact else (56 if large else 52)
+        nav_height = (52 if large else 48) if compact else (60 if large else 56)
         for nav in self.nav:
             nav.setMinimumHeight(nav_height)
         margin = 16 if compact else 24
@@ -4222,6 +4253,12 @@ class SellerWindow(MainWindow):
         self.request_detail.info("공식견적서", "요청" if personal.get("formalQuoteRequested") else "요청 없음")
         self.request_detail.items(personal.get("items", []))
         self.request_detail.note(personal.get("message") or "고객 요청사항 없음")
+
+    def update_sidebar_clock(self):
+        current = datetime.now(SEOUL)
+        weekday = ("월", "화", "수", "목", "금", "토", "일")[current.weekday()]
+        self.sidebar_date.setText(f"{current:%Y.%m.%d} ({weekday})")
+        self.sidebar_time.setText(current.strftime("%H:%M:%S"))
 
     def set_page_count(self, index, count):
         self.page_counts[index] = count
