@@ -47,7 +47,7 @@ export default function SpeciesBrowser({ lines, onSelect, onRemove, notice, lock
   }
   return <section id="trees" className="trees-section wrap catalog-section" aria-labelledby="trees-title">
     <div className="section-heading catalog-heading"><div><span className="overline">나무팜 묘목 안내</span><h2 id="trees-title">어떤 나무를 찾으세요?</h2></div><p className="catalog-direct-note">찾는 묘목이 없다면, 아래 견적 요청란에 묘목 이름을 직접 적어주세요.</p></div>
-    <div className="catalog-layout"><div className="catalog-main">
+    <div className="catalog-layout" data-purpose={mode === "purpose" ? purpose : undefined}><div className="catalog-main">
       <div className="catalog-mode-tabs" role="group" aria-label="묘목 찾는 방법">
         <button type="button" aria-pressed={mode === "name"} onClick={() => { setMode("name"); setPage(0); }}>이름·초성</button>
         <button type="button" aria-pressed={mode === "purpose"} onClick={() => { setMode("purpose"); setPage(0); }}>용도</button>
