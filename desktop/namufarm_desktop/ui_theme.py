@@ -319,6 +319,8 @@ QDialog#quoteWorkbench QLabel#workbenchSellerBadge{font-size:@small@px;font-weig
 QDialog#quoteWorkbench QFrame#workbenchFooter{background:@card@;border:0;border-top:1px solid @border@;}
 QDialog#quoteWorkbench QPushButton#workbenchCloseText{background:@card@;color:@muted@;border:1px solid @input-border@;border-radius:10px;min-width:80px;padding:0 16px;font-size:@action@px;}
 QDialog#quoteWorkbench QPushButton#workbenchCloseText:hover{color:@text@;background:@table-head@;}
+QDialog#quoteWorkbench #workbenchFooter QPushButton[footerSecondary="true"]{background:@card@;color:@text@;border:1px solid @input-border@;border-radius:8px;min-width:0;min-height:0;padding:0 12px;font-size:@body@px;}
+QDialog#quoteWorkbench #workbenchFooter QPushButton[footerSecondary="true"]:hover{background:@table-head@;border-color:@primary@;}
 QDialog#quoteWorkbench QFrame#workbenchFooterRule{background:@border@;border:0;}
 QDialog#quoteWorkbench QLabel#workbenchAmountDetail{font-size:@small@px;color:@muted@;}
 QDialog#quoteWorkbench QLabel#workbenchStepSend{font-size:@small@px;font-weight:700;color:#1D4F91;}

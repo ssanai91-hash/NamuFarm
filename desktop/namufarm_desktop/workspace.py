@@ -21,7 +21,7 @@ from PySide6.QtWidgets import (QApplication, QBoxLayout, QButtonGroup, QCheckBox
 from . import __version__
 from .ui_theme import (align_table, fit_window, scroll_dialog, scroll_page, workspace_style,
                        CustomerDelegate, StatusDelegate, customer_reference, CompactDateDelegate,
-                       NavigationButton, CellWidgetDelegate, QuoteRemarksDelegate, RequestQuoteDelegate, SequenceDelegate, TOKENS, CATEGORY, SALES_STAGES, StageCards, status_badge, stage_label, size_table_to_rows, collapsible, quote_workbench_style,
+                       NavigationButton, CellWidgetDelegate, QuoteRemarksDelegate, RequestQuoteDelegate, SequenceDelegate, TOKENS, CATEGORY, SALES_STAGES, StageCards, status_badge, size_table_to_rows, collapsible, quote_workbench_style,
                        work_window_header, set_button_tier)
 from .ui_icons import set_button_icon, ui_icon
 from .app import MainWindow, Task, table, fill_table, money, timestamp
@@ -1337,7 +1337,6 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         reference.setMinimumWidth(0)
         reference.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         heading.addWidget(reference, 1)
-        heading.addWidget(stage_label(self.request_status or "작성중"))
         close_mark = button("✕", self.reject)
         close_mark.setObjectName("workbenchClose")
         close_mark.setAccessibleName("작업대 닫기")
@@ -1802,11 +1801,16 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         information_row.setSpacing(12)
         self.close_button.setProperty("role", "outline")
         self.close_button.setObjectName("workbenchCloseText")
-        information_row.addWidget(self.close_button)
-        information_row.addWidget(self.save_working_button)
+        secondary_size = QSize(140, 48) if QApplication.instance().property("namufarmLargeFont") else QSize(124, 44)
+        for control in (self.close_button, self.save_working_button):
+            control.setProperty("footerSecondary", True)
+            control.setFixedSize(secondary_size)
+            control.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+            information_row.addWidget(control, 0, Qt.AlignmentFlag.AlignVCenter)
         self.working_save_status.setWordWrap(True)
         self.working_save_status.setMaximumWidth(240)
         information_row.addWidget(self.working_save_status, 1)
+        information_row.addStretch(1)
         self.workbench_summary.layout().removeWidget(self.amount_detail)
         self.workbench_summary.layout().removeWidget(self.total)
         self.workbench_summary.hide()
@@ -3570,7 +3574,6 @@ QDialog#quoteWorkbench[compactLayout="true"] QFrame#workbenchShipping QLabel#wor
         reference.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         reference.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         heading.addWidget(reference, 1)
-        heading.addWidget(stage_label(order_stage(self.row)))
         close_mark = button("✕", self.reject)
         close_mark.setObjectName("workbenchClose")
         close_mark.setAccessibleName("판매관리 창 닫기")
