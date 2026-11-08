@@ -4341,7 +4341,11 @@ class SellerWindow(MainWindow):
     def set_page_count(self, index, count):
         self.page_counts[index] = count
         if hasattr(self, "nav_badges") and index in self.nav_badges:
-            self.nav_badges[index].setText(str(count))
+            if index == self.PAGE_REQUESTS:
+                # The sidebar counts all pending requests, independent of list filters.
+                self.update_request_badge()
+            else:
+                self.nav_badges[index].setText(str(count))
         if hasattr(self, "stack") and self.stack.currentIndex() == index:
             self.update_page_title(index)
 
@@ -4775,20 +4779,14 @@ class SellerWindow(MainWindow):
         if state is None and self.manager and hasattr(self.manager, "request_notification_state"):
             state = self.manager.request_notification_state()
         seen = int((state or {}).get("seenSequence", 0) or 0)
-        count = sum(
-            row.get("status", "신규") == "신규"
-            and int(row.get("sequence", 0) or 0) > seen
-            for row in self.data.get("requests", [])
-        )
-        self.request_unread_count = count
-        if count:
-            self.request_nav_badge.setText("99+" if count > 99 else str(count))
-            self.request_nav_badge.setToolTip(f"마지막 확인 이후 신규 견적요청 {count}건")
-            self.request_nav_badge.show()
-        else:
-            self.request_nav_badge.clear()
-            self.request_nav_badge.setToolTip("")
-            self.request_nav_badge.hide()
+        requests = [row for row in self.data.get("requests", []) if row.get("status", "신규") == "신규"]
+        self.request_unread_count = sum(int(row.get("sequence", 0) or 0) > seen for row in requests)
+        total = len(requests)
+        # Keep the blue/white request count visible after opening the page, including zero.
+        self.request_nav_badge.setText(str(total))
+        self.request_nav_badge.setToolTip(f"견적요청 {total:,}건 · 미확인 {self.request_unread_count:,}건")
+        self.request_nav_badge.setAccessibleName(f"견적요청 {total:,}건")
+        self.request_nav_badge.show()
 
     def mark_requests_seen(self):
         if (
