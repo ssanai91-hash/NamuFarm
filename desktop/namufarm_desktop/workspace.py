@@ -3,6 +3,7 @@ import copy
 import json
 import sys
 import tempfile
+from time import monotonic
 from datetime import datetime
 from importlib.resources import files as package_files
 from pathlib import Path
@@ -20,7 +21,7 @@ from PySide6.QtWidgets import (QApplication, QBoxLayout, QButtonGroup, QCheckBox
 from . import __version__
 from .ui_theme import (align_table, fit_window, scroll_dialog, scroll_page, workspace_style,
                        CustomerDelegate, StatusDelegate, customer_reference, CompactDateDelegate,
-                       NavigationButton, QuoteRemarksDelegate, SequenceDelegate, TOKENS, CATEGORY, SALES_STAGES, StageCards, status_badge, stage_label, size_table_to_rows, collapsible, quote_workbench_style)
+                       NavigationButton, CellWidgetDelegate, QuoteRemarksDelegate, SequenceDelegate, TOKENS, CATEGORY, SALES_STAGES, StageCards, status_badge, stage_label, size_table_to_rows, collapsible, quote_workbench_style)
 from .ui_icons import set_button_icon, ui_icon
 from .app import MainWindow, Task, table, fill_table, money, timestamp
 from .commerce import (ISSUER, new_draft, new_manual_draft, draft_amounts, validate_draft, quote_html, quote_document_html, shipping_html,
@@ -157,6 +158,14 @@ def fit_quote_density(dialog):
     dialog.setStyleSheet(dialog.styleSheet())
 
 
+class GroupedPriceValidator(QIntValidator):
+    """Validate the same integer range while accepting display separators."""
+    def validate(self, text, position):
+        raw = text.replace(",", "")
+        state, _text, _position = super().validate(raw, min(position, len(raw)))
+        return state, text, position
+
+
 class UnitPriceEditor(QWidget):
     """Manual unit-price input with 500-won step buttons.
 
@@ -167,8 +176,9 @@ class UnitPriceEditor(QWidget):
     STEP = 500
     MAX_PRICE = 2147483647
 
-    def __init__(self, value=2000, parent=None, *, compact=False, caption="판매 단가"):
+    def __init__(self, value=2000, parent=None, *, compact=False, caption="판매 단가", grouped=False):
         super().__init__(parent)
+        self.grouped = grouped
         self.setObjectName("unitPriceEditor")
         large = bool(QApplication.instance().property("namufarmLargeFont"))
         control_height = 40 if compact else 44
@@ -184,15 +194,24 @@ class UnitPriceEditor(QWidget):
         self.minus.clicked.connect(lambda: self.adjust(-self.STEP))
         row.addWidget(self.minus)
 
-        self.input = QLineEdit(str(max(0, int(value or 0))))
-        self.input.setValidator(QIntValidator(0, self.MAX_PRICE, self.input))
+        price = max(0, int(value or 0))
+        self.input = QLineEdit(f"{price:,}" if grouped else str(price))
+        validator = GroupedPriceValidator if grouped else QIntValidator
+        self.input.setValidator(validator(0, self.MAX_PRICE, self.input))
         self.input.setAlignment(Qt.AlignmentFlag.AlignRight)
         self.input.setPlaceholderText(caption)
         self.input.setAccessibleName(caption + " (원)")
         if compact:
             self.input.setFixedHeight(control_height)
-            self.input.setFixedWidth(100)
-        self.input.textChanged.connect(lambda _text: self.changed.emit())
+            input_width = 100
+            if grouped:
+                font = QFont("Consolas")
+                font.setPixelSize(18 if large else 16)
+                self.input.setFont(font)
+                self.input.setStyleSheet("font-family:Consolas;font-size:%spx;" % (18 if large else 16))
+                input_width = max(input_width, int(QFontMetricsF(font).horizontalAdvance(f"{self.MAX_PRICE:,}")) + 16)
+            self.input.setFixedWidth(input_width)
+        self.input.textChanged.connect(self.price_changed)
         row.addWidget(self.input, 1)
 
         self.plus = QPushButton("+")
@@ -203,11 +222,30 @@ class UnitPriceEditor(QWidget):
         row.addWidget(self.plus)
 
     def text(self):
-        return self.input.text().strip()
+        text = self.input.text().strip()
+        return text.replace(",", "") if self.grouped else text
+
+    def price_changed(self, _text):
+        raw = self.text()
+        if self.grouped and raw.isascii() and raw.isdigit():
+            # Preserve the edit position by counting digits to the right of it.
+            tail = self.input.text()[self.input.cursorPosition():].replace(",", "")
+            formatted = f"{int(raw):,}"
+            if self.input.text() != formatted:
+                blocked = self.input.blockSignals(True)
+                self.input.setText(formatted)
+                cursor, remaining = len(formatted), len(tail)
+                while cursor > 0 and remaining:
+                    cursor -= 1
+                    if formatted[cursor].isdigit():
+                        remaining -= 1
+                self.input.setCursorPosition(cursor)
+                self.input.blockSignals(blocked)
+        self.changed.emit()
 
     def set_value(self, value):
         value = max(0, min(self.MAX_PRICE, int(value)))
-        self.input.setText(str(value))
+        self.input.setText(f"{value:,}" if self.grouped else str(value))
 
     def adjust(self, delta):
         raw = self.text()
@@ -1394,16 +1432,30 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         self.items = table(["묘목명", "수량", "판매 금액", "판매 단가", "순번", "규격", "빼기"])
         self.items.setEditTriggers(self.items.EditTrigger.DoubleClicked | self.items.EditTrigger.EditKeyPressed | self.items.EditTrigger.AnyKeyPressed)
         self.items.setObjectName("workbenchItems")
+        self.items.setProperty("preserveColumnMinimums", True)
+        self.items.setMouseTracking(True)
         polish_table(self.items)
         self.items.horizontalHeader().setFixedHeight(40 if large else 36)
         self.items.verticalHeader().setMinimumSectionSize(48 if large else 40)
         self.items.verticalHeader().setDefaultSectionSize(48 if large else 40)
         # Specification is between seedling name and quantity, including on reopening.
-        self.items.set_column_layout(((4, 0, 40), (0, 2, 156), (5, 1, 92), (1, .4, 64),
-                                      (3, 0, 196), (2, .5, 88), (6, 0, 44)))
+        price_sample = UnitPriceEditor(2000, self.items, compact=True, grouped=True)
+        price_margins = price_sample.layout().contentsMargins()
+        self.workbench_price_width = (price_sample.input.width() + price_sample.minus.width()
+                                      + price_sample.plus.width() + 2 * price_sample.layout().spacing()
+                                      + price_margins.left() + price_margins.right() + 12)
+        price_sample.hide()
+        price_sample.deleteLater()
+        self.items.set_column_layout(((4, 0, 48), (0, .7, 156), (5, 1.2, 112), (1, .2, 72),
+                                      (3, 0, self.workbench_price_width), (2, .8, 144 if large else 128), (6, 0, 52)))
         self.items.horizontalHeader().setMinimumSectionSize(32)
-        self.items.setItemDelegateForColumn(5, QuoteRemarksDelegate(self.items))
+        self.items.setItemDelegateForColumn(0, CellWidgetDelegate(self.items))
+        self.items.setItemDelegateForColumn(5, QuoteRemarksDelegate(self.items, specification=True))
         self.items.setItemDelegateForColumn(4, SequenceDelegate(self.items))
+        for column in range(self.items.columnCount()):
+            alignment = (Qt.AlignmentFlag.AlignLeft if column in (0, 5) else
+                         Qt.AlignmentFlag.AlignRight if column in (2, 3) else Qt.AlignmentFlag.AlignHCenter)
+            self.items.horizontalHeaderItem(column).setTextAlignment(alignment | Qt.AlignmentFlag.AlignVCenter)
         self.items.fit_columns()
         self.items.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Ignored)
         self.items.itemChanged.connect(self.recalculate)
@@ -1441,7 +1493,8 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         self.shipping_fee = self.shipping_fee_editor.input
         self.shipping_fee.setAccessibleName("선불 택배비 금액")
         shipping_row.addWidget(self.shipping_fee_editor)
-        shipping_row.addWidget(label("원"))
+        self.shipping_fee_unit = label("원")
+        shipping_row.addWidget(self.shipping_fee_unit)
         self.shipping_status = label("", "deliveryCaption", True)
         self.shipping_status.setMinimumWidth(0)
         self.shipping_status.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
@@ -1604,7 +1657,7 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         information_row.setSpacing(12)
         information_row.addWidget(self.close_button)
         information_row.addWidget(self.save_working_button)
-        self.close_button.setProperty("role", "text")
+        self.close_button.setProperty("role", "outline")
         self.workbench_summary.layout().removeWidget(self.amount_detail)
         self.workbench_summary.layout().removeWidget(self.total)
         self.workbench_summary.hide()
@@ -1617,8 +1670,6 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         amounts.addWidget(self.amount_detail)
         amounts.addWidget(self.total)
         summary.setMinimumWidth(160)
-        summary.setMaximumWidth(240)
-        information_row.addWidget(summary, 1)
         footer.addWidget(information, 1)
         delivery = self.delivery_send_layout.parent()
         if isinstance(delivery, QVBoxLayout):
@@ -1631,6 +1682,7 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         action_row = QHBoxLayout(actions)
         action_row.setContentsMargins(0, 0, 0, 0)
         action_row.setSpacing(12)
+        action_row.addWidget(summary)
         action_row.addLayout(self.delivery_send_layout)
         action_row.setAlignment(self.delivery_send_layout, Qt.AlignmentFlag.AlignTop)
         completion = QVBoxLayout()
@@ -1822,6 +1874,10 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
                 cell.setTextAlignment((Qt.AlignmentFlag.AlignLeft if column == 0 else Qt.AlignmentFlag.AlignRight) | Qt.AlignmentFlag.AlignVCenter)
                 if column == 2:
                     cell.setFlags(cell.flags() & ~Qt.ItemFlag.ItemIsEditable)
+                    amount_font = QFont("Consolas")
+                    amount_font.setPixelSize(18 if QApplication.instance().property("namufarmLargeFont") else 16)
+                    amount_font.setBold(True)
+                    cell.setFont(amount_font)
                 if column == 0:
                     cell.setToolTip(str(value))
                     font = cell.font()
@@ -1840,10 +1896,11 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
                     species_editor.activated.connect(lambda target=cell: self.items.setCurrentItem(target))
                     species_editor.pick_requested.connect(lambda target=cell: self.choose_quote_species(target))
                     self.items.setCellWidget(index, 0, species_editor)
-            price_editor = UnitPriceEditor(item["unitPrice"], self.items, compact=True)
+            price_editor = UnitPriceEditor(item["unitPrice"], self.items, compact=True, grouped=True)
             price_editor.changed.connect(self.recalculate)
             self.items.setCellWidget(index, 3, price_editor)
             specification = QTableWidgetItem(item_specification(item))
+            specification.setTextAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
             specification.setToolTip("홈페이지 희망 규격입니다. 클릭해서 입력하거나 수정할 수 있습니다.")
             self.items.setItem(index, 5, specification)
             if self.items.columnCount() > 6:
@@ -1893,6 +1950,9 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
                 notice = str(error)
         picker = QuoteSpeciesPicker(names, cell.text(), self, notice=notice)
         if picker.exec() == QDialog.DialogCode.Accepted and self.items.row(cell) >= 0:
+            editor = self.items.cellWidget(self.items.row(cell), 0)
+            if isinstance(editor, SpeciesNameEditor):
+                editor.input.setText(picker.selected_name)
             cell.setText(picker.selected_name)
 
     def unit_price_editor(self, row):
@@ -2009,6 +2069,7 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
             prepaid = self.shipping_prepaid.isChecked()
             self.shipping_fee_editor.setEnabled(prepaid)
             self.shipping_fee_editor.setVisible(prepaid)
+            self.shipping_fee_unit.setVisible(prepaid)
             self.shipping_fee.setEnabled(prepaid)
             self.shipping_status.setText("선불 · 합계 포함" if prepaid else "후불 · 별도")
         elif hasattr(self, "shipping_fee_editor"):
@@ -3942,11 +4003,21 @@ class SellerWindow(MainWindow):
         header.addWidget(self.page_count_number)
         header.addWidget(self.page_count_unit)
         header.addStretch(1)
-        self.sync_button.setText("서버 동기화 F5")
+        self.sync_button.setText("견적 가져오기 F5")
         self.sync_button.setObjectName("syncSecondary")
-        self.sync_button.setToolTip("서버 최신 자료를 PC에 반영 · 미반영 PC 수정은 복구 기록에 보관 · F5")
+        self.sync_button.setToolTip("견적요청·확정견적만 서버 원본으로 갱신합니다. 판매·문의·관리자료는 전체 동기화를 이용하세요. · F5")
+        self.sync_button.setAccessibleName("견적 가져오기 · F5 · 견적요청과 확정견적만 갱신")
         set_button_icon(self.sync_button, "refresh")
-        header.addWidget(self.sync_button)
+        self.transfer_buttons = QBoxLayout(QBoxLayout.Direction.LeftToRight)
+        self.transfer_buttons.setSpacing(8)
+        self.transfer_buttons.addWidget(self.sync_button)
+        self.full_sync_button = button("전체 동기화", self.full_sync)
+        self.full_sync_button.setObjectName("syncSecondary")
+        self.full_sync_button.setToolTip("견적·판매·고객문의·농원·묘목·재고의 서버 최신 자료를 PC에 반영합니다. 미반영 PC 수정은 복구 기록에 보관합니다.")
+        self.full_sync_button.setAccessibleName("전체 동기화 · 서버 원본을 PC에 반영")
+        set_button_icon(self.full_sync_button, "refresh")
+        self.transfer_buttons.addWidget(self.full_sync_button)
+        header.addLayout(self.transfer_buttons)
         self.header_actions = QHBoxLayout()
         header.addLayout(self.header_actions)
         content_layout.addWidget(self.page_header)
@@ -4075,7 +4146,12 @@ class SellerWindow(MainWindow):
             widget.hide()
         for page in (self.farms_page, self.species_page):
             page.sync_button.setObjectName("secondary")
+            page.sync_button.setText("관리자료 동기화")
+            page.sync_button.setToolTip("농원·묘목·재고의 서버 최신 자료를 PC에 반영합니다.")
         self.inquiries_page.load.setObjectName("secondary")
+        self.inquiries_page.load.setText("고객문의 가져오기")
+        self.connect_button.setText("서버 연결 · 견적 가져오기")
+        self.connect_button.setToolTip("PC 연결을 확인하고 견적요청·확정견적을 받습니다. 전체 자료는 전체 동기화를 이용하세요.")
         for search in (self.request_search, self.draft_search, self.sale_search, self.shipping_search,
                        self.farms_page.search, self.species_page.search, self.inquiries_page.search):
             search.setFixedWidth(340)
@@ -4127,6 +4203,8 @@ class SellerWindow(MainWindow):
         self.page_content_layout.setContentsMargins(margin, 0, margin, 0)
         self.page_content_layout.setSpacing(12)
         self.page_header_layout.setSpacing(12)
+        self.transfer_buttons.setDirection(QBoxLayout.Direction.TopToBottom if stacked_tools or large
+                                           else QBoxLayout.Direction.LeftToRight)
         self.sales_toolbar.setDirection(QBoxLayout.Direction.TopToBottom if stacked_tools
                                         else QBoxLayout.Direction.LeftToRight)
         # Do not restyle a modal editor's deliberately short item rows.
@@ -4667,7 +4745,6 @@ class SellerWindow(MainWindow):
         self.stack.setCurrentIndex(index)
         if index == self.PAGE_INQUIRIES:
             self.inquiries_page.refresh_local()
-        self.sync_button.setText("불러오기 F5" if index == self.PAGE_INQUIRIES else "가져오기 F5")
         if index in (self.PAGE_FARMS, self.PAGE_SPECIES):
             # Do not rebuild the hidden species/inventory page when opening farms.
             page = self.farms_page if index == self.PAGE_FARMS else self.species_page
@@ -4790,6 +4867,8 @@ class SellerWindow(MainWindow):
         self.navigate(self.PAGE_REQUESTS)
 
     def job_finished(self, task, value, error, conflict, on_success):
+        read_scope = getattr(task, "read_scope", "")
+        read_started = getattr(task, "read_started", None)
         super().job_finished(task, value, error, conflict, on_success)
         if self.workspace_ready:
             self.refresh_nursery()
@@ -4797,17 +4876,19 @@ class SellerWindow(MainWindow):
         title = getattr(task, "operation_title", "")
         server_transfer = any(token in title for token in (
             "동기화", "서버 연결", "판매자료를 서버에 올리는", "서버 판매자료를 합치는",
-            "서버 최신 자료를 PC", "서버 판매자료를 PC", "서버에서 농원"))
+            "서버 최신 자료를 PC", "서버 판매자료를 PC", "서버에서 농원", "견적 가져오기"))
         sync_errors = value.get("syncErrors", []) if isinstance(value, dict) else []
         if server_transfer:
             self._last_storage_transfer_error = str(error or " / ".join(sync_errors))
-        if (not error and isinstance(value, dict) and "requests" in value
+        if (not error and not sync_errors and isinstance(value, dict) and "requests" in value
                 and server_transfer):
             completed = timestamp(datetime.now(SEOUL).timestamp() * 1000)
-            self.last_sync_label.setText("성공 · " + completed)
+            completed_scope = read_scope or ("판매자료 반영" if "판매" in title else "서버 자료 반영")
+            self.last_sync_label.setText("성공 · " + completed_scope + " · " + completed)
             if self.manager and not getattr(self, "demo_mode", False):
                 try:
                     self.manager.vault.save_preference("storage-last-server-sync-at", int(datetime.now(SEOUL).timestamp() * 1000))
+                    self.manager.vault.save_preference("storage-last-server-sync-scope", completed_scope)
                 except Exception:
                     self.message.setText("서버 반영은 완료했으나 마지막 동기화 시각을 저장하지 못했습니다.")
             self.set_status_state("error" if sync_errors else "success", "일부 반영 · 확인 필요" if sync_errors else "동기화 완료")
@@ -4817,10 +4898,23 @@ class SellerWindow(MainWindow):
                 self._request_arrival_notice + ("  |  " + current if current else "")
             )
             self._request_arrival_notice = ""
-        if isinstance(value, dict) and value.get("transferNotice"):
+        if not error and isinstance(value, dict) and value.get("transferNotice"):
             self.message.setText(value["transferNotice"])
             if value.get("salesSyncConflict") or "서버 반영 대기" in value["transferNotice"]:
                 self.set_status_state("error", "서버 반영 대기")
+        if read_scope:
+            elapsed = f" · {monotonic() - read_started:.1f}초" if read_started is not None else ""
+            copy_error = value.get("copyError", "") if isinstance(value, dict) else ""
+            if error:
+                message = f"{read_scope} 실패{elapsed} · {error}"
+            else:
+                message = value.get("transferNotice") or f"{read_scope} 완료 · 서버 → PC 반영"
+                message += elapsed
+                if copy_error:
+                    message += " · " + copy_error
+            self.message.setText(message)
+            self.set_status_state("error" if error or sync_errors or copy_error else "success",
+                                  read_scope + (" 실패" if error else " 일부 확인 필요" if sync_errors or copy_error else " 완료"))
         self.refresh_storage_status()
 
     def refresh_storage_status(self):
@@ -4847,7 +4941,7 @@ class SellerWindow(MainWindow):
             elif self._last_storage_transfer_error:
                 transfer += " · 서버 반영 실패, 다시 시도해주세요"
             recent = self.last_sync_label.text().removeprefix("성공 · ")
-            text = f"{local} · {transfer} · 최근 서버 동기화: {recent}"
+            text = f"{local} · {transfer} · 최근 서버 반영: {recent}"
             if pending or self.dirty or self.data.get("copyError") or self._last_storage_transfer_error:
                 color = "#805a17"
         if hasattr(self, "sidebar_connection"):
@@ -4864,7 +4958,9 @@ class SellerWindow(MainWindow):
             self.status_auto.setText("자동 가져오기 켜짐" if self.auto_check.isChecked() else "자동 가져오기 꺼짐")
         self.storage_status.setText(text)
         self.storage_status.setToolTip(
-            "서버가 원본입니다. 저장한 변경은 즉시 전송을 시도하고, 동기화는 서버 최신 자료를 PC에 반영합니다. "
+            "서버가 원본입니다. 견적 가져오기(F5)는 견적요청·확정견적만 갱신합니다. "
+            "전체 동기화는 견적·판매·문의·농원·묘목·재고를 서버에서 받습니다. "
+            "판매는 로컬 DB에서 관리하고 저장한 변경은 즉시 서버 전송을 시도합니다. "
             "‘엑셀 파일 저장’은 파일 내보내기이며 서버에 전송하지 않습니다.\n" +
             (self._last_storage_transfer_error or self.data.get("copyError", "")))
         large = bool(QApplication.instance().property("namufarmLargeFont"))
@@ -4875,6 +4971,7 @@ class SellerWindow(MainWindow):
         if not self.workspace_ready:
             return
         ready = self.manager is not None and self.task is None
+        self.full_sync_button.setEnabled(ready and not getattr(self, "demo_mode", False))
         paired = ready
         self.stack.setEnabled(self.task is None)
         for page in (self.farms_page, self.species_page):
@@ -5734,14 +5831,27 @@ class SellerWindow(MainWindow):
         if self.workspace_ready:
             self.navigate(self.PAGE_REQUESTS)
 
+    def start_server_read(self, scope, work):
+        if (getattr(self, "demo_mode", False) or not self.manager or self.task
+                or not self.allow_discard()):
+            return
+        self.run_job(scope + " 중… · 서버 → PC", work)
+        if self.task is not None:
+            self.task.read_scope = scope
+            self.task.read_started = monotonic()
+
     def manual_sync(self):
-        if getattr(self, "demo_mode", False) or not self.manager or not self.allow_discard():
-            return
-        if self.stack.currentIndex() in (self.PAGE_FARMS, self.PAGE_SPECIES, self.PAGE_INQUIRIES):
-            self.stack.currentWidget().sync()
-            return
-        self.run_job("서버 최신 자료를 PC에 반영하는 중…",
-                     lambda: self.manager.connect(include_sales=True))
+        # F5 has one meaning on every page: quotes only, never sales/inquiry reads.
+        if self.manager:
+            self.start_server_read("견적 가져오기", self.manager.connect)
+
+    def connect_server(self):
+        # The settings action shares the quote-only path and its scoped logs.
+        self.manual_sync()
+
+    def full_sync(self):
+        if self.manager:
+            self.start_server_read("전체 동기화", lambda: self.manager.connect(include_management=True))
 
     def auto_sync(self):
         super().auto_sync()

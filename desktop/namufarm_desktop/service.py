@@ -181,9 +181,10 @@ class Manager(ServerFirst, QuoteVersions, SoldNumbers, SalesWorkspace):
                 "로컬 DB의 확정 견적을 선택해주세요.")
         return quote
 
-    def connect(self, include_sales=False, *, sales_only=False):
+    def connect(self, include_sales=False, *, sales_only=False, include_management=False):
         """Enroll this PC with the configured server without asking for a key or file."""
-        pull = (lambda: self.sync(sales_only=True)) if sales_only else self.sync if include_sales else self.sync_requests
+        pull = ((lambda: self.server_sync(include_management=True)) if include_management else
+                (lambda: self.sync(sales_only=True)) if sales_only else self.sync if include_sales else self.sync_requests)
         if self.credentials.get("paired") is True:
             try:
                 return pull()
@@ -1078,7 +1079,7 @@ class Manager(ServerFirst, QuoteVersions, SoldNumbers, SalesWorkspace):
         snapshot_id, total, watermark, received = None, None, None, 0
         snapshot = (field == "requests" and self.request_snapshot) if snapshot is None else snapshot
         for _ in range(100):
-            label = "견적요청" if field == "requests" else "판매자료"
+            label = "견적요청·확정견적" if field == "requests" else "판매자료"
             self.report_progress(f"{label} 가져오는 중… · {_ + 1}번째")
             extra = ({"snapshot":True, **({"snapshotId":snapshot_id} if snapshot_id else {})} if snapshot else
                      {"snapshot": False} if field == "requests" else {})
@@ -1232,7 +1233,10 @@ class Manager(ServerFirst, QuoteVersions, SoldNumbers, SalesWorkspace):
         except UserError as error:
             recovery_error = " · ".join(filter(None, (recovery_error, str(error))))
         # Sale numbering is prepared by sales/payment actions, not inbox reads.
-        value = self.local_copy_view()
+        self.report_progress("견적 목록 반영 완료 · 견적 엑셀 사본을 갱신하는 중…")
+        self.transfer_notice = (f"견적 가져오기 완료 · 서버 → PC · 요청 {len(self.inbox_requests):,}건 · "
+                                f"확정 {sum(r.get('status') in ('견적확정', '견적발송완료') for r in self.vault.rows('requests')):,}건")
+        value = self.local_copy_view(copies=("requests", "quotes"))
         value["copyError"] = " · ".join(filter(None, (value.get("copyError"), recovery_error)))
         return value
 

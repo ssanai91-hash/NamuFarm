@@ -194,9 +194,12 @@ QDialog#quoteWorkbench QTextBrowser#workbenchCustomerName,QDialog#quoteWorkbench
 QDialog#quoteWorkbench QTextBrowser#workbenchCustomerName,QDialog#quoteWorkbench QTextBrowser#workbenchReceipt{font-weight:700;}
 QDialog#quoteWorkbench QFrame#workbenchDocumentTools{border-radius:12px;}
 QDialog#quoteWorkbench QTableWidget#workbenchItems{font-size:@body@px;background:@card@;}
-QDialog#quoteWorkbench QTableWidget::item{padding:4px 8px;}
-QDialog#quoteWorkbench #quoteSpeciesEditor QLineEdit{border:0;background:transparent;padding:0;min-height:24px;}
-QDialog#quoteWorkbench #quoteSpeciesEditor QPushButton{background:transparent;border:0;color:@primary@;font-size:@small@px;min-height:24px;padding:0;}
+QDialog#quoteWorkbench QTableWidget#workbenchItems::item{padding:4px 8px;border-bottom:1px solid @border@;}
+QDialog#quoteWorkbench QTableWidget#workbenchItems::item:hover:!selected{background:@table-head@;}
+QDialog#quoteWorkbench #quoteSpeciesEditor QLineEdit{border:1px solid @border@;border-radius:6px;background:@card@;padding:0 6px;min-height:34px;}
+QDialog#quoteWorkbench #quoteSpeciesEditor QLineEdit:focus{border-color:@primary@;}
+QDialog#quoteWorkbench #quoteSpeciesEditor QPushButton{background:@card@;border:1px solid @border@;border-radius:6px;color:@primary@;min-width:36px;max-width:36px;min-height:36px;max-height:36px;padding:0;}
+QDialog#quoteWorkbench #quoteSpeciesEditor QPushButton:hover{background:@table-head@;border-color:@primary@;}
 QDialog#quoteWorkbench #unitPriceEditor QPushButton{min-width:40px;max-width:40px;min-height:40px;padding:0;}
 QDialog#quoteWorkbench #unitPriceEditor QLineEdit{min-height:38px;min-width:64px;padding:0 4px;}
 QDialog#quoteWorkbench QFrame#workbenchFooter{background:@card@;border:0;border-top:1px solid @border@;}
@@ -238,15 +241,39 @@ class RowSelectionDelegate(QStyledItemDelegate):
         option.state &= ~QStyle.StateFlag.State_HasFocus
 
 
+class CellWidgetDelegate(RowSelectionDelegate):
+    """Keep model text for collection/search, but let its editor draw it once."""
+    def initStyleOption(self, option, index):
+        super().initStyleOption(option, index)
+        table = self.parent()
+        if table.cellWidget(index.row(), index.column()) is not None:
+            option.text = ""
+
+
 class QuoteRemarksDelegate(RowSelectionDelegate):
     """An empty-cell hint is presentation only, never quote data or export text."""
+    def __init__(self, parent=None, *, specification=False):
+        super().__init__(parent)
+        self.specification = specification
+
     def initStyleOption(self, option, index):
         super().initStyleOption(option, index)
         if not index.data(Qt.ItemDataRole.DisplayRole):
-            option.text = "입력가능"
-            option.font.setItalic(True)
-            option.palette.setColor(QPalette.ColorRole.Text, QColor(TOKENS["muted"]))
-            option.palette.setColor(QPalette.ColorRole.HighlightedText, QColor(TOKENS["muted"]))
+            editable = bool(index.flags() & Qt.ItemFlag.ItemIsEditable)
+            option.text = "규격 입력" if self.specification and editable else "" if self.specification else "입력가능"
+            option.font.setItalic(not self.specification)
+            color = QColor(TOKENS["input-border"] if self.specification else TOKENS["muted"])
+            option.palette.setColor(QPalette.ColorRole.Text, color)
+            option.palette.setColor(QPalette.ColorRole.HighlightedText, color)
+
+    def paint(self, painter, option, index):
+        super().paint(painter, option, index)
+        if self.specification and index.flags() & Qt.ItemFlag.ItemIsEditable:
+            painter.save()
+            painter.setPen(QColor(TOKENS["border"]))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawRoundedRect(QRectF(option.rect).adjusted(4, 10, -4, -10), 5, 5)
+            painter.restore()
 
     def createEditor(self, parent, option, index):
         editor = super().createEditor(parent, option, index)
@@ -254,7 +281,7 @@ class QuoteRemarksDelegate(RowSelectionDelegate):
             font = parent.font()
             font.setItalic(False)
             editor.setFont(font)
-            editor.setPlaceholderText("입력가능")
+            editor.setPlaceholderText("규격 입력" if self.specification else "입력가능")
         return editor
 
 
@@ -470,7 +497,7 @@ class DataTable(QTableWidget):
             available = max(1, self.viewport().width())
             minimum_total = sum(minimum for _column, _weight, minimum in self._weights)
             total = sum(weight for _column, weight, _minimum in self._weights)
-            if minimum_total > available:
+            if minimum_total > available and not self.property("preserveColumnMinimums"):
                 columns = [(column, weight, max(36, int(minimum * available / minimum_total)))
                            for column, weight, minimum in self._weights]
             else:

@@ -4,6 +4,7 @@ from PySide6.QtWidgets import (QButtonGroup, QDialog, QGridLayout, QHBoxLayout,
     QLabel, QLineEdit, QListWidget, QPushButton, QSizePolicy, QVBoxLayout, QWidget)
 
 from .nursery import INITIALS, initial
+from .ui_icons import set_button_icon
 
 
 # Website catalog (website/lib/species-data.json), with the same name grouping as
@@ -47,9 +48,10 @@ class SpeciesNameEditor(QWidget):
     def __init__(self, text="", parent=None):
         super().__init__(parent)
         self.setObjectName("quoteSpeciesEditor")
-        row = QVBoxLayout(self)
-        row.setContentsMargins(0, 0, 0, 0)
+        row = QHBoxLayout(self)
+        row.setContentsMargins(6, 6, 6, 6)
         row.setSpacing(6)
+        row.setAlignment(Qt.AlignmentFlag.AlignVCenter)
         self.input = QLineEdit(text)
         self.input.setPlaceholderText("묘목명")
         self.input.setMaxLength(200)
@@ -59,10 +61,11 @@ class SpeciesNameEditor(QWidget):
         self.input.installEventFilter(self)
         self.input.textChanged.connect(self.changed.emit)
         row.addWidget(self.input, 1)
-        self.search_button = QPushButton("다른 묘목으로 바꾸기")
-        self.search_button.setProperty("role", "text")
-        self.search_button.setMinimumWidth(0)
-        self.search_button.setAccessibleName("이 품목의 묘목 초성검색")
+        self.search_button = QPushButton()
+        set_button_icon(self.search_button, "search")
+        self.search_button.setFixedSize(36, 36)
+        self.search_button.setToolTip("다른 묘목으로 바꾸기 · 초성검색")
+        self.search_button.setAccessibleName("다른 묘목으로 바꾸기 · 초성검색")
         self.search_button.installEventFilter(self)
         self.search_button.clicked.connect(lambda _checked=False: self.pick_requested.emit())
         row.addWidget(self.search_button)

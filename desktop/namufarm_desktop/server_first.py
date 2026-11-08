@@ -81,13 +81,17 @@ class ServerFirst:
             self._park_quote_write("다른 견적 처리 계속 · 이전 저장 결과는 별도 보관")
 
     @serialized
-    def server_sync(self):
+    def server_sync(self, *, include_management=False):
         """Pull each server area independently. No upload or delivery retry here."""
         self.verify_server()
         errors, completed = [], []
+        scope = "전체 동기화" if include_management else "견적·판매·문의 동기화"
         for title, action in (("견적", self.sync_requests), ("판매", self.download_sales)):
             try:
-                action()
+                self.report_progress(f"{scope} · {title} 자료를 서버에서 받는 중…")
+                area_result = action()
+                if area_result.get("copyError"):
+                    errors.append(title + " 로컬 사본: " + area_result["copyError"])
                 completed.append(title)
             except AuthenticationError:
                 raise
@@ -97,13 +101,29 @@ class ServerFirst:
         if info.get("customerInquiryReady"):
             from .inquiries import InquiryService
             try:
-                InquiryService(self).sync()
+                self.report_progress(scope + " · 고객문의 변경분을 서버에서 받는 중…")
+                inquiry = InquiryService(self).sync()
+                if inquiry.get("copyError"):
+                    errors.append("문의 엑셀: " + inquiry["copyError"])
                 completed.append("문의")
             except AuthenticationError:
                 raise
             except (UserError, OSError) as error:
                 errors.append("문의: " + str(error))
-        self.transfer_notice = "서버 → PC 반영: " + ("·".join(completed) or "완료 없음")
+        elif include_management:
+            errors.append("문의: 서버 기능 준비 상태를 확인해주세요.")
+        if include_management:
+            from .nursery import NurseryStore
+            try:
+                self.report_progress("전체 동기화 · 농원·묘목·재고를 서버에서 받는 중…")
+                NurseryStore(self).pull()
+                completed.append("농원·묘목·재고")
+            except AuthenticationError:
+                raise
+            except (UserError, OSError) as error:
+                errors.append("관리자료: " + str(error))
+        self.transfer_notice = scope + (" 일부 반영" if errors and completed else " 실패" if errors else " 완료")
+        self.transfer_notice += " · 서버 → PC · " + ("·".join(completed) or "완료 없음")
         if errors:
             self.transfer_notice += " · 일부 확인 필요: " + " / ".join(errors)
         result = self.local_copy_view()
