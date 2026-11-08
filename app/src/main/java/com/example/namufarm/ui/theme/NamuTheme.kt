@@ -62,10 +62,10 @@ fun NamuTheme(content: @Composable () -> Unit) {
             titleSmall = TextStyle(fontSize = 17.sp, lineHeight = 23.sp, fontWeight = FontWeight.Bold),
             bodyLarge = TextStyle(fontSize = 16.sp, lineHeight = 23.sp),
             bodyMedium = TextStyle(fontSize = 15.sp, lineHeight = 22.sp),
-            bodySmall = TextStyle(fontSize = 13.sp, lineHeight = 19.sp),
+            bodySmall = TextStyle(fontSize = 14.sp, lineHeight = 20.sp),
             labelLarge = TextStyle(fontSize = 15.sp, lineHeight = 21.sp, fontWeight = FontWeight.Bold),
-            labelMedium = TextStyle(fontSize = 13.sp, lineHeight = 18.sp),
-            labelSmall = TextStyle(fontSize = 13.sp, lineHeight = 18.sp)
+            labelMedium = TextStyle(fontSize = 14.sp, lineHeight = 20.sp),
+            labelSmall = TextStyle(fontSize = 14.sp, lineHeight = 20.sp)
         ), content = content
     )
 }

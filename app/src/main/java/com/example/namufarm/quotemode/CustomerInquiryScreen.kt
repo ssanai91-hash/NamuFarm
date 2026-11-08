@@ -88,12 +88,12 @@ fun CustomerInquiryScreen(viewModel: CustomerInquiryViewModel) {
         if (selected == null) state.message?.let { message ->
             Surface(color = Forest50, shape = InquiryDesign.shape, border = BorderStroke(1.dp, Forest700)) {
                 Row(Modifier.padding(start = 10.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(namuPlainText(message), Modifier.weight(1f).padding(vertical = 10.dp), fontSize = 14.sp)
+                    Text(namuPlainText(message), Modifier.weight(1f).padding(vertical = 10.dp), fontSize = 15.sp)
                     TextButton(onClick = viewModel::clearMessage) { Text("닫기") }
                 }
             }
         }
-        Text("문의 ${rows.size}건", color = Ink500, fontSize = 14.sp)
+        Text("문의 ${rows.size}건", color = Ink500, fontSize = 15.sp)
         LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 12.dp)) {
             if (rows.isEmpty()) item {
                 InquiryEmpty(state.rows.isEmpty())
@@ -146,6 +146,7 @@ private fun InquiryDetailDialog(row: CustomerInquiryRemote, state: CustomerInqui
     var statusTarget by remember { mutableStateOf<String?>(null) }
     var note by rememberSaveable(id) { mutableStateOf("") }
     var resolveChoice by remember { mutableStateOf<Boolean?>(null) }
+    var messageExpanded by rememberSaveable(id) { mutableStateOf(false) }
     var showOriginal by rememberSaveable(id) { mutableStateOf(false) }
     var showHistory by rememberSaveable(id) { mutableStateOf(false) }
     var preparedDraft by remember { mutableStateOf<CustomerInquiryDraftEntity?>(null) }
@@ -172,7 +173,7 @@ private fun InquiryDetailDialog(row: CustomerInquiryRemote, state: CustomerInqui
                         TextButton(onClick = { showHistory = true }, contentPadding = PaddingValues(horizontal = 6.dp),
                             colors = ButtonDefaults.textButtonColors(contentColor = green)) {
                             Icon(Icons.Outlined.History, null, Modifier.size(18.dp))
-                            Spacer(Modifier.width(3.dp)); Text("이력", fontSize = 13.sp)
+                            Spacer(Modifier.width(3.dp)); Text("이력", fontSize = 15.sp)
                         }
                         IconButton(onClick = onClose, modifier = Modifier.size(40.dp)) {
                             Icon(Icons.Outlined.Close, "닫기", tint = ink)
@@ -190,7 +191,7 @@ private fun InquiryDetailDialog(row: CustomerInquiryRemote, state: CustomerInqui
                                         shape = RoundedCornerShape(7.dp)) {
                                         Text(InquiryDesign.status(row.status), Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
                                             color = if (row.status == "closed") green else Amber600,
-                                            fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                                            fontSize = 15.sp, fontWeight = FontWeight.Bold)
                                     }
                                 }
                                 Row(Modifier.clickable {
@@ -199,7 +200,7 @@ private fun InquiryDetailDialog(row: CustomerInquiryRemote, state: CustomerInqui
                                             Uri.fromParts("tel", row.inquiry?.customerPhone.orEmpty(), null)))
                                         null
                                     }.getOrElse { "전화 앱을 열 수 없습니다." }
-                                }.heightIn(min = 32.dp), verticalAlignment = Alignment.CenterVertically,
+                                }.heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                                     Icon(Icons.Outlined.Phone, null, tint = green, modifier = Modifier.size(20.dp))
                                     Text(PhoneNumberUtils.formatNumber(row.inquiry?.customerPhone.orEmpty(), "KR")
@@ -208,43 +209,48 @@ private fun InquiryDetailDialog(row: CustomerInquiryRemote, state: CustomerInqui
                                 if (!row.inquiry?.customerEmail.isNullOrBlank()) {
                                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                                         Icon(Icons.Outlined.Email, null, tint = green, modifier = Modifier.size(20.dp))
-                                        SelectionContainer { Text(row.inquiry?.customerEmail.orEmpty(), fontSize = 14.sp, color = ink,
+                                        SelectionContainer { Text(row.inquiry?.customerEmail.orEmpty(), fontSize = 15.sp, color = ink,
                                             maxLines = 1, overflow = TextOverflow.Ellipsis) }
                                     }
                                 }
-                                Text("${row.inquiryNumber} · ${row.deliveryLabel}", fontSize = 13.sp, color = muted)
+                                Text("${row.inquiryNumber} · ${row.deliveryLabel}", fontSize = 15.sp, color = muted)
                                 // Why the last send failed (fixed server text), and the opt-out block notice.
                                 val reason = row.delivery?.takeIf { it.state == "failed" }?.statusMessage?.takeIf { it.isNotBlank() }
                                 if (reason != null || row.smsBlocked) Text(
                                     if (row.smsBlocked) "수신거부 번호라 문자는 보낼 수 없어요. 메일·전화로 안내해주세요." else reason.orEmpty(),
-                                    fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = NamuColors.danger)
+                                    fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = NamuColors.danger)
                             }
                         }
                         HorizontalDivider(color = line)
                         Column(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                 Icon(Icons.AutoMirrored.Outlined.Chat, null, tint = muted, modifier = Modifier.size(20.dp))
-                                Text("고객 문의 · ${row.inquiry?.category}", Modifier.weight(1f), fontSize = 13.sp,
+                                Text("고객 문의 · ${row.inquiry?.category}", Modifier.weight(1f), fontSize = 15.sp,
                                     fontWeight = FontWeight.SemiBold, color = muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                TextButton(onClick = { showOriginal = true }, modifier = Modifier.height(36.dp),
+                                TextButton(onClick = { showOriginal = true }, modifier = Modifier.heightIn(min = 48.dp),
                                     colors = ButtonDefaults.textButtonColors(contentColor = green),
-                                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)) { Text("원문", fontSize = 13.sp) }
+                                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)) { Text("원문", fontSize = 15.sp) }
                             }
-                            Text(inquiryLocalTime(row.createdAt), fontSize = 13.sp, color = muted)
+                            Text(inquiryLocalTime(row.createdAt), fontSize = 15.sp, color = muted)
                             Surface(color = White, shape = RoundedCornerShape(14.dp)) {
-                                SelectionContainer { Text(row.inquiry?.message.orEmpty(), Modifier.fillMaxWidth().padding(12.dp),
-                                    fontSize = 16.sp, color = ink, maxLines = 3, overflow = TextOverflow.Ellipsis) }
+                                Column {
+                                    SelectionContainer { Text(row.inquiry?.message.orEmpty(), Modifier.fillMaxWidth().padding(12.dp),
+                                        fontSize = 16.sp, color = ink, maxLines = if (messageExpanded) Int.MAX_VALUE else 3, overflow = TextOverflow.Ellipsis) }
+                                    TextButton(onClick = { messageExpanded = !messageExpanded }, modifier = Modifier.heightIn(min = 48.dp)) {
+                                        Text(if (messageExpanded) "접기" else "펼치기", fontSize = 15.sp)
+                                    }
+                                }
                             }
                         }
-                        actionError?.let { Text(it, color = Amber600, fontSize = 13.sp) }
-                        state.message?.let { Text(it, color = Amber600, fontSize = 14.sp) }
+                        actionError?.let { Text(it, color = Amber600, fontSize = 15.sp) }
+                        state.message?.let { Text(it, color = Amber600, fontSize = 15.sp) }
                         if (pending != null || row.blockedDelivery) {
-                            Text("이전 작업의 결과를 먼저 확인해주세요. 결과가 불명확한 상태에서는 다시 발송하지 않습니다.", fontSize = 14.sp, color = Amber600)
+                            Text("이전 작업의 결과를 먼저 확인해주세요. 결과가 불명확한 상태에서는 다시 발송하지 않습니다.", fontSize = 15.sp, color = Amber600)
                             OutlinedButton(onClick = { viewModel.check(id) }, enabled = !state.busy,
                                 modifier = Modifier.fillMaxWidth()) { Text("결과 확인") }
                         }
                         if (conflict || pending?.action == "save_inquiry_reply") {
-                            Text("다른 기기의 답변 또는 미확인 초안이 있습니다. 최신 서버 답변과 비교한 뒤 선택해주세요.", color = Amber600, fontSize = 14.sp)
+                            Text("다른 기기의 답변 또는 미확인 초안이 있습니다. 최신 서버 답변과 비교한 뒤 선택해주세요.", color = Amber600, fontSize = 15.sp)
                             Text("서버 답변: ${row.reply?.text.orEmpty()}", fontSize = 15.sp)
                             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                 OutlinedButton(onClick = { resolveChoice = true }, enabled = !state.busy && !row.blockedDelivery,
@@ -264,7 +270,7 @@ private fun InquiryDetailDialog(row: CustomerInquiryRemote, state: CustomerInqui
                                         contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp),
                                         colors = ButtonDefaults.textButtonColors(contentColor = green)) {
                                         Icon(Icons.Outlined.Save, null, Modifier.size(18.dp)); Spacer(Modifier.width(4.dp))
-                                        Text("초안 저장", fontSize = 13.sp)
+                                        Text("초안 저장", fontSize = 15.sp)
                                     }
                                 }
                                 OutlinedTextField(value = draft.text, onValueChange = { viewModel.edit(id, it) },
@@ -277,7 +283,7 @@ private fun InquiryDetailDialog(row: CustomerInquiryRemote, state: CustomerInqui
                                         focusedPlaceholderColor = muted, unfocusedPlaceholderColor = muted),
                                     modifier = Modifier.fillMaxWidth().then(
                                         if (scrollBody) Modifier.heightIn(min = 112.dp, max = 180.dp) else Modifier.weight(1f)))
-                                Text("${draft.text.length}자 · 전송창에서 인사말·마무리 자동 작성", fontSize = 13.sp, color = muted)
+                                Text("${draft.text.length}자 · 전송창에서 인사말·마무리 자동 작성", fontSize = 15.sp, color = muted)
                             }
                         }
                     }
@@ -299,7 +305,7 @@ private fun InquiryDetailDialog(row: CustomerInquiryRemote, state: CustomerInqui
                             modifier = Modifier.weight(1f).heightIn(min = 48.dp)) {
                             Icon(if (row.status == "closed") Icons.Outlined.Refresh else Icons.Outlined.Phone, null, Modifier.size(18.dp))
                             Spacer(Modifier.width(4.dp))
-                            Text(if (row.status == "closed") "다시 열기" else "상담완료", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            Text(if (row.status == "closed") "다시 열기" else "상담완료", fontSize = 15.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -312,9 +318,9 @@ private fun InquiryDetailDialog(row: CustomerInquiryRemote, state: CustomerInqui
             SelectionContainer {
                 Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("${row.inquiry?.customerName.orEmpty()} · ${inquiryLocalTime(row.createdAt)}", fontSize = 13.sp, color = Ink500)
-                    Text(row.inquiry?.customerPhone.orEmpty(), fontSize = 14.sp)
-                    if (!row.inquiry?.customerEmail.isNullOrBlank()) Text(row.inquiry?.customerEmail.orEmpty(), fontSize = 14.sp)
+                    Text("${row.inquiry?.customerName.orEmpty()} · ${inquiryLocalTime(row.createdAt)}", fontSize = 15.sp, color = Ink500)
+                    Text(row.inquiry?.customerPhone.orEmpty(), fontSize = 15.sp)
+                    if (!row.inquiry?.customerEmail.isNullOrBlank()) Text(row.inquiry?.customerEmail.orEmpty(), fontSize = 15.sp)
                     Text(row.inquiry?.message.orEmpty(), fontSize = 17.sp, color = Forest800)
                 }
             }
@@ -324,14 +330,14 @@ private fun InquiryDetailDialog(row: CustomerInquiryRemote, state: CustomerInqui
         text = {
             Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (row.history.orEmpty().isEmpty()) Text("등록된 답변 이력이 없습니다.", fontSize = 14.sp, color = Ink500)
+                if (row.history.orEmpty().isEmpty()) Text("등록된 답변 이력이 없습니다.", fontSize = 15.sp, color = Ink500)
                 row.history.orEmpty().asReversed().filterNotNull().forEach { entry ->
                     Surface(color = Canvas, shape = RoundedCornerShape(8.dp), border = BorderStroke(1.dp, InquiryDesign.line)) {
                         Column(Modifier.fillMaxWidth().padding(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text(inquiryLocalTime(entry.at), fontSize = 13.sp, color = Ink500)
+                            Text(inquiryLocalTime(entry.at), fontSize = 15.sp, color = Ink500)
                             if (entry.kind == "status") Text("${InquiryDesign.status(entry.status)} · ${entry.note.orEmpty()}")
                             else {
-                                Text("${if (entry.channel == "sms") "문자" else "메일"} · ${CustomerInquiryRemote.DELIVERY_LABELS[entry.state] ?: entry.state.orEmpty()}", fontSize = 13.sp)
+                                Text("${if (entry.channel == "sms") "문자" else "메일"} · ${CustomerInquiryRemote.DELIVERY_LABELS[entry.state] ?: entry.state.orEmpty()}", fontSize = 15.sp)
                                 SelectionContainer { Text(entry.text.orEmpty(), fontSize = 15.sp) }
                             }
                         }

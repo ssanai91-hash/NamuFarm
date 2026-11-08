@@ -120,7 +120,8 @@ internal fun NamuBadge(text: String, manual: Boolean = false, error: Boolean = f
         color = when { error -> colors.errorContainer; manual -> colors.tertiaryContainer; else -> colors.primaryContainer },
         contentColor = when { error -> colors.onErrorContainer; manual -> colors.onTertiaryContainer; else -> colors.onPrimaryContainer }
     ) {
-        Text(text, Modifier.padding(horizontal = 9.dp, vertical = 5.dp), style = MaterialTheme.typography.labelMedium)
+        Text(text, Modifier.padding(horizontal = 9.dp, vertical = 5.dp), style = MaterialTheme.typography.labelMedium,
+            fontSize = if (error) 15.sp else 14.sp)
     }
 }
 
@@ -305,7 +306,7 @@ internal fun NamuTopBar(title: String, syncText: String? = null, onSync: (() -> 
                 // The last-sync time sits under the title so the right-hand buttons stay on one centre line.
                 Column(Modifier.weight(1f).padding(vertical = 6.dp)) {
                     Text(title, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = NamuColors.text, maxLines = 1)
-                    syncText?.let { Text(it, fontSize = 12.sp, color = NamuColors.muted, maxLines = 1) }
+                    syncText?.let { Text(it, fontSize = 14.sp, color = NamuColors.muted, maxLines = 1) }
                 }
                 FlowRow(Modifier.widthIn(max = actionWidth).padding(vertical = 6.dp), itemVerticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -329,7 +330,7 @@ internal fun NamuTopBarButton(text: String, onClick: () -> Unit, primary: Boolea
         Row(Modifier.height(38.dp).widthIn(min = 88.dp).padding(horizontal = 12.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally)) {
             icon?.let { Icon(it, null, Modifier.size(17.dp), tint = ink) }
-            Text(text, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = ink, maxLines = 1)
+            Text(text, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = ink, maxLines = 1)
         }
     }
 }
@@ -342,7 +343,7 @@ internal fun NamuCallButton(phone: String, modifier: Modifier = Modifier, enable
     OutlinedIconButton(onClick = {
         runCatching { context.startActivity(Intent(Intent.ACTION_DIAL, Uri.fromParts("tel", number, null))) }
             .onFailure { Toast.makeText(context, "전화 앱을 열 수 없습니다.", Toast.LENGTH_SHORT).show() }
-    }, modifier = modifier.size(48.dp), enabled = enabled && number.isNotBlank(),
+    }, modifier = modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp), enabled = enabled && number.isNotBlank(),
         border = BorderStroke(1.5.dp, NamuColors.primary)) {
         Icon(Icons.Outlined.Phone, "전화", Modifier.size(iconSize), tint = NamuColors.primary)
     }
@@ -358,7 +359,7 @@ internal fun NamuSmsButton(phone: String, modifier: Modifier = Modifier, enabled
         com.example.namufarm.phone.openSmsComposer(context, number, "")?.let {
             Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
         }
-    }, modifier = modifier.size(48.dp), enabled = enabled && number.isNotBlank(),
+    }, modifier = modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp), enabled = enabled && number.isNotBlank(),
         border = BorderStroke(1.5.dp, NamuColors.primary)) {
         Icon(Icons.Outlined.Sms, "문자", Modifier.size(iconSize), tint = NamuColors.primary)
     }
@@ -377,7 +378,7 @@ internal fun NamuStatusBadge(stage: String) {
     }
     Surface(color = pair.second, shape = RoundedCornerShape(7.dp)) {
         Text(stage, Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-            fontSize = 13.sp, fontWeight = FontWeight.Medium, color = pair.first)
+            fontSize = 15.sp, fontWeight = FontWeight.Medium, color = pair.first)
     }
 }
 
@@ -394,7 +395,7 @@ internal fun NamuDashedAdd(text: String, onClick: () -> Unit, modifier: Modifier
 }
 
 internal fun masterSyncLabel(at: Long?): String? = at?.let {
-    "마지막 " + java.text.SimpleDateFormat("HH:mm", Locale.KOREA).format(java.util.Date(it))
+    "마지막 " + shortNamuTime(it)
 }
 
 internal fun shortNamuTime(at: Long): String {

@@ -153,7 +153,7 @@ internal fun InitialQuoteScreen(viewModel: InitialQuoteViewModel, connection: In
                 contentPadding = PaddingValues(bottom = 12.dp)) {
                 if (selectedTab == 0) {
                     if (requests.isEmpty()) item {
-                        Text("새 견적요청이 없습니다. 동기화로 서버 요청을 확인하세요.", Modifier.padding(12.dp))
+                        NamuEmptyState("새 견적요청이 없습니다.", "동기화로 서버 요청을 확인하세요.")
                     }
                     itemsIndexed(requests, key = { _, request -> request.requestId }) { index, request ->
                         QuoteRequestCard(request, request.customerName, request.customerPhone,
@@ -167,9 +167,8 @@ internal fun InitialQuoteScreen(viewModel: InitialQuoteViewModel, connection: In
                     }
                 } else {
                     if (shownConfirmed.isEmpty()) item {
-                        Text(if (confirmedPool.isEmpty()) "확정된 견적이 없습니다."
-                            else "${confirmedPeriodLabel(confirmedDays)}에 확정한 견적이 없습니다.",
-                            Modifier.padding(12.dp), fontSize = 15.sp, color = NamuColors.muted)
+                        NamuEmptyState(if (confirmedPool.isEmpty()) "확정된 견적이 없습니다."
+                            else "${confirmedPeriodLabel(confirmedDays)}에 확정한 견적이 없습니다.")
                     }
                     itemsIndexed(shownConfirmed, key = { _, row -> row.key }) { index, row ->
                         val badge = row.closedState ?: "견적확정"
@@ -257,6 +256,22 @@ internal fun InitialQuoteScreen(viewModel: InitialQuoteViewModel, connection: In
             onDeleteRequest = if (saved?.confirmationPending == true) null else ({ onDelete(request.requestId) }),
             verifiedDelivery = saved?.delivery, verifyDelivery = true,
             onSave = { draft, action -> handleAction(draft, action) },
+            onSaveDraft = { draft, savedLocally ->
+                if (!busy) {
+                    busy = true
+                    scope.launch {
+                        try {
+                            // Reuse the existing document-preparation draft path: no server call or reservation.
+                            withContext(Dispatchers.IO) { workflow.prepareExternalDelivery(request, draft, QuoteDelivery.SMS, reserve = false) }
+                            records = withContext(Dispatchers.IO) { workflow.records() }
+                            savedLocally()
+                            message = NamuMessage("이 휴대폰에 임시저장했습니다. 고객에게 발송하지 않았습니다.")
+                        } catch (e: CancellationException) { throw e }
+                        catch (e: Exception) { message = NamuMessage(e.message ?: "임시저장하지 못했습니다. 입력 내용을 유지합니다.", true) }
+                        finally { busy = false }
+                    }
+                }
+            },
             onConfirmSent = { draft, method -> handleAction(draft, QuoteDelivery.COMPLETE, method) },
             // '아직 안 보냈어요': release a shared reservation so PC/other phones can send.
             onNotSent = { scope.launch {
@@ -335,7 +350,7 @@ private fun QuoteRequestCard(request: WebQuoteRequestEntity, name: String, phone
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(name.ifBlank { "이름 없음" }, Modifier.weight(1f), fontSize = 18.sp,
                     fontWeight = FontWeight.Bold, color = NamuColors.text)
-                Text(shortNamuTime(at), fontSize = 13.sp, color = NamuColors.muted)
+                Text(shortNamuTime(at), fontSize = 15.sp, color = NamuColors.muted)
                 if (onDelete != null) IconButton(onClick = onDelete, enabled = deleteEnabled,
                     modifier = Modifier.padding(start = 6.dp).size(36.dp)
                         .background(Color(0xFFFDECEC), RoundedCornerShape(10.dp))) {
@@ -349,7 +364,7 @@ private fun QuoteRequestCard(request: WebQuoteRequestEntity, name: String, phone
                     if (pending) Row(verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         Icon(Icons.Outlined.Info, null, Modifier.size(18.dp), tint = NamuColors.danger)
-                        Text("견적완료 확인 필요", fontSize = 13.sp, color = NamuColors.danger)
+                        Text("견적완료 확인 필요", fontSize = 15.sp, color = NamuColors.danger)
                     } else FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp),
                         verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         if (status == "견적확정") {
@@ -357,12 +372,12 @@ private fun QuoteRequestCard(request: WebQuoteRequestEntity, name: String, phone
                             // The date is already at the top right; show the quote number instead of repeating it.
                             val receipt = request.receiptNumber
                             Text(if (receipt.isNotBlank()) receipt.substringBefore('-') + "-" + receipt.takeLast(4) else date,
-                                fontSize = 13.sp, color = NamuColors.muted, modifier = Modifier.align(Alignment.CenterVertically))
+                                fontSize = 15.sp, color = NamuColors.muted, modifier = Modifier.align(Alignment.CenterVertically))
                         } else {
                             if (request.formalQuoteRequested) NamuStatusBadge("공식견적서")
                             val receipt = request.receiptNumber
                             if (receipt.isNotBlank()) Text(receipt.substringBefore('-') + "-" + receipt.takeLast(4),
-                                fontSize = 13.sp, color = NamuColors.muted, modifier = Modifier.align(Alignment.CenterVertically))
+                                fontSize = 15.sp, color = NamuColors.muted, modifier = Modifier.align(Alignment.CenterVertically))
                         }
                     }
                 }

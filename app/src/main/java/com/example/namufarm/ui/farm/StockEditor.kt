@@ -57,9 +57,6 @@ internal fun StockEditor(viewModel: ManagementViewModel, original: InventoryDisp
         viewModel.updateSize(Math.round((state.inputSizeMeters + delta).coerceAtLeast(0f) * 10) / 10f)
     }
     val age = state.inputAge.filter(Char::isDigit).toIntOrNull() ?: 0
-    // Honor this editor's explicit 44dp controls and 36dp quick buttons. Large
-    // text may still expand their contents, and the body remains scrollable.
-    CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
     Column(Modifier.fillMaxSize().navigationBarsPadding().imePadding()) {
         FarmSubHeader(if (original == null) "새 재고 입력" else "재고 수정",
             "${state.selectedSpecies?.speciesName.orEmpty()} · ${state.selectedFarm?.farmName.orEmpty()}", onBack)
@@ -72,7 +69,7 @@ internal fun StockEditor(viewModel: ManagementViewModel, original: InventoryDisp
                         append("규격을 바꾸면 ")
                         withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append("새 재고로 추가") }
                         append("돼요 (기존 재고 유지)")
-                    }, fontSize = 14.sp, lineHeight = 20.3.sp, color = Color(0xFF6B4300))
+                    }, fontSize = 15.sp, lineHeight = 20.3.sp, color = Color(0xFF6B4300))
                 }
             }
             NamuCard {
@@ -132,7 +129,7 @@ internal fun StockEditor(viewModel: ManagementViewModel, original: InventoryDisp
             Text(buildAnnotatedString {
                 if (spec.isNotBlank()) append("$spec · ")
                 withStyle(SpanStyle(color = NamuColors.text, fontWeight = FontWeight.Bold)) { append("${farmNumber(state.inputQuantity)}주") }
-            }, fontSize = 13.sp, color = NamuColors.muted)
+            }, fontSize = 15.sp, color = NamuColors.muted)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (original == null) NamuSecondaryButton("취소", onBack, Modifier.weight(1f))
                 else OutlinedButton(onClick = {
@@ -152,7 +149,6 @@ internal fun StockEditor(viewModel: ManagementViewModel, original: InventoryDisp
                 }, Modifier.weight(1.6f), original != null || state.inputQuantity > 0)
             }
         }
-    }
     }
     if (numberField != null) AlertDialog(onDismissRequest = { numberField = null },
         title = { Text("${numberField} 입력") },
@@ -183,9 +179,9 @@ internal fun StockEditor(viewModel: ManagementViewModel, original: InventoryDisp
 }
 
 @Composable
-private fun SpecInputRow(label: String, content: @Composable RowScope.() -> Unit) {
+internal fun SpecInputRow(label: String, content: @Composable RowScope.() -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(label, Modifier.width(40.dp), fontSize = 15.sp, color = Color(0xFF33423A), fontWeight = FontWeight.Medium)
+        Text(label, Modifier.width(40.dp), fontSize = 15.sp, color = NamuColors.text, fontWeight = FontWeight.Medium)
         Spacer(Modifier.width(4.dp))
         Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp), content = content)
@@ -193,44 +189,48 @@ private fun SpecInputRow(label: String, content: @Composable RowScope.() -> Unit
 }
 
 @Composable
-private fun SmallAdjust(label: String, onClick: () -> Unit, circle: Boolean = false,
+internal fun SmallAdjust(label: String, onClick: () -> Unit, circle: Boolean = false,
     width: Dp? = null, enabled: Boolean = true, selected: Boolean = false) {
     Surface(onClick = onClick, enabled = enabled,
         modifier = Modifier.semantics { this.selected = selected },
         shape = if (circle) CircleShape else RoundedCornerShape(22.dp),
         border = if (selected) BorderStroke(2.dp, NamuColors.primary) else null,
-        color = if (selected) Color(0xFFEEF6F0) else Color(0xFFE3EFE7)) {
-        val bounds = if (circle) Modifier.size(44.dp) else
+        color = if (selected) NamuColors.soft else Color.White) {
+        val bounds = if (circle) Modifier.size(48.dp) else
             Modifier.then(if (width != null) Modifier.width(width) else Modifier.padding(horizontal = 7.dp)).heightIn(min = 44.dp)
         Box(bounds, contentAlignment = Alignment.Center) {
-            Text(label, color = if (enabled) Color(0xFF1F573B) else Color(0xFF9AA59F),
-                fontSize = if (circle) 20.sp else 14.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+            Text(label, color = if (enabled) NamuColors.primary else NamuColors.muted,
+                fontSize = if (circle) 20.sp else 15.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
         }
     }
 }
 
 @Composable
-private fun SpecValue(text: String, modifier: Modifier, empty: Boolean) {
+internal fun SpecValue(text: String, modifier: Modifier, empty: Boolean) {
     Surface(modifier.widthIn(min = 64.dp).heightIn(min = 44.dp), shape = RoundedCornerShape(10.dp),
         border = BorderStroke(1.5.dp, NamuColors.input), color = Color.White) {
         Box(Modifier.padding(4.dp), contentAlignment = Alignment.Center) {
             Text(if (empty) "없음" else text, fontSize = 18.sp, fontWeight = FontWeight.Bold,
-                color = if (empty) Color(0xFF9AA59F) else NamuColors.text, textAlign = TextAlign.Center)
+                color = if (empty) NamuColors.muted else NamuColors.text, textAlign = TextAlign.Center)
         }
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun SpecChoice(label: String, options: List<String>, selected: String, onSelect: (String) -> Unit) {
-    SpecInputRow(label) {
-        options.forEach { value ->
-            val active = value == selected
-            Surface(onClick = { onSelect(value) }, modifier = Modifier.weight(1f).heightIn(min = 44.dp), shape = RoundedCornerShape(10.dp),
-                border = BorderStroke(if (active) 2.dp else 1.dp, if (active) NamuColors.primary else Color(0xFFC9D4CE)),
-                color = if (active) Color(0xFFEEF6F0) else Color.White) {
-                Box(Modifier.padding(3.dp), contentAlignment = Alignment.Center) {
-                    Text(value.ifBlank { "없음" }, fontSize = 15.sp, textAlign = TextAlign.Center,
-                        fontWeight = if (active) FontWeight.Bold else FontWeight.Normal, color = if (active) Color(0xFF1F573B) else Color(0xFF33423A))
+internal fun SpecChoice(label: String, options: List<String>, selected: String, onSelect: (String) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(label, fontSize = 15.sp, color = NamuColors.muted)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            options.forEach { value ->
+                val active = value == selected
+                Surface(onClick = { onSelect(value) }, modifier = Modifier.widthIn(min = 56.dp).heightIn(min = 48.dp), shape = RoundedCornerShape(10.dp),
+                    border = BorderStroke(if (active) 2.dp else 1.dp, if (active) NamuColors.primary else NamuColors.input),
+                    color = if (active) NamuColors.soft else Color.White) {
+                    Box(Modifier.padding(3.dp), contentAlignment = Alignment.Center) {
+                        Text(value.ifBlank { "없음" }, fontSize = 15.sp, textAlign = TextAlign.Center,
+                            fontWeight = if (active) FontWeight.Bold else FontWeight.Normal, color = if (active) NamuColors.primary else NamuColors.text)
+                    }
                 }
             }
         }
@@ -251,14 +251,14 @@ private fun NumberAdjust(label: String, value: Int, unit: String, increments: Li
     Row(Modifier.fillMaxWidth().padding(start = 44.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         increments.forEach { delta ->
             OutlinedButton(onClick = { onValue((value.toLong() + delta).coerceAtMost(999999999L).toInt()) },
-                modifier = Modifier.weight(1f).heightIn(min = 36.dp), shape = RoundedCornerShape(18.dp),
+                modifier = Modifier.weight(1f).heightIn(min = 48.dp), shape = RoundedCornerShape(18.dp),
                 contentPadding = PaddingValues(horizontal = 2.dp, vertical = 4.dp), border = BorderStroke(1.dp, Color(0xFFC9D4CE))) {
-                Text(when (delta) { 1000 -> "+1천"; 10000 -> "+1만"; else -> "+$delta" }, fontSize = 14.sp)
+                Text(when (delta) { 1000 -> "+1천"; 10000 -> "+1만"; else -> "+$delta" }, fontSize = 15.sp)
             }
         }
-        OutlinedButton(onClick = { onValue(0) }, modifier = Modifier.weight(1f).heightIn(min = 36.dp), shape = RoundedCornerShape(18.dp),
+        OutlinedButton(onClick = { onValue(0) }, modifier = Modifier.weight(1f).heightIn(min = 48.dp), shape = RoundedCornerShape(18.dp),
             contentPadding = PaddingValues(horizontal = 2.dp, vertical = 4.dp), border = BorderStroke(1.dp, Color(0xFFECC9C4))) {
-            Text("지우기", fontSize = 14.sp, color = Color(0xFF9A2A22))
+            Text("지우기", fontSize = 15.sp, color = Color(0xFF9A2A22))
         }
     }
 }
