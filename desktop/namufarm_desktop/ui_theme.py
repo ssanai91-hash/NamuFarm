@@ -272,6 +272,8 @@ QDialog#quoteWorkbench #workbenchFooter QPushButton{min-height:52px;}
 QDialog#quoteWorkbench QLabel#workbenchTotal{font-size:@total@px;font-weight:700;color:#1E6B3F;}
 QDialog#quoteWorkbench QFrame#workbenchShipping{background:@w-soft@;border:0;border-top:1px solid @w-line@;border-bottom-left-radius:14px;border-bottom-right-radius:14px;}
 QDialog#quoteWorkbench #workbenchShipping QLineEdit{min-height:28px;}
+QDialog#quoteWorkbench #workbenchShipping #unitPriceEditor QPushButton{min-width:0;max-width:16777215px;min-height:0;padding:0;}
+QDialog#quoteWorkbench #workbenchShipping #unitPriceEditor QLineEdit{min-width:0;min-height:0;padding:0 4px;}
 QDialog#quoteWorkbench #workbenchOriginalText{background:#F5F9FF;border:1px solid #DCE8FB;border-radius:10px;padding:6px 8px;font-size:@body@px;}
 QDialog#quoteWorkbench QPushButton[deliveryCompletion="true"]{min-width:180px;max-width:200px;min-height:64px;font-size:@detail@px;font-weight:700;border-radius:14px;}
 QDialog#quoteWorkbench QPushButton#smsAction,QDialog#quoteWorkbench QPushButton#mailAction{min-height:56px;font-size:@action@px;padding:0 8px;background:@card@;color:#163D73;border:2px solid #2563C9;border-radius:12px;}
@@ -315,7 +317,7 @@ QDialog#quoteWorkbench QFrame#workbenchSellerNote{background:@card@;border:1px s
 QDialog#quoteWorkbench QLabel#workbenchSellerNoteTitle{font-size:@section@px;font-weight:700;color:@w-ink@;}
 QDialog#quoteWorkbench QLabel#workbenchSellerBadge{font-size:@small@px;font-weight:700;color:@w-ink@;background:@w-tint@;border-radius:6px;padding:2px 8px;}
 QDialog#quoteWorkbench QFrame#workbenchFooter{background:@card@;border:0;border-top:1px solid @border@;}
-QDialog#quoteWorkbench QPushButton#workbenchCloseText{background:transparent;color:@muted@;border:0;min-width:64px;font-size:@action@px;}
+QDialog#quoteWorkbench QPushButton#workbenchCloseText{background:@card@;color:@muted@;border:1px solid @input-border@;border-radius:10px;min-width:80px;padding:0 16px;font-size:@action@px;}
 QDialog#quoteWorkbench QPushButton#workbenchCloseText:hover{color:@text@;background:@table-head@;}
 QDialog#quoteWorkbench QFrame#workbenchFooterRule{background:@border@;border:0;}
 QDialog#quoteWorkbench QLabel#workbenchAmountDetail{font-size:@small@px;color:@muted@;}
@@ -342,7 +344,7 @@ def _work_window_css():
            "QFrame#workWindowHeader QLabel{background:transparent;border:0;color:@card@;}",
            "QFrame#workWindowHeader QLabel#workWindowChip{font-size:@section@px;font-weight:700;border-radius:8px;padding:4px 12px;}",
            "QFrame#workWindowHeader QLabel#workWindowSubtitle{font-size:@small@px;color:#CFE3D8;}",
-           "QPushButton[tier=\"quiet\"]{background:transparent;color:@muted@;border:0;min-width:64px;}",
+           "QPushButton[tier=\"quiet\"]{background:@card@;color:@muted@;border:1px solid @input-border@;border-radius:10px;min-width:80px;min-height:44px;padding:0 16px;}",
            "QPushButton[tier=\"quiet\"]:hover{background:@table-head@;color:@text@;}",
            "QPushButton[tier=\"main\"]{min-height:52px;min-width:150px;font-size:@action@px;font-weight:700;border-radius:12px;}"]
     for key, (solid, on) in WORK_WINDOW_ACCENTS.items():
@@ -379,7 +381,7 @@ def work_window_header(title, category="quotes", subtitle=""):
 
 
 def set_button_tier(button, tier):
-    """quiet: 닫기·취소처럼 가장 약한 버튼, main: 그 창의 마지막 단계(가장 크게)."""
+    """quiet: 테두리가 있는 닫기·취소 버튼, main: 그 창의 마지막 단계(가장 크게)."""
     button.setProperty("tier", tier)
     if tier == "main" and button.objectName() != "primary" and button.property("role") != "danger":
         button.setProperty("role", "primary")

@@ -466,6 +466,27 @@ class Manager(ServerFirst, QuoteVersions, SoldNumbers, SalesWorkspace):
         self.vault.save_preference("drafts", [saved, *drafts])
         return self.view()
 
+    def confirmed_working_draft(self, identifier):
+        """A PC-only edit copy; never substitutes for the server's confirmed quote."""
+        return copy.deepcopy((self.vault.preference("confirmed_quote_edits", {}) or {}).get(identifier))
+
+    @serialized
+    def save_confirmed_working_draft(self, original, draft):
+        validate_working_draft(draft)
+        require(original["id"] == draft["id"], "수정할 견적을 다시 선택해주세요.")
+        require(self._sale_for_draft(draft) is None, "판매 등록한 견적은 수정할 수 없습니다.")
+        edits = dict(self.vault.preference("confirmed_quote_edits", {}) or {})
+        require(draft["id"] in edits or len(edits) < 500, "보관 중인 확정견적 수정본을 정리해주세요.")
+        edits[draft["id"]] = {"base": copy.deepcopy(original), "draft": copy.deepcopy(draft)}
+        self.vault.save_preference("confirmed_quote_edits", edits)
+
+    @serialized
+    def clear_confirmed_working_draft(self, original):
+        edits = dict(self.vault.preference("confirmed_quote_edits", {}) or {})
+        if edits.get(original["id"], {}).get("base") == original:
+            edits.pop(original["id"])
+            self.vault.save_preference("confirmed_quote_edits", edits)
+
     def confirm_quote(self, draft):
         validate_draft(draft)
         self._require_no_pending_delivery(draft["id"])

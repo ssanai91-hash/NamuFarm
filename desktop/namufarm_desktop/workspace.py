@@ -15,7 +15,7 @@ from PySide6.QtGui import (QColor, QDesktopServices, QFont, QFontMetricsF, QImag
 from PySide6.QtPrintSupport import QPrinter, QPrintDialog
 from PySide6.QtWidgets import (QApplication, QBoxLayout, QButtonGroup, QCheckBox, QComboBox, QDialog, QDoubleSpinBox, QFileDialog, QFormLayout,
     QFrame, QGridLayout, QGroupBox, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QListWidget,
-    QMessageBox, QMenu, QPlainTextEdit, QPushButton, QRadioButton, QScrollArea, QSplitter, QStackedWidget,
+    QMessageBox, QMenu, QPlainTextEdit, QProgressBar, QPushButton, QRadioButton, QScrollArea, QSplitter, QStackedWidget,
     QSizePolicy, QStyle, QSystemTrayIcon, QTableWidget, QTableWidgetItem, QTextBrowser, QVBoxLayout, QWidget, QSpinBox)
 
 from . import __version__
@@ -157,6 +157,47 @@ def fit_quote_density(dialog):
     dialog.setProperty("compactLayout", compact)
     # Re-evaluate ancestor property selectors, including the sales dialog overrides.
     dialog.setStyleSheet(dialog.styleSheet())
+
+
+class ProcessingDialog(QDialog):
+    """Non-blocking task feedback; closing it must not imply cancellation."""
+    def __init__(self, parent, title, text):
+        super().__init__(parent)
+        self.setWindowTitle(title)
+        self.setWindowModality(Qt.WindowModality.WindowModal)
+        self.setWindowFlag(Qt.WindowType.WindowCloseButtonHint, False)
+        self.setMinimumWidth(440)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(24, 20, 24, 20)
+        layout.setSpacing(16)
+        self.status = label(text, wrap=True)
+        self.status.setMinimumHeight(64)
+        layout.addWidget(self.status)
+        progress = QProgressBar()
+        progress.setRange(0, 0)
+        progress.setTextVisible(False)
+        layout.addWidget(progress)
+        self.elapsed = label("처리 중 · 잠시 기다려주세요.", wrap=True)
+        layout.addWidget(self.elapsed)
+        self.started = monotonic()
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.update_elapsed)
+        self.timer.start(1000)
+
+    def update_elapsed(self):
+        seconds = int(monotonic() - self.started)
+        self.elapsed.setText(f"처리 중 · {seconds}초 경과\n서버 응답은 시간이 걸릴 수 있습니다. 결과 확인 전 다시 누르지 마세요.")
+
+    def finish(self):
+        self.timer.stop()
+        QDialog.done(self, QDialog.DialogCode.Accepted)
+        self.deleteLater()
+
+    def reject(self):
+        pass
+
+    def closeEvent(self, event):
+        event.ignore()
 
 
 class GroupedPriceValidator(QIntValidator):
@@ -1130,6 +1171,7 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         self._workbench_notes_timer.setSingleShot(True)
         self._workbench_notes_timer.timeout.connect(self.align_workbench_notes)
         self.items_only = items_only
+        self.confirmed_edit_base = copy.deepcopy(draft) if items_only else None
         self.simple_request = bool(draft.get('sourceRequestId'))
         self.manual_quote = not self.simple_request and draft.get('manualStatus') in ('작성중', '견적확정', '견적발송완료')
         self.workbench = self.simple_request or self.manual_quote or items_only or getattr(self, "confirmed_result", False)
@@ -1495,7 +1537,13 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         shipping_row.addWidget(shipping_choices)
         self.shipping_fee_editor = UnitPriceEditor(int(self.draft.get("shippingFee") or 6000),
                                                    compact=True, caption="선불 택배비")
-        self.shipping_fee_editor.setFixedWidth(196)
+        shipping_control_height = 40 if large else 36
+        for control in (self.shipping_fee_editor.minus, self.shipping_fee_editor.plus):
+            control.setFixedSize(shipping_control_height, shipping_control_height)
+        self.shipping_fee_editor.input.setFixedHeight(shipping_control_height)
+        self.shipping_fee_editor.setFixedSize(2 * shipping_control_height + 116, shipping_control_height + 4)
+        shipping.setMinimumHeight(shipping_control_height + 24)
+        shipping.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.shipping_fee = self.shipping_fee_editor.input
         self.shipping_fee.setAccessibleName("선불 택배비 금액")
         shipping_row.addWidget(self.shipping_fee_editor)
@@ -1580,7 +1628,9 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         footer.addWidget(self.working_save_status, 1)
         self.save_working_button = button("임시저장", self.save_working_draft)
         self.save_working_button.setToolTip("이 PC에 임시저장하고 계속 수정합니다. 문자·메일 발송 후 견적완료까지 진행할 수 있습니다.")
-        self.save_working_button.setVisible(not self.items_only and not getattr(self, "confirmed_result", False))
+        self.save_working_button.setVisible(not getattr(self, "confirmed_result", False))
+        if self.items_only:
+            self.save_working_button.setToolTip("수정 내용을 이 PC에만 임시저장합니다. 서버 반영은 ‘수정 저장’을 눌러주세요.")
         self.save_working_button.setEnabled(self.manager is not None)
         set_button_icon(self.save_working_button, "save", "#193c32")
         footer.addWidget(self.save_working_button)
@@ -1735,9 +1785,9 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         content.addStretch(1)
         self.workbench_total_rule.hide()
         self.workbench_delivery_rule.hide()
-        self.request_note_view.setFixedHeight(80)
+        self.request_note_view.setFixedHeight(120)
 
-        # 아래 버튼줄: 닫기(가장 약함) · 임시저장 | 합계 | ① 보내기 → ② 마무리(가장 큼)
+        # 아래 버튼줄: 닫기 · 임시저장 | 합계 | ① 보내기 → ② 마무리
         self.workbench_footer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         footer = self.workbench_footer.layout()
         footer.setContentsMargins(24, 12, 24, 12)
@@ -1750,7 +1800,7 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         information_row = QHBoxLayout(information)
         information_row.setContentsMargins(0, 0, 0, 0)
         information_row.setSpacing(12)
-        self.close_button.setProperty("role", "text")
+        self.close_button.setProperty("role", "outline")
         self.close_button.setObjectName("workbenchCloseText")
         information_row.addWidget(self.close_button)
         information_row.addWidget(self.save_working_button)
@@ -1806,6 +1856,11 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         completion.addWidget(self.confirm_button)
         self.completion_hint = label("전송 확인 후 누를 수 있어요", "workbenchCompletionHint")
         completion.addWidget(self.completion_hint)
+        if self.items_only:
+            self.workbench_send_step.hide()
+            arrow.hide()
+            self.workbench_done_step.setText("수정 마무리")
+            self.completion_hint.hide()
         action_row.addLayout(completion)
         footer.addWidget(actions)
         self.shipping_status.setToolTip("후불이면 합계에 포함하지 않아요")
@@ -1847,7 +1902,14 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
             self.workbench_items_count.setText(f"{len(items)}종 · {quantity:,}주")
 
     def update_completion_availability(self):
-        if not hasattr(self, "completion_hint") or getattr(self, "confirmed_result", False):
+        if not hasattr(self, "completion_hint"):
+            return
+        if self.items_only:
+            self.confirm_button.setEnabled(self.working_save_task is None)
+            self.confirm_button.setToolTip("수정 내용을 저장하고 서버 반영 결과를 확인합니다.")
+            self.completion_hint.hide()
+            return
+        if getattr(self, "confirmed_result", False):
             return
         state = self.delivery_state
         try:
@@ -1872,7 +1934,9 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
             return
         self.setEnabled(False)
         self.working_save_status.setText("이 PC에 임시저장 중…")
-        task = Task(lambda: self.manager.save_working_draft(self._working_snapshot), None, self)
+        work = (lambda: self.manager.save_confirmed_working_draft(self.confirmed_edit_base, self._working_snapshot)) if self.items_only else (
+            lambda: self.manager.save_working_draft(self._working_snapshot))
+        task = Task(work, None, self)
         self.working_save_task = task
         task.completed.connect(self.working_draft_saved)
         task.start()
@@ -1889,9 +1953,11 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
             self.working_save_status.setText("저장 실패 · " + error)
             return
         self.draft = copy.deepcopy(self._working_snapshot)
-        self.draft["workingCopy"] = True
+        if not self.items_only:
+            self.draft["workingCopy"] = True
         self.initial = self.raw_state()
-        self.working_save_status.setText("임시저장 완료 · 수정·발송 후 견적완료까지 진행할 수 있습니다.")
+        self.working_save_status.setText("이 PC에 임시저장 완료 · 서버 반영은 ‘수정 저장’을 눌러주세요." if self.items_only else
+                                       "임시저장 완료 · 수정·발송 후 견적완료까지 진행할 수 있습니다.")
 
     def persist_shipping(self):
         """Prepare current inputs for PDF/messages without confirming the request."""
@@ -1994,7 +2060,7 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
     def align_workbench_notes(self):
         if not getattr(self, "_workbench_ready", False) or self._workbench_closed:
             return
-        height = 96 if QApplication.instance().property("namufarmLargeFont") else 80
+        height = 144 if QApplication.instance().property("namufarmLargeFont") else 120
         self.note.setFixedHeight(height)
         # 고객 원문과 판매자 요청사항 카드는 나란히 같은 높이로 둡니다.
         self.request_note_view.setFixedHeight(height)
@@ -3200,7 +3266,10 @@ class QuoteDeliveryDialog(QuoteDialog):
         if self.action_task is not None:
             return
         self.payment_status.setText(text)
-        self.action_task = Task(work, None, self)
+        self.action_progress = ProcessingDialog(self, "확정견적 처리 중", text)
+        self.action_progress.show()
+        self.action_task = Task(work, None, self, progress_source=self.manager)
+        self.action_task.progress.connect(self.action_progress.status.setText)
         self.action_task.completed.connect(completed)
         self._set_actions_enabled()
         self.action_task.start()
@@ -3209,6 +3278,7 @@ class QuoteDeliveryDialog(QuoteDialog):
         task = self.action_task
         if task is not None:
             task.wait()
+            self.action_progress.finish()
             self.action_task = None
             task.deleteLater()
         self._set_actions_enabled()
@@ -3246,7 +3316,7 @@ class QuoteDeliveryDialog(QuoteDialog):
         self._notes_then_payment = then_payment
         self._notes_then_delivery = then_delivery
         updated = copy.deepcopy(self._pending_note_edit)
-        self._run_action("판매자 요청사항을 확정견적 엑셀에 저장하고 있습니다…",
+        self._run_action("판매자 요청사항을 저장하고 반영 결과를 확인하고 있습니다…",
                          lambda: self.manager.save_draft(updated), self._note_saved)
 
     @Slot(object, str, bool)
@@ -3266,14 +3336,29 @@ class QuoteDeliveryDialog(QuoteDialog):
     def edit_confirmed_items(self):
         if self.payment_registered or self.action_task or self.manager is None:
             return
-        editor = QuoteDialog(self.collect(False), self, request_status=self.request_status,
+        snapshot = self.collect(False)
+        saved = self.manager.confirmed_working_draft(snapshot["id"])
+        restored = False
+        if saved:
+            changed = saved.get("base") != self.original_quote
+            message = "이 PC에 임시저장한 수정 내용을 불러올까요?\n서버 반영은 ‘수정 저장’을 눌러야 합니다."
+            if changed:
+                message += "\n\n임시저장 이후 원본 견적이 바뀌었습니다. 불러온 품목·택배비·요청사항을 최신 내용과 확인해주세요."
+            if QMessageBox.question(self, "임시저장한 수정본", message,
+                                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                                    QMessageBox.StandardButton.No if changed else QMessageBox.StandardButton.Yes) == QMessageBox.StandardButton.Yes:
+                for key in ("items", "shippingFee", "isPrepaid", "note"):
+                    snapshot[key] = copy.deepcopy(saved["draft"][key])
+                restored = True
+        editor = QuoteDialog(snapshot, self, request_status=self.request_status,
                              manager=self.manager, items_only=True)
+        editor.confirmed_edit_base = copy.deepcopy(self.original_quote)
         editor.setWindowTitle("확정견적 묘목정보 수정")
         editor.findChild(QLabel, "workbenchTitle").setText("묘목정보 수정")
         for field in editor.fields.values():
             field.setReadOnly(True)
         editor.note.setReadOnly(False)
-        editor.shipping_fee.setText(str(self.original_quote["shippingFee"]))
+        editor.shipping_fee.setText(str(snapshot["shippingFee"]))
         editor.sms_button.hide()
         editor.email_button.hide()
         editor.delivery_heading.hide()
@@ -3281,6 +3366,8 @@ class QuoteDeliveryDialog(QuoteDialog):
         editor.confirm_button.clicked.disconnect()
         editor.confirm_button.setText("수정 저장")
         editor.confirm_button.setEnabled(True)
+        if restored:
+            editor.working_save_status.setText("PC 임시저장본을 불러왔습니다. 서버 반영은 ‘수정 저장’을 눌러주세요.")
 
         def save_items():
             try:
@@ -3298,13 +3385,18 @@ class QuoteDeliveryDialog(QuoteDialog):
             return
         updated = copy.deepcopy(editor.draft)
         self._pending_item_edit = updated
-        self._run_action("묘목정보를 확정견적 엑셀에 저장하고 있습니다…",
+        self._run_action("묘목정보·택배비·요청사항을 저장하고 반영 결과를 확인하고 있습니다…",
                          lambda: self.manager.save_draft(updated), self._items_saved)
 
     @Slot(object, str, bool)
     def _items_saved(self, value, error, conflict):
         if not self._finish_action(error):
             return
+        cleanup_notice = ""
+        try:
+            self.manager.clear_confirmed_working_draft(self.original_quote)
+        except Exception:
+            cleanup_notice = " PC 임시저장본 정리는 완료하지 못해 그대로 보관합니다."
         self.original_quote = copy.deepcopy(self._pending_item_edit)
         self.draft = copy.deepcopy(self.original_quote)
         self.local_changed = True
@@ -3313,7 +3405,7 @@ class QuoteDeliveryDialog(QuoteDialog):
         self.note.blockSignals(False)
         self._render_confirmed_items()
         self.recalculate()
-        self.payment_status.setText("묘목정보·택배비·판매자 요청사항을 저장했습니다.")
+        self.payment_status.setText("묘목정보·택배비·판매자 요청사항을 저장했습니다." + cleanup_notice)
 
     def receive_payment(self):
         if self.payment_registered or self.action_task or self.manager is None:
@@ -3333,7 +3425,7 @@ class QuoteDeliveryDialog(QuoteDialog):
             self.payment_status.setText("문자 발송 완료 · 입금확인을 누르지 않아 판매 등록하지 않았습니다." if sent else
                                         "입금확인 문자 전송이 완료되지 않아 판매 등록하지 않았습니다.")
             return
-        self._run_action("입금확인 주문을 판매관리에 저장하고 있습니다…",
+        self._run_action("입금확인과 판매 등록을 처리하고 서버 반영 결과를 확인하고 있습니다…",
                          lambda: self.manager.confirm_received_payment(self._payment_draft, sms_required=True),
                          self._payment_saved)
 
@@ -3342,6 +3434,10 @@ class QuoteDeliveryDialog(QuoteDialog):
         if not self._finish_action(error):
             return
         self.payment_view = value
+        if value.get("copyError"):
+            QMessageBox.warning(self, "입금확인 처리 결과", value["copyError"])
+        else:
+            QMessageBox.information(self, "입금확인 완료", value.get("transferNotice") or "입금확인과 판매 등록 처리를 완료했습니다.")
         self.accept()
 
     def reject(self):
@@ -4437,9 +4533,15 @@ class SellerWindow(MainWindow):
                 panel.setFixedWidth(width)
         self.update_page_title(self.stack.currentIndex())
 
-    def run_job(self, title, work, on_success=None, refresh_on_error=True, on_failure=None):
+    def run_job(self, title, work, on_success=None, refresh_on_error=True, on_failure=None, *, progress_title=None):
         starting = self.task is None
+        progress = ProcessingDialog(self, progress_title, title) if starting and progress_title else None
+        if progress is not None:
+            progress.show()
         super().run_job(title, work, on_success, refresh_on_error, on_failure)
+        if progress is not None:
+            self.task.operation_progress = progress
+            self.task.progress.connect(progress.status.setText)
         if starting and self.workspace_ready:
             self.set_status_state("working", "처리 중")
 
@@ -5127,7 +5229,17 @@ class SellerWindow(MainWindow):
     def job_finished(self, task, value, error, conflict, on_success):
         read_scope = getattr(task, "read_scope", "")
         read_started = getattr(task, "read_started", None)
+        progress = getattr(task, "operation_progress", None)
+        if progress is not None:
+            progress.finish()
         super().job_finished(task, value, error, conflict, on_success)
+        if progress is not None:
+            if error:
+                QMessageBox.warning(self, "처리 결과 확인", error)
+            elif isinstance(value, dict) and value.get("copyError"):
+                QMessageBox.warning(self, "처리 결과 확인", value["copyError"])
+            else:
+                QMessageBox.information(self, "처리 완료", self.message.text())
         if self.workspace_ready:
             self.refresh_nursery()
         self.set_status_state("error" if error else "success", "처리 실패" if error else "처리 완료")
@@ -5795,11 +5907,13 @@ class SellerWindow(MainWindow):
         draft, mode = dialog.draft, dialog.mode
         if mode == "save_manual":
             self.run_job("직접 작성한 견적을 로컬 DB에 저장 중…", lambda: self.manager.save_draft(draft),
-                         lambda view: self.manual_quote_saved(view, draft["id"]))
+                         lambda view: self.manual_quote_saved(view, draft["id"]), progress_title="견적완료 처리 중")
         elif mode == "confirm":
-            self.run_job("입금확인 내역을 로컬 DB에 저장 중…", lambda: self.manager.confirm_draft(draft), self.quote_confirmed)
+            self.run_job("입금확인 내역을 저장하고 서버 반영 결과를 확인 중…", lambda: self.manager.confirm_draft(draft),
+                         self.quote_confirmed, progress_title="입금확인 처리 중")
         elif mode == "finalize":
-            self.run_job("견적확정 상태를 운영 시트에 저장 중…", lambda: self.manager.confirm_quote(draft), self.quote_finalized)
+            self.run_job("견적확정 상태를 서버에 저장하고 결과를 확인 중…", lambda: self.manager.confirm_quote(draft),
+                         self.quote_finalized, progress_title="견적완료 처리 중")
 
     def quote_confirmed(self, value):
         self.apply_view(value)
