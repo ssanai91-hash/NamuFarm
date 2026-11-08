@@ -21,7 +21,8 @@ from PySide6.QtWidgets import (QApplication, QBoxLayout, QButtonGroup, QCheckBox
 from . import __version__
 from .ui_theme import (align_table, fit_window, scroll_dialog, scroll_page, workspace_style,
                        CustomerDelegate, StatusDelegate, customer_reference, CompactDateDelegate,
-                       NavigationButton, CellWidgetDelegate, QuoteRemarksDelegate, RequestQuoteDelegate, SequenceDelegate, TOKENS, CATEGORY, SALES_STAGES, StageCards, status_badge, stage_label, size_table_to_rows, collapsible, quote_workbench_style)
+                       NavigationButton, CellWidgetDelegate, QuoteRemarksDelegate, RequestQuoteDelegate, SequenceDelegate, TOKENS, CATEGORY, SALES_STAGES, StageCards, status_badge, stage_label, size_table_to_rows, collapsible, quote_workbench_style,
+                       work_window_header, set_button_tier)
 from .ui_icons import set_button_icon, ui_icon
 from .app import MainWindow, Task, table, fill_table, money, timestamp
 from .commerce import (ISSUER, new_draft, new_manual_draft, draft_amounts, validate_draft, quote_html, quote_document_html, shipping_html,
@@ -1295,7 +1296,12 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         reference.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         heading.addWidget(reference, 1)
         heading.addWidget(stage_label(self.request_status or "작성중"))
-        heading.addWidget(button("✕", self.reject))
+        close_mark = button("✕", self.reject)
+        close_mark.setObjectName("workbenchClose")
+        close_mark.setAccessibleName("작업대 닫기")
+        close_mark.setToolTip("닫기")
+        close_mark.setFixedSize(44, 44)
+        heading.addWidget(close_mark)
         root.addWidget(header)
 
         body = QHBoxLayout()
@@ -1606,9 +1612,13 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         self.initial = self.raw_state()
 
     def apply_workbench_presentation(self):
-        """Reparent existing editors/actions; all signals and collection indices stay intact."""
+        """A안: reparent existing editors/actions only; signals and collection indices stay intact.
+
+        왼쪽은 고객 카드·공식견적서, 오른쪽은 견적 품목(택배비 포함)과 요청사항 두 칸,
+        아래는 ① 고객에게 보내기 → ② 마무리 순서의 버튼줄입니다.
+        """
         customer = self.customer_scroll.widget().layout()
-        customer.setSpacing(8)
+        customer.setSpacing(12)
         customer.removeWidget(self.workbench_customer_heading)
         customer.removeItem(self.workbench_identity)
         info_card = QFrame()
@@ -1616,38 +1626,123 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         info_card.setObjectName("card")
         info_layout = QVBoxLayout(info_card)
         info_layout.setContentsMargins(16, 16, 16, 16)
+        info_layout.setSpacing(12)
+        # 이름 첫 글자 원이 사람 아이콘을 대신합니다.
+        for icon in self.workbench_customer_heading.findChildren(QLabel, "workbenchIcon"):
+            icon.hide()
+        name = str(self.draft.get("customerName") or "").strip()
+        self.workbench_avatar = label(name[:1] or "고", "workbenchAvatar")
+        self.workbench_avatar.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.workbench_avatar.setFixedSize(48, 48)
+        self.workbench_customer_heading.layout().insertWidget(0, self.workbench_avatar)
+        if "customerName" in self.fields:
+            self.fields["customerName"].textChanged.connect(
+                lambda text: self.workbench_avatar.setText(text.strip()[:1] or "고"))
         info_layout.addWidget(self.workbench_customer_heading)
+        phone = self.customer_values.get("연락처")
+        if phone is not None:
+            # 읽기 전용 연락처는 줄바꿈 없는 큰 번호와 복사 버튼으로 보여 줍니다.
+            for widget in (self.customer_captions["연락처"], phone):
+                self.workbench_identity.removeWidget(widget)
+                widget.hide()
+            info_layout.addWidget(self.build_workbench_phone_box(self.draft.get("customerPhone")))
         info_layout.addLayout(self.workbench_identity)
         customer.insertWidget(0, info_card)
-        self.workbench_document_area.layout().removeWidget(self.workbench_note_area)
-        note_card = QFrame()
-        note_card.setObjectName("card")
-        note_layout = QVBoxLayout(note_card)
-        note_layout.setContentsMargins(16, 16, 16, 16)
-        note_layout.addWidget(self.workbench_note_area)
-        note_layout.addWidget(label("견적서·문자·메일에 함께 들어가요", "muted", True))
-        customer.insertWidget(customer.count() - 1, note_card)
-        self.workbench_note_area.findChild(QLabel).setText("판매자 요청사항")
+
         self.generate_quote_button.setText("견적서 PDF 생성")
         self.generate_quote_button.setProperty("role", "outline")
-        self.workbench_items_panel.setObjectName("card")
-        self.workbench_items_panel.layout().setContentsMargins(16, 16, 16, 16)
-        self.workbench_items_panel.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
-        self.workbench_content_layout.setStretch(0, 0)
-        self.workbench_content_layout.addStretch(1)
+        self.document_buttons_layout.setStretch(0, 1)
+        self.document_buttons_layout.setStretch(1, 0)
+
+        # 판매자 요청사항: 고객 원문 옆, 주황 카드.
+        self.workbench_document_area.layout().removeWidget(self.workbench_note_area)
+        note_card = QFrame()
+        self.workbench_note_card = note_card
+        note_card.setObjectName("workbenchSellerNote")
+        note_layout = QVBoxLayout(note_card)
+        note_layout.setContentsMargins(16, 12, 16, 14)
+        note_layout.addWidget(self.workbench_note_area)
+        notes = self.workbench_note_area.layout()
+        note_title = self.workbench_note_area.findChild(QLabel)
+        note_title.setText("판매자 요청사항")
+        note_title.setObjectName("workbenchSellerNoteTitle")
+        notes.removeWidget(note_title)
+        note_head = QHBoxLayout()
+        note_head.setSpacing(8)
+        note_head.addWidget(note_title)
+        note_head.addStretch(1)
+        note_head.addWidget(label("견적서 · 문자 · 메일에 들어가요", "workbenchSellerBadge"))
+        notes.insertLayout(0, note_head)
+
+        # 고객 요청사항: 홈페이지 원문, 수정 불가, 파랑 카드.
+        original = self.workbench_original_area
+        original.setStyleSheet("")
+        self.request_note_view.setStyleSheet("")
+        original.setMaximumHeight(16777215)
+        original_layout = original.layout()
+        original_layout.setContentsMargins(16, 12, 16, 14)
+        original_layout.setSpacing(8)
+        original_title = original.findChild(QLabel)
+        original_title.setText("고객 요청사항")
+        original_title.setObjectName("workbenchOriginalTitle")
+        original_layout.removeWidget(original_title)
+        original_head = QHBoxLayout()
+        original_head.setSpacing(8)
+        original_head.addWidget(original_title)
+        original_head.addStretch(1)
+        original_head.addWidget(label("홈페이지 원문 · 수정 불가", "workbenchOriginalBadge"))
+        original_layout.insertLayout(0, original_head)
+
+        # 견적 품목 카드: 주황 머리띠, 표, 택배비 줄을 한 카드에 둡니다.
+        panel = self.workbench_items_panel
+        panel.setObjectName("workbenchItemsCard")
+        items_layout = panel.layout()
+        items_layout.setContentsMargins(0, 0, 0, 0)
+        items_layout.setSpacing(0)
+        tools = items_layout.itemAt(0).layout()
+        items_layout.removeItem(tools)
+        items_layout.removeWidget(self.workbench_items_hint)
+        band = QFrame()
+        band.setObjectName("workbenchItemsHead")
+        band_row = QHBoxLayout(band)
+        band_row.setContentsMargins(16, 10, 16, 10)
+        band_row.addLayout(tools)
+        heading = tools.itemAt(0).widget().layout()
+        self.workbench_items_count = label("", "workbenchItemsCount")
+        heading.insertWidget(2, self.workbench_items_count)
         self.workbench_items_hint.setText("묘목명·규격·수량을 확인해주세요")
+        self.workbench_items_hint.setWordWrap(False)
+        heading.insertWidget(3, self.workbench_items_hint)
+        self.add_item_button.setProperty("role", "itemAdd")
         self.remove_item_button.hide()
+        items_layout.insertWidget(0, band)
+        content = self.workbench_content_layout
+        content.removeWidget(self.workbench_shipping)
+        items_layout.addWidget(self.workbench_shipping)
+        self.items.setAlternatingRowColors(True)
+        panel.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
+        content.setStretch(0, 0)
+        content.setSpacing(14)
+        content.removeWidget(original)
+        requests = QWidget()
+        self.workbench_requests_row = requests
+        request_row = QHBoxLayout(requests)
+        request_row.setContentsMargins(0, 0, 0, 0)
+        request_row.setSpacing(14)
+        request_row.addWidget(original, 1)
+        request_row.addWidget(note_card, 1)
+        content.insertWidget(content.indexOf(panel) + 1, requests)
+        content.addStretch(1)
         self.workbench_total_rule.hide()
         self.workbench_delivery_rule.hide()
-        self.workbench_original_area.setMaximumHeight(84)
-        self.request_note_view.setFixedHeight(36)
+        self.request_note_view.setFixedHeight(80)
+
+        # 아래 버튼줄: 닫기(가장 약함) · 임시저장 | 합계 | ① 보내기 → ② 마무리(가장 큼)
         self.workbench_footer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         footer = self.workbench_footer.layout()
-        footer.setContentsMargins(16, 12, 16, 12)
+        footer.setContentsMargins(24, 12, 24, 12)
         footer.setSpacing(16)
         footer.removeWidget(self.working_save_status)
-        self.working_save_status.setWordWrap(True)
-        note_layout.addWidget(self.working_save_status)
         footer.removeWidget(self.save_working_button)
         footer.removeWidget(self.close_button)
         information = QWidget()
@@ -1655,9 +1750,13 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         information_row = QHBoxLayout(information)
         information_row.setContentsMargins(0, 0, 0, 0)
         information_row.setSpacing(12)
+        self.close_button.setProperty("role", "text")
+        self.close_button.setObjectName("workbenchCloseText")
         information_row.addWidget(self.close_button)
         information_row.addWidget(self.save_working_button)
-        self.close_button.setProperty("role", "outline")
+        self.working_save_status.setWordWrap(True)
+        self.working_save_status.setMaximumWidth(240)
+        information_row.addWidget(self.working_save_status, 1)
         self.workbench_summary.layout().removeWidget(self.amount_detail)
         self.workbench_summary.layout().removeWidget(self.total)
         self.workbench_summary.hide()
@@ -1665,35 +1764,87 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         amounts = QVBoxLayout(summary)
         amounts.setContentsMargins(0, 0, 0, 0)
         amounts.setSpacing(0)
-        self.amount_detail.setObjectName("muted")
+        self.amount_detail.setObjectName("workbenchAmountDetail")
         self.amount_detail.setWordWrap(True)
+        self.amount_detail.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         amounts.addWidget(self.amount_detail)
         amounts.addWidget(self.total)
-        summary.setMinimumWidth(160)
+        summary.setMinimumWidth(170)
         footer.addWidget(information, 1)
         delivery = self.delivery_send_layout.parent()
         if isinstance(delivery, QVBoxLayout):
             delivery.removeItem(self.delivery_send_layout)
-        self.workbench_content_layout.removeItem(self.delivery_tools_layout)
-        self.delivery_send_layout.setSpacing(12)
+        content.removeItem(self.delivery_tools_layout)
+        self.delivery_send_layout.setSpacing(10)
         self.delivery_send_layout.removeWidget(self.confirm_button)
         actions = QWidget()
         self.workbench_footer_actions = actions
         action_row = QHBoxLayout(actions)
         action_row.setContentsMargins(0, 0, 0, 0)
-        action_row.setSpacing(12)
+        action_row.setSpacing(14)
         action_row.addWidget(summary)
-        action_row.addLayout(self.delivery_send_layout)
-        action_row.setAlignment(self.delivery_send_layout, Qt.AlignmentFlag.AlignTop)
+        divider = QFrame()
+        divider.setObjectName("workbenchFooterRule")
+        divider.setFixedSize(1, 56)
+        action_row.addWidget(divider)
+        send = QVBoxLayout()
+        send.setContentsMargins(0, 0, 0, 0)
+        send.setSpacing(4)
+        self.workbench_send_step = label("① 고객에게 보내기", "workbenchStepSend")
+        send.addWidget(self.workbench_send_step)
+        send.addLayout(self.delivery_send_layout)
+        action_row.addLayout(send)
+        arrow = label("→", "workbenchStepArrow")
+        arrow.setAccessibleName("다음 단계")
+        action_row.addWidget(arrow, 0, Qt.AlignmentFlag.AlignBottom)
         completion = QVBoxLayout()
         completion.setContentsMargins(0, 0, 0, 0)
         completion.setSpacing(4)
+        self.workbench_done_step = label("② 마무리", "workbenchStepDone")
+        completion.addWidget(self.workbench_done_step)
+        self.confirm_button.setFixedWidth(200)
         completion.addWidget(self.confirm_button)
-        self.completion_hint = label("전송 확인 후 누를 수 있어요", "muted")
+        self.completion_hint = label("전송 확인 후 누를 수 있어요", "workbenchCompletionHint")
         completion.addWidget(self.completion_hint)
         action_row.addLayout(completion)
         footer.addWidget(actions)
         self.shipping_status.setToolTip("후불이면 합계에 포함하지 않아요")
+
+    def build_workbench_phone_box(self, value):
+        """Read-only contact: one unbroken number and a copy button that never truncates."""
+        box = QFrame()
+        box.setObjectName("workbenchPhoneBox")
+        row = QHBoxLayout(box)
+        row.setContentsMargins(12, 8, 8, 8)
+        row.setSpacing(8)
+        text = QVBoxLayout()
+        text.setSpacing(0)
+        text.addWidget(label("연락처", "workbenchPhoneCaption"))
+        number = phone_text(value) if value else ""
+        self.workbench_phone = label(number or "미입력", "workbenchPhone")
+        self.workbench_phone.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        self.workbench_phone.setAccessibleName("연락처")
+        text.addWidget(self.workbench_phone)
+        row.addLayout(text, 1)
+        copy_button = QPushButton("복사")
+        copy_button.setObjectName("workbenchPhoneCopy")
+        copy_button.setAccessibleName("연락처 복사")
+        copy_button.setEnabled(bool(number))
+        copy_button.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
+        self.workbench_phone_copy = copy_button
+
+        def copy_phone():
+            QApplication.clipboard().setText(number)
+            copy_button.setText("복사됨")
+            QTimer.singleShot(1500, copy_button, lambda: copy_button.setText("복사"))
+        copy_button.clicked.connect(copy_phone)
+        row.addWidget(copy_button, 0, Qt.AlignmentFlag.AlignVCenter)
+        return box
+
+    def set_workbench_items_count(self, items):
+        if hasattr(self, "workbench_items_count"):
+            quantity = sum(int(item.get("quantity") or 0) for item in items)
+            self.workbench_items_count.setText(f"{len(items)}종 · {quantity:,}주")
 
     def update_completion_availability(self):
         if not hasattr(self, "completion_hint") or getattr(self, "confirmed_result", False):
@@ -1775,7 +1926,8 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
         compact = self.width() < 1400
         rail_width = (360 if compact else 400) + (20 if large else 0)
         self.customer_scroll.setFixedWidth(rail_width)
-        self.document_buttons_layout.setDirection(QBoxLayout.Direction.TopToBottom)
+        # A안: PDF 생성(넓게)과 미리보기(작게)를 한 줄에 둡니다.
+        self.document_buttons_layout.setDirection(QBoxLayout.Direction.LeftToRight)
         caption_width = max(76, *(caption.sizeHint().width() for caption in self.customer_captions.values()))
         for caption in self.customer_captions.values():
             caption.setFixedWidth(caption_width)
@@ -1842,8 +1994,10 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
     def align_workbench_notes(self):
         if not getattr(self, "_workbench_ready", False) or self._workbench_closed:
             return
-        self.note.setFixedHeight(96 if QApplication.instance().property("namufarmLargeFont") else 80)
-        self.request_note_view.setFixedHeight(36)
+        height = 96 if QApplication.instance().property("namufarmLargeFont") else 80
+        self.note.setFixedHeight(height)
+        # 고객 원문과 판매자 요청사항 카드는 나란히 같은 높이로 둡니다.
+        self.request_note_view.setFixedHeight(height)
 
     def edit_specification_cell(self, row, column):
         if column == 5:
@@ -2096,6 +2250,8 @@ class QuoteDialog(QuoteDeliveryTools, QDialog):
                     self.items.item(row, 5).setText(f"{item['quantity'] * item['unitPrice']:,}")
             self.items.blockSignals(False)
             amount = draft_amounts(draft)
+            if self.workbench:
+                self.set_workbench_items_count(draft["items"])
             self.total.setText(f"{amount['total']:,}원" if self.workbench else f"합계 {amount['total']:,}원")
             if self.workbench:
                 self.amount_detail.setText(
@@ -2269,7 +2425,9 @@ class QuoteSmsDialog(DeliveryRecoveryTools, QDialog):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 20, 24, 20)
         layout.setSpacing(12)
-        layout.addWidget(label("입금확인 문자 보내기" if payment else "견적 문자 보내기", "deliveryTitle"))
+        layout.addWidget(work_window_header("입금확인 문자 보내기" if payment else "견적 문자 보내기",
+                                            "sales" if payment else "quotes",
+                                            f"{self.draft.get('customerName') or '고객'} · {self.quote_number()}"))
         if payment:
             layout.addWidget(label("문자 전송 성공 후 입금확인을 누르면 판매관리에 등록됩니다.", "deliverySubtitle", True))
 
@@ -2312,7 +2470,8 @@ class QuoteSmsDialog(DeliveryRecoveryTools, QDialog):
         layout.addWidget(self.status)
 
         actions = QHBoxLayout()
-        self.cancel_button = button("닫기", self.reject)
+        actions.setSpacing(12)
+        self.cancel_button = set_button_tier(button("닫기", self.reject), "quiet")
         self.check_button = QPushButton("결과 확인")
         self.check_button.setEnabled(not payment and bool(self.delivery_state.get("smsMessageId")))
         self.check_button.clicked.connect(self.check_status)
@@ -2320,12 +2479,13 @@ class QuoteSmsDialog(DeliveryRecoveryTools, QDialog):
         self.send_button.setObjectName("smsSendPrimary")
         self.send_button.setEnabled(False)
         self.send_button.clicked.connect(self.send_sms)
+        set_button_tier(self.send_button, "main")
+        actions.addWidget(self.cancel_button)
         actions.addStretch()
         actions.addWidget(self.check_button)
-        actions.addWidget(self.cancel_button)
         actions.addWidget(self.send_button)
         if payment:
-            self.payment_confirm_button = button("입금확인", self.confirm_payment, True)
+            self.payment_confirm_button = set_button_tier(button("입금확인", self.confirm_payment, True), "main")
             self.payment_confirm_button.setEnabled(False)
             actions.addWidget(self.payment_confirm_button)
         self.setup_delivery_recovery(actions, "sms")
@@ -2632,7 +2792,8 @@ class QuoteEmailDialog(DeliveryRecoveryTools, QDialog):
         layout.setContentsMargins(24, 20, 24, 20)
         layout.setSpacing(12)
 
-        layout.addWidget(label("견적 메일 보내기", "deliveryTitle"))
+        layout.addWidget(work_window_header("견적 메일 보내기", "quotes",
+                                            f"{self.draft.get('customerName') or '고객'} · {self.quote_number()}"))
 
         address_card = QFrame()
         address_card.setObjectName("emailAddressCard")
@@ -2689,13 +2850,15 @@ class QuoteEmailDialog(DeliveryRecoveryTools, QDialog):
         layout.addWidget(self.status)
 
         actions = QHBoxLayout()
-        self.cancel_button = button("취소", self.reject)
+        actions.setSpacing(12)
+        self.cancel_button = set_button_tier(button("취소", self.reject), "quiet")
         self.send_button = QPushButton("메일 전송")
         self.send_button.setObjectName("emailSendPrimary")
         self.send_button.setEnabled(False)
         self.send_button.clicked.connect(self.send_email)
-        actions.addStretch()
+        set_button_tier(self.send_button, "main")
         actions.addWidget(self.cancel_button)
+        actions.addStretch()
         actions.addWidget(self.send_button)
         self.setup_delivery_recovery(actions, "email")
         layout.addLayout(actions)
@@ -3001,6 +3164,7 @@ class QuoteDeliveryDialog(QuoteDialog):
         try:
             current = self.collect(False)
             amount = draft_amounts(current)
+            self.set_workbench_items_count(current["items"])
             self.total.setText(f"{amount['total']:,}원")
             self.amount_detail.setText(f"총 수량 {amount['quantity']:,}주 · {quote_amount_detail(current)}")
         except UserError:
@@ -3243,16 +3407,22 @@ class CustomerOrderDialog(QDialog):
         self.setSizeGripEnabled(True)
         large = bool(QApplication.instance().property("namufarmLargeFont"))
         identity_height = 48 if large else 44
-        self.setStyleSheet(quote_workbench_style(large) + """
+        self.setProperty("category", "sales")
+        self.setStyleSheet(quote_workbench_style(large, "sales") + """
 QDialog#quoteWorkbench QLabel#workbenchCaption{padding:4px 8px;}
 QDialog#quoteWorkbench QLineEdit#workbenchCustomerInput{min-height:@input@px;padding:4px 8px;}
 QDialog#quoteWorkbench QLineEdit#workbenchCustomerInput:focus{padding:3px 7px;}
 QDialog#quoteWorkbench QPushButton{min-height:36px;padding:0 12px;}
-QDialog#quoteWorkbench QPushButton[deliveryCompletion="true"]{min-height:40px;font-size:18px;}
+QDialog#quoteWorkbench QPushButton[deliveryCompletion="true"]{min-height:52px;max-width:400px;font-size:18px;border-radius:12px;}
+QDialog#quoteWorkbench QPushButton#salesSaveButton{min-height:48px;}
+QDialog#quoteWorkbench QPushButton#workbenchPhoneCopy{min-height:0;min-width:72px;}
+QDialog#quoteWorkbench QFrame#workbenchSummary{background:#F7FBF8;border:0;border-top:1px solid #B8DEC5;border-bottom-left-radius:14px;border-bottom-right-radius:14px;}
+QDialog#quoteWorkbench QLabel#salesTotal{font-size:@freight@px;font-weight:700;color:#1E6B3F;}
+QDialog#quoteWorkbench #workbenchShipping QLabel#workbenchSectionTitle{color:#1E6B3F;}
 QDialog#quoteWorkbench QWidget#workbenchCustomerRail QLineEdit#workbenchCustomerInput{min-height:@identity@px;padding:6px 8px;}
 QDialog#quoteWorkbench QWidget#workbenchCustomerRail QLineEdit#workbenchCustomerInput:focus{padding:5px 7px;}
 QDialog#quoteWorkbench QWidget#workbenchCustomerRail QLineEdit#workbenchCustomerInput[customerName="true"]{font-size:24px;font-weight:600;}
-QDialog#quoteWorkbench QFrame#workbenchShipping{background:#f5f8f6;border:1px solid #d6e1da;border-radius:10px;}
+QDialog#quoteWorkbench QFrame#workbenchShipping{background:#FFFFFF;border:1px solid #B8DEC5;border-radius:14px;}
 QDialog#quoteWorkbench QLabel#salesShippingFee{font-size:@freight@px;font-weight:600;color:#193c32;}
 QDialog#quoteWorkbench[compactLayout="true"] QFrame#workbenchShipping QLineEdit#workbenchCustomerInput{font-size:@shipfont@px;min-height:22px;padding:3px 6px;}
 QDialog#quoteWorkbench[compactLayout="true"] QFrame#workbenchShipping QLineEdit#workbenchCustomerInput:focus{padding:2px 5px;}
@@ -3293,22 +3463,24 @@ QDialog#quoteWorkbench[compactLayout="true"] QFrame#workbenchShipping QLabel#wor
         header = QFrame()
         header.setObjectName("workbenchHeader")
         heading = QHBoxLayout(header)
-        heading.setContentsMargins(20, 8, 20, 8)
-        heading.setSpacing(20)
-        heading.addWidget(icon("leaf", 32, "#91d39d"))
-        heading.addWidget(label("나무팜(주)", "workbenchBrand"))
-        brand_rule = QFrame()
-        brand_rule.setObjectName("workbenchBrandRule")
-        brand_rule.setFixedSize(1, 30)
-        heading.addWidget(brand_rule)
+        # 견적 작업대와 같은 머리띠: 업무 칩 · 고객명 · 판매번호 · 단계 · 닫기 (판매관리는 초록).
+        header.setMinimumHeight(72)
+        heading.setContentsMargins(16, 8, 16, 8)
+        heading.setSpacing(16)
         heading.addWidget(label("판매관리", "workbenchTitle"))
-        heading.addStretch(1)
+        heading.addWidget(label(self.order.get("customerName") or "고객", "workbenchBrand"))
         reference = label("판매번호  " + sale_number(self.row), "workbenchReference", True)
         reference.setMinimumWidth(0)
         reference.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
-        reference.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         reference.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         heading.addWidget(reference, 1)
+        heading.addWidget(stage_label(order_stage(self.row)))
+        close_mark = button("✕", self.reject)
+        close_mark.setObjectName("workbenchClose")
+        close_mark.setAccessibleName("판매관리 창 닫기")
+        close_mark.setToolTip("닫기")
+        close_mark.setFixedSize(44, 44)
+        heading.addWidget(close_mark)
         root.addWidget(header)
 
         body = QHBoxLayout()
@@ -3330,7 +3502,10 @@ QDialog#quoteWorkbench[compactLayout="true"] QFrame#workbenchShipping QLabel#wor
         customer_title = QHBoxLayout(customer_heading)
         customer_title.setContentsMargins(0, 0, 0, 0)
         customer_title.setSpacing(8)
-        customer_title.addWidget(icon("person", 36))
+        avatar = label((str(self.order.get("customerName") or "").strip()[:1] or "고"), "workbenchAvatar")
+        avatar.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        avatar.setFixedSize(48, 48)
+        customer_title.addWidget(avatar)
         customer_title.addWidget(label("고객 정보", "workbenchCustomerTitle"))
         customer_title.addStretch(1)
         customer.addWidget(customer_heading)
@@ -3368,6 +3543,25 @@ QDialog#quoteWorkbench[compactLayout="true"] QFrame#workbenchShipping QLabel#wor
             identity.addWidget(identity_caption(caption), index, 0)
             edit = field(name, caption)
             edit.setMinimumHeight(identity_height)
+            if name == "customerPhone":
+                # 연락처는 입력칸 옆 복사 버튼으로 바로 옮겨 적을 수 있게 합니다.
+                phone_row = QHBoxLayout()
+                phone_row.setContentsMargins(0, 0, 0, 0)
+                phone_row.setSpacing(6)
+                phone_row.addWidget(edit, 1)
+                copy_phone = QPushButton("복사")
+                copy_phone.setObjectName("workbenchPhoneCopy")
+                copy_phone.setAccessibleName("연락처 복사")
+                copy_phone.setFixedHeight(identity_height)
+
+                def copy_current_phone(checked=False, source=edit, target=copy_phone):
+                    QApplication.clipboard().setText(phone_text(source.text().strip()))
+                    target.setText("복사됨")
+                    QTimer.singleShot(1500, target, lambda: target.setText("복사"))
+                copy_phone.clicked.connect(copy_current_phone)
+                phone_row.addWidget(copy_phone)
+                identity.addLayout(phone_row, index, 1)
+                continue
             identity.addWidget(edit, index, 1)
         if self.row["private"].get("quoteDocumentJson"):
             self.customer_fields["customerPhone"].setReadOnly(True)
@@ -3407,12 +3601,21 @@ QDialog#quoteWorkbench[compactLayout="true"] QFrame#workbenchShipping QLabel#wor
         content.setContentsMargins(12, 8, 12, 8)
         content.setSpacing(8)
         self.customer_items_panel = QFrame()
+        self.customer_items_panel.setObjectName("workbenchItemsCard")
         self.customer_items_panel.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         item_content = QVBoxLayout(self.customer_items_panel)
         item_content.setContentsMargins(0, 0, 0, 0)
-        item_content.setSpacing(8)
+        item_content.setSpacing(0)
         self.customer_items_heading = section("판매 품목", "leaf")
-        item_content.addWidget(self.customer_items_heading)
+        sold_items = self.meta.get("items", [])
+        self.customer_items_heading.layout().insertWidget(
+            2, label(f"{len(sold_items)}종 · {sum(int(i.get('quantity') or 0) for i in sold_items):,}주", "workbenchItemsCount"))
+        items_band = QFrame()
+        items_band.setObjectName("workbenchItemsHead")
+        band_row = QHBoxLayout(items_band)
+        band_row.setContentsMargins(16, 8, 16, 8)
+        band_row.addWidget(self.customer_items_heading)
+        item_content.addWidget(items_band)
         content.addWidget(self.customer_items_panel)
         self.items = table(["묘목명", "규격", "수량", "판매 단가", "판매 금액"])
         self.items.setObjectName("workbenchItems")
@@ -3441,11 +3644,11 @@ QDialog#quoteWorkbench[compactLayout="true"] QFrame#workbenchShipping QLabel#wor
         item_summary.setObjectName("workbenchSummary")
         item_summary.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         totals = QHBoxLayout(item_summary)
-        totals.setContentsMargins(10, 6, 10, 6)
+        totals.setContentsMargins(16, 8, 16, 8)
         shipping_text = f"선불 {money(self.meta['shippingFee'])} 포함" if self.meta["isPrepaid"] else "후불"
         totals.addStretch(1)
         total_text = money(self.meta["totalPrice"] + self.meta.get("taxAmount", 0))
-        totals.addWidget(label(f"총금액  {total_text} ({shipping_text})", "deliverySectionTitle"))
+        totals.addWidget(label(f"총금액  {total_text} ({shipping_text})", "salesTotal"))
         item_content.addWidget(item_summary)
         request_area = QFrame()
         request_area.setObjectName("workbenchOriginalRequest")
@@ -3551,6 +3754,10 @@ QDialog#quoteWorkbench[compactLayout="true"] QFrame#workbenchShipping QLabel#wor
                                 "주소 확인 후 송장 준비를 누르세요. 송장번호는 발급 후 등록할 수 있습니다.", "deliveryCaption", True)
         footer_layout.addWidget(self.edit_state)
         actions = QHBoxLayout()
+        actions.setSpacing(12)
+        # 버튼 위계: 닫기(가장 약함) · 되돌리기 작업 | 수정 저장 · 마지막 단계(가장 큼)
+        self.close_order_button = set_button_tier(button("닫기", self.reject), "quiet")
+        actions.addWidget(self.close_order_button)
         self.cancel_order_button = button("구매 취소", lambda: self.finish("cancel"))
         self.cancel_order_button.setObjectName("danger")
         self.cancel_order_button.setEnabled(self.meta["status"] in ("입금확인", "구매확정"))
@@ -3559,8 +3766,8 @@ QDialog#quoteWorkbench[compactLayout="true"] QFrame#workbenchShipping QLabel#wor
         self.restore_button.setEnabled(self.meta["status"] in ("구매취소", "주문취소"))
         actions.addWidget(self.restore_button)
         actions.addStretch(1)
-        actions.addWidget(button("닫기", self.reject))
         self.save_button = button("수정 저장", lambda: self.finish("save"))
+        self.save_button.setObjectName("salesSaveButton")
         self.save_button.setEnabled(True)
         self.save_button.setText("메모 저장" if terminal else "수정 저장")
         actions.addWidget(self.save_button)
@@ -3739,7 +3946,7 @@ class ShippingExportDialog(QDialog):
         self.setWindowTitle("로젠 XLS · 출고자료 확인")
         self.resize(1240, 740)
         layout = QVBoxLayout(self)
-        layout.addWidget(label(f"입금확인 {len(rows)}건 · 로젠 엑셀 저장", "sectionTitle"))
+        layout.addWidget(work_window_header("로젠 XLS 저장", "shipping", f"입금확인 {len(rows)}건 · 출고자료 확인"))
         layout.addWidget(label("첨부 양식의 A~X열과 빈 열을 유지합니다. 첫 줄은 제목, 실제 주문은 2행부터입니다.", "muted", True))
         sender_group = QGroupBox("발송인 · 실제 출고지를 확인하세요")
         form = QGridLayout(sender_group)
@@ -3810,9 +4017,10 @@ class ShippingExportDialog(QDialog):
         self.error_label.hide()
         layout.addWidget(self.error_label)
         actions = QHBoxLayout()
+        actions.setSpacing(12)
+        actions.addWidget(set_button_tier(button("취소", self.reject), "quiet"))
         actions.addWidget(label("저장한 XLS를 로젠에 불러온 후 공식 송장을 출력합니다.", "muted", True), 1)
-        actions.addWidget(button("취소", self.reject))
-        actions.addWidget(button("확인 후 XLS 저장", self.validate_export, True))
+        actions.addWidget(set_button_tier(button("확인 후 XLS 저장", self.validate_export, True), "main"))
         layout.addLayout(actions)
         scroll_dialog(self, layout)
 

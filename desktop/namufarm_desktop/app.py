@@ -25,7 +25,7 @@ from .errors import ConflictError, UserError
 from .delivery_recovery import DeliveryRecoveryTools
 from .service import Manager
 from .store import Vault
-from .ui_theme import DataTable, StatusMessage, align_table, workspace_style
+from .ui_theme import DataTable, StatusMessage, align_table, workspace_style, work_window_header, set_button_tier
 from .ui_icons import set_button_icon
 from .report_excel import write_sales_report
 
@@ -165,6 +165,7 @@ class ReportEmailDialog(DeliveryRecoveryTools, QDialog):
         self.setWindowTitle("엑셀 저장 완료 · 매출 메일")
         self.setMinimumWidth(560)
         layout = QFormLayout(self)
+        layout.addRow(work_window_header("매출 메일 보내기", "sales", "엑셀 저장 완료 · 판매자 메일로 첨부"))
         layout.addRow(QLabel("매출 엑셀은 저장되었습니다. 판매자 메일로 첨부해서 보낼 수 있습니다."))
         layout.addRow("첨부파일", QLabel(path.name))
         self.recipient = QLineEdit(recipient)
@@ -178,11 +179,13 @@ class ReportEmailDialog(DeliveryRecoveryTools, QDialog):
         self.status.setWordWrap(True)
         layout.addRow(self.status)
         actions = QHBoxLayout()
-        self.send_button = QPushButton("메일 전송")
+        actions.setSpacing(12)
+        self.send_button = set_button_tier(QPushButton("메일 전송"), "main")
         self.send_button.clicked.connect(self.send_report)
-        self.cancel_button = QPushButton("저장만 · 닫기")
+        self.cancel_button = set_button_tier(QPushButton("저장만 · 닫기"), "quiet")
         self.cancel_button.clicked.connect(self.reject)
         actions.addWidget(self.cancel_button)
+        actions.addStretch(1)
         actions.addWidget(self.send_button)
         self.setup_delivery_recovery(actions, "report_email")
         layout.addRow(actions)

@@ -10,12 +10,21 @@ from .errors import UserError
 from .nursery import INITIALS, NurseryStore, initial
 from .species_purposes import (PURPOSES, category_error, format_category, matches_purpose, parse_category,
                                suggest_purpose_labels)
-from .ui_theme import TOKENS
+from .ui_theme import TOKENS, work_window_header, set_button_tier
 from .visuals import CONCEPTS, concept_icon, farm_avatar, species_icon
 
 # English initials follow how the letter is read in Korean (JB → 제이 → ㅈ), as in the Android app.
 _LATIN_INITIALS = dict(zip("ABCDEFGHIJKLMNOPQRSTUVWXYZ", "ㅇㅂㅅㄷㅇㅇㅈㅇㅇㅈㅋㅇㅇㅇㅇㅍㅋㅇㅇㅌㅇㅂㄷㅇㅇㅈ"))
 
+
+def tier_dialog_buttons(buttons):
+    """저장은 가장 크게, 취소는 가장 약하게 (작업창 공통 버튼 위계)."""
+    save = buttons.button(QDialogButtonBox.StandardButton.Save)
+    cancel = buttons.button(QDialogButtonBox.StandardButton.Cancel)
+    if save is not None:
+        set_button_tier(save, 'main')
+    if cancel is not None:
+        set_button_tier(cancel, 'quiet')
 
 def stock_initial(name):
     first = initial(name or "")
@@ -317,6 +326,7 @@ class NurseryPage(QWidget):
         dialog.setWindowTitle(('농원' if self.kind == 'farms' else '묘목') + (' 수정' if row else ' 추가'))
         dialog.setMinimumWidth(600 if self.kind == 'species' else 460)
         form = QFormLayout(dialog)
+        form.addRow(work_window_header(dialog.windowTitle(), 'nursery'))
         labels = [('farmName', '농원명'), ('address', '주소'), ('phone', '전화번호'), ('memo', '메모')] if self.kind == 'farms' else [
             ('speciesName', '묘목명'), ('chosung', '초성'), ('farmName', '농원사용명'), ('category', '분류'), ('memo', '메모')]
         inputs = {}
@@ -343,6 +353,7 @@ class NurseryPage(QWidget):
         message.setWordWrap(True)
         form.addRow(message)
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
+        tier_dialog_buttons(buttons)
         form.addRow(buttons)
         if purpose_editor is not None:
             def update_category_validation():
@@ -550,6 +561,7 @@ class NurseryPage(QWidget):
         dialog.setWindowTitle(f'20주 이하 남은 재고 {len(items)}건')
         dialog.setMinimumWidth(520)
         box = QVBoxLayout(dialog)
+        box.addWidget(work_window_header('남은 재고 확인', 'nursery', dialog.windowTitle()))
         box.addWidget(QLabel('농원·묘목별 합계 수량 기준입니다. 두 번 누르면 그 농원 재고로 이동합니다.'))
         grid = table(['농원', '묘목', '남은 수량'])
         grid.setIconSize(QSize(24, 24))
@@ -722,6 +734,7 @@ class NurseryPage(QWidget):
         dialog = QDialog(self)
         dialog.setWindowTitle('재고 수정' if existing else '재고 추가')
         form = QFormLayout(dialog)
+        form.addRow(work_window_header(dialog.windowTitle(), 'nursery'))
         other = None
         if not fk or not sk:
             # 농원별에서는 묘목을, 묘목별에서는 농원을 골라 새 재고를 넣는다.
@@ -750,6 +763,7 @@ class NurseryPage(QWidget):
         message.setWordWrap(True)
         form.addRow(message)
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
+        tier_dialog_buttons(buttons)
         form.addRow(buttons)
         def save():
             try:

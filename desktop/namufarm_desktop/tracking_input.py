@@ -4,6 +4,7 @@ from PySide6.QtGui import QRegularExpressionValidator
 from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QLineEdit, QPushButton
 
 from .commerce import normalize_tracking
+from .ui_theme import work_window_header, set_button_tier
 from .errors import UserError
 
 
@@ -15,13 +16,14 @@ class TrackingNumberDialog(QDialog):
         self.setWindowModality(Qt.WindowModality.WindowModal)
         self.setStyleSheet("QDialog#trackingInputDialog{background:#f5f8f6;}"
                            "QDialog#trackingInputDialog QLabel{font-size:15px;color:#193c32;}"
+                           "QDialog#trackingInputDialog QFrame#workWindowHeader QLabel{color:#FFFFFF;}"
                            "QDialog#trackingInputDialog QLineEdit{font-size:24px;min-height:32px;padding:6px;}"
                            "QDialog#trackingInputDialog QPushButton{font-size:22px;min-height:44px;padding:0 10px;}"
                            "QDialog#trackingInputDialog QPushButton[keypadAction=\"true\"]{font-size:16px;min-height:34px;}"
                            "QDialog#trackingInputDialog QPushButton#applyNumber{background:#25634b;color:white;font-weight:700;}")
         self.number = value
         layout = QVBoxLayout(self)
-        layout.addWidget(QLabel("로젠 송장번호 입력"))
+        layout.addWidget(work_window_header("로젠 송장번호 입력", "shipping"))
         self.entry = QLineEdit(value)
         self.entry.setAccessibleName("송장번호 숫자와 하이픈 입력")
         self.entry.setPlaceholderText("123-4567-8901")
@@ -52,6 +54,8 @@ class TrackingNumberDialog(QDialog):
             if text == "입력":
                 key.setObjectName("applyNumber")
                 key.setDefault(True)
+            elif text == "취소":
+                set_button_tier(key, "quiet")
             actions.addWidget(key)
         layout.addLayout(actions)
         self.resize(360, self.sizeHint().height())

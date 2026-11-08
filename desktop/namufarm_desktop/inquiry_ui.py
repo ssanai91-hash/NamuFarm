@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (QWidget, QDialog, QVBoxLayout, QHBoxLayout, QLabe
 from .app import table, fill_table, Task
 from .errors import UserError
 from .inquiries import InquiryService, DELIVERY_LABELS, local_time, sms_blocked
-from .ui_theme import fit_window, scroll_dialog
+from .ui_theme import fit_window, scroll_dialog, work_window_header, set_button_tier
 from .ui_theme import align_table, StatusDelegate
 from .presentation import phone_text, date_text
 from .ui_icons import set_button_icon
@@ -203,6 +203,7 @@ class InquiryDialog(QDialog):
         root = QVBoxLayout(self)
         root.setContentsMargins(18, 16, 18, 16)
         root.setSpacing(10)
+        root.addWidget(work_window_header('고객문의 답변', 'inquiries'))
         heading = QHBoxLayout()
         self.title = text_label('', 'sectionTitle')
         self.badge = text_label('', 'selectionHint')
@@ -239,13 +240,17 @@ class InquiryDialog(QDialog):
         self.sms = QPushButton('문자 보내기'); self.sms.setObjectName('primary')
         self.email = QPushButton('메일 보내기'); self.email.setObjectName('primary')
         self.check_button = QPushButton('결과 확인')
-        for w in (self.save, self.sms, self.email, self.check_button): actions.addWidget(w)
+        # 버튼 위계: 초안·확인은 보조, 문자·메일 보내기는 가장 크게, 닫기는 가장 약하게 왼쪽.
+        actions.setSpacing(12)
+        actions.addWidget(self.save); actions.addWidget(self.check_button); actions.addStretch()
+        for w in (self.sms, self.email): actions.addWidget(set_button_tier(w, 'main'))
         root.addLayout(actions)
         footer = QHBoxLayout()
+        footer.setSpacing(12)
         self.rebase = QPushButton('최신 기준 저장')
         self.status = QPushButton('전화 상담 완료')
-        self.close_button = QPushButton('닫기')
-        footer.addWidget(self.rebase); footer.addWidget(self.status); footer.addStretch(); footer.addWidget(self.close_button)
+        self.close_button = set_button_tier(QPushButton('닫기'), 'quiet')
+        footer.addWidget(self.close_button); footer.addStretch(); footer.addWidget(self.rebase); footer.addWidget(self.status)
         root.addLayout(footer)
         self.timer = QTimer(self); self.timer.setSingleShot(True); self.timer.setInterval(350)
         self.timer.timeout.connect(self.remember)

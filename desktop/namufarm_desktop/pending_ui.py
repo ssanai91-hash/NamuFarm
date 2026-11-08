@@ -3,6 +3,8 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (QDialog, QHBoxLayout, QLabel, QMessageBox, QPlainTextEdit,
     QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout, QHeaderView)
 
+from .ui_theme import work_window_header, set_button_tier
+
 
 def describe(entry):
     body = entry.get("body") or {}
@@ -44,6 +46,7 @@ class PendingDialog(QDialog):
         root = QVBoxLayout(self)
         root.setContentsMargins(20, 20, 20, 20)
         root.setSpacing(12)
+        root.addWidget(work_window_header("대기 내역 · 복구 기록", "system", "문자·메일은 이 화면에서 다시 보내지 않습니다."))
         self.notice = QLabel("대기가 있어도 새 견적은 서버에서 계속 받습니다. 이 화면은 문자·메일을 재발송하지 않습니다.")
         self.notice.setWordWrap(True)
         root.addWidget(self.notice)
@@ -73,9 +76,12 @@ class PendingDialog(QDialog):
         self.release_button.clicked.connect(lambda: self.act(True))
         self.retry_button = QPushButton("저장 다시 시도")
         self.retry_button.clicked.connect(self.retry)
-        self.close_button = QPushButton("닫기")
+        self.close_button = set_button_tier(QPushButton("닫기"), "quiet")
         self.close_button.clicked.connect(self.reject)
-        for button in (self.refresh_button, self.history_button, self.check_button, self.release_button, self.retry_button, self.close_button):
+        row.setSpacing(12)
+        row.addWidget(self.close_button)
+        row.addStretch(1)
+        for button in (self.refresh_button, self.history_button, self.check_button, self.release_button, self.retry_button):
             row.addWidget(button)
         root.addLayout(row)
         self.refresh()

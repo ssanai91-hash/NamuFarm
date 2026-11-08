@@ -3,7 +3,7 @@ import re
 
 from PySide6.QtCore import QEvent, Qt, QRectF, QTimer
 from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPalette
-from PySide6.QtWidgets import (QApplication, QFrame, QGridLayout, QHeaderView, QLabel, QLineEdit, QScrollArea,
+from PySide6.QtWidgets import (QApplication, QFrame, QGridLayout, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QScrollArea,
                                QSizePolicy, QTableWidget, QVBoxLayout, QWidget,
                                QStyledItemDelegate, QStyleOptionViewItem, QStyle, QPushButton)
 
@@ -232,17 +232,27 @@ QLabel#channelStatusBadge[state="pending"]{background:@working-bg@;color:@quote-
 QLabel#channelStatusBadge[state="failed"]{background:@cancel-bg@;color:@cancel-fg@;}
 QLabel#channelStatusBadge[state="success"]{background:@paid-bg@;color:@paid-fg@;}
 QLabel#emptyState{font-size:@body@px;color:@muted@;background:transparent;padding:24px;}
-""" + request_view_style(large), large, compact)
+""" + _work_window_css() + request_view_style(large), large, compact)
 
 
-def quote_workbench_style(large=False):
-    return _theme("""
+# 작업창 색: 견적 작업대는 주황, 판매관리 작업창은 초록 (CATEGORY와 같은 계열).
+WORK_PALETTES = {
+    "quotes": {"solid": "#F5A623", "on": "#3A2300", "tint": "#FDEFD3", "ink": "#6F4300", "line": "#F0CD8C",
+               "head": "#FDF3E0", "row": "#FFF9EE", "soft": "#FFFCF6", "rule": "#F3E6CC"},
+    "sales": {"solid": "#23824A", "on": "#FFFFFF", "tint": "#E3F2E8", "ink": "#1E6B3F", "line": "#B8DEC5",
+              "head": "#E8F4EC", "row": "#F4FAF6", "soft": "#F7FBF8", "rule": "#DCEDE2"},
+}
+
+
+def quote_workbench_style(large=False, category="quotes"):
+    """Work-window layout shared by the quote workbench (주황) and the sales window (초록)."""
+    css = """
 QDialog#quoteWorkbench{background:@page-bg@;}
-QDialog#quoteWorkbench QFrame#workbenchHeader{background:@sidebar@;border:0;}
+QDialog#quoteWorkbench QFrame#workbenchHeader{background:@sidebar@;border:0;border-bottom:4px solid @w-solid@;}
 QDialog#quoteWorkbench #workbenchHeader QLabel{color:@card@;background:transparent;border:0;}
-QDialog#quoteWorkbench QLabel#workbenchTitle{font-size:@title@px;font-weight:700;}
-QDialog#quoteWorkbench QLabel#workbenchBrand{font-size:@action@px;font-weight:700;}
-QDialog#quoteWorkbench QLabel#workbenchReference{font-size:@small@px;}
+QDialog#quoteWorkbench QLabel#workbenchTitle{font-size:@section@px;font-weight:700;color:@w-on@;background:@w-solid@;border-radius:8px;padding:4px 12px;}
+QDialog#quoteWorkbench QLabel#workbenchBrand{font-size:@title@px;font-weight:700;}
+QDialog#quoteWorkbench QLabel#workbenchReference{font-size:@small@px;color:#CFE3D8;}
 QDialog#quoteWorkbench #workbenchCustomerRail{background:@page-bg@;}
 QDialog#quoteWorkbench QLabel#workbenchCaption{font-size:@small@px;color:@muted@;background:transparent;border:0;padding:0;}
 QDialog#quoteWorkbench QTextBrowser#workbenchCustomerName,QDialog#quoteWorkbench QTextBrowser#workbenchInfo,QDialog#quoteWorkbench QTextBrowser#workbenchReceipt{background:transparent;border:0;padding:0;font-size:@body@px;}
@@ -259,15 +269,123 @@ QDialog#quoteWorkbench #unitPriceEditor QPushButton{min-width:40px;max-width:40p
 QDialog#quoteWorkbench #unitPriceEditor QLineEdit{min-height:38px;min-width:64px;padding:0 4px;}
 QDialog#quoteWorkbench QFrame#workbenchFooter{background:@card@;border:0;border-top:1px solid @border@;}
 QDialog#quoteWorkbench #workbenchFooter QPushButton{min-height:52px;}
-QDialog#quoteWorkbench QLabel#workbenchTotal{font-size:@total@px;font-weight:700;color:@primary@;}
-QDialog#quoteWorkbench QFrame#workbenchShipping{background:@table-head@;border-radius:8px;}
+QDialog#quoteWorkbench QLabel#workbenchTotal{font-size:@total@px;font-weight:700;color:#1E6B3F;}
+QDialog#quoteWorkbench QFrame#workbenchShipping{background:@w-soft@;border:0;border-top:1px solid @w-line@;border-bottom-left-radius:14px;border-bottom-right-radius:14px;}
 QDialog#quoteWorkbench #workbenchShipping QLineEdit{min-height:28px;}
-QDialog#quoteWorkbench #workbenchOriginalText{background:@table-head@;border:1px solid @border@;border-radius:8px;font-size:@small@px;}
-QDialog#quoteWorkbench QPushButton[deliveryCompletion="true"]{min-width:160px;max-width:180px;min-height:52px;}
-QDialog#quoteWorkbench QPushButton#smsAction,QDialog#quoteWorkbench QPushButton#mailAction{min-height:52px;font-size:@action@px;padding:0 8px;}
-QDialog#quoteWorkbench QLabel#deliveryActionTitle{font-size:@action@px;font-weight:700;}
+QDialog#quoteWorkbench #workbenchOriginalText{background:#F5F9FF;border:1px solid #DCE8FB;border-radius:10px;padding:6px 8px;font-size:@body@px;}
+QDialog#quoteWorkbench QPushButton[deliveryCompletion="true"]{min-width:180px;max-width:200px;min-height:64px;font-size:@detail@px;font-weight:700;border-radius:14px;}
+QDialog#quoteWorkbench QPushButton#smsAction,QDialog#quoteWorkbench QPushButton#mailAction{min-height:56px;font-size:@action@px;padding:0 8px;background:@card@;color:#163D73;border:2px solid #2563C9;border-radius:12px;}
+QDialog#quoteWorkbench QPushButton#smsAction:hover,QDialog#quoteWorkbench QPushButton#mailAction:hover{background:#F5F9FF;}
+QDialog#quoteWorkbench QPushButton#smsAction:disabled,QDialog#quoteWorkbench QPushButton#mailAction:disabled{border:1px solid @border@;color:@muted@;background:@table-head@;}
+QDialog#quoteWorkbench QLabel#deliveryActionTitle{font-size:@action@px;font-weight:700;color:#163D73;}
 QDialog#quoteWorkbench #workbenchCustomerInput{background:@card@;}
-""", large)
+/* 2026-11-08 A안: 고객=파랑, 판매자 작성=주황, 금액·완료=초록 */
+QDialog#quoteWorkbench QPushButton#workbenchClose{background:transparent;color:@card@;border:1px solid #5E8072;border-radius:10px;min-height:0;padding:0;font-size:@action@px;}
+QDialog#quoteWorkbench QPushButton#workbenchClose:hover{background:@nav-selected@;}
+QDialog#quoteWorkbench QLabel#workbenchAvatar{background:#DCE8FB;color:#163D73;border-radius:24px;font-size:@detail@px;font-weight:700;}
+QDialog#quoteWorkbench QLabel#workbenchCustomerTitle{font-size:@section@px;font-weight:700;color:#163D73;}
+QDialog#quoteWorkbench QFrame#workbenchPhoneBox{background:#F5F9FF;border:1px solid #B9C9F0;border-radius:12px;}
+QDialog#quoteWorkbench #workbenchPhoneBox QLabel{background:transparent;border:0;}
+QDialog#quoteWorkbench QLabel#workbenchPhoneCaption{font-size:@small@px;font-weight:700;color:#163D73;}
+QDialog#quoteWorkbench QLabel#workbenchPhone{font-family:Consolas;font-size:@detail@px;font-weight:700;color:@text@;}
+QDialog#quoteWorkbench QPushButton#workbenchPhoneCopy{background:@card@;color:#163D73;border:1px solid #2563C9;border-radius:10px;min-height:40px;min-width:84px;padding:0 10px;font-weight:700;}
+QDialog#quoteWorkbench QPushButton#workbenchPhoneCopy:hover{background:#DCE8FB;}
+QDialog#quoteWorkbench QFrame#workbenchFormal[requested="true"]{background:#E7F0FB;border-radius:8px;}
+QDialog#quoteWorkbench QFrame#workbenchFormal[requested="true"] QLabel{color:#1D4F91;font-weight:700;}
+QDialog#quoteWorkbench QLabel#deliverySectionTitle{font-size:@section@px;font-weight:700;}
+QDialog#quoteWorkbench QPushButton#pdfAction[documentGenerate="true"]{background:@w-row@;color:@w-ink@;border:2px solid @w-solid@;border-radius:10px;min-height:48px;font-weight:700;}
+QDialog#quoteWorkbench QPushButton#pdfAction[documentGenerate="true"]:hover{background:@w-tint@;}
+QDialog#quoteWorkbench QPushButton#pdfAction{min-height:48px;color:@text@;border-color:@border@;}
+QDialog#quoteWorkbench QFrame#workbenchItemsCard{background:@card@;border:1px solid @w-line@;border-radius:14px;}
+QDialog#quoteWorkbench QFrame#workbenchItemsHead{background:@w-tint@;border:0;border-top-left-radius:14px;border-top-right-radius:14px;}
+QDialog#quoteWorkbench #workbenchItemsHead QLabel{background:transparent;}
+QDialog#quoteWorkbench #workbenchItemsHead QLabel#workbenchSectionTitle{font-size:@section@px;font-weight:700;color:@w-ink@;}
+QDialog#quoteWorkbench QLabel#workbenchItemsCount{font-size:@body@px;font-weight:700;color:@w-ink@;}
+QDialog#quoteWorkbench #workbenchItemsHead QLabel#deliveryCaption{color:@w-ink@;}
+QDialog#quoteWorkbench QPushButton[role="itemAdd"]{background:@card@;color:@w-ink@;border:1px solid @w-ink@;border-radius:10px;min-height:42px;font-weight:700;}
+QDialog#quoteWorkbench QPushButton[role="itemAdd"]:hover{background:@w-row@;}
+QDialog#quoteWorkbench QTableWidget#workbenchItems{border:0;border-radius:0;alternate-background-color:@w-row@;}
+QDialog#quoteWorkbench QTableWidget#workbenchItems::item{border-bottom:1px solid @w-rule@;}
+QDialog#quoteWorkbench QTableWidget#workbenchItems QHeaderView::section{background:@w-head@;color:@w-ink@;font-size:@body@px;font-weight:700;border:0;border-bottom:2px solid @w-solid@;padding:6px 8px;}
+QDialog#quoteWorkbench #workbenchShipping QLabel#deliverySectionTitle{color:@w-ink@;}
+QDialog#quoteWorkbench QFrame#workbenchOriginalRequest{background:@card@;border:1px solid #B9C9F0;border-radius:14px;}
+QDialog#quoteWorkbench QLabel#workbenchOriginalTitle{font-size:@section@px;font-weight:700;color:#163D73;}
+QDialog#quoteWorkbench QLabel#workbenchOriginalBadge{font-size:@small@px;font-weight:700;color:@muted@;background:@table-head@;border-radius:6px;padding:2px 8px;}
+QDialog#quoteWorkbench QFrame#workbenchSellerNote{background:@card@;border:1px solid @w-line@;border-radius:14px;}
+QDialog#quoteWorkbench QLabel#workbenchSellerNoteTitle{font-size:@section@px;font-weight:700;color:@w-ink@;}
+QDialog#quoteWorkbench QLabel#workbenchSellerBadge{font-size:@small@px;font-weight:700;color:@w-ink@;background:@w-tint@;border-radius:6px;padding:2px 8px;}
+QDialog#quoteWorkbench QFrame#workbenchFooter{background:@card@;border:0;border-top:1px solid @border@;}
+QDialog#quoteWorkbench QPushButton#workbenchCloseText{background:transparent;color:@muted@;border:0;min-width:64px;font-size:@action@px;}
+QDialog#quoteWorkbench QPushButton#workbenchCloseText:hover{color:@text@;background:@table-head@;}
+QDialog#quoteWorkbench QFrame#workbenchFooterRule{background:@border@;border:0;}
+QDialog#quoteWorkbench QLabel#workbenchAmountDetail{font-size:@small@px;color:@muted@;}
+QDialog#quoteWorkbench QLabel#workbenchStepSend{font-size:@small@px;font-weight:700;color:#1D4F91;}
+QDialog#quoteWorkbench QLabel#workbenchStepDone{font-size:@small@px;font-weight:700;color:#1E6B3F;}
+QDialog#quoteWorkbench QLabel#workbenchStepArrow{font-size:@title@px;color:@input-border@;padding-bottom:14px;}
+QDialog#quoteWorkbench QLabel#workbenchCompletionHint{font-size:@small@px;color:@muted@;}
+"""
+    for key, value in WORK_PALETTES[category].items():
+        css = css.replace("@w-" + key + "@", value)
+    return _theme(css, large)
+
+
+# 2026-11-08 작업창 공통: 어두운 머리띠 + 업무색 칩·밑줄, 버튼은 중요도(tier)로 크기를 나눈다.
+WORK_WINDOW_ACCENTS = {
+    "quotes": ("#F5A623", "#3A2300"), "requests": ("#2563C9", "#FFFFFF"), "sales": ("#23824A", "#FFFFFF"),
+    "shipping": ("#0E7C7B", "#FFFFFF"), "inquiries": ("#F2D38A", "#3A2300"), "nursery": ("#7FD8A2", "#17362C"),
+    "system": ("#CBD3D8", "#2F3B42"),
+}
+
+
+def _work_window_css():
+    css = ["QFrame#workWindowHeader{background:@sidebar@;border:0;border-bottom:4px solid #F5A623;border-radius:10px;}",
+           "QFrame#workWindowHeader QLabel{background:transparent;border:0;color:@card@;}",
+           "QFrame#workWindowHeader QLabel#workWindowChip{font-size:@section@px;font-weight:700;border-radius:8px;padding:4px 12px;}",
+           "QFrame#workWindowHeader QLabel#workWindowSubtitle{font-size:@small@px;color:#CFE3D8;}",
+           "QPushButton[tier=\"quiet\"]{background:transparent;color:@muted@;border:0;min-width:64px;}",
+           "QPushButton[tier=\"quiet\"]:hover{background:@table-head@;color:@text@;}",
+           "QPushButton[tier=\"main\"]{min-height:52px;min-width:150px;font-size:@action@px;font-weight:700;border-radius:12px;}"]
+    for key, (solid, on) in WORK_WINDOW_ACCENTS.items():
+        css.append(f'QFrame#workWindowHeader[category="{key}"]{{border-bottom-color:{solid};}}')
+        css.append(f'QFrame#workWindowHeader QLabel#workWindowChip[category="{key}"]{{background:{solid};color:{on};}}')
+    return "\n".join(css) + "\n"
+
+
+def work_window_header(title, category="quotes", subtitle=""):
+    """작업창 맨 위 머리띠. 제목은 업무색 칩, 보조 설명은 옅은 글씨로 둡니다."""
+    frame = QFrame()
+    frame.setObjectName("workWindowHeader")
+    frame.setProperty("category", category)
+    row = QHBoxLayout(frame)
+    row.setContentsMargins(16, 10, 16, 10)
+    row.setSpacing(12)
+    chip = QLabel(title)
+    chip.setObjectName("workWindowChip")
+    chip.setProperty("category", category)
+    chip.setTextFormat(Qt.TextFormat.PlainText)
+    chip.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Preferred)
+    row.addWidget(chip)
+    detail = QLabel(subtitle)
+    detail.setObjectName("workWindowSubtitle")
+    detail.setTextFormat(Qt.TextFormat.PlainText)
+    detail.setWordWrap(True)
+    detail.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+    detail.setVisible(bool(subtitle))
+    row.addWidget(detail, 1)
+    row.addStretch(0 if subtitle else 1)
+    frame.title_label = chip
+    frame.subtitle_label = detail
+    return frame
+
+
+def set_button_tier(button, tier):
+    """quiet: 닫기·취소처럼 가장 약한 버튼, main: 그 창의 마지막 단계(가장 크게)."""
+    button.setProperty("tier", tier)
+    if tier == "main" and button.objectName() != "primary" and button.property("role") != "danger":
+        button.setProperty("role", "primary")
+    button.style().unpolish(button)
+    button.style().polish(button)
+    return button
 
 
 def quote_delivery_style(large=False, compact=False):
