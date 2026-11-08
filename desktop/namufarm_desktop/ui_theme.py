@@ -93,6 +93,61 @@ def _theme(css, large=False, compact=False):
     return css
 
 
+def request_view_style(large=False):
+    """Scoped customer-card presentation; no sales or shared-detail selectors."""
+    css = """
+QFrame#requestCountPill{background:#F5F9FF;border:2px solid #2563C9;border-radius:28px;}
+QFrame#requestCountPill QLabel{background:transparent;border:0;}
+QFrame#requestCountPill QLabel#requestCountDot{background:#2563C9;border-radius:5px;}
+QLabel#requestCountTitle{font-size:@request-title@px;font-weight:700;color:#163D73;}
+QLabel#requestCountValue{font-size:@request-count@px;font-weight:700;color:#2563C9;}
+QLabel#requestCountUnit{font-size:@request-body@px;color:#163D73;}
+QScrollArea#requestHeaderGroup{background:transparent;border:0;}
+QLineEdit#requestHeaderSearch{background:#F3F5F2;border:1px solid #DDE3DE;border-radius:12px;min-height:0;padding:0 12px;font-size:@request-search@px;}
+QLineEdit#requestHeaderSearch:focus{border-color:#2563C9;}
+QTableWidget#requestInboxTable{background:#FFFFFF;alternate-background-color:#F7F9F7;selection-background-color:#DCE8FB;}
+QTableWidget#requestInboxTable::item{border:0;border-bottom:1px solid #EEF2EE;padding:8px;}
+QTableWidget#requestInboxTable::item:selected{background:#DCE8FB;color:#1C2621;}
+QTableWidget#requestInboxTable QHeaderView::section{font-size:@request-body@px;font-weight:700;background:#EAF1FD;color:#163D73;border:0;border-top:3px solid #2563C9;border-bottom:1px solid #B9C9F0;padding:8px;}
+QFrame#requestDetailPanel{background:#FFFFFF;border:1px solid #DDE3DE;border-radius:12px;}
+QFrame#requestDetailPanel QScrollArea,QWidget#requestDetailBody{background:transparent;border:0;}
+QFrame#requestDetailPanel QLabel{background:transparent;border:0;}
+QFrame#requestDetailPanel QLabel#requestEmpty{color:#56645C;}
+QFrame#requestDetailPanel QLabel#requestAvatar{background:#DCE8FB;color:#163D73;border-radius:28px;font-size:24px;font-weight:700;}
+QFrame#requestDetailPanel QLabel#requestCustomerName{font-size:24px;font-weight:700;}
+QFrame#requestDetailPanel QLabel#requestNewBadge{background:#E7F0FB;color:#1D4F91;border-radius:6px;font-size:@request-small@px;padding:3px 8px;}
+QFrame#requestDetailPanel QLabel#requestReference{font-size:@request-small@px;color:#56645C;}
+QFrame#requestContactCard{background:#F5F9FF;border:1px solid #B9C9F0;border-radius:12px;}
+QFrame#requestDetailPanel QLabel#requestContactCaption{font-size:@request-small@px;font-weight:700;color:#163D73;}
+QFrame#requestDetailPanel QLabel#requestPhone{font-family:Consolas;font-size:23px;font-weight:700;color:#163D73;}
+QFrame#requestDetailPanel QPushButton#requestPhoneCopy{font-size:@request-body@px;min-height:0;padding:0 8px;color:#163D73;border-color:#B9C9F0;}
+QFrame#requestInfoCell,QFrame#requestOfficialCard{border:1px solid #DDE3DE;border-radius:10px;}
+QFrame#requestOfficialCard[requested="true"]{background:#DCE8FB;}
+QFrame#requestOfficialCard[requested="false"]{background:#ECEFF1;}
+QFrame#requestDetailPanel QLabel#requestInfoCaption{font-size:@request-caption@px;color:#56645C;}
+QFrame#requestDetailPanel QLabel#requestInfoValue{font-size:@request-body@px;font-weight:700;}
+QFrame#requestDetailPanel QLabel#requestItemsHeading{font-size:@request-item@px;font-weight:700;color:#1E6B3F;}
+QFrame#requestDetailPanel QLabel#requestItemsCount{font-size:@request-small@px;color:#1E6B3F;}
+QFrame#requestItemsCard{background:#FFFFFF;border:1px solid #B8DEC5;border-radius:10px;}
+QWidget#requestItemRow{border:0;border-bottom:1px solid #EEF2EE;}
+QFrame#requestDetailPanel QLabel#requestItemNumber{background:#E3F2E8;border-radius:13px;color:#1E6B3F;font-size:@request-small@px;font-weight:700;}
+QFrame#requestDetailPanel QLabel#requestItemSpecies{font-size:@request-item@px;font-weight:700;}
+QFrame#requestDetailPanel QLabel#requestItemSpecification{font-size:@request-small@px;color:#56645C;}
+QFrame#requestDetailPanel QLabel#requestItemQuantity{font-size:@request-search@px;font-weight:700;}
+QFrame#requestDetailPanel QLabel#requestItemsTotal{background:#F4FAF6;color:#1E6B3F;font-size:@request-body@px;font-weight:700;padding:10px;}
+QFrame#requestDetailPanel QLabel#requestNoteHeading{font-size:@request-item@px;font-weight:700;color:#8A5300;}
+QFrame#requestDetailPanel QLabel#requestCustomerNote{font-size:@request-body@px;background:#F3F5F2;color:#56645C;border-radius:10px;padding:12px;}
+QFrame#requestDetailPanel QLabel#requestCustomerNote[hasMessage="true"]{background:#FDF1DC;border:1px solid #F0CD8C;color:#1C2621;}
+QFrame#requestDetailPanel QPushButton#primary{font-size:18px;font-weight:700;min-height:0;}
+QFrame#requestDetailPanel QLabel#requestOpenHint{font-size:13px;color:#56645C;}
+QFrame#requestDetailPanel QPushButton#requestDetailDelete{font-size:13px;color:#B3261E;background:transparent;border:0;min-height:32px;padding:0 4px;}
+"""
+    sizes = {'title': 18, 'count': 26, 'body': 15, 'search': 17, 'small': 13, 'caption': 12, 'item': 16}
+    for key, size in sizes.items():
+        css = css.replace('@request-' + key + '@', str(size + (2 if large else 0)))
+    return css
+
+
 def workspace_style(large=False, compact=False):
     # Compact layouts change geometry, never reduce the readable type scale.
     return _theme("""
@@ -177,7 +232,7 @@ QLabel#channelStatusBadge[state="pending"]{background:@working-bg@;color:@quote-
 QLabel#channelStatusBadge[state="failed"]{background:@cancel-bg@;color:@cancel-fg@;}
 QLabel#channelStatusBadge[state="success"]{background:@paid-bg@;color:@paid-fg@;}
 QLabel#emptyState{font-size:@body@px;color:@muted@;background:transparent;padding:24px;}
-""", large, compact)
+""" + request_view_style(large), large, compact)
 
 
 def quote_workbench_style(large=False):
@@ -311,6 +366,33 @@ class CompactDateDelegate(RowSelectionDelegate):
         super().initStyleOption(option, index)
         from .presentation import date_text
         option.text = date_text(option.text)
+
+
+class RequestQuoteDelegate(RowSelectionDelegate):
+    """Render the original formal-quote flag without changing its stored table text."""
+    def paint(self, painter, option, index):
+        opt = QStyleOptionViewItem(option)
+        self.initStyleOption(opt, index)
+        requested = opt.text == '요청'
+        opt.text = ''
+        style = opt.widget.style() if opt.widget else QApplication.style()
+        style.drawControl(QStyle.ControlElement.CE_ItemViewItem, opt, painter, opt.widget)
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        font = QFont(option.font)
+        font.setPixelSize(17 if QApplication.instance().property('namufarmLargeFont') else 15)
+        font.setBold(requested)
+        painter.setFont(font)
+        text = '요청' if requested else '없음'
+        width = QFontMetrics(font).horizontalAdvance(text)
+        left = option.rect.center().x() - (width + 16) / 2
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor('#2563C9' if requested else '#CBD3D8'))
+        painter.drawEllipse(QRectF(left, option.rect.center().y() - 4, 8, 8))
+        painter.setPen(QColor('#163D73' if requested else '#56645C'))
+        rect = QRectF(left + 16, option.rect.y(), width, option.rect.height())
+        painter.drawText(rect, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, text)
+        painter.restore()
 
 
 class CustomerDelegate(RowSelectionDelegate):
@@ -467,6 +549,7 @@ class DataTable(QTableWidget):
         self._weights = ()
         self._fitting = False
         self._stripe = None  # colour, or callable(row) -> colour/None; drawn over the row's left edge
+        self._stripe_width = 5
         self.viewport().installEventFilter(self)
         row_height = 64 if QApplication.instance().property("namufarmLargeFont") else 60
         self.verticalHeader().setMinimumSectionSize(row_height)
@@ -524,8 +607,9 @@ class DataTable(QTableWidget):
         self._empty_message = text
         self.update_empty_state()
 
-    def set_row_stripe(self, stripe):
+    def set_row_stripe(self, stripe, *, width=5):
         self._stripe = stripe
+        self._stripe_width = width
         self.viewport().update()
 
     def paintEvent(self, event):
@@ -541,7 +625,7 @@ class DataTable(QTableWidget):
                 continue
             color = self._stripe(row) if callable(self._stripe) else self._stripe
             if color:
-                painter.fillRect(0, self.rowViewportPosition(row), 5, self.rowHeight(row), QColor(color))
+                painter.fillRect(0, self.rowViewportPosition(row), self._stripe_width, self.rowHeight(row), QColor(color))
         painter.end()
 
     def setRowCount(self, count):

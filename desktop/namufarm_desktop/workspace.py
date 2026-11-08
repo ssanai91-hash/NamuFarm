@@ -21,7 +21,7 @@ from PySide6.QtWidgets import (QApplication, QBoxLayout, QButtonGroup, QCheckBox
 from . import __version__
 from .ui_theme import (align_table, fit_window, scroll_dialog, scroll_page, workspace_style,
                        CustomerDelegate, StatusDelegate, customer_reference, CompactDateDelegate,
-                       NavigationButton, CellWidgetDelegate, QuoteRemarksDelegate, SequenceDelegate, TOKENS, CATEGORY, SALES_STAGES, StageCards, status_badge, stage_label, size_table_to_rows, collapsible, quote_workbench_style)
+                       NavigationButton, CellWidgetDelegate, QuoteRemarksDelegate, RequestQuoteDelegate, SequenceDelegate, TOKENS, CATEGORY, SALES_STAGES, StageCards, status_badge, stage_label, size_table_to_rows, collapsible, quote_workbench_style)
 from .ui_icons import set_button_icon, ui_icon
 from .app import MainWindow, Task, table, fill_table, money, timestamp
 from .commerce import (ISSUER, new_draft, new_manual_draft, draft_amounts, validate_draft, quote_html, quote_document_html, shipping_html,
@@ -37,7 +37,7 @@ from .inquiry_ui import InquiryPage
 from .nursery import NurseryStore
 from .quote_species import SpeciesNameEditor, QuoteSpeciesPicker
 from .list_filters import ListPeriodFilter, first_date, record_date
-from .presentation import DetailPanel, phone_text, date_text, order_stage, time_value
+from .presentation import DetailPanel, RequestDetailPanel, phone_text, date_text, order_stage, time_value
 
 STYLE = workspace_style()
 
@@ -4091,11 +4091,12 @@ class SellerWindow(MainWindow):
         self.request_table.setTextElideMode(Qt.TextElideMode.ElideRight)
         self.request_table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Fixed)
         self.configure_request_columns()
-        self.request_table.setItemDelegateForColumn(0, CustomerDelegate(self.request_table))
+        self.request_table.setItemDelegateForColumn(0, self.request_table.itemDelegate())
         request_layout = old_pages[0].layout()
         request_layout.setContentsMargins(0, 0, 0, 0)
         request_layout.setSpacing(8)
-        self.request_table.setItemDelegateForColumn(1, CompactDateDelegate(self.request_table))
+        self.request_table.setItemDelegateForColumn(1, self.request_table.itemDelegate())
+        self.request_table.setItemDelegateForColumn(7, RequestQuoteDelegate(self.request_table))
         self.build_request_detail(old_pages[0])
         self.request_table.horizontalHeaderItem(1).setToolTip("접수일 · 전체 날짜와 시간은 셀 도움말에서 확인합니다.")
         set_button_icon(self.request_quote_button, "document", "#23593a")
@@ -4106,6 +4107,7 @@ class SellerWindow(MainWindow):
         self.apply_design_scale(self.large_font_check.isChecked())
         for widget in self.findChildren(type(self.request_table)):
             polish_table(widget)
+        self.configure_request_columns()
         self.save_button.setObjectName("primary")
         self.next_button.setObjectName("primary")
         # 판매·고객 관리는 목록 + 전용 팝업으로 동작합니다. 기존 내장 편집기는
@@ -4152,7 +4154,7 @@ class SellerWindow(MainWindow):
         self.inquiries_page.load.setText("고객문의 가져오기")
         self.connect_button.setText("서버 연결 · 견적 가져오기")
         self.connect_button.setToolTip("PC 연결을 확인하고 견적요청·확정견적을 받습니다. 전체 자료는 전체 동기화를 이용하세요.")
-        for search in (self.request_search, self.draft_search, self.sale_search, self.shipping_search,
+        for search in (self.draft_search, self.sale_search, self.shipping_search,
                        self.farms_page.search, self.species_page.search, self.inquiries_page.search):
             search.setFixedWidth(340)
             search.addAction(ui_icon("search", TOKENS["muted"]), QLineEdit.ActionPosition.LeadingPosition)
@@ -4220,7 +4222,12 @@ class SellerWindow(MainWindow):
         for panel_name in ("request_detail", "sale_detail"):
             panel = getattr(self, panel_name, None)
             if panel:
-                panel.setFixedWidth(360 if self.width() < 1500 else 400)
+                if panel_name == "request_detail":
+                    width = (400 if large else 360) if self.width() < 1500 else (420 if large else 400)
+                else:
+                    width = 360 if self.width() < 1500 else 400
+                panel.setFixedWidth(width)
+        self.update_page_title(self.stack.currentIndex())
 
     def run_job(self, title, work, on_success=None, refresh_on_error=True, on_failure=None):
         starting = self.task is None
@@ -4255,32 +4262,83 @@ class SellerWindow(MainWindow):
         self.server_log_frame.update()
 
     def configure_request_columns(self):
-        self.request_table.set_column_layout(((0, 1, 160), (3, .6, 88), (4, .7, 112), (8, 1.2, 120), (7, .3, 60)))
-        self.request_table.horizontalHeaderItem(0).setText("접수번호 · 시각")
-        self.request_table.horizontalHeaderItem(3).setText("고객")
-        self.request_table.horizontalHeaderItem(8).setText("희망 묘목")
-        self.request_table.horizontalHeaderItem(7).setText("견적서")
+        large = bool(QApplication.instance().property("namufarmLargeFont"))
+        self.request_table.setObjectName("requestInboxTable")
+        self.request_table.setProperty("preserveColumnMinimums", True)
+        self.request_table.set_column_layout(((0, .7, 196 if large else 180), (1, .2, 116 if large else 104),
+                                             (3, .3, 100 if large else 88), (4, .2, 164 if large else 148),
+                                             (8, 1.3, 160), (7, 0, 96 if large else 84)))
+        height = 56 if large else 52
+        self.request_table.verticalHeader().setMinimumSectionSize(height)
+        self.request_table.verticalHeader().setDefaultSectionSize(height)
+        self.request_table.horizontalHeader().setFixedHeight(48 if large else 44)
+        for column, title in ((0, "접수번호"), (1, "시각"), (3, "고객"), (4, "전화번호"), (8, "희망 묘목"), (7, "견적서")):
+            alignment = ((Qt.AlignmentFlag.AlignHCenter if column == 7 else Qt.AlignmentFlag.AlignLeft)
+                         | Qt.AlignmentFlag.AlignVCenter)
+            self.request_table.horizontalHeaderItem(column).setText(title)
+            self.request_table.horizontalHeaderItem(column).setTextAlignment(alignment)
+            for row in range(self.request_table.rowCount()):
+                cell = self.request_table.item(row, column)
+                if cell is not None:
+                    cell.setTextAlignment(alignment)
+                    if column in (0, 3, 4):
+                        font = QFont("Consolas") if column == 4 else cell.font()
+                        font.setPixelSize((16 if column == 3 else 15) + (2 if large else 0))
+                        font.setBold(column != 4)
+                        cell.setFont(font)
 
     def build_request_detail(self, page):
         layout = page.layout()
         self.request_quick_filter = "all"
-        quick, self.request_quick_buttons = self.filter_buttons(
-            (("전체", "all"), ("공식견적서 요청", "formal"), ("오늘 접수", "today")), self.set_request_quick_filter)
-        layout.insertLayout(1, quick)
-        # A안: 견적요청은 파랑 하나. 카드도 견적요청 안의 구분(전체·공식견적서·오늘)만 보여 준다.
         page.setProperty("category", "requests")
         blue = CATEGORY["requests"]
-        self.request_cards = StageCards(page)
-        self.request_cards.add("all", "견적 기다리는 요청", blue["solid"], blue["on"])
-        self.request_cards.add("formal", "공식견적서 요청", blue["tint"], blue["ink"], "PDF 견적서를 함께 보내야 해요")
-        self.request_cards.add("today", "오늘 접수", blue["tint"], blue["ink"])
-        layout.insertWidget(1, self.request_cards)
-        self.request_table.set_row_stripe(blue["solid"])
+        self.request_table.set_row_stripe(lambda row: blue["solid"] if self.request_table.item(row, 0) is not None
+                                          and self.request_table.item(row, 0).isSelected() else None, width=4)
+        layout.removeWidget(self.request_search)
+        self.request_header_group = QScrollArea()
+        self.request_header_group.setObjectName("requestHeaderGroup")
+        self.request_header_group.setWidgetResizable(True)
+        self.request_header_group.setFrameShape(QFrame.Shape.NoFrame)
+        self.request_header_group.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.request_header_group.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
+        self.request_header_group.setMinimumWidth(0)
+        self.request_header_group.setFixedHeight(56)
+        self.request_header_group.horizontalScrollBar().rangeChanged.connect(
+            lambda minimum, maximum: self.request_header_group.setFixedHeight(70 if maximum > 0 else 56))
+        request_header = QWidget()
+        header_row = QHBoxLayout(request_header)
+        header_row.setContentsMargins(0, 0, 0, 0)
+        header_row.setSpacing(12)
+        header_row.setAlignment(Qt.AlignmentFlag.AlignVCenter)
+        count_pill = QFrame()
+        count_pill.setObjectName("requestCountPill")
+        count_pill.setFixedHeight(56)
+        pill_row = QHBoxLayout(count_pill)
+        pill_row.setContentsMargins(14, 0, 14, 0)
+        pill_row.setSpacing(8)
+        dot = label("", "requestCountDot")
+        dot.setFixedSize(10, 10)
+        pill_row.addWidget(dot)
+        pill_row.addWidget(label("견적요청", "requestCountTitle"))
+        self.request_header_count = label("0", "requestCountValue")
+        pill_row.addWidget(self.request_header_count)
+        pill_row.addWidget(label("건", "requestCountUnit"))
+        header_row.addWidget(count_pill)
+        self.request_search.setObjectName("requestHeaderSearch")
+        self.request_search.setMinimumWidth(180)
+        self.request_search.setMaximumWidth(16777215)
+        self.request_search.setFixedHeight(56)
+        self.request_search.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.request_search.addAction(ui_icon("search", TOKENS["muted"]), QLineEdit.ActionPosition.LeadingPosition)
+        header_row.addWidget(self.request_search, 1)
+        self.request_header_group.setWidget(request_header)
+        self.page_header_layout.insertWidget(3, self.request_header_group, 1)
+        self.request_header_group.hide()
         position = layout.indexOf(self.request_table)
         layout.removeWidget(self.request_table)
         self.request_splitter = QSplitter(Qt.Orientation.Horizontal)
         self.request_splitter.setChildrenCollapsible(False)
-        self.request_detail = DetailPanel()
+        self.request_detail = RequestDetailPanel()
         self.request_splitter.addWidget(self.request_table)
         self.request_splitter.addWidget(self.request_detail)
         self.request_splitter.setStretchFactor(0, 1)
@@ -4295,20 +4353,17 @@ class SellerWindow(MainWindow):
         self.manual_quote_button.setObjectName("primary")
         self.header_actions.addWidget(self.manual_quote_button)
         self.request_detail_primary = button("견적 작성하기 →", self.request_quote_button.click, True)
+        self.request_detail_primary.setFixedHeight(54)
         self.request_detail_delete = button("요청 삭제", self.delete_button.click)
+        self.request_detail_delete.setObjectName("requestDetailDelete")
         self.request_detail_delete.setProperty("role", "danger")
         self.request_detail.footer.addWidget(self.request_detail_primary)
-        self.request_detail.footer.addWidget(label("더블클릭 · Enter로도 열 수 있어요", "muted", True))
-        self.request_detail.footer.addWidget(self.request_detail_delete)
+        footer_row = QHBoxLayout()
+        footer_row.addWidget(label("더블클릭 · Enter로도 열 수 있어요", "requestOpenHint"), 1)
+        footer_row.addWidget(self.request_detail_delete)
+        self.request_detail.footer.addLayout(footer_row)
         self.request_table.itemSelectionChanged.connect(self.refresh_request_detail)
-        self.request_search.setFixedWidth(340)
         self.refresh_request_detail()
-
-    def set_request_quick_filter(self, value):
-        self.request_quick_filter = value
-        for key, item in self.request_quick_buttons.items():
-            item.setChecked(key == value)
-        self.refresh_requests()
 
     def refresh_request_detail(self):
         if not hasattr(self, "request_detail"):
@@ -4318,19 +4373,10 @@ class SellerWindow(MainWindow):
         self.request_detail_primary.setEnabled(selected and self.request_quote_button.isEnabled())
         self.request_detail_delete.setEnabled(selected and self.delete_button.isEnabled())
         if not selected:
-            self.request_detail.reset("목록에서 선택해주세요.")
+            self.request_detail.show_request(None)
             return
         row = self.request_rows[index]
-        personal = row["personal"]
-        self.request_detail.reset(personal["customerName"],
-            (row.get("receiptNumber") or "접수번호 없음") + " · " + date_text(row["createdAt"]), "신규")
-        self.request_detail.info("연락처", phone_text(personal.get("customerPhone")), copy=True)
-        self.request_detail.info("지역", personal.get("region"))
-        self.request_detail.info("이메일", personal.get("customerEmail"))
-        self.request_detail.info("받는 방법", personal.get("replyChannel"))
-        self.request_detail.info("공식견적서", "요청" if personal.get("formalQuoteRequested") else "요청 없음")
-        self.request_detail.items(personal.get("items", []))
-        self.request_detail.note(personal.get("message") or "고객 요청사항 없음")
+        self.request_detail.show_request(row)
 
     def update_sidebar_clock(self):
         current = datetime.now(SEOUL)
@@ -4353,6 +4399,24 @@ class SellerWindow(MainWindow):
         count = self.page_counts.get(index, 0)
         self.page_summary.hide()
         self.other_page_title.hide()
+        request_page = index == self.PAGE_REQUESTS
+        for widget in (self.page_title, self.page_count_number, self.page_count_unit):
+            widget.setVisible(not request_page)
+        if hasattr(self, "request_header_group"):
+            self.request_header_group.setVisible(request_page)
+            self.page_header_layout.setStretch(3, 1 if request_page else 0)
+            self.page_header_layout.setStretch(4, 0 if request_page else 1)
+            total = sum(row.get("status", "신규") == "신규" for row in self.data.get("requests", []))
+            self.request_header_count.setText(f"{total:,}")
+            self.request_header_count.setAccessibleName(f"견적요청 {total:,}건")
+            self.request_header_group.setToolTip(f"전체 신규 견적요청 {total:,}건 · 검색어와 무관한 건수입니다.")
+            large = bool(QApplication.instance().property("namufarmLargeFont"))
+            stacked_buttons = not request_page and (self.width() < 1240 or large)
+            self.transfer_buttons.setDirection(QBoxLayout.Direction.TopToBottom if stacked_buttons
+                                               else QBoxLayout.Direction.LeftToRight)
+            if request_page:
+                self.page_header.setAccessibleName(f"견적요청 {total:,}건")
+                return
         self.page_title.setText(self.PAGES[index][0])
         self.page_count_number.setText(("신규 " if index == self.PAGE_REQUESTS else "처리할 주문 " if index == self.PAGE_SALES else "") + f"{count:,}")
         self.page_count_number.setToolTip(f"현재 화면 {count:,}건")
@@ -4366,23 +4430,11 @@ class SellerWindow(MainWindow):
             for i, row in enumerate(self.request_rows):
                 self.request_table.item(i, 0).setData(Qt.ItemDataRole.UserRole, date_text(row["createdAt"]))
                 self.request_table.item(i, 0).setToolTip((row.get("receiptNumber") or "접수번호 없음") + "\n" + timestamp(row["createdAt"]))
+                self.request_table.item(i, 1).setText(date_text(row["createdAt"]))
+                self.request_table.item(i, 1).setForeground(QColor("#56645C"))
+                self.request_table.item(i, 1).setToolTip(timestamp(row["createdAt"]))
                 self.request_table.item(i, 4).setText(phone_text(row["personal"]["customerPhone"]))
-            if hasattr(self, "request_quick_buttons"):
-                rows = [r for r in self.data["requests"] if r.get("status", "신규") == "신규"]
-                today = datetime.now(SEOUL).date()
-                counts = {"all": len(rows), "formal": sum(bool(r["personal"].get("formalQuoteRequested")) for r in rows),
-                          "today": sum(record_date(r["createdAt"]) == today for r in rows)}
-                for key, item in self.request_quick_buttons.items():
-                    title = {"all": "전체", "formal": "공식견적서 요청", "today": "오늘 접수"}[key]
-                    item.setText(f"{title} {counts[key]:,}")
-                if hasattr(self, "request_cards"):
-                    oldest = min((r["createdAt"] for r in rows), default="")
-                    latest = max((r["createdAt"] for r in rows if record_date(r["createdAt"]) == today), default="")
-                    self.request_cards.set("all", counts["all"],
-                                           ("가장 오래된 요청 · " + date_text(oldest)) if oldest else "새 요청이 없어요")
-                    self.request_cards.set("formal", counts["formal"])
-                    self.request_cards.set("today", counts["today"],
-                                           ("마지막 접수 · " + date_text(latest)) if latest else "오늘 들어온 요청 없음")
+            self.configure_request_columns()
             self.refresh_request_detail()
 
     def filter_buttons(self, choices, callback):

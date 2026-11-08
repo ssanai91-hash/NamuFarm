@@ -1,9 +1,11 @@
 """Display-only formatting and panels. Never imports manager, API, store, or pricing logic."""
 from datetime import datetime, timedelta
+from html import escape
 import re
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (QApplication, QFrame, QLabel, QVBoxLayout, QHBoxLayout,
-                              QScrollArea, QWidget, QPushButton)
+                              QScrollArea, QWidget, QPushButton, QGridLayout, QSizePolicy, QStyle)
 from .domain import SEOUL
 from .ui_theme import TOKENS, status_badge
 
@@ -135,6 +137,180 @@ class DetailPanel(QFrame):
             qty.setObjectName("detailQuantity")
             layout.addWidget(qty)
             self.body.addWidget(row)
+
+
+class RequestDetailPanel(QFrame):
+    """Customer card for incoming quotes only; the sales DetailPanel stays unchanged."""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName('requestDetailPanel')
+        self.setMinimumWidth(360)
+        self.setMaximumWidth(420)
+        root = QVBoxLayout(self)
+        root.setContentsMargins(12, 12, 12, 12)
+        root.setSpacing(12)
+        self.scroll = QScrollArea()
+        self.scroll.setWidgetResizable(True)
+        self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.scroll.setMinimumWidth(0)
+        root.addWidget(self.scroll, 1)
+        self.footer = QVBoxLayout()
+        self.footer.setSpacing(8)
+        root.addLayout(self.footer)
+        self._shown_request = object()
+        self.show_request(None)
+
+    @staticmethod
+    def text(value='', name='', *, wrap=True):
+        result = plain_label(value, name, wrap)
+        result.setMinimumWidth(0)
+        if wrap:
+            result.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        return result
+
+    def info_cell(self, caption, value):
+        cell = QFrame()
+        cell.setObjectName('requestInfoCell')
+        column = QVBoxLayout(cell)
+        column.setContentsMargins(10, 8, 10, 8)
+        column.setSpacing(4)
+        column.addWidget(self.text(caption, 'requestInfoCaption'))
+        column.addWidget(self.text(value or '—', 'requestInfoValue'))
+        return cell
+
+    def show_request(self, row):
+        # Copy display fields only, so unrelated updates do not reset reading/copy feedback.
+        personal = row['personal'] if row is not None else {}
+        payload = None if row is None else {
+            'name': personal.get('customerName') or '—',
+            'phone': phone_text(personal.get('customerPhone')),
+            'region': personal.get('region'), 'email': personal.get('customerEmail'),
+            'channel': personal.get('replyChannel'), 'formal': bool(personal.get('formalQuoteRequested')),
+            'items': [{key: item.get(key) for key in ('species', 'specification', 'quantity')}
+                      for item in personal.get('items', [])],
+            'message': personal.get('message') or '',
+            'reference': row.get('receiptNumber') or '접수번호 없음', 'createdAt': row.get('createdAt'),
+        }
+        if payload == self._shown_request:
+            return
+        self._shown_request = payload
+        old = self.scroll.takeWidget()
+        if old is not None:
+            old.hide()
+            old.deleteLater()
+        body = QWidget()
+        body.setObjectName('requestDetailBody')
+        column = QVBoxLayout(body)
+        column.setContentsMargins(0, 0, 2, 0)
+        column.setSpacing(14)
+        if payload is None:
+            empty = self.text('목록에서 선택해주세요.', 'requestEmpty')
+            empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            column.addWidget(empty, 1)
+            self.scroll.setWidget(body)
+            return
+
+        heading = QHBoxLayout()
+        heading.setSpacing(12)
+        avatar = self.text(payload['name'][0], 'requestAvatar', wrap=False)
+        avatar.setFixedSize(56, 56)
+        avatar.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        heading.addWidget(avatar, 0, Qt.AlignmentFlag.AlignTop)
+        identity = QVBoxLayout()
+        identity.setSpacing(4)
+        identity.addWidget(self.text(payload['name'], 'requestCustomerName'))
+        badge = self.text('신규 요청', 'requestNewBadge', wrap=False)
+        identity.addWidget(badge, 0, Qt.AlignmentFlag.AlignLeft)
+        heading.addLayout(identity, 1)
+        column.addLayout(heading)
+        column.addWidget(self.text(payload['reference'] + ' · ' + date_text(payload['createdAt']), 'requestReference'))
+
+        contact = QFrame()
+        contact.setObjectName('requestContactCard')
+        contact_box = QVBoxLayout(contact)
+        contact_box.setContentsMargins(10, 10, 10, 10)
+        contact_box.setSpacing(4)
+        contact_box.addWidget(self.text('연락처', 'requestContactCaption'))
+        phone_row = QHBoxLayout()
+        phone_row.setSpacing(6)
+        phone = self.text(payload['phone'] or '—', 'requestPhone', wrap=False)
+        phone.setToolTip(payload['phone'])
+        phone_row.addWidget(phone, 1)
+        action = QPushButton('복사')
+        action.setObjectName('requestPhoneCopy')
+        action.setMinimumWidth(96)
+        action.setFixedHeight(46)
+        action.setIcon(QIcon.fromTheme('edit-copy', self.style().standardIcon(QStyle.StandardPixmap.SP_FileIcon)))
+        action.setAccessibleName('연락처 복사')
+        action.setEnabled(bool(payload['phone']))
+        timer = QTimer(action)
+        timer.setSingleShot(True)
+        timer.timeout.connect(lambda: action.setText('복사'))
+        def copy_phone():
+            QApplication.clipboard().setText(payload['phone'])
+            action.setText('복사됨')
+            timer.start(1500)
+        action.clicked.connect(copy_phone)
+        phone_row.addWidget(action)
+        contact_box.addLayout(phone_row)
+        column.addWidget(contact)
+
+        grid = QGridLayout()
+        grid.setSpacing(8)
+        grid.setColumnStretch(0, 1)
+        grid.setColumnStretch(1, 1)
+        grid.addWidget(self.info_cell('지역', payload['region']), 0, 0)
+        grid.addWidget(self.info_cell('받는 방법', payload['channel']), 0, 1)
+        grid.addWidget(self.info_cell('이메일', payload['email']), 1, 0, 1, 2)
+        official = self.info_cell('공식견적서', 'PDF 견적서 요청' if payload['formal'] else '요청 없음')
+        official.setObjectName('requestOfficialCard')
+        official.setProperty('requested', payload['formal'])
+        grid.addWidget(official, 2, 0, 1, 2)
+        column.addLayout(grid)
+
+        items_heading = QHBoxLayout()
+        items_heading.addWidget(self.text('주문 묘목', 'requestItemsHeading'), 1)
+        items_heading.addWidget(self.text(f"{len(payload['items']):,}종", 'requestItemsCount', wrap=False))
+        column.addLayout(items_heading)
+        items = QFrame()
+        items.setObjectName('requestItemsCard')
+        item_rows = QVBoxLayout(items)
+        item_rows.setContentsMargins(0, 0, 0, 0)
+        item_rows.setSpacing(0)
+        quantity = 0
+        for index, item in enumerate(payload['items'], 1):
+            item_row = QWidget()
+            item_row.setObjectName('requestItemRow')
+            line = QHBoxLayout(item_row)
+            line.setContentsMargins(10, 10, 10, 10)
+            line.setSpacing(8)
+            number = self.text(str(index), 'requestItemNumber', wrap=False)
+            number.setFixedSize(26, 26)
+            number.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            line.addWidget(number)
+            seedling = QVBoxLayout()
+            seedling.setSpacing(2)
+            seedling.addWidget(self.text(item['species'] or '—', 'requestItemSpecies'))
+            seedling.addWidget(self.text(item['specification'] or '규격 미입력', 'requestItemSpecification'))
+            line.addLayout(seedling, 1)
+            count = item['quantity'] or 0
+            quantity += count
+            line.addWidget(self.text(f'{count:,}주', 'requestItemQuantity', wrap=False))
+            item_rows.addWidget(item_row)
+        total = self.text(f'합계 {quantity:,}주', 'requestItemsTotal')
+        total.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        item_rows.addWidget(total)
+        column.addWidget(items)
+        column.addWidget(self.text('고객 요청사항', 'requestNoteHeading'))
+        note = self.text('', 'requestCustomerNote')
+        note.setProperty('hasMessage', bool(payload['message']))
+        note.setTextFormat(Qt.TextFormat.RichText)
+        message = escape(payload['message'] or '고객 요청사항 없음').replace('\n', '<br>')
+        note.setText('<p style="line-height:160%;white-space:pre-wrap;margin:0;">' + message + '</p>')
+        column.addWidget(note)
+        column.addStretch(1)
+        self.scroll.setWidget(body)
+        self.scroll.verticalScrollBar().setValue(0)
 
 
 def order_stage(row):
