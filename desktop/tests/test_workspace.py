@@ -682,7 +682,7 @@ class SellerUiTest(QtTestCase):
         self.assertEqual('공식 견적서 미생성', dialog.quote_file_label.text())
         dialog.generate_official_quote()
         self.assertIsNotNone(dialog.generated_quote_image)
-        self.assertEqual((955, 1342), (dialog.generated_quote_image.width(), dialog.generated_quote_image.height()))
+        self.assertEqual((2865, 4026), (dialog.generated_quote_image.width(), dialog.generated_quote_image.height()))
         self.assertTrue(dialog.preview_quote_button.isEnabled())
         self.assertEqual('공식견적서 재생성', dialog.generate_quote_button.text())
         self.assertEqual('공식 견적서 생성완료 : NAMU-20261011-0001_공식견적서.pdf',
@@ -706,13 +706,13 @@ class SellerUiTest(QtTestCase):
         draft.update(requestReceiptNumber='NAMU-20261011-0003', taxAmount=0,
                      shippingFee=6000, isPrepaid=False)
         image = render_official_quote_image(draft)
-        self.assertEqual(955, image.width())
-        self.assertEqual(1342, image.height())
+        self.assertEqual(2865, image.width())
+        self.assertEqual(4026, image.height())
         self.assertFalse(image.isNull())
         red_pixels = 0
         for y in range(86, 136, 4):
             for x in range(858, 912, 4):
-                color = image.pixelColor(x, y)
+                color = image.pixelColor(x * 3, y * 3)
                 if color.red() > color.green() + 20 and color.red() > color.blue() + 20:
                     red_pixels += 1
         self.assertGreater(red_pixels, 3)

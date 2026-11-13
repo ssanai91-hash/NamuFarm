@@ -380,19 +380,23 @@ def render_official_quote_images(draft):
 
 
 def render_official_quote_image(draft, *, _page=None):
-    """Render the official quote at the same 955x1342 geometry as the supplied paper form."""
+    """Render at 3x resolution while preserving the supplied 955x1342 form geometry."""
     validate_draft(draft)
     if _page is None:
         pages = official_quote_page_plan(draft)
         require(len(pages) == 1, "여러 페이지 견적은 공식견적서 생성 기능을 사용해주세요.")
         _page = pages[0]
     width, height = 955, 1342
-    image = QImage(width, height, QImage.Format.Format_ARGB32)
+    render_scale = 3
+    image = QImage(width * render_scale, height * render_scale, QImage.Format.Format_ARGB32)
     image.fill(QColor("white"))
 
     painter = QPainter(image)
+    # Draw text and rules directly at print resolution; keep all layout coordinates unchanged.
+    painter.scale(render_scale, render_scale)
     painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
     painter.setRenderHint(QPainter.RenderHint.TextAntialiasing, True)
+    painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
     black = QColor("#222222")
     thin = QPen(black, 1)
     thick = QPen(black, 2)

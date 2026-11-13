@@ -144,7 +144,9 @@ class QuoteEditingTest(QtTestCase):
         draft['items'][0]['remarks'] = '3년생 / 키 80cm'
         draft['note'] = '판매자가 작성한 배송 안내'
         after = render_official_quote_image(draft)
-        old_remarks, new_remarks = before.copy(714, 313, 190, 30), after.copy(714, 313, 190, 30)
-        old_note, new_note = before.copy(228, 1205, 670, 60), after.copy(228, 1205, 670, 60)
+        old_remarks = before.copy(714 * 3, 313 * 3, 190 * 3, 30 * 3)
+        new_remarks = after.copy(714 * 3, 313 * 3, 190 * 3, 30 * 3)
+        old_note = before.copy(228 * 3, 1205 * 3, 670 * 3, 60 * 3)
+        new_note = after.copy(228 * 3, 1205 * 3, 670 * 3, 60 * 3)
         self.assertNotEqual(bytes(old_remarks.bits()), bytes(new_remarks.bits()))
         self.assertNotEqual(bytes(old_note.bits()), bytes(new_note.bits()))
