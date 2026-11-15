@@ -1,53 +1,76 @@
-# 전화 고객 연결
+# 통화 중 홈페이지 안내 · Android 1.1.43(46)
 
-## 사용 흐름
+## 사용 방법
 
-1. 판매화면 오른쪽 위 전화 아이콘 → `전화 수신 연결` 켜기.
-2. 전화·통화 기록 권한, Android 13 이상에서는 알림 권한을 허용한다.
-3. 일반 전화가 오면 번호를 로컬에 보관하고 `견적 작성` / `답장 작성` 알림을 표시한다.
-4. 알림을 누르면 나무팜의 전화 고객 연결 화면이 열린다. 앱 안의 전화 아이콘에서도 최근 번호를 확인할 수 있다.
-5. `이 번호로 견적 작성`을 눌러 고객 번호를 적용한 뒤, 기존 판매 재고/빠른 견적 → 견적 바구니 → 문자 기능을 사용한다. 기존 고객 번호가 다르면 변경 확인을 먼저 받는다.
-6. `응답 문자 작성`에서는 기본 문구를 선택·수정하고 `문자 앱 열기`를 누른다. 발송은 사용자가 문자 앱에서 직접 한다.
+1. 매매 화면 상단의 **전화 안내**를 연다.
+2. 전화·통화 기록·문자·알림 권한과 **다른 앱 위 표시**를 허용한다. 알림 채널도 켜져 있어야 한다.
+3. 듀얼 SIM이면 문자를 보낼 SIM을 선택한다. 기본 문자 SIM이 확정되지 않았거나 선택한 SIM이 제거되었으면 보내지 않는다.
+4. **전화 안내**를 켠다. 처음에는 꺼져 있으며, 켠 동안 통화 감지용 알림이 계속 표시된다. 알림에서도 설정을 열거나 기능을 끌 수 있다.
+5. 일반 휴대전화가 오면 받는 번호와 작은 안내 창이 나타난다. 통화가 연결되면 **문자 전송**을 한 번 누른다. 기본 문자 앱으로 이동하지 않고 해당 휴대전화의 선택된 SIM에서 직접 발송한다.
+6. 작은 창의 제목을 끌어 위치를 바꿀 수 있다. ×는 이번 통화의 창만 닫는다. 통화 종료 시 창과 임시 번호를 없앤다.
 
-관리화면에서 알림을 열어도 미저장 재고 입력이나 내비게이션을 강제로 바꾸지 않는다. 관리 작업을 마치고 판매화면으로 돌아가면 선택한 번호를 사용할 수 있다. 견적 저장 중에는 번호 적용을 보류한다.
+## 안내 문자
 
-## 파일별 역할
+대표 이름은 기존 `QuoteIssuerSettings`를 사용한다(기본값 오진웅). 견적서 공급자 정보는 수정하지 않는다.
+
+```text
+안녕하세요! 나무팜 대표 오진웅입니다.
+
+묘목 견적 홈페이지 보내드립니다.
+https://namufarm.co.kr
+
+원하시는 묘목과 수량을 편하게 남겨주세요.
+이용이 어려우시면 이 번호로 전화나 문자 주세요.
+감사합니다.
+```
+
+한글·줄바꿈을 유지한다. 기본 문자 앱의 장문 작성 기능과 달리 `SmsManager.divideMessage()`로 나눈 SMS를 사용하므로 기기·통신사에 따라 여러 문자로 표시되거나 요금이 부과될 수 있다. 실제 수신 형태는 사용자 단말에서 확인한다.
+
+## 구현과 자료 보존
 
 | 파일 | 역할 |
 | --- | --- |
-| `phone/IncomingCallReceiver.kt` | Activity 생명주기와 분리된 manifest receiver. 사용자 opt-in 및 두 전화 권한 확인 후 RINGING만 처리. OFFHOOK 발신 통화는 제외. |
-| `phone/IncomingCallStore.kt` | 최근 번호 1개와 설정을 앱 전용 SharedPreferences에 보관. 중복 RINGING 제외, IDLE 시 다음 통화 허용, 24시간 경과 시 다음 읽기에서 삭제. |
-| `phone/IncomingCallNotifications.kt` | 잠금화면 번호 숨김, 직접 Activity PendingIntent, 견적/답장별 URI, 유효한 로컬 caller ID 확인에 사용하는 요청 모델. |
-| `phone/SmsComposer.kt` | 단일 전화번호 검증 및 `ACTION_SENDTO` 문자 작성 화면. 기존 견적 문자에도 같은 경로 적용. |
-| `ui/IncomingCallAssist.kt` | 선택적 권한 요청, 번호 변경 확인, 응답 문구, 알림/권한 설정 진입. 열린 화면의 받는 번호는 새 수신 및 화면 재생성에도 유지. |
-| `MainActivity.kt` | 기존 자동 권한 요청·동적 수신기 제거, 알림의 최초 실행 및 `onNewIntent` 처리. 명시적인 번호 적용만 ViewModel에 전달. |
-| `ui/SellingHome.kt`, `ui/SellingModeScreen.kt` | 전화 고객 연결 진입 버튼 및 공통 문자 작성 연결. |
-| Manifest / backup XML | 알림 권한, system phone-state receiver, Activity 재사용. 수신 번호·opt-in은 클라우드 백업/기기 이전 대상에서 제외. |
+| `phone/WebsiteCallConfig.kt` | 명시적 켜기/끄기, 권한·알림·SIM 확인, 대표 이름을 포함한 문자 생성 |
+| `phone/WebsiteCallSettingsActivity.kt` | 매매 상단 및 알림에서 여는 독립 설정 화면, 문자 미리보기, 권한 안내와 SIM 선택 |
+| `phone/WebsiteCallService.kt` | 사용자가 켠 동안 실행하는 `specialUse` foreground service, 전화 상태 수신, 통화별 번호·중복 클릭 관리, 재부팅/앱 업데이트 후 선택된 감지 기능만 재개 |
+| `phone/WebsiteCallOverlay.kt` | 이동 가능한 작은 창, 큰 전송/닫기 버튼, 잠금 상태에서 창 숨김 |
+| `phone/WebsiteSmsSender.kt` | 명시적인 버튼 클릭에만 직접 SMS 발송, 분할 문자별 시스템 발송 결과 수신, 최대 20개의 번호 마스킹 기록 |
+| `phone/SmsComposer.kt` | 기존 문자 앱 작성 경로. 기존 견적 문자·메일·견적완료 규칙은 바꾸지 않음 |
 
-## 데이터 무결성
+- MainActivity와 매매 화면에 중복되던 자동 전화 감지기를 제거했다. 전화가 왔다는 이유로 `customerPhone`을 바꾸던 동작도 제거하여 작성 중인 견적을 보존한다. 기존 최근 통화 목록에서 사용자가 직접 번호를 선택하는 동작은 유지한다.
+- 현재 수신 번호는 서비스 메모리에만 둔다. DB·견적·주문·문의·재고·동기화 대기는 변경하지 않는다. 안내 문자를 보냈다고 견적 발송/견적완료로 처리하지 않는다.
+- 기능 설정과 안내 문자 결과는 별도 SharedPreferences다. 시스템 백업·기기 이전에서 제외하며 기존 수동 업무 백업의 허용 목록도 변경하지 않는다. 원문 전화번호·문자 본문을 결과 기록이나 로그에 남기지 않는다.
+- 연결된 수신 통화에서만 발송한다. 발신 통화, 미확인/표시제한 번호, 국내 휴대전화 형식이 아닌 번호에는 보내지 않는다. 오래된 통화 기록에서 상대 번호를 추측하지 않는다.
+- 두 번의 RINGING(번호 있음/없음)은 한 통화로 취급한다. 다른 번호·통화 대기·추적하지 못한 통화 상태를 감지하면 해당 통화에서는 보내지 않는다. 버튼은 통화별 ID에 묶이고, 클릭 순간에도 통화·잠금·권한·SIM을 다시 확인한다. 듀얼 SIM은 Android 12 이상에서 단일 연결 회선인지 추가 확인하며, 구형 Android의 듀얼 SIM처럼 회선을 구분하지 못하면 차단한다.
+- 발송 시도 전 로컬 기록과 중복 방지 상태를 먼저 고정한다. 같은 통화에서는 실패/결과 불명이어도 재전송하지 않으며 자동 발송·자동 재시도·발송 예약은 없다. 다른 수신 통화는 사용자의 새 클릭이 있어야 발송한다.
+- 분할 문자 모두의 시스템 발송 성공 결과를 받아야 **발송 완료**로 표시한다. 상대 수신을 보장하는 표시는 아니다. 일부 실패·예외·2분 이상 결과 누락은 확인 필요로 표시한다. 과거 통화의 늦은 결과는 해당 ID 기록만 갱신한다.
+- 서비스가 재시작되면 이전 번호로 통화를 복원하지 않는다. 진행 중인 통화를 건너뛰고 다음 새 수신부터 처리한다. 기능을 끄거나 알림의 끄기를 누르면 서비스와 창을 제거한다.
 
-- 수신 자체로 `customerPhone`, 견적, 주문, 재고 또는 `pending_sync`를 변경하지 않는다. 임시 전화 제안과 설정만 로컬에 보관한다.
-- 이 임시 번호 저장소는 고객/견적의 기준 DB가 아니다. 견적 저장·주문 확정은 기존 Room transaction 및 local-first 순서를 사용한다.
-- 수기 견적과 실제 재고 품목의 구분, 주문 취소의 1회 재고 복원 정책은 그대로다.
-- 알림은 최신 1개로 갱신한다. 오래된 알림 ID를 눌러도 새 고객 번호로 바꿔치기하지 않는다.
-- 답장은 현재 견적의 고객 번호를 바꾸지 않는다. 새 전화가 와도 이미 열린 답장/번호 확인 화면의 대상은 바뀌지 않는다.
-- SMS 자동 발송, SEND_SMS 권한, 오버레이 또는 전체화면 알림은 사용하지 않는다.
+## Android 지원 조건
 
-## Android 지원 조건 및 배포 전 확인
+- `READ_PHONE_STATE`, `READ_CALL_LOG`, `SEND_SMS`, Android 13 이상 `POST_NOTIFICATIONS`, 다른 앱 위 표시가 필요하다. 통화 기록·문자 발송은 restricted 권한이므로 설치 프로그램이 허용하지 않으면 앱 안 요청만으로 사용할 수 없다. 기본 전화/문자 앱 변경을 강요하거나 새 인증서로 우회하지 않는다.
+- Android 14 이상 foreground service의 `specialUse` 유형과 권한·용도 설명을 선언한다. 수신 순간 백그라운드에서 새 서비스를 시작하는 방식 대신 사용자가 설정에서 켤 때 감지를 시작한다. 재부팅/앱 교체 시에는 이미 켜 둔 기능만 재개를 요청한다. OS가 시작을 막으면 다음 앱 실행 때 설정 안내를 남긴다.
+- 앱 강제 중지, 제조사 절전 정책, 권한 철회, 알림 차단에 따라 감지가 중단될 수 있다. 앱을 다시 열어 상태를 확인한다. 잠금화면에는 번호나 전송 창을 표시하지 않으며 잠금 해제 후 같은 추적 통화일 때만 표시한다.
+- 일반 이동통신 수신을 대상으로 한다. 카카오톡 등 인터넷 전화, 발신번호 미제공, 제조사 전화 앱의 오버레이 숨김은 지원을 보장하지 않는다. Google Play 배포 시 SMS/통화기록 및 foreground service 심사 적격성은 별도 확인이 필요하며 이 구현이 승인을 보장하지 않는다.
+- 패키지 `com.example.namufarm.original`, 기존 인증서·DB·서버/인증·기존 견적/판매 업무 규칙은 유지한다.
 
-기존 앱의 `READ_PHONE_STATE` + `READ_CALL_LOG` 경로를 확장했다. Android의 `EXTRA_INCOMING_NUMBER`는 API 29부터 deprecated이지만 공식 문서에 수신 조건이 명시되어 있다. 앱에 두 권한이 모두 실제로 허용되고 시스템이 번호를 제공할 때만 작동한다. 통화 기록 권한은 hard restricted 권한이므로 설치 프로그램의 허용 여부도 영향을 준다. 권한 허용 불가 상황을 기본 전화 앱을 강제로 바꾸는 방식으로 우회하지 않는다.
+## 사용자 직접 확인 항목 · 아직 미검증
 
-Google Play는 통화 기록 권한을 제한한다. Play 배포 시 적격 사용 사례/예외와 권한 선언 심사를 확인해야 하며, 현재 구현이 심사를 통과한다고 보장하지 않는다. 역할 기반 CallScreeningService 도입은 기존 발신자 식별 앱 교체와 연락처에 저장된 발신자의 처리 조건을 함께 검토한 후 별도로 결정한다.
+- 동일 인증서 APK로 기존 앱 삭제 없이 업데이트, 기존 견적·초안·설정·재고·전송 대기 보존.
+- 처음 꺼짐, 각 권한 거부/철회·설치 프로그램의 restricted 권한 미허용 시 안내, 앱/채널 알림 차단, 기능 켜기/끄기와 알림에서 끄기.
+- 앱 화면/다른 앱/백그라운드/최근 앱에서 닫기/재부팅 후 일반 전화 수신, 받기·거절·부재중·통화 종료, 잠금/해제와 화면 회전·큰 글씨·창 이동.
+- 올바른 번호로 클릭 한 번 발송, 인사·대표 이름·줄바꿈·URL·분할 문자 수신 형태, 빠른 연속 클릭과 새 전화로 대상이 바뀌는 경우.
+- 발신 통화·번호 표시제한·유선 번호·통화 대기·다른 SIM 동시 통화·SIM 제거/교체에서 차단과 대상 번호 보존.
+- 발송 중 종료/프로세스 재시작/전파 없음/일부 실패/늦은 결과에서 자동 재발송 없음과 결과 문구. 실제 수신과 시스템 발송 결과를 구분.
+- 작성 중인 견적 고객 번호가 전화 때문에 바뀌지 않는지, 최근 통화에서 직접 선택·기존 문자 작성·견적완료 동작 유지.
 
-일반 휴대전화 수신을 대상으로 한다. 발신번호 표시제한/알 수 없는 번호, 카카오톡 등 별도 인터넷 전화, 기기별 절전 제한에서는 번호를 받지 못할 수 있다. 사용자가 앱을 강제 중지한 상태에서는 앱을 다시 열어야 한다. 알림 권한/채널 차단 시 시스템 알림 대신 앱 안에서 저장된 번호만 확인할 수 있다. 배너/잠금화면 표시 방식은 휴대폰 알림 설정에 따른다.
+컴파일·자동시험·Actions·APK 빌드/서명·실제 전화/문자 발송은 수행하지 않았다. 실제 기기 검증은 사용자가 진행한다.
 
-실제 단말에서 다음을 확인한다: 앱이 열린 상태/백그라운드/프로세스 종료 후 수신, 전화 받기/부재중/연속 수신, 알림에서 최초 실행·재실행, 잠금화면 개인정보 숨김, 권한 거부·철회, 듀얼 SIM, 기본 문자 앱의 한글 본문 및 수신 번호. JVM/Compose 테스트만으로 통신사·OEM 동작까지 검증할 수 없다.
-
-공식 참고 문서:
+공식 참고:
 
 - https://developer.android.com/reference/android/telephony/TelephonyManager#ACTION_PHONE_STATE_CHANGED
+- https://developer.android.com/reference/android/telephony/SmsManager
 - https://developer.android.com/reference/android/Manifest.permission#READ_CALL_LOG
-- https://developer.android.com/develop/background-work/background-tasks/broadcasts/broadcast-exceptions
-- https://developer.android.com/guide/components/activities/background-starts
-- https://developer.android.com/develop/ui/views/notifications/notification-permission
-- https://support.google.com/googleplay/android-developer/answer/10208820
+- https://developer.android.com/reference/android/Manifest.permission#SEND_SMS
+- https://developer.android.com/develop/background-work/services/fgs/service-types#special-use
+- https://developer.android.com/develop/background-work/services/fgs/restrictions-bg-start

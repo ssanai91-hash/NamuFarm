@@ -340,36 +340,12 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
         }
     }
 
-    DisposableEffect(context) {
-        val receiver = object : android.content.BroadcastReceiver() {
-            override fun onReceive(ctx: android.content.Context?, intent: android.content.Intent?) {
-                if (intent?.action == android.telephony.TelephonyManager.ACTION_PHONE_STATE_CHANGED) {
-                    val state = intent.getStringExtra(android.telephony.TelephonyManager.EXTRA_STATE)
-
-                    if (state == android.telephony.TelephonyManager.EXTRA_STATE_RINGING ||
-                        state == android.telephony.TelephonyManager.EXTRA_STATE_OFFHOOK) {
-
-                        val number = intent.getStringExtra(android.telephony.TelephonyManager.EXTRA_INCOMING_NUMBER)
-
-                        if (!number.isNullOrBlank()) {
-                            viewModel.updateCustomerPhone(number)
-                        }
-                    }
-                }
-            }
-        }
-
-        val filter = android.content.IntentFilter(android.telephony.TelephonyManager.ACTION_PHONE_STATE_CHANGED)
-        context.registerReceiver(receiver, filter)
-
-        onDispose {
-            context.unregisterReceiver(receiver)
-        }
-    }
-
     Scaffold(
         topBar = {
             NamuTopBar("매매", masterSyncLabel(uiState.lastMasterSyncAt), onSync = { viewModel.syncDataWithGoogleSheet() }, concept = NamuConcept.SALE) {
+                NamuTopBarButton("전화 안내", onClick = {
+                    context.startActivity(Intent(context, com.example.namufarm.phone.WebsiteCallSettingsActivity::class.java))
+                }, icon = Icons.Outlined.Phone)
                 if (uiState.pendingSyncCount > 0) TextButton(onClick = { showPendingSyncDialog = true }) {
                     Text("전송 대기 ${uiState.pendingSyncCount}건", fontSize = 15.sp)
                 }
@@ -2552,3 +2528,4 @@ fun AddressSearchDialog(
         }
     }
 }
+

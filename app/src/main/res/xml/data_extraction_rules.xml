@@ -10,6 +10,10 @@
         <include domain="sharedpref" path="." />
         <exclude domain="sharedpref" path="operations_master_device.xml" />
         <exclude domain="sharedpref" path="operations_master_device.xml.bak" />
+        <exclude domain="sharedpref" path="call_website_config.xml" />
+        <exclude domain="sharedpref" path="call_website_config.xml.bak" />
+        <exclude domain="sharedpref" path="call_website_receipts.xml" />
+        <exclude domain="sharedpref" path="call_website_receipts.xml.bak" />
         <include domain="file" path="sync_backup/" />
         <!-- Android excludes cache/code_cache automatically; root is not included here. -->
     </cloud-backup>
@@ -23,7 +27,12 @@
         <include domain="sharedpref" path="." />
         <exclude domain="sharedpref" path="operations_master_device.xml" />
         <exclude domain="sharedpref" path="operations_master_device.xml.bak" />
+        <exclude domain="sharedpref" path="call_website_config.xml" />
+        <exclude domain="sharedpref" path="call_website_config.xml.bak" />
+        <exclude domain="sharedpref" path="call_website_receipts.xml" />
+        <exclude domain="sharedpref" path="call_website_receipts.xml.bak" />
         <include domain="file" path="sync_backup/" />
         <!-- Android excludes cache/code_cache automatically; root is not included here. -->
     </device-transfer>
 </data-extraction-rules>
+

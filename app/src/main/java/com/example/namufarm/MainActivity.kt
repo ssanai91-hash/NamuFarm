@@ -1,16 +1,9 @@
 package com.example.namufarm
 
-import android.Manifest
-import android.content.BroadcastReceiver
 import android.content.Context
-import android.content.Intent
-import android.content.IntentFilter
-import android.content.pm.PackageManager
 import android.os.Bundle
-import android.telephony.TelephonyManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Text
@@ -25,7 +18,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.lifecycleScope
@@ -49,24 +41,7 @@ import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
 
-    // 🚨 뷰모델을 클래스 전역에서 쓸 수 있게 빼줌
-    private lateinit var viewModel: ManagementViewModel
     private var quoteViewModel: com.example.namufarm.quotemode.InitialQuoteViewModel? = null
-
-    // 🚨 통화 상태를 실시간으로 감시할 스파이(리시버)
-    private var phoneStateReceiver: BroadcastReceiver? = null
-
-    // 🚨 앱 시작 시 권한을 물어보는 런처
-    private val requestPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
-    ) { permissions ->
-        val phoneStateGranted = permissions[Manifest.permission.READ_PHONE_STATE] ?: false
-        val callLogGranted = permissions[Manifest.permission.READ_CALL_LOG] ?: false
-
-        if (phoneStateGranted && callLogGranted) {
-            registerPhoneStateReceiver() // 권한 받으면 감시자 투입!
-        }
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -102,8 +77,7 @@ class MainActivity : ComponentActivity() {
         // 3. 공장에 dao와 syncManager 둘 다 넘겨주기!
         val factory = ManagementViewModelFactory(dao, syncManager)
 
-        // 🚨 위에서 선언한 전역 변수에 뷰모델 할당!
-        viewModel = ViewModelProvider(this, factory)[ManagementViewModel::class.java]
+        val viewModel = ViewModelProvider(this, factory)[ManagementViewModel::class.java]
 
         val quoteConnection = com.example.namufarm.quotemode.InitialQuoteConnection(
             com.example.namufarm.quotemode.InitialQuoteDatabase.get(this), masterClient,
@@ -132,9 +106,6 @@ class MainActivity : ComponentActivity() {
                 withContext(Dispatchers.Main) { viewModelStore.clear() }
             }, resumeUi = { if (!isFinishing && !isDestroyed) recreate() })
 
-        // 🚨 4. 권한 체크 및 통화 감시자 작동 시작!
-        checkAndRequestPermissions()
-
         setContent {
             val navController = rememberNavController()
 
@@ -151,58 +122,11 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // --- 🚨 [통화 감시 관련 핵심 로직] ---
-
-    private fun checkAndRequestPermissions() {
-        val hasPhoneState = ContextCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED
-        val hasCallLog = ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CALL_LOG) == PackageManager.PERMISSION_GRANTED
-
-        if (hasPhoneState && hasCallLog) {
-            registerPhoneStateReceiver() // 이미 권한 있으면 바로 감시자 투입
-        } else {
-            // 없으면 권한 요청 팝업 띄우기
-            requestPermissionLauncher.launch(
-                arrayOf(Manifest.permission.READ_PHONE_STATE, Manifest.permission.READ_CALL_LOG)
-            )
-        }
-    }
-
-    private fun registerPhoneStateReceiver() {
-        if (phoneStateReceiver != null) return
-
-        phoneStateReceiver = object : BroadcastReceiver() {
-            override fun onReceive(context: Context?, intent: Intent?) {
-                if (intent?.action == TelephonyManager.ACTION_PHONE_STATE_CHANGED) {
-                    val state = intent.getStringExtra(TelephonyManager.EXTRA_STATE)
-                    val incomingNumber = intent.getStringExtra(TelephonyManager.EXTRA_INCOMING_NUMBER)
-
-                    // 🚨 전화벨이 울리거나(RINGING) 통화가 연결되었을 때(OFFHOOK)!
-                    if (state == TelephonyManager.EXTRA_STATE_RINGING || state == TelephonyManager.EXTRA_STATE_OFFHOOK) {
-                        if (!incomingNumber.isNullOrBlank()) {
-                            // 뷰모델의 전화번호 업데이트 함수를 쏴버림! -> UI에 마법처럼 촥 꽂힘
-                            viewModel.updateCustomerPhone(incomingNumber)
-                            android.util.Log.d("NamuFarm", "통화 감지됨! 번호: $incomingNumber")
-                        }
-                    }
-                }
-            }
-        }
-
-        // 안드로이드 시스템에 우리 감시자를 정식으로 등록
-        val filter = IntentFilter(TelephonyManager.ACTION_PHONE_STATE_CHANGED)
-        registerReceiver(phoneStateReceiver, filter)
-    }
-
     /** On launch and every return to the app: read only the server's change counter, then changed rows. */
     override fun onResume() {
         super.onResume()
+        com.example.namufarm.phone.WebsiteCallService.resumeIfEnabled(this)
         quoteViewModel?.checkForChanges()
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        // 앱 꺼질 때 감시자도 같이 퇴근시킴 (메모리 누수 방지)
-        phoneStateReceiver?.let { unregisterReceiver(it) }
     }
 }
 
@@ -239,4 +163,5 @@ fun SplashScreen(onTimeout: () -> Unit) {
         }
     }
 }
+
 
