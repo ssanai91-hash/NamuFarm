@@ -32,6 +32,8 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+          cache: pip
+          cache-dependency-path: desktop/pyproject.toml
       - name: Install desktop and packager
         run: python -m pip install -e desktop 'pyinstaller>=6.11,<7'
       - name: Build Windows executable

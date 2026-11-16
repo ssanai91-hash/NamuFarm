@@ -2,17 +2,20 @@
 
 ## Retention and upload policy
 
-- Regular Android CI runs tests and compiles debug. UI/test diagnostics upload only on failure or when `upload_ui_previews` is selected in a manual run; retention is 3 days. Diagnostic upload failure is non-blocking and does not mask test failures.
-- Regular Desktop manager CI retains Linux/server tests and Windows Qt tests. EXE packaging/upload occurs only in a manual CI run with `build_exe` selected on main.
-- Use **Android APK Build → Run workflow → debug/release** for a downloadable APK. Release uses the existing permanent signing certificate. Alternatively run Android CI manually with `build_signed_apk` selected on main.
-- Use **Build APK and EXE downloads → Run workflow** on main to request all three manual builds together. This workflow also verifies the dispatch paths when its own file changes on main. Its green dispatch status only confirms that requests were accepted; check each producer's result.
-- Use **Desktop EXE Build → Run workflow** for an EXE plus packaged Qt startup check. Use Desktop manager CI with `build_exe` selected for the full test gate before packaging. A successful manual EXE build alone does not mean the full test suite passed.
-- APK/EXE artifacts expire after 7 days. On artifact upload failure, debug APKs, signed APKs and EXEs are saved as private draft releases. Failure of that fallback fails the build. Debug drafts are explicitly test-only, use an ephemeral certificate, and cannot update an installed permanently signed seller app.
+- Current policy (2026-11-16): commits include `[skip ci]`; builds, tests and Actions runs require a separate user request. See [ACTIONS_RUNTIME.md](ACTIONS_RUNTIME.md).
+- The old **Android CI** job is disabled (`if: ${{ false }}`). Its preserved debug/signing inputs and 3-day diagnostic configuration are not a current APK production route.
+- **Desktop manager CI** is the Linux/server and Windows Qt verification route. Keep the default `build_exe: false` for verification only. The existing main-only `build_exe: true` option remains available when testing plus packaging is explicitly requested; it is not the normal delivery route.
+- Use **Android APK Build → Run workflow → main → unsigned/signed** for the current original-app release build. The default unsigned APK requires local signing with the original key and is not an installable update. Signed mode requires repository credentials matching the fixed original certificate; never substitute a debug or new key.
+- **Desktop EXE Build → Run workflow → main** is the canonical delivery packaging route, including the existing packaged Qt startup check. Its success alone does not mean the full test suite passed.
+- **Build EXE downloads (Android builds locally) → Run workflow → main** is an alternative entry point that dispatches only the canonical EXE workflow. It neither requests APKs nor packages a second EXE itself. Do not also dispatch Desktop EXE Build or CI packaging for the same requested delivery. A green dispatch status confirms request acceptance only.
+- `[skip ci]` and `[build desktop exe]` in one commit do not trigger a push build. Preserve `[skip ci]` and request the canonical workflow manually when authorized. The existing push trigger is unchanged.
+- Current APK artifacts expire after 3 days; EXE artifacts after 7 days. On artifact upload failure, the existing private draft-release fallback is preserved. Historical debug drafts cannot update the installed original app.
+- Gradle cache writes are enabled only for main. The EXE workflow now uses a pip download cache keyed by `desktop/pyproject.toml` with the setup-python platform/Python context. These caches are separate from downloadable artifacts and do not replace dependency installation, clean EXE packaging or signing. Cache effectiveness was not measured in this change.
 - Actions storage maintenance runs after producers finish, daily, and when its own workflow/script changes on main. Manual runs default to inventory only (`dry_run: true`); turn it off for cleanup.
 - Maintenance lists all pages before deletion, keeps two newest downloadable binaries per kind (debug/signed/Windows), and keeps only the newest diagnostic bundle while younger than 3 days. Old and current debug/signed artifact names are treated as the same kind. Unknown artifacts, expired entries, releases, logs, caches, and other repositories are not deleted. Existing retained binaries still expire on their original GitHub expiry dates; this policy does not extend them.
 - The maintenance run summary lists remaining artifacts and signed-in download URLs; its log records inventory, selected IDs, removed bytes and verified remaining bytes. These ZIP byte totals are repository inventory, not the account billing meter.
 
-## Current investigation, 2026-10-17
+## Historical investigation, 2026-10-17
 
 - Existing APK/EXE producers already use private draft releases when Actions storage is blocked. All existing draft releases are preserved.
 - Initial live inventory found 168 non-expired artifacts totaling 4,123,829,172 ZIP bytes, far above the 500 MB plan allowance quoted in the notification. The first cleanup deleted 133 artifacts (3,385,456,590 bytes). The complete inventory also identified the historical `namufarm-debug-apk` alias; it uses the same two-copy rule as `NamuFarm-Debug-APK`.

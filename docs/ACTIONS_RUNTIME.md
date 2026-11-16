@@ -9,6 +9,7 @@
 - APK 작업은 `workflow_dispatch`와 `refs/heads/main`을 함께 요구한다. concurrency 그룹은 `android-original-apk-manual`, `cancel-in-progress: false`이며 30초 push 대기는 없다. 실행 중인 수동 작업을 다음 요청으로 취소하지 않는다.
 - 과거 **Android CI**는 job의 `if: ${{ false }}`로 중지돼 있다. 남아 있는 입력·경로·시험 명령은 보존된 설정이며 현재 앱 검증이나 APK 제작 경로로 사용하지 않는다.
 - `build-downloads.yml`의 현재 표시 이름은 **Build EXE downloads (Android builds locally)**다. 이 워크플로는 main의 `desktop-exe-build.yml`만 요청하며 APK를 함께 만들지 않는다. 이름의 Android 로컬 안내와 별개로, 사용자 명시 요청 시 위 수동 APK 워크플로를 사용할 수 있다.
+- EXE 전달용 기준 경로는 **Desktop EXE Build → Run workflow → main**이다. `Desktop manager CI`는 Linux·Windows 검증용이며 기본 `build_exe: false`를 사용한다. 기존 CI 패키징 옵션은 별도 검증·패키징을 명시적으로 요청한 경우에만 사용한다.
 
 근거: `.github/workflows/android-apk-build.yml`, `android-ci.yml`, `build-downloads.yml`, `AGENTS.md`, `NAMUFARM_PROJECT_STATUS.md`의 2026-11-16 빌드 기록. 실제 설치·업무 기능 확인과 빌드 성공은 별개다.
 
@@ -74,15 +75,28 @@ PC용 pip 다운로드 캐시를 사용하고, PyInstaller는 EXE 생성 요청 
 
 - `Android APK Build`: main 수동 실행, release 고정, `unsigned/signed` 선택. 위 현재 정책을 따른다.
 - `Android CI`: 중지 상태다. 보존된 `build_signed_apk`, `upload_ui_previews` 입력으로 현재 APK 생성을 요청하지 않는다.
-- `Desktop manager CI`: `build_exe` 입력과 테스트 성공 후 패키징·기동 검증 유지.
-- `Desktop EXE Build`: 수동 실행 또는 경로 조건을 만족하는 main push의 `[build desktop exe]` 표식으로 EXE를 생성한다. 두 EXE 패키징 경로의 기준 지정은 2단계 승인 후 정리한다.
-- `Build EXE downloads (Android builds locally)`: main 수동 실행 시 EXE 전용 경로 하나만 요청한다. APK 2개와 EXE를 묶어 요청하던 이전 설명은 현재 동작이 아니다.
+- `Desktop EXE Build` (`desktop-exe-build.yml`): **전달용 EXE 패키징 기준 경로**다. main 수동 실행으로 생성하고 기존 패키지 기동 확인을 수행한다. 전체 Linux·Windows 시험 통과를 뜻하지 않는다. 기존 main push의 경로 조건과 `[build desktop exe]` 표식은 남아 있지만 현재 커밋 규칙에서는 수동 실행을 사용한다.
+- `Desktop manager CI` (`desktop-ci.yml`): **Linux·Windows 전체 검증 경로**다. 기본 `build_exe: false`로 검증만 수행한다. 검증 후 패키징까지 별도 요청한 경우의 `build_exe: true` 옵션과 기존 기동 확인은 보존한다. 이 결과를 기준 EXE 경로와 동시에 만들 필요는 없다.
+- `Build EXE downloads (Android builds locally)` (`build-downloads.yml`): main 수동 실행 시 위 기준 `desktop-exe-build.yml` 하나만 요청하는 편의 진입점이다. 별도 패키징 구현이 아니며 APK를 요청하지 않는다. 요청기를 사용했다면 같은 커밋의 `Desktop EXE Build`를 다시 직접 실행하지 않는다.
 - `[skip ci]`와 `[build desktop exe]`를 같은 커밋에 넣으면 push 워크플로가 생략되므로 EXE가 생성되지 않는다. `[skip ci]` 규칙을 유지하고 필요한 빌드는 별도로 수동 요청한다.
-- 이번 1단계는 검사 기준과 문서만 변경한다. 캐시·패키징 경로·아티팩트 보관일·저장공간 정리·draft release 정책은 변경하지 않는다.
+- 같은 커밋에 전달용 EXE가 필요하면 기준 경로 또는 편의 요청기 중 하나만 선택한다. CI의 예외 패키징까지 함께 요청하면 별개 concurrency 그룹 때문에 중복 제작할 수 있다. 이번 단계는 역할을 지정하며 자동 중복 방지나 기존 트리거·패키징 명령을 변경하지 않는다.
+
+## 빌드 캐시 (2단계, 2026-11-16)
+
+| 경로 | 설정 | 저장·복원 범위 |
+| --- | --- | --- |
+| `android-apk-build.yml` | `gradle/actions/setup-gradle@v4`, `cache-read-only: ${{ github.ref != 'refs/heads/main' }}` | main에서 캐시 복원·저장. 다른 ref는 읽기 전용이며 현재 APK job 자체도 main 수동 실행만 허용 |
+| `desktop-exe-build.yml` | `actions/setup-python@v5`, `cache: pip`, `cache-dependency-path: desktop/pyproject.toml` | pip 다운로드 캐시. Python 버전·실행 플랫폼·의존성 파일 기준으로 복원·저장 |
+| `desktop-ci.yml` | 기존 Linux·Windows `cache: pip` 유지 | 검증 경로 캐시, 이번 단계 변경 없음 |
+
+- Gradle 캐시는 `setup-gradle` 한 곳에서 관리한다. `setup-java`의 Gradle 캐시를 중복 추가하지 않는다.
+- pip 캐시는 설치 완료된 앱·가상환경·EXE가 아니다. 매번 기존 설치 명령을 실행하며 PyInstaller의 `--clean`도 유지한다.
+- 캐시 미적중·저장공간 제한 시 기존 다운로드·빌드 경로를 사용한다. 캐시 적중률·실행시간 절감과 저장 성공은 다음에 사용자가 요청한 빌드에서 확인할 항목이며, 이번에는 측정하지 않았다.
+- APK/EXE 보관일·아티팩트 정리·draft release·서명·앱 버전은 변경하지 않는다. 캐시 정리와 아티팩트 정리는 별개다.
 
 ## 검증 방법
 
-아래 명령은 참고용이다. 사용자의 별도 실행 요청이 있을 때만 실행하며, 이번 1단계에서는 실행하지 않았다.
+아래 명령은 참고용이다. 사용자의 별도 실행 요청이 있을 때만 실행하며, 이번 1·2단계에서는 실행하지 않았다.
 
 ```bash
 python -m pip install 'PyYAML>=6,<7'

@@ -1,5 +1,19 @@
 # 나무팜 프로젝트 현황 · 채팅 인수인계
 
+## 2026-11-16 빌드 효율 2단계 — Gradle·pip 캐시와 EXE 기준 경로
+
+- 기준 main `09eec9d6818d81d9290b9e7273e1bae45c45de78`. 사용자 승인으로 **2단계만** 진행했다. main 외 브랜치·PR 생성 없이 `[skip ci]` 커밋으로 반영하며 3단계 착수는 다음 승인 대기다.
+- `.github/workflows/android-apk-build.yml`의 `cache-read-only`를 `${{ github.ref != 'refs/heads/main' }}`로 조정했다. main만 Gradle 캐시를 저장하고 다른 ref는 읽기 전용이다. 현재 APK job의 main 수동 실행 제한·서명 선택·고정 인증서·concurrency는 그대로다. setup-java에 중복 Gradle 캐시를 추가하지 않았다.
+- `.github/workflows/desktop-exe-build.yml`의 setup-python에 `cache: pip`, `cache-dependency-path: desktop/pyproject.toml`을 추가했다. 의존성 설치, PyInstaller `--clean`, 기존 EXE 기동 확인·산출물·draft release는 그대로다.
+- **전달용 EXE 기준 경로는 Desktop EXE Build → Run workflow → main**으로 정했다. `build-downloads.yml`은 같은 기준 워크플로 하나만 요청하는 편의 진입점이다. `Desktop manager CI`는 Linux·Windows 검증 역할, 기본 `build_exe: false`이며 기존 `true` 옵션은 명시적으로 요청한 검증+패키징에만 사용한다. 기존 트리거·CI 시험·예외 패키징을 삭제하거나 실행하지 않았다.
+- `docs/ACTIONS_RUNTIME.md`, `docs/ACTIONS_STORAGE.md`에 기준/검증/요청기 역할과 캐시 범위를 정리했다. `[skip ci]`와 `[build desktop exe]`를 같이 쓰면 push 빌드가 생략되므로 수동 요청을 사용한다. 1단계에서 남겨 둔 storage 문서의 과거 APK debug/release·3개 빌드 안내도 현재 main 수동 unsigned/signed·EXE 단일 요청 안내로 갱신했다.
+- 변경 파일은 위 워크플로 2개·안내 문서 2개와 이 문서의 **5개**다. 앱·나피·서버 실행 코드와 나피 패키지/표시 버전은 변경하지 않았다. 기존 도메인·서버 URL·배포 ID·인증·Android 패키지·DB·서명과 업무 데이터는 그대로다.
+- **정적 설정·변경 내용 검토만 수행**한다. 컴파일·자동시험·Actions 실행·EXE 기동 확인 실행·실제 고객/전화/문자/메일 시험·시트 쓰기·업무 API 호출은 하지 않았다. 홈페이지 게시·Apps Script 재배포도 하지 않았다. **운영 서버 재배포는 필요 없다.**
+- 남은 위험: 캐시 복원·저장 성공과 실제 시간 절감은 미측정이며 캐시 용량·미적중에 따라 효과가 달라진다. EXE 경로 간 자동 중복 방지는 없으므로 같은 커밋에 기준 경로·편의 요청기·CI 패키징을 동시에 요청하지 않는다. APK signed 모드의 기존 인증서 불일치도 이번 변경으로 해결된 것이 아니다.
+- 남은 단계: **3단계** Android 주문 서버 동기화·중복 방지 설계안 먼저 보고, 승인 후 구현; **4단계** 만료 행 물리 정리/압축 설계안 먼저 보고, 승인 후 구현; **5단계** P0 수동 읽기 전용 리뷰 기준; **6단계** clasp 연결 계획 먼저 보고. main 푸시 운영 자동 배포는 제외한다. 사용자 확인 후 다음 단계 승인 전 중단한다.
+
+---
+
 ## 2026-11-16 정합성 정리 1단계 — APK 검사 기준·실행 안내·장부 스키마
 
 - 기준 main `6d5b18a7492330f9cef931be030ea739aa1007c6`. 최신 사용자 지시에 따라 **1단계만** 수행한다. main 외 브랜치·PR을 만들지 않고 커밋 메시지에 `[skip ci]`를 붙인다. 2단계 이후는 사용자 확인·승인 대기다.

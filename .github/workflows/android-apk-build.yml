@@ -54,7 +54,8 @@ jobs:
       - name: Configure Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
-          cache-read-only: true
+          # Only main may save Gradle cache entries; other refs remain read-only.
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
 
       - name: Compile release APK without unit or device tests
         id: build
