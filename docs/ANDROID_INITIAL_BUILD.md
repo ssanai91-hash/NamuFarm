@@ -187,3 +187,6 @@ Android의 수정·빌드 기준은 main이다. 홈페이지·나피·서버도 
 - `sign_initial_apk.py`의 기존 `--reference-apk` 경로는 유지한다. CI에서 이전 APK를 확보하지 못했을 때는 `--previous-version-code`로 비교 기준을 명시할 수 있다. 두 인자는 배타적이며, 양수 기준보다 높은 versionCode·고정 인증서·기존 패키지·release·정렬 검사는 항상 적용한다. CI 입력 기본 45는 직전 소스 기준이며 실제 설치 기기를 읽은 값이 아니다.
 - 산출물은 검증된 업데이트 APK와 커밋/버전/파일 SHA-256/인증서가 담긴 `build-info.json`이다. artifact 보존 3일, 저장공간 부족 등 업로드 실패 시 비공개 draft release에 보관하며 공개 release를 게시하지 않는다.
 - 최초 실행 결과와 실제 APK 생성 여부는 Actions 실행 기록을 확인한다. 이 절은 설정 설명이며 빌드 성공/실기기 정상 동작을 뜻하지 않는다.
+
+- 첫 실행의 SDK 구형 `tools` 패키지 오류는 runner의 기존 SDK 도구 사용으로 수정했다. 다음 실행 `43779340039`에서 `assembleRelease`와 lintVital이 성공했으나, repository 서명 키가 고정 초기 인증서와 달라 서명을 차단했다.
+- 수동 입력 `signing_mode`의 기본은 `unsigned`다. 이 모드는 Actions에서 release APK를 컴파일해 원본 키로 로컬 서명할 산출물과 공개 SDK 서명 도구를 저장한다. 미서명 파일은 설치용 업데이트로 전달하지 않는다. 기존 인증서·패키지·versionCode·정렬을 로컬 서명 도구로 확인한 APK만 최종 전달한다. `signed` 모드는 저장소 키가 고정 인증서와 일치할 때만 완료한다. 개인키를 새로 업로드하거나 저장소 secret을 변경하지 않았다.

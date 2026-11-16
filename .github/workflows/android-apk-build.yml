@@ -3,6 +3,14 @@ name: Android APK Build
 on:
   workflow_dispatch:
     inputs:
+      signing_mode:
+        description: 'Signing: unsigned for local original-key signing; signed requires matching repository secrets'
+        required: true
+        type: choice
+        default: unsigned
+        options:
+          - unsigned
+          - signed
       previous_version_code:
         description: 'Installed original-app versionCode must be lower than this build (last source version: 45)'
         required: true
@@ -55,6 +63,7 @@ jobs:
           ./gradlew --no-daemon --max-workers=1 :app:assembleRelease
 
       - name: Prepare original-app certificate
+        if: inputs.signing_mode == 'signed'
         id: signing
         env:
           SIGNING_BASE64: ${{ secrets.NAMUFARM_INITIAL_KEYSTORE_BASE64 || secrets.NAMUFARM_KEYSTORE_BASE64 }}
@@ -71,6 +80,7 @@ jobs:
           fi
 
       - name: Sign and verify original-app update
+        if: inputs.signing_mode == 'signed'
         id: signed
         env:
           PREVIOUS_VERSION_CODE: ${{ inputs.previous_version_code }}
@@ -117,26 +127,78 @@ jobs:
               summary.write(f"SHA-256: `{record['sha256']}`\n\nNo device, order or message tests performed.\n")
           PY
 
-      - name: Upload verified update APK
+      - name: Prepare unsigned APK for local original-key signing
+        if: inputs.signing_mode == 'unsigned'
+        env:
+          PREVIOUS_VERSION_CODE: ${{ inputs.previous_version_code }}
+        run: |
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          import re
+          import shutil
+          from zipfile import ZipFile, ZIP_DEFLATED
+
+          source = Path("app/build.gradle.kts").read_text()
+          version = re.search(r'versionName = "([^"]+)"', source).group(1)
+          code = int(re.search(r"versionCode = (\d+)", source).group(1))
+          previous = os.environ["PREVIOUS_VERSION_CODE"]
+          if not re.fullmatch(r"[1-9][0-9]*", previous) or code <= int(previous):
+              raise SystemExit("Candidate must have a higher versionCode than the supplied baseline.")
+          if not re.fullmatch(r"[0-9]+(?:\.[0-9]+)+", version):
+              raise SystemExit("Unexpected versionName.")
+          apks = list(Path("app/build/outputs/apk/release").glob("*-unsigned.apk"))
+          if len(apks) != 1:
+              raise SystemExit("Expected exactly one unsigned release APK.")
+          dist = Path("dist")
+          dist.mkdir()
+          sha = os.environ["GITHUB_SHA"]
+          output = dist / f"NamuFarm-initial-{version}-{sha[:7]}-unsigned.apk"
+          shutil.copy2(apks[0], output)
+          # Public SDK tools only. The private original key never leaves local storage.
+          tools = Path(os.environ["ANDROID_HOME"]) / "build-tools/36.0.0"
+          with ZipFile(dist / "android-signing-tools.zip", "w", ZIP_DEFLATED) as archive:
+              for name in ("aapt", "zipalign", "apksigner", "lib/apksigner.jar"):
+                  archive.write(tools / name, name)
+              if (tools / "lib64").is_dir():
+                  for file in (tools / "lib64").rglob("*"):
+                      if file.is_file():
+                          archive.write(file, str(file.relative_to(tools)))
+          record = {"commit": sha, "versionName": version, "versionCode": code,
+                    "package": "com.example.namufarm.original",
+                    "signing": "UNSIGNED - NOT AN INSTALLABLE UPDATE",
+                    "baselineVersionCode": int(previous),
+                    "sha256": hashlib.sha256(output.read_bytes()).hexdigest(),
+                    "deviceVerification": "not performed"}
+          (dist / "build-info.json").write_text(json.dumps(record, indent=2) + "\n")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as summary:
+              summary.write(f"### Compilation succeeded\n\nSource: `{sha}`\n\n")
+              summary.write(f"Unsigned APK {version} ({code}). Original-key local signing is required before installation.\n")
+          PY
+
+      - name: Upload APK build files
         id: artifact
         continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
-          name: NamuFarm-Original-Update-APK
+          name: ${{ inputs.signing_mode == 'unsigned' && 'NamuFarm-Unsigned-For-Local-Signing' || 'NamuFarm-Original-Update-APK' }}
           path: dist/*
           if-no-files-found: error
           retention-days: 3
 
-      - name: Save verified update as a private draft if artifact storage is full
+      - name: Save build as a private draft if artifact storage is full
         if: steps.artifact.outcome == 'failure'
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
+          APK_MODE: ${{ inputs.signing_mode }}
         run: |
-          tag="android-initial-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          tag="android-initial-${APK_MODE}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           gh release create "$tag" dist/* --draft --target "$GITHUB_SHA" \
-            --title "NamuFarm original-app update ${GITHUB_SHA:0:7}" \
-            --notes "User-requested main build. Original certificate and package verified. Device behavior has not been tested."
+            --title "NamuFarm ${APK_MODE} build ${GITHUB_SHA:0:7}" \
+            --notes "User-requested main build (${APK_MODE}). Unsigned builds require local original-key signing before installation. No device tests performed."
           echo "APK saved to draft release: $tag" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Remove temporary signing material
