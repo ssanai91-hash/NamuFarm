@@ -35,8 +35,10 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      - name: Configure Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Use runner Android SDK command-line tools
+        run: |
+          test -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
 
       - name: Install required Android SDK
         run: sdkmanager "platforms;android-36.1" "build-tools;36.0.0"
