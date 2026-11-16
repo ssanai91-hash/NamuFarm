@@ -40,7 +40,7 @@ import kotlinx.coroutines.withContext
 internal fun InitialQuoteScreen(viewModel: InitialQuoteViewModel, connection: InitialQuoteConnection,
     inbox: InitialQuoteUiState, onSync: () -> Unit,
     onRead: (String) -> Unit, onDelete: (String) -> Unit,
-    newOrderNumber: (() -> String)? = null,
+    newOrderNumber: (suspend (String) -> String)? = null,
     onPaidOrder: (suspend (String, QuoteWorkflowRecord) -> Unit)? = null) {
     val context = LocalContext.current
     val store = remember(context) { AndroidQuoteWorkflowStore(context) }

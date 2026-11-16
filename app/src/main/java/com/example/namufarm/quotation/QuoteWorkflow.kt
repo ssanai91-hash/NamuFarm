@@ -7,6 +7,8 @@ import com.google.gson.Gson
 import com.google.gson.JsonObject
 import java.security.MessageDigest
 import java.util.UUID
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /** Delivery and confirmation are independent; opening an external app never counts as delivery. */
 data class QuoteDeliveryRecord(
@@ -103,6 +105,7 @@ class QuoteWorkflow(
     private val markConfirmedDelivered: suspend (String) -> Unit = { error("확정견적 발송 상태 연결이 필요합니다.") },
     private val shared: SharedQuoteGateway? = null
 ) {
+    private val paymentMutex = Mutex()
     fun records() = store.records()
     /**
      * Revision of a confirmed quote. With shared quotes the new content is first saved on the server as a
@@ -493,45 +496,55 @@ class QuoteWorkflow(
      * then the local order with the very same order number. Retries reuse the journal; a lost reply
      * never creates a new number.
      */
-    suspend fun confirmSharedPayment(record: QuoteWorkflowRecord, newOrderNumber: () -> String,
-        createOrder: suspend (String, QuoteWorkflowRecord) -> Unit): QuoteWorkflowRecord {
+    suspend fun confirmSharedPayment(record: QuoteWorkflowRecord, newOrderNumber: suspend (String) -> String,
+        createOrder: suspend (String, QuoteWorkflowRecord) -> Unit): QuoteWorkflowRecord = paymentMutex.withLock {
         val gateway = shared ?: error("서버에 확정견적 공유 기능이 배포된 뒤 입금확인할 수 있습니다. 지금은 PC 나피에서 입금확인해주세요.")
-        checkCurrentConfirmed(record)
-        var current = record
+        var current = store.records().firstOrNull { it.request.requestId == record.request.requestId } ?: record
+        check(current.draft == record.draft) { "휴대폰 견적이 바뀌었습니다. 닫고 다시 열어주세요." }
         val journal = current.sharedPayment
-        if (journal?.confirmed == true) return finishSharedPayment(current, createOrder)
+        if (journal?.confirmed == true && journal.confirmedAt > 0) return@withLock finishSharedPayment(current, createOrder)
         val state = sharedState(current.request.requestId)
             ?: error("서버에 확정견적 공유 기능이 배포된 뒤 입금확인할 수 있습니다. 지금은 PC 나피에서 입금확인해주세요.")
         state.payment?.let { payment ->
             val number = payment.get("orderNumber")?.asString.orEmpty()
-            check(number.isNotEmpty() && journal != null && number == journal.orderNumber) {
-                "다른 기기에서 이미 입금확인한 견적입니다 · 주문번호 $number"
+            check(number.isNotEmpty() && journal != null && number == journal.orderNumber &&
+                payment.get("operationId")?.asString == journal.operationId) {
+                "다른 기기에서 이미 입금확인한 견적입니다 · 주문번호 $number · 매매 동기화로 기존 주문을 가져와주세요."
             }
-            current = current.copy(sharedPayment = journal.copy(confirmed = true)).also(store::save)
-            return finishSharedPayment(current, createOrder)
+            current = current.copy(sharedPayment = checkedPayment(current, payment)).also(store::save)
+            return@withLock finishSharedPayment(current, createOrder)
         }
         check(state.version != null) { "고객에게 보낸 기록이 서버에 아직 없습니다. 현재 견적을 보내고 ‘견적완료’한 뒤 입금확인해주세요." }
         check(state.sameContent(current.draft)) { "서버의 최신 확정견적과 내용이 다릅니다. 동기화 후 다시 확인해주세요." }
         check(state.deliveredCurrent) { "수정한 견적을 아직 고객에게 보내지 않았습니다. 현재 견적을 먼저 보내주세요." }
-        val claim = journal?.takeIf { it.revision == state.revision && it.fingerprint == state.fingerprint }
-            ?: SharedQuotePayment(UUID.randomUUID().toString(), journal?.orderNumber ?: newOrderNumber(),
+        check(journal == null || journal.revision == state.revision && journal.fingerprint == state.fingerprint) {
+            "이전 입금 작업과 서버 견적 버전이 다릅니다. 새 입금 작업을 만들지 않고 기존 기록을 보관합니다."
+        }
+        val claim = journal ?: SharedQuotePayment(UUID.randomUUID().toString(), newOrderNumber(current.request.requestId),
                 state.revision, state.fingerprint, sharedAmount(current.draft))
         current = current.copy(sharedPayment = claim).also(store::save) // Before the network.
         val result = gateway.call("confirm_quote_payment", mapOf("requestId" to current.request.requestId,
             "operationId" to checkNotNull(claim.operationId), "orderNumber" to checkNotNull(claim.orderNumber),
             "expectedRevision" to claim.revision, "quoteFingerprint" to checkNotNull(claim.fingerprint),
             "amount" to claim.amount))
-        check(result.obj("payment")?.get("orderNumber")?.asString == claim.orderNumber) {
-            "서버 입금확인 응답을 확인하지 못했습니다. 같은 견적으로 다시 확인해주세요."
-        }
-        current = current.copy(sharedPayment = claim.copy(confirmed = true)).also(store::save)
-        return finishSharedPayment(current, createOrder)
+        current = current.copy(sharedPayment = checkedPayment(current, checkNotNull(result.obj("payment")))).also(store::save)
+        finishSharedPayment(current, createOrder)
+    }
+
+    private fun checkedPayment(record: QuoteWorkflowRecord, payment: JsonObject): SharedQuotePayment {
+        val claim = checkNotNull(record.sharedPayment)
+        check(payment.get("orderNumber")?.asString == claim.orderNumber && payment.get("operationId")?.asString == claim.operationId &&
+            payment.get("revision")?.asInt == claim.revision && payment.get("fingerprint")?.asString == claim.fingerprint &&
+            payment.get("amount")?.asLong == claim.amount) { "입금확인 응답이 저장한 작업과 다릅니다. 같은 작업을 보관합니다." }
+        val time = com.example.namufarm.data.OrderProtocol.instant(checkNotNull(payment.get("confirmedAt")).asString)
+        return claim.copy(confirmed = true, confirmedAt = time)
     }
 
     private suspend fun finishSharedPayment(record: QuoteWorkflowRecord,
         createOrder: suspend (String, QuoteWorkflowRecord) -> Unit): QuoteWorkflowRecord {
         val payment = checkNotNull(record.sharedPayment)
-        if (!payment.orderCreated) createOrder(checkNotNull(payment.orderNumber), record)
+        // The callback is idempotent and can also recover an old local-only order's upload queue.
+        createOrder(checkNotNull(payment.orderNumber), record)
         return record.copy(sharedPayment = payment.copy(orderCreated = true)).also(store::save)
     }
 }

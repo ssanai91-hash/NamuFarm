@@ -10,6 +10,7 @@ import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.http.Body
 import retrofit2.http.POST
+import retrofit2.http.GET
 import retrofit2.http.Url
 import java.security.KeyStore
 import java.security.SecureRandom
@@ -24,6 +25,10 @@ interface OperationsMasterApi {
         @Body body: Map<String, @JvmSuppressWildcards Any>): JsonObject
 }
 
+interface OperationsServiceInfoApi {
+    @GET suspend fun read(@Url url: String): JsonObject
+}
+
 object OperationsMasterTransport {
     const val ENDPOINT = "https://script.google.com/macros/s/AKfycbzY7JKzXYmS9APLNFDt15k8dv09zb4EXKFHOOv_T1vpFmkr6TLwbqGznGLgpd2cIVgD/exec"
     val api: OperationsMasterApi by lazy {
@@ -34,6 +39,12 @@ object OperationsMasterTransport {
                 .addInterceptor(GoogleContentResponseInterceptor()).build())
             .addConverterFactory(GsonConverterFactory.create()).build()
             .create(OperationsMasterApi::class.java)
+    }
+    val information: OperationsServiceInfoApi by lazy {
+        Retrofit.Builder().baseUrl("https://script.google.com/")
+            .client(com.example.namufarm.data.remote.WebQuoteTransport.clientBuilder().build())
+            .addConverterFactory(GsonConverterFactory.create()).build()
+            .create(OperationsServiceInfoApi::class.java)
     }
 }
 
@@ -97,6 +108,7 @@ class OperationsMasterClient(
     private val credentials: MasterDeviceCredentials,
     private val api: OperationsMasterApi = OperationsMasterTransport.api
 ) : OperationsMasterGateway {
+    suspend fun serviceInfo(): JsonObject = checked(OperationsMasterTransport.information.read(OperationsMasterTransport.ENDPOINT))
     override var downloaded: Boolean
         get() = credentials.downloaded
         set(value) { credentials.downloaded = value }

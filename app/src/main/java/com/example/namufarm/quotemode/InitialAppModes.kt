@@ -120,7 +120,7 @@ fun InitialAppModes(management: ManagementViewModel, quote: InitialQuoteViewMode
                 when (page) {
                     0 -> InitialQuoteScreen(quote, quote.connection, inbox,
                         onSync = quote::refresh, onRead = quote::read, onDelete = quote::close,
-                        newOrderNumber = { management.nextWebOrderNumber(context) },
+                        newOrderNumber = { requestId -> management.reserveWebOrderNumber(requestId) },
                         onPaidOrder = management::createPaidWebOrder)
                     1 -> CustomerInquiryScreen(inquiry)
                     2 -> SellingModeScreen(management, onNavigateToManagement = { requestMove(3) }, isActive = pager.currentPage == 2)

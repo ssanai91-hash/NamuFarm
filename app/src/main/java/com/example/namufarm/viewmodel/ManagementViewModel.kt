@@ -18,8 +18,6 @@ import kotlinx.coroutines.withContext
 import com.example.namufarm.data.SyncManager
 import com.example.namufarm.data.remote.JusoItem
 import com.example.namufarm.data.remote.RetrofitClient
-import com.example.namufarm.data.remote.SheetOrderItemDto
-import com.google.gson.Gson
 import java.io.File
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -57,6 +55,12 @@ data class ManagementUiState(
     val recentCallList: List<CallLogItem> = emptyList(),
     val todayQuotes: List<QuoteEntity> = emptyList(),
     val todayOrders: List<OrderEntity> = emptyList(),
+    val orderLabels: Map<String, String> = emptyMap(),
+    val orderServerLabels: Map<String, String> = emptyMap(),
+    val unlinkedOrders: List<String> = emptyList(),
+    val orderLinkReview: OrderLinkReview? = null,
+    val orderSyncBusy: Boolean = false,
+    val orderReviewBusy: Boolean = false,
 
     val farmList: List<FarmEntity> = emptyList(),
     val selectedFarm: FarmEntity? = null,
@@ -135,6 +139,8 @@ class ManagementViewModel(
         }
     }
     private val clearingPendingSync = AtomicBoolean(false)
+    private val syncingOrders = AtomicBoolean(false)
+    private val reviewingOrder = AtomicBoolean(false)
     internal val pendingSyncObserver: Job
 
     init {
@@ -235,23 +241,13 @@ class ManagementViewModel(
         }
     }
 
-    private val gson = Gson()
-
-    private fun enqueuePendingSync(type: String, payload: Any): Int {
-        return dao.insertPendingSync(
-            PendingSyncEntity(
-                syncType = type,
-                payloadJson = gson.toJson(payload)
-            )
-        ).toInt()
-    }
-
     private fun refreshLocalState() {
         val farms = dao.getAllFarms()
         val allSpecies = dao.getAllSpecies()
         val allInventory = dao.getAllSellingInventory()
         val quotes = dao.getTodayQuotes()
-        val orders = dao.getTodayOrders()
+        val allOrders = dao.getTodayOrders()
+        val orders = runCatching { syncManager.orders?.visible(allOrders) ?: allOrders }.getOrDefault(allOrders)
         val blocked = syncManager.inventory.blockedInventoryWork()
 
         _uiState.update { current ->
@@ -264,7 +260,11 @@ class ManagementViewModel(
                     checkChosung(it.speciesName, it.chosung, current.selectedChosung)
                 },
                 todayQuotes = quotes,
-                todayOrders = orders
+                todayOrders = orders,
+                orderLabels = allOrders.associate { it.orderNumber to (syncManager.orders?.displayNumber(it.orderNumber) ?: it.orderNumber) },
+                orderServerLabels = runCatching { syncManager.orders?.feedback(allOrders).orEmpty() }
+                    .getOrElse { allOrders.associate { order -> order.orderNumber to "연결 기록 확인 필요" } },
+                unlinkedOrders = runCatching { syncManager.orders?.unresolvedNumbers().orEmpty() }.getOrDefault(emptyList())
             )
         }
     }
@@ -560,7 +560,7 @@ class ManagementViewModel(
     // 🚨 중복 방지용 전역 카운터 함수 추가! (ViewModel 클래스 안에 넣어줘)
     private fun getNextOrderSequence(context: android.content.Context): Int {
         val pref = context.getSharedPreferences("NamuFarmPrefs", android.content.Context.MODE_PRIVATE)
-        val today = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.KOREA).format(java.util.Date())
+        val today = OrderProtocol.day(System.currentTimeMillis())
         val lastDate = pref.getString("last_order_date", "")
 
         var currentSeq = pref.getInt("last_order_seq", 0)
@@ -573,259 +573,126 @@ class ManagementViewModel(
         }
 
         // 변경된 값 저장
-        pref.edit().apply {
+        check(currentSeq > 0) { "기기 주문번호 순번을 확인해주세요." }
+        check(pref.edit().apply {
             putString("last_order_date", today)
             putInt("last_order_seq", currentSeq)
-            apply()
-        }
+        }.commit()) { "주문번호를 기기에 저장하지 못했습니다." }
 
         return currentSeq
     }
 
-    /** Same ORDER_ numbering as 매매 orders on this phone (daily counter). */
-    fun nextWebOrderNumber(context: Context): String {
-        val datePart = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.KOREA).format(java.util.Date())
-        return "ORDER_${datePart}_${String.format("%03d", getNextOrderSequence(context))}"
-    }
+    suspend fun reserveWebOrderNumber(requestId: String): String = checkNotNull(syncManager.orders).reserveWebNumber(requestId)
 
-    /**
-     * Local 매매 order for a web quote whose payment the server already confirmed under [orderNumber].
-     * Idempotent by order number; the order and its sync entry are one Room transaction.
-     * Web quote rows are not linked to farm stock, so no stock is deducted here.
-     */
+    /** Same confirmed number, one local order/queue transaction, no web stock deduction. */
     suspend fun createPaidWebOrder(orderNumber: String, record: com.example.namufarm.quotation.QuoteWorkflowRecord) =
         withContext(Dispatchers.IO) {
+            val engine = checkNotNull(syncManager.orders)
+            val payment = checkNotNull(record.sharedPayment)
+            check(payment.confirmed && payment.orderNumber == orderNumber && payment.confirmedAt > 0)
             val draft = record.draft
             val lines = draft.validate(com.example.namufarm.quotation.QuoteDelivery.COMPLETE)
             val amount = com.example.namufarm.quotation.sharedAmount(draft)
-            val tax = if (draft.recipient.formalQuoteRequested) draft.options.taxAmount() else 0L
+            check(amount <= Int.MAX_VALUE && amount == payment.amount)
             val number = record.request.receiptNumber.ifBlank { record.request.requestId }
-            val order = OrderEntity(
-                orderNumber = orderNumber,
-                orderDate = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.KOREA).format(java.util.Date()),
-                customerPhone = draft.phone.filter(Char::isDigit),
-                totalQty = lines.sumOf { it.orderQty },
-                totalPrice = amount.toInt(),
-                itemSummary = com.example.namufarm.domain.order.OrderSummaryCodec.encode(lines),
+            val candidate = OrderEntity(orderNumber = orderNumber, orderDate = OrderProtocol.orderDate(payment.confirmedAt),
+                customerPhone = draft.phone.filter(Char::isDigit), totalQty = lines.sumOf { it.orderQty },
+                totalPrice = amount.toInt(), itemSummary = com.example.namufarm.domain.order.OrderSummaryCodec.encode(lines),
                 receiverName = draft.recipient.recipientName.ifBlank { draft.recipient.customerName },
-                note = "웹 견적 $number · 서버 입금확인" + if (tax > 0) " · 세액 포함" else "",
-                status = "입금확인",
-                isPrepaid = draft.prepaid,
-                shippingFee = draft.shipping()
-            )
-            val items = lines.map {
-                SheetOrderItemDto(farm_name = com.example.namufarm.domain.order.OrderSummaryCodec.MANUAL_FARM_LABEL,
-                    species_name = it.speciesName, quality = it.quality, age = it.age, size = it.size,
-                    plant_type = it.plantType, order_qty = it.orderQty, retail_price = it.retailPrice)
-            }
-            syncManager.masters.database.withTransaction {
-                if (dao.getTodayOrders().none { it.orderNumber == orderNumber }) {
-                    dao.insertOrder(order)
-                    enqueuePendingSync(PendingSyncType.ORDER, PendingOrderSyncPayload(order = order, items = items))
+                note = "웹 견적 $number · 서버 입금확인", status = "입금확인", isPrepaid = draft.prepaid,
+                shippingFee = draft.fee.trim().toIntOrNull()?.coerceAtLeast(0) ?: 0)
+            engine.localChange {
+                engine.checkWebCreation(orderNumber)
+                val existing = dao.findOrdersByNumber(orderNumber)
+                check(existing.size <= 1) { "기기 주문번호가 중복돼 있습니다. 기존 자료를 유지합니다." }
+                check(!payment.orderCreated || existing.isNotEmpty()) {
+                    "이미 생성했던 웹 주문이 기기에 없습니다. 새 주문을 만들지 않고 매매 동기화에서 기존 주문을 먼저 확인해주세요."
                 }
+                val order = existing.singleOrNull()?.copy(shippingFee = candidate.shippingFee) ?: candidate.also { dao.insertOrder(it) }
+                check(order.customerPhone.filter(Char::isDigit) == candidate.customerPhone &&
+                    order.totalPrice == candidate.totalPrice && order.totalQty == candidate.totalQty) {
+                    "기존 주문과 입금확인 내용이 다릅니다. 주문 연결을 확인해주세요."
+                }
+                engine.ensureWebUpload(order, System.currentTimeMillis(), record)
+                if (order.orderId != null) dao.updateOrder(order)
             }
             refreshLocalState()
-            _uiState.update { it.copy(todayOrders = dao.getTodayOrders(), message = "입금확인 주문을 매매에 저장했습니다 · $orderNumber") }
+            _uiState.update { it.copy(message = "입금확인 주문 기기 저장 · $orderNumber · 매매 동기화로 서버 반영을 확인해주세요.") }
         }
 
-    // 🚨 주문 확정 로직 업데이트 (context 파라미터 추가!)
     fun convertQuoteToOrder(quote: QuoteEntity, context: Context) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-            val now = java.util.Date()
-            val datePart = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.KOREA).format(now)
-            val displayDate = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.KOREA).format(now)
-
-            val currentSeq = getNextOrderSequence(context)
-            val orderNumber = "ORDER_${datePart}_${String.format("%03d", currentSeq)}"
-
-            // 🚨 2. 견적서를 주문서로 바꿀 때 택배비 정보도 같이 넘겨줌!
-            val newOrder = OrderEntity(
-                orderNumber = orderNumber,
-                orderDate = displayDate,
-                customerPhone = quote.customerPhone,
-                totalQty = quote.totalQty,
-                totalPrice = quote.totalPrice, // 이미 견적서에 택배비가 포함되어 있으므로 그대로 사용
-                itemSummary = quote.itemSummary,
-                receiverName = "",
-                zipNo = "",
-                roadAddress = "",
-                detailAddress = "",
-                note = "",
-                status = "입금확인",
-                isPrepaid = quote.isPrepaid,     // 🚨 추가됨: 견적서의 택배비 설정 그대로 복사
-                shippingFee = quote.shippingFee  // 🚨 추가됨: 견적서의 택배비 금액 그대로 복사
-            )
-
-            // 주문 품목 패킷 준비
-            val summaryLines = quote.itemSummary.split("\n").filter { it.isNotBlank() }
-            val itemsToDeduct = summaryLines.mapNotNull { line ->
-                val parts = line.split("|")
-                if (parts.size >= 9) {
-                    SheetOrderItemDto(
-                        species_name = parts[0],
-                        quality = parts[1],
-                        age = parts[2],
-                        size = parts[3],
-                        plant_type = parts[4],
-                        order_qty = parts[5].toIntOrNull() ?: 0,
-                        retail_price = parts[6].toIntOrNull() ?: 0,
-                        farm_name = parts[7]
-                    )
-                } else {
-                    null
+                val engine = checkNotNull(syncManager.orders)
+                var skipped: List<String> = emptyList()
+                val order = engine.localChange {
+                    check(dao.findQuotesByNumber(quote.quoteNumber).singleOrNull() == quote) {
+                        "이미 주문으로 전환했거나 견적이 바뀌었습니다. 기존 주문을 확인해주세요."
+                    }
+                    val at = System.currentTimeMillis()
+                    val number = "ORDER_${OrderProtocol.day(at)}_${getNextOrderSequence(context).toString().padStart(3, '0')}"
+                    check(dao.findOrdersByNumber(number).isEmpty()) { "기기 주문번호가 겹칩니다. 다시 확인해주세요." }
+                    val order = OrderEntity(orderNumber = number, orderDate = OrderProtocol.orderDate(at),
+                        customerPhone = quote.customerPhone, totalQty = quote.totalQty, totalPrice = quote.totalPrice,
+                        itemSummary = quote.itemSummary, status = "입금확인", isPrepaid = quote.isPrepaid, shippingFee = quote.shippingFee)
+                    engine.enqueueNew(order, at)
+                    dao.insertOrder(order); dao.deleteQuote(quote)
+                    skipped = deductLocalInventoryFromSummary(quote.itemSummary)
+                    order
                 }
-            }
-
-            // 1) 주문·견적 삭제·로컬 재고·전송대기를 한 Room 트랜잭션으로 저장한다.
-            // 중간 종료 시 주문만 남고 전송대기가 빠지는 상태를 만들지 않는다. 네트워크는 트랜잭션 밖.
-            val (skipped, pendingId) = syncManager.masters.database.withTransaction {
-                dao.insertOrder(newOrder)
-                dao.deleteQuote(quote)
-                val skippedItems = deductLocalInventoryFromSummary(quote.itemSummary)
-                skippedItems to enqueuePendingSync(
-                    PendingSyncType.ORDER,
-                    PendingOrderSyncPayload(order = newOrder, items = itemsToDeduct)
-                )
-            }
-            val skippedNotice = if (skipped.isEmpty()) "" else
-                "\n재고 차감을 건너뛴 품목: ${skipped.joinToString(", ")} (숨긴 묘목·삭제된 농원)"
-            attemptInventorySync(skippedNotice)
-
-            val quotes = dao.getTodayQuotes()
-            val orders = dao.getTodayOrders()
-            val allSellingInventory = dao.getAllSellingInventory()
-            val selectedChosung = _uiState.value.selectedChosung
-            val filteredSellingInventory = buildFilteredSellingInventory(
-                allSellingInventory = allSellingInventory,
-                chosung = selectedChosung
-            )
-
-            _uiState.update {
-                it.copy(
-                    todayQuotes = quotes,
-                    todayOrders = orders,
-                    allSellingInventory = allSellingInventory,
-                    filteredSellingInventory = filteredSellingInventory,
-                    message = "💾 로컬 주문확정 완료" + skippedNotice
-                )
-            }
-
-            // 2) 구글시트 업로드는 1번만
-            val isCloudSuccess = syncManager.uploadOrderToSheet(
-                orderEntity = newOrder,
-                itemsToDeduct = itemsToDeduct
-            )
-
-            recordImmediateSyncFailure(isCloudSuccess)
-            if (isCloudSuccess) {
-                dao.deletePendingSync(pendingId)
-            }
-
-            _uiState.update {
-                it.copy(
-                    message = (if (isCloudSuccess) {
-                        "✅ 로컬 주문확정 + 시트 연동 완료"
-                    } else {
-                        "⚠️ 로컬 주문확정 완료, 시트 연동 실패"
-                    }) + skippedNotice
-                )
-            }
+                val notice = if (skipped.isEmpty()) "" else "\n재고 차감을 건너뛴 품목: ${skipped.joinToString(", ")}"
+                attemptInventorySync(notice)
+                refreshLocalState()
+                _uiState.update { it.copy(message = "기기 주문 저장 · ${order.orderNumber}\n주문 서버 반영 대기 · 매매 동기화로 확인해주세요.$notice") }
             } catch (e: CancellationException) { throw e }
-            catch (e: Exception) { _uiState.update { it.copy(message = "주문 전환을 완료하지 못했습니다. 기존 자료와 전송 대기를 유지합니다: ${e.message}") } }
+            catch (e: Exception) { _uiState.update { it.copy(message = e.message ?: "주문과 전송 대기를 보관합니다.") } }
         }
     }
 
     fun loadTodayData() {
         viewModelScope.launch(Dispatchers.IO) {
-            val quotes = dao.getTodayQuotes()
-            val orders = dao.getTodayOrders()
-            _uiState.update { it.copy(todayQuotes = quotes, todayOrders = orders) }
+            refreshLocalState()
         }
     }
 
     fun deleteQuote(quote: QuoteEntity) {
         viewModelScope.launch(Dispatchers.IO) {
             dao.deleteQuote(quote)
-            val quotes = dao.getTodayQuotes()
-            val orders = dao.getTodayOrders()
-            _uiState.update {
-                it.copy(
-                    todayQuotes = quotes,
-                    todayOrders = orders,
-                    message = "🗑️ 견적서가 삭제되었습니다."
-                )
-            }
+            refreshLocalState()
+            _uiState.update { it.copy(message = "🗑️ 견적서가 삭제되었습니다.") }
         }
     }
 
-    // ManagementViewModel.kt
-
-    // 🚨 주문 상태 업데이트 (입금확인 / 주문취소)
     fun updateOrderStatus(order: OrderEntity, newStatus: String) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                // 1) 로컬 DB는 INSERT 말고 UPDATE
-                dao.updateOrderStatus(
-                    orderNumber = order.orderNumber,
-                    status = newStatus
-                )
-
-                // 2) 주문취소만 별도 큐에 적재
-                if (newStatus == "주문취소") {
-                    val pendingId = enqueuePendingSync(
-                        PendingSyncType.CANCEL_ORDER,
-                        PendingCancelOrderSyncPayload(order.orderNumber)
-                    )
-
-                    val isCloudSuccess = syncManager.cancelOrderOnSheet(order.orderNumber)
-
-                    recordImmediateSyncFailure(isCloudSuccess)
-                    if (isCloudSuccess) {
-                        dao.deletePendingSync(pendingId)
+                val engine = checkNotNull(syncManager.orders)
+                engine.localChange {
+                    val current = dao.findOrdersByNumber(order.orderNumber).singleOrNull() ?: error("현재 주문을 다시 확인해주세요.")
+                    val next = current.copy(status = OrderProtocol.status(newStatus))
+                    if (current != next) {
+                        engine.enqueueChange(current, next, "status", System.currentTimeMillis())
+                        dao.updateOrder(next)
                     }
                 }
-
                 refreshLocalState()
-
-                _uiState.update {
-                    it.copy(
-                        message = if (newStatus == "주문취소") {
-                            "✅ 주문이 취소 상태로 변경되었습니다."
-                        } else {
-                            "✅ 주문 상태가 [$newStatus]로 변경되었습니다."
-                        }
-                    )
-                }
-            } catch (e: Exception) {
-                android.util.Log.e("NamuFarm", "주문 상태 변경 실패", e)
-                _uiState.update {
-                    it.copy(message = "❌ 주문 상태 변경 실패: ${e.message}")
-                }
-            }
+                _uiState.update { it.copy(message = "기기 상태 저장 · 서버 반영 대기. 매매 동기화로 확인해주세요.") }
+            } catch (e: CancellationException) { throw e }
+            catch (e: Exception) { _uiState.update { it.copy(message = e.message ?: "주문 상태와 대기를 보관합니다.") } }
         }
     }
 
-    // 🚨 기존 updateOrderStatus 함수 밑에 이 함수를 통째로 추가해 줘!
     fun deleteOrder(order: OrderEntity) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                // 1) 구글 시트에 삭제 요청 먼저 쏨!
-                val isCloudSuccess = syncManager.deleteOrderOnSheet(order.orderNumber)
-
-                if (isCloudSuccess) {
-                    // 2) 시트 삭제 성공하면 로컬 DB에서도 완전 삭제!
-                    dao.deleteOrder(order)
-
-                    // 3) 화면 갱신
-                    refreshLocalState()
-                    _uiState.update { it.copy(message = "🗑️ 주문이 정상적으로 완전히 삭제되었습니다.") }
-                } else {
-                    _uiState.update { it.copy(message = "⚠️ 구글 시트 통신 실패. 삭제 취소됨.") }
+                val engine = checkNotNull(syncManager.orders)
+                engine.localChange {
+                    val current = dao.findOrdersByNumber(order.orderNumber).singleOrNull() ?: error("현재 주문을 다시 확인해주세요.")
+                    engine.enqueueChange(current, current, "delete", System.currentTimeMillis())
                 }
-            } catch (e: Exception) {
-                _uiState.update { it.copy(message = "❌ 주문 삭제 중 오류 발생: ${e.message}") }
-            }
+                _uiState.update { it.copy(message = "삭제 요청 저장 · 매매 동기화에서 서버 삭제를 확인한 뒤 기기에서도 삭제합니다.") }
+            } catch (e: CancellationException) { throw e }
+            catch (e: Exception) { _uiState.update { it.copy(message = e.message ?: "기존 주문을 보관합니다.") } }
         }
     }
 
@@ -952,11 +819,51 @@ class ManagementViewModel(
 
     fun syncDataWithGoogleSheet() = syncInventoryWithMasters()
     fun syncInventoryWithMasters() {
+        if (!syncingOrders.compareAndSet(false, true)) return
         viewModelScope.launch(Dispatchers.IO) {
-            _uiState.update { it.copy(message = "농원·묘목·재고를 순서대로 동기화하는 중입니다.") }
-            val result = syncManager.inventory.sync(refreshMasters = true)
-            refreshLocalState()
-            recordInventoryOutcome(result, refreshMasters = true)
+            _uiState.update { it.copy(orderSyncBusy = true, message = "농원·묘목·재고·주문을 동기화하는 중입니다.") }
+            try {
+                val stock = syncManager.inventory.sync(refreshMasters = true)
+                val orders = syncManager.orders?.sync() ?: OrderSyncOutcome(false, "주문 연결이 준비되지 않았습니다.")
+                refreshLocalState()
+                val complete = stock.success && orders.success
+                _uiState.update { it.copy(message = stock.message + "\n" + orders.message,
+                    lastSyncError = if (complete) null else stock.message + "\n" + orders.message,
+                    lastMasterSyncAt = if (complete) System.currentTimeMillis() else it.lastMasterSyncAt) }
+            } catch (e: CancellationException) { throw e }
+            catch (e: Exception) { _uiState.update { it.copy(message = e.message ?: "자료와 전송 대기를 보관합니다.") } }
+            finally { syncingOrders.set(false); _uiState.update { it.copy(orderSyncBusy = false) } }
+        }
+    }
+
+    fun reviewOrderConnection(number: String) {
+        if (!reviewingOrder.compareAndSet(false, true)) return
+        _uiState.update { it.copy(orderReviewBusy = true) }
+        viewModelScope.launch(Dispatchers.IO) {
+            try { val review = checkNotNull(syncManager.orders).review(number)
+                _uiState.update { it.copy(orderLinkReview = review) }
+            } catch (e: CancellationException) { throw e }
+            catch (e: Exception) { _uiState.update { it.copy(message = e.message ?: "서버 주문을 확인하지 못했습니다.") } }
+            finally { reviewingOrder.set(false); _uiState.update { it.copy(orderReviewBusy = false) } }
+        }
+    }
+    fun dismissOrderReview() { if (!reviewingOrder.get()) _uiState.update { it.copy(orderLinkReview = null) } }
+    fun useServerOrder(local: String, server: String) = resolveOrderReview {
+        checkNotNull(syncManager.orders).useServer(local, server)
+    }
+    fun registerManualOrder(local: String) = resolveOrderReview {
+        checkNotNull(syncManager.orders).registerManual(local)
+    }
+    private fun resolveOrderReview(action: suspend () -> Unit) {
+        if (!reviewingOrder.compareAndSet(false, true)) return
+        _uiState.update { it.copy(orderReviewBusy = true) }
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                action(); refreshLocalState()
+                _uiState.update { it.copy(orderLinkReview = null, message = "주문 연결을 저장했습니다. 매매 동기화로 서버 반영을 확인해주세요.") }
+            } catch (e: CancellationException) { throw e }
+            catch (e: Exception) { _uiState.update { it.copy(message = e.message ?: "기존 주문과 대기를 유지합니다.") } }
+            finally { reviewingOrder.set(false); _uiState.update { it.copy(orderReviewBusy = false) } }
         }
     }
     private fun recordInventoryOutcome(result: InventoryOutcome, refreshMasters: Boolean) {
@@ -1137,67 +1044,25 @@ class ManagementViewModel(
             }
         }
     }
-    fun updateOrderDeliveryInfo(
-        order: OrderEntity,
-        receiverName: String,
-        zipNo: String,
-        roadAddress: String,
-        detailAddress: String,
-        note: String
-    ) {
+    fun updateOrderDeliveryInfo(order: OrderEntity, receiverName: String, zipNo: String,
+        roadAddress: String, detailAddress: String, note: String) {
         viewModelScope.launch(Dispatchers.IO) {
-            if (receiverName.isBlank()) {
-                _uiState.update { it.copy(message = "받는사람 이름을 입력해주세요.") }
-                return@launch
-            }
-
-            if (roadAddress.isBlank()) {
-                _uiState.update { it.copy(message = "기본 주소를 선택해주세요.") }
-                return@launch
-            }
-
-            // 1) 로컬 먼저 저장
-            dao.updateOrderDeliveryInfo(
-                orderNumber = order.orderNumber,
-                receiverName = receiverName,
-                zipNo = zipNo,
-                roadAddress = roadAddress,
-                detailAddress = detailAddress,
-                note = note
-            )
-
-            val pendingId = enqueuePendingSync(
-                PendingSyncType.DELIVERY,
-                PendingDeliverySyncPayload(
-                    orderNumber = order.orderNumber,
-                    receiverName = receiverName,
-                    zipNo = zipNo,
-                    roadAddress = roadAddress,
-                    detailAddress = detailAddress,
-                    note = note
-                )
-            )
-
-            refreshLocalState()
-            _uiState.update { it.copy(message = "💾 로컬 배송정보 저장 완료") }
-
-            // 2) 시트 즉시 시도
-            val isCloudSuccess = syncManager.updateOrderDeliveryOnSheet(
-                orderNumber = order.orderNumber,
-                receiverName = receiverName,
-                zipNo = zipNo,
-                roadAddress = roadAddress,
-                detailAddress = detailAddress,
-                note = note
-            )
-
-            recordImmediateSyncFailure(isCloudSuccess)
-            if (isCloudSuccess) {
-                dao.deletePendingSync(pendingId)
-                _uiState.update { it.copy(message = "✅ 로컬 배송정보 + 시트 저장 완료") }
-            } else {
-                _uiState.update { it.copy(message = "⚠️ 로컬 배송정보 저장 완료, 시트 반영 대기") }
-            }
+            try {
+                check(receiverName.isNotBlank() && roadAddress.isNotBlank()) { "받는사람과 기본 주소를 입력해주세요." }
+                val engine = checkNotNull(syncManager.orders)
+                engine.localChange {
+                    val current = dao.findOrdersByNumber(order.orderNumber).singleOrNull() ?: error("현재 주문을 다시 확인해주세요.")
+                    val next = current.copy(receiverName = receiverName, zipNo = zipNo, roadAddress = roadAddress,
+                        detailAddress = detailAddress, note = note)
+                    if (current != next) {
+                        engine.enqueueChange(current, next, "delivery", System.currentTimeMillis())
+                        dao.updateOrder(next)
+                    }
+                }
+                refreshLocalState()
+                _uiState.update { it.copy(message = "기기 배송정보 저장 · 서버 반영 대기. 매매 동기화로 확인해주세요.") }
+            } catch (e: CancellationException) { throw e }
+            catch (e: Exception) { _uiState.update { it.copy(message = e.message ?: "배송정보와 전송 대기를 보관합니다.") } }
         }
     }
 
@@ -1248,12 +1113,6 @@ class ManagementViewModel(
             _uiState.update { it.copy(message = result.message) }
         }
     }
-    private fun recordImmediateSyncFailure(success: Boolean) {
-        if (!success) _uiState.update { it.copy(
-            lastSyncError = "농원·묘목 외 전송은 아직 연결되지 않았습니다. 기기 데이터와 대기 기록을 유지합니다."
-        ) }
-    }
-
     private fun recordSyncOutcome(result: MasterSyncOutcome) {
         val pending = dao.getAllPendingSync()
         _uiState.update { it.copy(
@@ -1268,6 +1127,10 @@ class ManagementViewModel(
         if (clearingPendingSync.get()) return
         viewModelScope.launch(Dispatchers.IO) {
             confirmedPendingSync = dao.getAllPendingSync()
+            if (syncManager.orders?.canClear(confirmedPendingSync) == false) {
+                _uiState.update { it.copy(message = "제출한 주문 대기는 일괄 삭제하지 않습니다. 같은 작업을 동기화하거나 주문 연결 확인에서 정리해주세요.") }
+                return@launch
+            }
             if (confirmedPendingSync.isEmpty()) {
                 _uiState.update { it.copy(message = "전송 대기가 없습니다.") }
                 return@launch
@@ -1304,9 +1167,11 @@ class ManagementViewModel(
                     val rows = dao.getAllPendingSync()
                     when {
                         rows != confirmed -> null // The changed queue needs two new confirmations.
+                        syncManager.orders?.canClear(rows) == false -> error("제출한 주문의 결과가 불명확해 전송 대기를 보존합니다.")
                         rows.isEmpty() -> 0
                         else -> {
                             backup = writePendingSyncBackup(context.applicationContext, rows)
+                            syncManager.orders?.clearUnsubmittedLinks(rows)
                             dao.clearAllPendingSync() // Backup failure rolls back and never reaches DELETE.
                         }
                     }

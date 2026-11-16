@@ -24,7 +24,7 @@ import kotlinx.coroutines.withContext
 @Composable
 internal fun ConfirmedQuoteSessionDialog(saved: QuoteWorkflowRecord, workflow: QuoteWorkflow,
     connection: InitialQuoteConnection, onChanged: (QuoteWorkflowRecord) -> Unit,
-    newOrderNumber: (() -> String)? = null,
+    newOrderNumber: (suspend (String) -> String)? = null,
     onPaidOrder: (suspend (String, QuoteWorkflowRecord) -> Unit)? = null,
     onDismiss: () -> Unit) {
     val context = LocalContext.current

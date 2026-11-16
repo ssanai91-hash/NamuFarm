@@ -44,7 +44,7 @@ data class SharedQuoteReservation(val deliveryId: String? = null, val channel: S
 /** Payment claim journal: the order number and operation ID survive a lost reply or app restart. */
 data class SharedQuotePayment(val operationId: String? = null, val orderNumber: String? = null,
     val revision: Int = 0, val fingerprint: String? = null, val amount: Long = 0,
-    val confirmed: Boolean = false, val orderCreated: Boolean = false)
+    val confirmed: Boolean = false, val orderCreated: Boolean = false, val confirmedAt: Long = 0)
 
 internal fun JsonObject.obj(name: String): JsonObject? = get(name)?.takeIf { it.isJsonObject }?.asJsonObject
 private fun JsonObject.text(name: String): String? =

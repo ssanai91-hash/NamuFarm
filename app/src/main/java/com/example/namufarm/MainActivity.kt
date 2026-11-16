@@ -72,7 +72,12 @@ class MainActivity : ComponentActivity() {
         val masterClient = com.example.namufarm.data.remote.OperationsMasterClient(credentials)
         val masterSync = com.example.namufarm.data.OperationsMasterSync(database, masterClient)
         val stockSync = com.example.namufarm.data.InventorySync(database, masterClient, masterSync, credentials, filesDir)
-        val syncManager = SyncManager(dao, masterSync, stockSync)
+        val orderSync = com.example.namufarm.data.OrderSync(database, masterClient,
+            getSharedPreferences("NamuFarmPrefs", Context.MODE_PRIVATE), masterClient::serviceInfo,
+            { com.example.namufarm.quotation.AndroidQuoteWorkflowStore(this).records() },
+            { record -> getSharedPreferences("initial_formal_quotes_v1", Context.MODE_PRIVATE).getString(
+                record.request.requestId + ":" + com.example.namufarm.quotation.quoteWorkflowFingerprint(record.draft), null) })
+        val syncManager = SyncManager(dao, masterSync, stockSync, orderSync)
 
         // 3. 공장에 dao와 syncManager 둘 다 넘겨주기!
         val factory = ManagementViewModelFactory(dao, syncManager)

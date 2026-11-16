@@ -29,9 +29,6 @@ interface JusoApi {
 }
 
 object RetrofitClient {
-    // 🚨 브로의 최신 구글 웹앱 URL 반영 완료! (반드시 /로 끝나야 함)
-    private const val BASE_URL = "https://example.com/"
-
     // 🚨 [핵심] 구글 서버의 느린 응답을 30초까지 기다려주는 인내심 엔진! (SocketTimeoutException 방어)
     private val okHttpClient = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
@@ -39,15 +36,7 @@ object RetrofitClient {
         .writeTimeout(30, TimeUnit.SECONDS)
         .build()
 
-    // 🌳 구글 시트 API용 레트로핏 객체
-    private val retrofit = Retrofit.Builder()
-        .baseUrl(BASE_URL)
-        .client(okHttpClient) // 👈 30초 방패 장착 완료!
-        .addConverterFactory(GsonConverterFactory.create())
-        .build()
-
-    val api: GoogleSheetApi = retrofit.create(GoogleSheetApi::class.java)
-
+    // Orders use the authenticated OperationsMasterClient. Preserve the address API only.
     // 🏠 행안부 주소 API 주소
     private const val JUSO_URL = "https://business.juso.go.kr/addrlink/"
 

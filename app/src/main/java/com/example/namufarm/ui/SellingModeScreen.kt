@@ -82,7 +82,8 @@ private fun PendingSyncDialog(
     onRequestClear: () -> Unit,
     onContinue: () -> Unit,
     onCancel: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onReviewOrder: (String) -> Unit
 ) {
     val step = state.pendingSyncClearStep
     if (step == PendingSyncClearStep.NONE) {
@@ -92,7 +93,10 @@ private fun PendingSyncDialog(
             text = {
                 Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("전송 대기 ${state.pendingSyncCount}건")
-                    Text("농원·묘목 ${state.pendingMasterCount}건 / 재고 ${state.pendingInventoryCount}건 / 주문(서버 미연결) ${state.pendingOrderCount}건", fontSize = 15.sp)
+                    Text("농원·묘목 ${state.pendingMasterCount}건 / 재고 ${state.pendingInventoryCount}건 / 주문 ${state.pendingOrderCount}건", fontSize = 15.sp)
+                    state.unlinkedOrders.take(20).forEach { number ->
+                        TextButton(onClick = { onReviewOrder(number) }) { Text("기존 주문 연결 확인 · $number") }
+                    }
                     state.blockedInventory.forEach { item ->
                         val name = item.species?.speciesName ?: "묘목 ${item.key.speciesId}"
                         val farm = item.farm?.farmName ?: "농원 ${item.key.farmId}"
@@ -426,7 +430,8 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
             onRequestClear = { viewModel.requestPendingSyncClear() },
             onContinue = { viewModel.continuePendingSyncClear() },
             onCancel = { viewModel.cancelPendingSyncClear() },
-            onDelete = { viewModel.backupAndClearConfirmedPendingSync(context) }
+            onDelete = { viewModel.backupAndClearConfirmedPendingSync(context) },
+            onReviewOrder = { number -> showPendingSyncDialog = false; viewModel.reviewOrderConnection(number) }
         )
     }
 
@@ -1106,16 +1111,17 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                                                 .padding(horizontal = 8.dp, vertical = 4.dp),
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
-                                            Text(
-                                                text = "주문번호 : ${order.orderNumber}",
-                                                fontSize = 15.sp,
-                                                color = Color.Black,
-                                                fontWeight = FontWeight.Bold
-                                            )
+                                            Column(Modifier.weight(1f)) {
+                                                Text("주문번호 : ${uiState.orderLabels[order.orderNumber] ?: order.orderNumber}",
+                                                    fontSize = 15.sp, color = Color.Black, fontWeight = FontWeight.Bold)
+                                                Text(uiState.orderServerLabels[order.orderNumber].orEmpty(), fontSize = 13.sp, color = Color.Gray)
+                                            }
 
-                                            Spacer(modifier = Modifier.weight(1f))
-
-                                            val statusText = if (order.status == "주문취소") "주문취소됨" else "입금확인완료"
+                                            val statusText = when (order.status) {
+                                                "주문취소", "구매취소" -> "구매취소"
+                                                "배송완료" -> "배송완료"
+                                                else -> "입금확인"
+                                            }
 
                                             Text(
                                                 text = statusText,
@@ -1398,9 +1404,34 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
         }
     }
 
+    uiState.orderLinkReview?.let { review ->
+        var confirmNew by remember(review.localNumber) { mutableStateOf(false) }
+        AlertDialog(onDismissRequest = { viewModel.dismissOrderReview() },
+            title = { Text("주문 연결 확인") },
+            text = {
+                Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(review.localNumber, fontWeight = FontWeight.Bold)
+                    Text(review.message)
+                    review.choices.forEach { choice ->
+                        Text("${choice.number} · ${choice.date}\n${choice.phone} · ${String.format("%,d", choice.amount)}원 · ${choice.status}\n${choice.summary}")
+                        OutlinedButton(enabled = !uiState.orderReviewBusy, onClick = { viewModel.useServerOrder(review.localNumber, choice.number) }) {
+                            Text("이 서버 주문 사용 · 기기 기록 보관")
+                        }
+                    }
+                    if (review.choices.isEmpty()) Text("일치 여부를 확인할 서버 주문 후보가 없습니다.")
+                    if (review.allowNew) {
+                        if (confirmNew) {
+                            Text("서버에 같은 주문이 없는 수기 주문임을 확인했나요? 기존 번호는 보관하고 서버 판매번호를 예약합니다.")
+                            Button(enabled = !uiState.orderReviewBusy, onClick = { viewModel.registerManualOrder(review.localNumber) }) { Text("확인 · 수기 주문 등록 대기") }
+                        } else OutlinedButton(enabled = !uiState.orderReviewBusy, onClick = { confirmNew = true }) { Text("서버에 없는 수기 주문 등록") }
+                    } else Text("웹 입금 기록이나 과거 배송·취소 시각을 추측해 신규 등록하지 않습니다.")
+                }
+            }, confirmButton = { TextButton(enabled = !uiState.orderReviewBusy, onClick = { viewModel.dismissOrderReview() }) { Text("닫기 · 로컬 보관") } })
+    }
+
     //  [수정] 주문서 상세 다이얼로그 (배송비 표시 추가)
     if (showOrderDetailDialog && selectedOrder != null) {
-        val order = selectedOrder!!
+        val order = uiState.todayOrders.firstOrNull { it.orderNumber == selectedOrder!!.orderNumber } ?: selectedOrder!!
         Dialog(
             onDismissRequest = { showOrderDetailDialog = false },
             properties = DialogProperties(usePlatformDefaultWidth = false)
@@ -1411,6 +1442,9 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                 modifier = Modifier.fillMaxWidth(0.95f).heightIn(max = 880.dp)
             ) {
                 Column(modifier = Modifier.padding(16.dp).verticalScroll(rememberScrollState())) {
+                    TextButton(onClick = { showOrderDetailDialog = false; viewModel.reviewOrderConnection(order.orderNumber) }) {
+                        Text("주문 연결 확인 · 서버/기기 자료 보관")
+                    }
                     Box(
                         modifier = Modifier.fillMaxWidth().background(Color(0xFFE3F2FD))
                             .padding(12.dp), contentAlignment = Alignment.Center
@@ -1471,16 +1505,17 @@ fun SellingModeScreen(viewModel: ManagementViewModel, onNavigateToManagement: ()
                                     modifier = Modifier.fillMaxWidth(),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Text(
-                                        text = "주문번호 : ${order.orderNumber}",
-                                        fontSize = 15.sp,
-                                        color = Color.Gray,
-                                        fontWeight = FontWeight.Bold
-                                    )
+                                    Column(Modifier.weight(1f)) {
+                                        Text("주문번호 : ${uiState.orderLabels[order.orderNumber] ?: order.orderNumber}",
+                                            fontSize = 15.sp, color = Color.Gray, fontWeight = FontWeight.Bold)
+                                        Text(uiState.orderServerLabels[order.orderNumber].orEmpty(), fontSize = 13.sp, color = Color.Gray)
+                                    }
 
-                                    Spacer(modifier = Modifier.weight(1f))
-
-                                    val statusText = if (order.status == "주문취소") "주문취소" else "입금확인"
+                                    val statusText = when (order.status) {
+                                        "주문취소", "구매취소" -> "구매취소"
+                                        "배송완료" -> "배송완료"
+                                        else -> "입금확인"
+                                    }
 
                                     Text(
                                         text = statusText,

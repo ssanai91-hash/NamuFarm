@@ -105,6 +105,15 @@ interface ManagementDao {
     @Insert
     fun insertOrder(order: OrderEntity)
 
+    @Query("SELECT * FROM order_list WHERE order_number = :number")
+    fun findOrdersByNumber(number: String): List<OrderEntity>
+
+    @androidx.room.Update
+    fun updateOrder(order: OrderEntity)
+
+    @Query("SELECT * FROM quote_list WHERE quote_number = :number")
+    fun findQuotesByNumber(number: String): List<QuoteEntity>
+
     // ✅ 추가: 주문서 배송정보 업데이트
     @Query("""
     UPDATE order_list
