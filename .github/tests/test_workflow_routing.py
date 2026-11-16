@@ -133,7 +133,8 @@ class WorkflowRoutingTest(unittest.TestCase):
         self.assertFalse(included('desktop/README.md', WORKFLOWS[DESKTOP]['on']['push']['paths']))
         self.assertEqual(routed(['desktop/README.md', 'desktop/pyproject.toml']), {DESKTOP})
 
-    def test_manual_checks_bypass_path_and_branch_filters(self):
+    def test_manual_dispatch_event_is_declared_without_path_filters(self):
+        # Event availability only; the APK job separately restricts execution to main.
         for name in VALIDATION | {'android-apk-build.yml', 'desktop-exe-build.yml', 'build-downloads.yml'}:
             with self.subTest(name=name):
                 self.assertTrue(triggers(name, [], event='workflow_dispatch', branch='fix/local-first-integrity-review'))
@@ -178,7 +179,7 @@ class WorkflowRoutingTest(unittest.TestCase):
         self.assertEqual(len(prefixes), len(VALIDATION))
 
     def test_push_debounce_precedes_expensive_setup(self):
-        for name, job in [(ANDROID, 'build'), (DESKTOP, 'test'), ('android-apk-build.yml', 'apk')]:
+        for name, job in [(ANDROID, 'build'), (DESKTOP, 'test')]:
             with self.subTest(name=name):
                 first = steps(name, job)[0]
                 self.assertEqual(first['if'], "github.event_name == 'push'")
@@ -204,13 +205,6 @@ class WorkflowRoutingTest(unittest.TestCase):
         self.assertIn('build_signed_apk', android)
         self.assertIn('upload_ui_previews', android)
         self.assertIn('build_exe', desktop)
-        apk = WORKFLOWS['android-apk-build.yml']
-        self.assertIn('push', apk['on'])
-        self.assertEqual(apk['on']['workflow_dispatch']['inputs']['apk_type']['options'], ['debug', 'release'])
-        self.assertEqual(apk['jobs']['apk']['if'], "github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[build apk]')")
-        self.assertNotIn('concurrency', apk)  # skipped, unmarked pushes cannot cancel a requested APK
-        self.assertIs(apk['jobs']['apk']['concurrency']['cancel-in-progress'], True)
-        self.assertIn('manual-{0}', apk['jobs']['apk']['concurrency']['group'])
         exe = WORKFLOWS['desktop-exe-build.yml']
         self.assertEqual(set(exe['on']), {'push', 'workflow_dispatch'})
         self.assertEqual(exe['jobs']['windows']['if'], "github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[build desktop exe]')")
@@ -218,6 +212,26 @@ class WorkflowRoutingTest(unittest.TestCase):
         self.assertIs(exe['jobs']['windows']['concurrency']['cancel-in-progress'], True)
         self.assertIn('manual-{0}', exe['jobs']['windows']['concurrency']['group'])
         self.assertEqual(set(WORKFLOWS['build-downloads.yml']['on']), {'workflow_dispatch'})
+
+    def test_original_apk_is_manual_main_release_with_explicit_signing(self):
+        apk = WORKFLOWS['android-apk-build.yml']
+        self.assertEqual(set(apk['on']), {'workflow_dispatch'})
+        inputs = apk['on']['workflow_dispatch']['inputs']
+        self.assertNotIn('apk_type', inputs)
+        self.assertEqual(inputs['signing_mode']['type'], 'choice')
+        self.assertIs(inputs['signing_mode']['required'], True)
+        self.assertEqual(inputs['signing_mode']['default'], 'unsigned')
+        self.assertEqual(inputs['signing_mode']['options'], ['unsigned', 'signed'])
+        self.assertIs(inputs['previous_version_code']['required'], True)
+        self.assertEqual(inputs['previous_version_code']['type'], 'string')
+        job = apk['jobs']['apk']
+        self.assertEqual(job['if'], "github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'")
+        # Serialize requests; a later manual build must not cancel one already running.
+        self.assertEqual(job['concurrency']['group'], 'android-original-apk-manual')
+        self.assertIs(job['concurrency']['cancel-in-progress'], False)
+        self.assertFalse(any(step.get('run') == 'sleep 30' for step in job['steps']))
+        self.assertIn(':app:assembleRelease', commands('android-apk-build.yml', 'apk'))
+        self.assertEqual(WORKFLOWS[ANDROID]['jobs']['build']['if'], '${{ false }}')
 
     def test_explicit_desktop_build_only_listens_for_desktop_main_changes(self):
         name = 'desktop-exe-build.yml'

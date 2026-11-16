@@ -1,6 +1,18 @@
-# GitHub Actions 실행시간 절감 (2026-10-18)
+# GitHub Actions 실행 정책과 실행시간 절감
 
-## 확인한 실행 기록
+## 현재 정책 (2026-11-16)
+
+- 모든 작업은 main에서 관리하고 커밋에 `[skip ci]`를 붙인다. 컴파일·자동시험·Actions는 사용자가 별도로 요청한 경우에만 실행한다.
+- 현재 초기 앱 APK는 **Android APK Build → Run workflow → main**에서 수동 생성한다. 입력은 `signing_mode: unsigned/signed`이며 기본값은 `unsigned`다. push/PR 트리거나 `[build apk]` 실행 기능은 없다.
+- 두 모드 모두 `:app:assembleRelease`를 사용한다. `unsigned`는 로컬 초기 앱 키로 최종 서명하기 위한 미서명 release 산출물이며 설치용 업데이트가 아니다. `signed`는 저장소 인증서가 초기 앱 고정 SHA-256과 일치해야만 성공한다. 현재 저장소 키 불일치가 기록돼 있으므로 임의 키·디버그 키로 대체하지 않는다.
+- `previous_version_code`에는 실제 설치된 앱의 versionCode를 확인해 입력한다. 워크플로 기본값은 직전 소스 기준 참고값이며 기기를 자동 조회한 값이 아니다.
+- APK 작업은 `workflow_dispatch`와 `refs/heads/main`을 함께 요구한다. concurrency 그룹은 `android-original-apk-manual`, `cancel-in-progress: false`이며 30초 push 대기는 없다. 실행 중인 수동 작업을 다음 요청으로 취소하지 않는다.
+- 과거 **Android CI**는 job의 `if: ${{ false }}`로 중지돼 있다. 남아 있는 입력·경로·시험 명령은 보존된 설정이며 현재 앱 검증이나 APK 제작 경로로 사용하지 않는다.
+- `build-downloads.yml`의 현재 표시 이름은 **Build EXE downloads (Android builds locally)**다. 이 워크플로는 main의 `desktop-exe-build.yml`만 요청하며 APK를 함께 만들지 않는다. 이름의 Android 로컬 안내와 별개로, 사용자 명시 요청 시 위 수동 APK 워크플로를 사용할 수 있다.
+
+근거: `.github/workflows/android-apk-build.yml`, `android-ci.yml`, `build-downloads.yml`, `AGENTS.md`, `NAMUFARM_PROJECT_STATUS.md`의 2026-11-16 빌드 기록. 실제 설치·업무 기능 확인과 빌드 성공은 별개다.
+
+## 과거 실행시간 조사 (2026-10-18)
 
 기준 main: `7b143ad2a31c2529eaf6574bba334ab9167afba3`.
 최근 Actions 실행 100건과 main 커밋 35건을 조회하고, 최신 main 커밋 10개의 변경 파일을 대조했다.
@@ -17,16 +29,17 @@ PC 검증은 10회에서 서버 변경 1회로 줄어든다.
 서버·홈페이지의 가벼운 검증은 각각의 관련 변경에 유지한다.
 이는 과거 커밋 경로에 대한 재현 결과이며, 실제 계정 청구 분 절감률은 아니다.
 
-## 실행 조건
+## 경로별 실행 조건
 
-push와 main 대상 pull_request에 같은 경로 조건을 적용한다.
-한 push에 여러 영역이 바뀌면 필요한 검증을 모두 시작한다.
+아래 표는 YAML에 남아 있는 push와 main 대상 pull_request 경로 조건이다.
+`[skip ci]` 커밋에서는 이 자동 검증을 건너뛴다. Android CI는 경로가 맞아도 job이 중지돼 있다.
+skip 지시가 없는 혼합 변경은 해당 영역의 활성 검증을 선택한다. 수동 실행은 별도 요청이 있을 때만 사용한다.
 
 | 변경 영역 | 실행하는 검증 |
 | --- | --- |
-| Android 소스·리소스·테스트, Gradle 설정·wrapper, Android 서명 준비 스크립트 | Android 전체 단위 테스트와 debug 빌드, Android→Python 백업 호환성, PDF 검증 |
+| Android 소스·리소스·테스트, Gradle 설정·wrapper, Android 서명 준비 스크립트 | 과거 Android CI 경로만 보존; job 중지로 실행하지 않음 |
 | PC 소스·테스트·의존성·리소스 | Linux 전체 PC 테스트 → 성공 시 Windows 전체 PC 테스트 |
-| PC `api.py`, `crypto.py`, `errors.py`, `tests/check_android_backup.py` | PC 검증 + Android 검증 (빌드 서버 URL/실제 백업 호환성 의존성) |
+| PC `api.py`, `crypto.py`, `errors.py`, `tests/check_android_backup.py` | PC 검증; 과거 Android 교차 검증 경로는 남아 있으나 job 중지 |
 | `server/**` | 서버·홈페이지 회귀 검증 + 실제 Apps Script fixture를 쓰는 PC 통합 테스트 |
 | `website/**` | Node 24 서버·홈페이지 회귀 검증; JDK·Gradle·Qt 설치 없음 |
 | 루트 README, `docs/**`, PC/홈페이지 Markdown 문서만 수정 | 앱 자동 검증 없음 |
@@ -45,7 +58,7 @@ PC용 pip 다운로드 캐시를 사용하고, PyInstaller는 EXE 생성 요청 
 
 ## 연속 커밋과 중복 실행
 
-- Android CI와 PC CI의 자동 push는 첫 30초 동안 설정·설치를 시작하지 않는다.
+- PC CI의 자동 push는 첫 30초 동안 설정·설치를 시작하지 않는다. 과거 Android CI에도 같은 설정이 남아 있지만 job은 중지돼 있다.
   같은 검증에 해당하는 후속 push가 오면 기존 concurrency로 이전 실행을 취소한다.
   이후 빌드 중에도 새 관련 커밋은 이전 자동 실행을 취소한다.
   30초 대기도 runner 시간에 포함되므로 가벼운 서버·홈페이지 검증에는 추가하지 않았다.
@@ -53,25 +66,23 @@ PC용 pip 다운로드 캐시를 사용하고, PyInstaller는 EXE 생성 요청 
   서로 다른 영역의 검증이 빠지는 것을 방지한다.
 - 서버→홈페이지 연속 push에서는 protocol 실행이 바뀔 수 있다.
   따라서 protocol은 매번 서버와 홈페이지 두 테스트 묶음을 모두 실행한다.
-- PC push 대상은 main으로 통일했다. `fix/local-first-integrity-review`는 main 대상 PR 또는
-  수동 실행으로 검증해 동일 커밋의 branch push/PR 이중 실행을 피한다.
-- 수동 실행은 run ID가 포함된 별도 concurrency 그룹을 사용한다.
-  자동 push가 수동 APK/EXE 검증을 취소하지 않는다.
+- PC push 대상은 main이다. 이 문서를 근거로 별도 브랜치나 PR을 만들지 않는다.
+- 기존 검증·EXE 경로의 수동 실행은 run ID가 포함된 별도 concurrency 그룹을 사용한다.
+  APK는 위의 고정 수동 그룹을 사용하며 push 자체를 받지 않는다.
 
-## APK·EXE 수동 생성 유지
+## APK·EXE 생성 경로
 
-- `Android APK Build`: debug/release 선택 및 기존 영구 서명 유지.
-  main push의 마지막 커밋 메시지에 `[build apk]`를 쓰는 기능도 유지한다.
-  표시된 push끼리만 APK 작업 단위에서 취소·30초 대기를 적용한다.
-  표시가 없는 push는 진행 중인 APK 생성을 취소하지 않는다.
-- `Android CI`: `build_signed_apk`, `upload_ui_previews` 입력 유지.
+- `Android APK Build`: main 수동 실행, release 고정, `unsigned/signed` 선택. 위 현재 정책을 따른다.
+- `Android CI`: 중지 상태다. 보존된 `build_signed_apk`, `upload_ui_previews` 입력으로 현재 APK 생성을 요청하지 않는다.
 - `Desktop manager CI`: `build_exe` 입력과 테스트 성공 후 패키징·기동 검증 유지.
-- `Desktop EXE Build`: 기존 수동 전용 EXE 생성 그대로 유지.
-- `Build APK and EXE downloads`: 수동 실행으로 debug APK·release APK·EXE 3개 요청 유지.
-  이제 이 YAML 편집만으로 세 빌드를 자동 시작하지 않는다.
-- 기존 아티팩트 보관일, 저장공간 정리, draft release 보존 경로는 변경하지 않는다.
+- `Desktop EXE Build`: 수동 실행 또는 경로 조건을 만족하는 main push의 `[build desktop exe]` 표식으로 EXE를 생성한다. 두 EXE 패키징 경로의 기준 지정은 2단계 승인 후 정리한다.
+- `Build EXE downloads (Android builds locally)`: main 수동 실행 시 EXE 전용 경로 하나만 요청한다. APK 2개와 EXE를 묶어 요청하던 이전 설명은 현재 동작이 아니다.
+- `[skip ci]`와 `[build desktop exe]`를 같은 커밋에 넣으면 push 워크플로가 생략되므로 EXE가 생성되지 않는다. `[skip ci]` 규칙을 유지하고 필요한 빌드는 별도로 수동 요청한다.
+- 이번 1단계는 검사 기준과 문서만 변경한다. 캐시·패키징 경로·아티팩트 보관일·저장공간 정리·draft release 정책은 변경하지 않는다.
 
 ## 검증 방법
+
+아래 명령은 참고용이다. 사용자의 별도 실행 요청이 있을 때만 실행하며, 이번 1단계에서는 실행하지 않았다.
 
 ```bash
 python -m pip install 'PyYAML>=6,<7'
@@ -80,9 +91,9 @@ node --test server/quote-requests/tests/*.test.cjs
 node --test website/tests/privacy-crypto.test.mjs website/tests/quote-service.test.mjs website/tests/quote-receipt.test.mjs website/tests/quote-upstream.test.mjs website/tests/species-catalog.test.mjs
 ```
 
-CI 설정 검사 14개는 40개 경로 사례를 push/PR 양쪽(80개 조합)으로 검증하며,
-혼합 변경·삭제/이동 경로·분야별 취소·수동 입력·기존 전체 테스트 명령도 확인한다.
-서버·홈페이지 테스트 160개가 로컬에서 통과했다.
+설정 검사에는 경로·분야별 취소·수동 입력과 APK의 main 수동 실행/서명 선택 정책을 담는다.
+2026-10-18 당시 기록은 설정 검사 14개와 서버·홈페이지 테스트 160개의 로컬 통과였다.
+이 과거 결과를 현재 수정본의 검사 통과로 간주하지 않는다.
 Android SDK/Windows GUI 실행 결과를 이 로컬 검증으로 대체하지 않는다.
 
 공식 동작 기준:
@@ -91,7 +102,7 @@ Android SDK/Windows GUI 실행 결과를 이 로컬 검증으로 대체하지 �
 
 경로 필터로 생략된 워크플로를 향후 필수 PR 검사로 지정하면 Pending 상태가 남을 수 있다.
 필수 검사 정책을 추가할 때에는 모든 PR에 결과를 내는 별도 집계 검사를 함께 설계한다.
-## 적용 후 GitHub 실행 확인
+## 과거 적용 후 GitHub 실행 확인 (2026-10-18)
 
 코드 커밋: `cfa79e6e26aa83a0877b5137af829f22856b39f9`.
 GitHub가 Android/PC/protocol/CI 설정 검사를 생성한 것을 확인했다.
@@ -100,4 +111,3 @@ GitHub가 Android/PC/protocol/CI 설정 검사를 생성한 것을 확인했다.
 연결 API에서 상세 annotation을 읽을 수 없어 정확한 사유는 확정하지 않았다.
 따라서 이 변경의 로컬 검사 통과와 GitHub에서의 실제 테스트 성공을 구분한다.
 표시 없는 커밋의 APK 작업은 예상대로 skipped였다.
-
