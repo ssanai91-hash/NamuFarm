@@ -36,7 +36,10 @@ def identity(aapt, apk):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--unsigned-apk", type=Path, required=True)
-    parser.add_argument("--reference-apk", type=Path, required=True)
+    baseline = parser.add_mutually_exclusive_group(required=True)
+    baseline.add_argument("--reference-apk", type=Path)
+    baseline.add_argument("--previous-version-code", type=int,
+                          help="CI baseline when the previous APK is not available; certificate stays pinned.")
     parser.add_argument("--build-tools", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
@@ -48,8 +51,13 @@ def main():
         raise SystemExit("Output already exists; choose a new update filename.")
     tools = args.build_tools
     signer = tools / "apksigner"
-    certificate(signer, args.reference_apk)
-    previous, _ = identity(tools / "aapt", args.reference_apk)
+    if args.reference_apk is not None:
+        certificate(signer, args.reference_apk)
+        previous, _ = identity(tools / "aapt", args.reference_apk)
+    else:
+        previous = args.previous_version_code
+        if previous is None or previous < 1:
+            raise SystemExit("A positive previous versionCode is required.")
     current, debug = identity(tools / "aapt", args.unsigned_apk)
     if debug or current <= previous:
         raise SystemExit("A release APK with a newer versionCode is required.")

@@ -1,43 +1,30 @@
 name: Android APK Build
 
 on:
-  push:
-    branches: [ "main" ]
   workflow_dispatch:
     inputs:
-      apk_type:
-        description: 'APK to build (release needs persistent signing secrets)'
+      previous_version_code:
+        description: 'Installed original-app versionCode must be lower than this build (last source version: 45)'
         required: true
-        type: choice
-        default: debug
-        options:
-          - debug
-          - release
+        type: string
+        default: '45'
 
 permissions:
   contents: read
 
 jobs:
   apk:
-    # Retired after main consolidation; use the original certificate and local signing tool.
-    if: ${{ false }}
-    name: Build ${{ inputs.apk_type || 'release' }} APK
-    # Job scope is intentional: an unmarked push must not cancel a requested APK.
-    concurrency:
-      group: android-apk-${{ github.event_name == 'workflow_dispatch' && format('manual-{0}', github.run_id) || github.ref }}
-      cancel-in-progress: true
-    env:
-      APK_TYPE: ${{ github.event_name == 'push' && 'release' || inputs.apk_type }}
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    name: Build original-app update APK
     runs-on: ubuntu-latest
-    timeout-minutes: 50
+    timeout-minutes: 40
+    concurrency:
+      group: android-original-apk-manual
+      cancel-in-progress: false
     permissions:
-      contents: write # Needed only to save the APK as a draft release.
+      contents: write # Private draft-release fallback when artifact storage is full.
     steps:
-      - name: Coalesce marked pushes before APK setup
-        if: github.event_name == 'push'
-        run: sleep 30
-
-      - name: Check out selected commit
+      - name: Check out selected main commit
         uses: actions/checkout@v4
         with:
           persist-credentials: false
@@ -48,147 +35,108 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      - name: Restore Gradle dependency cache
+      - name: Configure Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install required Android SDK
+        run: sdkmanager "platforms;android-36.1" "build-tools;36.0.0"
+
+      - name: Configure Gradle
         uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: true
 
-      - name: Prepare Gradle wrapper
-        run: chmod +x gradlew
-
-      # Config exists only on the temporary runner, never in the repository.
-      # The Android Gradle fallback points to an older deployment URL.
-      - name: Configure current server and optional Firebase
-        env:
-          SCRIPT_URL: ${{ vars.NAMUFARM_WEB_REQUEST_SCRIPT_URL }}
-          FIREBASE_APPLICATION_ID: ${{ vars.NAMUFARM_FIREBASE_APPLICATION_ID }}
-          FIREBASE_API_KEY: ${{ secrets.NAMUFARM_FIREBASE_API_KEY }}
-          FIREBASE_PROJECT_ID: ${{ vars.NAMUFARM_FIREBASE_PROJECT_ID }}
-          FIREBASE_SENDER_ID: ${{ vars.NAMUFARM_FIREBASE_SENDER_ID }}
+      - name: Compile release APK without unit or device tests
+        id: build
         run: |
-          python3 - <<'PY'
-          import os
-          import re
-          from pathlib import Path
+          chmod +x gradlew
+          ./gradlew --no-daemon --max-workers=1 :app:assembleRelease
 
-          pc = Path("desktop/namufarm_desktop/api.py").read_text(encoding="utf-8")
-          match = re.search(r'^DEFAULT_URL = "(https://script\.google\.com/macros/s/[^"]+/exec)"$', pc, re.M)
-          if not match:
-              raise SystemExit("The current NamuFarm Apps Script URL was not found.")
-          url = os.environ.get("SCRIPT_URL") or match.group(1)
-          if not re.fullmatch(r'https://script\.google\.com/macros/s/[A-Za-z0-9_-]+/exec', url):
-              raise SystemExit("Invalid NamuFarm server URL.")
-          lines = ["WEB_REQUEST_SCRIPT_URL=" + url]
-          names = ("FIREBASE_APPLICATION_ID", "FIREBASE_API_KEY",
-                   "FIREBASE_PROJECT_ID", "FIREBASE_SENDER_ID")
-          for name in names:
-              value = os.environ.get(name, "")
-              if value:
-                  if any(c in value for c in "\r\n"):
-                      raise SystemExit("Invalid Firebase build setting.")
-                  lines.append(name + "=" + value)
-          Path("local.properties").write_text("\n".join(lines) + "\n", encoding="utf-8")
-          if not all(os.environ.get(name) for name in names):
-              print("FCM build values are incomplete. Push notifications will be unavailable.")
-          PY
-
-      # Use the same permanent release certificate as the existing Android CI.
-      # Never put the keystore or its passwords into the repository or artifacts.
-      - name: Prepare existing release signing
-        if: env.APK_TYPE == 'release'
+      - name: Prepare original-app certificate
         id: signing
         env:
-          SIGNING_BASE64: ${{ secrets.NAMUFARM_KEYSTORE_BASE64 }}
-          NAMUFARM_STORE_PASSWORD: ${{ secrets.NAMUFARM_STORE_PASSWORD }}
-          NAMUFARM_KEY_ALIAS: ${{ secrets.NAMUFARM_KEY_ALIAS }}
-          NAMUFARM_KEY_PASSWORD: ${{ secrets.NAMUFARM_KEY_PASSWORD }}
-          NAMUFARM_SIGNING_SHA256: ${{ vars.NAMUFARM_SIGNING_SHA256 }}
+          SIGNING_BASE64: ${{ secrets.NAMUFARM_INITIAL_KEYSTORE_BASE64 || secrets.NAMUFARM_KEYSTORE_BASE64 }}
+          NAMUFARM_STORE_PASSWORD: ${{ secrets.NAMUFARM_INITIAL_STORE_PASSWORD || secrets.NAMUFARM_STORE_PASSWORD }}
+          NAMUFARM_KEY_ALIAS: ${{ secrets.NAMUFARM_INITIAL_KEY_ALIAS || secrets.NAMUFARM_KEY_ALIAS }}
+          NAMUFARM_KEY_PASSWORD: ${{ secrets.NAMUFARM_INITIAL_KEY_PASSWORD || secrets.NAMUFARM_KEY_PASSWORD }}
+          # Never trust an old main-app fingerprint or substitute a debug/new key.
+          NAMUFARM_SIGNING_SHA256: a31a78a895be8f89bacb2c7b355f413e1cacecfbfd769b257801fcb619e616e1
         run: |
           python3 scripts/prepare_android_signing.py
           if ! grep -q '^ready=true$' "$GITHUB_OUTPUT"; then
-            echo "::error::Permanent signing is not configured. Choose debug for compilation only, or set the existing release signing credentials."
+            echo "::error::Original-app signing credentials are required. No installable update was produced."
             exit 1
           fi
 
-      - name: Build debug APK
-        if: env.APK_TYPE == 'debug'
-        run: ./gradlew --no-daemon :app:assembleDebug
-
-      # Offline credential tests only; no server requests or order/message trials.
-      - name: Verify quote workflow and connection credential preservation
-        run: ./gradlew --no-daemon :app:testDebugUnitTest --tests com.example.namufarm.data.WebQuoteRequestTest --tests com.example.namufarm.webrequests.WebRequestSettingsTest --tests com.example.namufarm.quotation.QuoteWorkflowTest --tests com.example.namufarm.ui.QuoteWorkflowUiTest
-
-      - name: Build signed release APK
-        if: env.APK_TYPE == 'release'
+      - name: Sign and verify original-app update
+        id: signed
         env:
-          NAMUFARM_KEYSTORE: ${{ runner.temp }}/namufarm-release.jks
-          NAMUFARM_STORE_PASSWORD: ${{ secrets.NAMUFARM_STORE_PASSWORD }}
-          NAMUFARM_KEY_ALIAS: ${{ secrets.NAMUFARM_KEY_ALIAS }}
-          NAMUFARM_KEY_PASSWORD: ${{ secrets.NAMUFARM_KEY_PASSWORD }}
-        run: ./gradlew --no-daemon :app:assembleRelease
+          PREVIOUS_VERSION_CODE: ${{ inputs.previous_version_code }}
+          NAMUFARM_INITIAL_KEYSTORE: ${{ runner.temp }}/namufarm-release.jks
+          NAMUFARM_INITIAL_STORE_PASSWORD: ${{ secrets.NAMUFARM_INITIAL_STORE_PASSWORD || secrets.NAMUFARM_STORE_PASSWORD }}
+          NAMUFARM_INITIAL_KEY_ALIAS: ${{ secrets.NAMUFARM_INITIAL_KEY_ALIAS || secrets.NAMUFARM_KEY_ALIAS }}
+          NAMUFARM_INITIAL_KEY_PASSWORD: ${{ secrets.NAMUFARM_INITIAL_KEY_PASSWORD || secrets.NAMUFARM_KEY_PASSWORD }}
+        run: |
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          import re
+          import subprocess
 
-      - name: Upload debug APK (testing only)
-        id: debug_artifact
+          previous = os.environ["PREVIOUS_VERSION_CODE"]
+          if not re.fullmatch(r"[1-9][0-9]*", previous):
+              raise SystemExit("A positive installed versionCode is required.")
+          apks = list(Path("app/build/outputs/apk/release").glob("*-unsigned.apk"))
+          if len(apks) != 1:
+              raise SystemExit("Expected one unsigned release APK.")
+          source = Path("app/build.gradle.kts").read_text()
+          version = re.search(r'versionName = "([^"]+)"', source).group(1)
+          if not re.fullmatch(r"[0-9]+(?:\.[0-9]+)+", version):
+              raise SystemExit("Unexpected versionName.")
+          code = int(re.search(r"versionCode = (\d+)", source).group(1))
+          sha = os.environ["GITHUB_SHA"]
+          output = Path("dist") / f"NamuFarm-initial-{version}-{sha[:7]}-update.apk"
+          subprocess.run(["python3", "scripts/sign_initial_apk.py",
+                          "--unsigned-apk", str(apks[0]), "--previous-version-code", previous,
+                          "--build-tools", str(Path(os.environ["ANDROID_HOME"]) / "build-tools/36.0.0"),
+                          "--output", str(output)], check=True)
+          record = {"commit": sha, "versionName": version, "versionCode": code,
+                    "baselineVersionCode": int(previous), "baselineSource": "manual input; installed device not inspected",
+                    "package": "com.example.namufarm.original",
+                    "certificateSha256": "a31a78a895be8f89bacb2c7b355f413e1cacecfbfd769b257801fcb619e616e1",
+                    "sha256": hashlib.sha256(output.read_bytes()).hexdigest(),
+                    "deviceVerification": "not performed"}
+          Path("dist/build-info.json").write_text(json.dumps(record, ensure_ascii=False, indent=2) + "\n")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as summary:
+              summary.write(f"### Original-app update APK\n\nSource: `{sha}`\n\n")
+              summary.write(f"Version: {version} ({code}); certificate and package verified.\n\n")
+              summary.write(f"SHA-256: `{record['sha256']}`\n\nNo device, order or message tests performed.\n")
+          PY
+
+      - name: Upload verified update APK
+        id: artifact
         continue-on-error: true
-        if: env.APK_TYPE == 'debug'
         uses: actions/upload-artifact@v4
         with:
-          name: NamuFarm-Debug-APK
-          path: app/build/outputs/apk/debug/*.apk
+          name: NamuFarm-Original-Update-APK
+          path: dist/*
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 3
 
-      - name: Save test APK as a draft release if artifact upload fails
-        if: env.APK_TYPE == 'debug' && steps.debug_artifact.outcome == 'failure'
+      - name: Save verified update as a private draft if artifact storage is full
+        if: steps.artifact.outcome == 'failure'
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          set -euo pipefail
-          shopt -s nullglob
-          apks=(app/build/outputs/apk/debug/*.apk)
-          if [ "${#apks[@]}" -ne 1 ]; then
-            echo "::error::Expected exactly one debug APK."
-            exit 1
-          fi
-          tag="android-debug-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          gh release create "$tag" "${apks[0]}" --draft \
-            --target "$GITHUB_SHA" --title "Test-only debug APK ${GITHUB_SHA:0:7}" \
-            --notes "Testing only. Ephemeral debug certificate; cannot update the permanently signed seller app. Source commit: $GITHUB_SHA."
-          echo "Saved test APK in draft release: $tag" >> "$GITHUB_STEP_SUMMARY"
+          tag="android-initial-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          gh release create "$tag" dist/* --draft --target "$GITHUB_SHA" \
+            --title "NamuFarm original-app update ${GITHUB_SHA:0:7}" \
+            --notes "User-requested main build. Original certificate and package verified. Device behavior has not been tested."
+          echo "APK saved to draft release: $tag" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Upload signed release APK
-        id: release_artifact
-        continue-on-error: true
-        if: env.APK_TYPE == 'release'
-        uses: actions/upload-artifact@v4
-        with:
-          name: NamuFarm-Signed-APK
-          path: app/build/outputs/apk/release/*.apk
-          if-no-files-found: error
-          retention-days: 7
-
-      # Draft only: retains repository visibility and never publishes a release.
-      - name: Save signed APK as a draft release if artifact upload fails
-        if: env.APK_TYPE == 'release' && steps.release_artifact.outcome == 'failure'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-        run: |
-          set -euo pipefail
-          shopt -s nullglob
-          apks=(app/build/outputs/apk/release/*.apk)
-          if [ "${#apks[@]}" -ne 1 ]; then
-            echo "::error::Expected exactly one signed release APK."
-            exit 1
-          fi
-          tag="android-apk-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          gh release create "$tag" "${apks[0]}" --draft \
-            --target "$GITHUB_SHA" --title "Android APK ${GITHUB_SHA:0:7}" \
-            --notes "Manual signed Android APK build. Source commit: $GITHUB_SHA."
-          echo "Saved signed APK in draft release: $tag" >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Remove temporary signing file
+      - name: Remove temporary signing material
         if: always()
         run: rm -f "$RUNNER_TEMP/namufarm-release.jks"
-
-
-
