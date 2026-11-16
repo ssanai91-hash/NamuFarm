@@ -190,3 +190,10 @@ Android의 수정·빌드 기준은 main이다. 홈페이지·나피·서버도 
 
 - 첫 실행의 SDK 구형 `tools` 패키지 오류는 runner의 기존 SDK 도구 사용으로 수정했다. 다음 실행 `43779340039`에서 `assembleRelease`와 lintVital이 성공했으나, repository 서명 키가 고정 초기 인증서와 달라 서명을 차단했다.
 - 수동 입력 `signing_mode`의 기본은 `unsigned`다. 이 모드는 Actions에서 release APK를 컴파일해 원본 키로 로컬 서명할 산출물과 공개 SDK 서명 도구를 저장한다. 미서명 파일은 설치용 업데이트로 전달하지 않는다. 기존 인증서·패키지·versionCode·정렬을 로컬 서명 도구로 확인한 APK만 최종 전달한다. `signed` 모드는 저장소 키가 고정 인증서와 일치할 때만 완료한다. 개인키를 새로 업로드하거나 저장소 secret을 변경하지 않았다.
+
+## 1.1.43 Actions 산출물 최종 서명 결과 (2026-11-16)
+
+- Actions 실행: https://github.com/ssanai91-hash/NamuFarm/actions/runs/43780269864, 소스 `11dbadd0a72ea064524ec4527b699a667f40dfa1`. assembleRelease/lintVital과 산출물 업로드 성공. 자동 단위/기기 시험은 미실시.
+- 저장소의 키 불일치로 unsigned 모드를 사용한 뒤, 보관된 초기 키로 로컬 서명했다. 기존 앱 인증서·패키지·versionCode 증가·non-debuggable·정렬 검사를 통과했다. repository secret 변경이나 개인키 업로드는 하지 않았다.
+- 설치용 APK: `NamuFarm-initial-1.1.43-11dbadd-update.apk`, 14095359 bytes, SHA-256 `9d50664b37ac0573dd82dedea3dfd1f416866e863edebb99a73fba4f75f1bbd7`.
+- 앱 삭제 없이 같은 패키지의 업데이트로 설치한다. 실제 휴대폰 설치·자료 유지·전화/문자 동작은 사용자 확인 대상이다.

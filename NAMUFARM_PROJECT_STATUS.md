@@ -1,5 +1,15 @@
 # 나무팜 프로젝트 현황 · 채팅 인수인계
 
+## 2026-11-16 Android 1.1.43(46) — 사용자 요청 Actions 빌드·기존 키 서명 완료
+
+- 사용자 명시 요청으로 수동 Actions 빌드를 재개했다. 앱 빌드 소스는 main `11dbadd0a72ea064524ec4527b699a667f40dfa1`; 실행 [43780269864](https://github.com/ssanai91-hash/NamuFarm/actions/runs/43780269864)에서 `:app:assembleRelease`와 lintVital을 통과하고 APK 산출물 업로드까지 성공했다. 단위/기기 자동시험·실제 전화/문자/주문 시험은 하지 않았다.
+- 구 main용 자동 CI는 계속 중지하며, 현재 앱용 수동 워크플로만 정리했다. SDK의 폐기된 `tools` 설치 오류는 runner에 설치된 도구 사용으로 수정했다. repository의 기존 서명 키가 초기 앱 고정 인증서와 달라 직접 서명 모드는 차단했다. 저장소 secret은 변경하지 않았다.
+- Actions의 미서명 release APK를 내려받아 보관된 초기 앱 키로 로컬 최종 서명했다. 고정 인증서 `a31a78a895be8f89bacb2c7b355f413e1cacecfbfd769b257801fcb619e616e1`, 패키지 `com.example.namufarm.original`, release/non-debuggable, versionCode `46 > 45`, zipalign 검사를 통과했다. 45는 직전 소스 기준이며 실제 설치 기기의 versionCode를 읽은 값은 아니다. 개인키·비밀번호는 저장소/로그/산출물에 넣지 않았다.
+- 최종 설치용 파일: `NamuFarm-initial-1.1.43-11dbadd-update.apk` (14,095,359 bytes). SHA-256: `9d50664b37ac0573dd82dedea3dfd1f416866e863edebb99a73fba4f75f1bbd7`. Actions의 unsigned 파일 자체는 설치용 업데이트로 전달하지 않는다.
+- 앱 기능은 이전 통화 중 홈페이지 안내 구현 그대로다. 홈페이지 게시·Apps Script 재배포·실제 기기 설치는 하지 않았다. 사용자는 기존 앱을 삭제하지 않고 업데이트한 뒤 **매매 → 전화 안내** 권한·켜기/끄기, 작은 창·통화 상대 번호·문구/줄바꿈·중복 전송 방지와 기존 자료 보존을 확인한다.
+
+---
+
 ## 2026-11-15 Android 1.1.43(46) — 통화 중 홈페이지 안내 문자 · 코드만, 미빌드
 
 - 기준 main `c20c2c3027907f9d10283875511aa7aadcd5fe5f`. 기존 앱에 **매매 상단 → 전화 안내**를 추가한다. 사용자가 권한을 허용하고 켠 동안 통화 감지 알림을 표시하며, 수신 시 작은 이동 창을 띄운다. 연결된 통화에서 **문자 전송**을 누르면 상대 휴대전화 번호에 `https://namufarm.co.kr` 안내 문자를 선택된 SIM으로 직접 발송한다. 기본값은 꺼짐이다.
