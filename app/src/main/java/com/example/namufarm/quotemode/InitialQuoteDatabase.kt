@@ -24,6 +24,8 @@ abstract class InitialQuoteDatabase : RoomDatabase() {
     }
 }
 
+data class QuoteReceiveKey(val requestId: String, val sequence: Long)
+
 @Dao
 interface InitialQuoteDao {
     @Query("SELECT * FROM web_quote_request ORDER BY sequence DESC")
@@ -34,7 +36,11 @@ interface InitialQuoteDao {
     fun requests(): List<WebQuoteRequestEntity>
     @Query("SELECT COUNT(*) FROM deferred_web_request")
     fun deferredCount(): Int
-    /** Incremental sync cursor. Expired rows are deleted locally, so a later download only repeats tombstones. */
+    @Query("SELECT * FROM web_quote_request WHERE requestId = :id")
+    fun request(id: String): WebQuoteRequestEntity?
+    @Query("SELECT requestId, sequence FROM web_quote_request WHERE requestId > :after UNION ALL SELECT requestId, sequence FROM deferred_web_request WHERE requestId > :after ORDER BY requestId LIMIT 100")
+    fun receiveKeys(after: String): List<QuoteReceiveKey>
+    /** Legacy cache hint only. V2 commits a server watermark independently of live rows. */
     @Query("SELECT MAX(sequence) FROM web_quote_request")
     fun maxSequence(): Long?
     @Query("DELETE FROM web_quote_request")

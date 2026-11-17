@@ -33,7 +33,7 @@ function secureServiceInfo_() {
     quoteLedgerMonth:'receivedAt',orderLedgerMonth:'paidAt',
     processingBases:['quote_request'],requestFields:['customerEmail','formalQuoteRequested','recipientName','replyChannel'],
     encryptionReady:false,customerDataStorage:'plain',sellerKey:key,retentionDays:30,requestDeletionSync:true,saleDeletionSync:true,
-    receiptFormat:'NAMU-YYYYMMDD-NNNN',receiptTimeZone:'Asia/Seoul',connectionFile:true,requestSnapshot:true,
+    receiptFormat:'NAMU-YYYYMMDD-NNNN',receiptTimeZone:'Asia/Seoul',connectionFile:true,requestSnapshot:true,quoteSyncVersion:twoBookActive_()?2:1,quoteStateBatchSize:50,
     connectionAuth:'auto-v1',quoteReadMode:twoBookActive_()?'annual-two-tabs':'legacy-storage',legacyDeviceAuth:true,
     quoteDeliveryIdempotency:1,quoteEmail:true,salesReportEmail:true,
     syncHead:1,confirmedQuoteVersion:twoBookActive_()?1:0,confirmedQuotePayment:twoBookActive_()?1:0,
@@ -136,9 +136,10 @@ function quoteResponseRow_(row) {
     raw.quoteVersion?{quoteVersion:raw.quoteVersion}:{});
 }
 function listEncryptedRequests_(body) {
+  if(body.quoteSyncVersion===2)return quoteSyncV2_(body,false);
   assert_(Number.isSafeInteger(body.afterSequence) && body.afterSequence>=0);
   if(twoBookActive_())return lock_(()=>{
-    const rows=twoTabRecords_().filter(r=>Number(r.row[1])>body.afterSequence);
+    const rows=quoteCompatibleRecords_().filter(r=>Number(r.row[1])>body.afterSequence);
     const requests=rows.slice(0,100).map(r=>quoteResponseRow_(r.row));
     return {requests:requests,hasMore:rows.length>requests.length};
   });
@@ -152,10 +153,11 @@ function listEncryptedRequests_(body) {
 }
 /** A complete, versioned view: partial downloads must never remove local records. */
 function snapshotRequests_(body) {
+  if(body.quoteSyncVersion===2)return quoteSyncV2_(body,true);
   assert_(Number.isSafeInteger(body.afterSequence) && body.afterSequence >= 0);
   assert_(body.afterSequence === 0 || /^[a-f0-9]{64}$/.test(body.snapshotId || ''));
   return lock_(() => {
-    const rows = twoBookActive_()?twoTabRecords_().map(r=>r.row):
+    const rows = twoBookActive_()?quoteCompatibleRecords_().map(r=>r.row):
       quoteStorageConfigured_()
         ? indexedQuoteRecords_(-1,true).map(({entry,cache})=>quoteRecord_(entry,cache,false).row)
         : receiptRows_(sheet_());

@@ -86,7 +86,8 @@ class MainActivity : ComponentActivity() {
 
         val quoteConnection = com.example.namufarm.quotemode.InitialQuoteConnection(
             com.example.namufarm.quotemode.InitialQuoteDatabase.get(this), masterClient,
-            getSharedPreferences("quote_sync_v1", Context.MODE_PRIVATE))
+            getSharedPreferences("NamuFarmPrefs", Context.MODE_PRIVATE),
+            java.io.File(noBackupFilesDir, "quote_receive_v2.sqlite"))
         val quoteViewModel = ViewModelProvider(this,
             com.example.namufarm.quotemode.InitialQuoteViewModelFactory(quoteConnection, this))[
                 com.example.namufarm.quotemode.InitialQuoteViewModel::class.java]

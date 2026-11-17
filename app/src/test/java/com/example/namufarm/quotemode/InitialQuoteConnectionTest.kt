@@ -30,7 +30,12 @@ class InitialQuoteConnectionTest {
         db = Room.inMemoryDatabaseBuilder(RuntimeEnvironment.getApplication(), InitialQuoteDatabase::class.java)
             .allowMainThreadQueries().build()
         server = Server()
-        connection = InitialQuoteConnection(db, server)
+        val context = RuntimeEnvironment.getApplication<android.app.Application>()
+        val prefs = context.getSharedPreferences("quote_receive_test", android.content.Context.MODE_PRIVATE)
+        prefs.edit().clear().commit()
+        val receive = java.io.File(context.noBackupFilesDir, "quote_receive_test.sqlite")
+        android.database.sqlite.SQLiteDatabase.deleteDatabase(receive)
+        connection = InitialQuoteConnection(db, server, prefs, receive)
     }
     @After fun close() = db.close()
     private fun local(id: Int = 9) = WebQuoteRequestEntity(
@@ -74,10 +79,12 @@ class InitialQuoteConnectionTest {
         assertThrows(IllegalStateException::class.java) { runBlocking { connection.refresh() } }
         assertEquals(listOf(local()), connection.localRequests())
     }
-    @Test fun busySnapshotRestartsBeforeAtomicReplace() = runBlocking {
+    @Test fun busySnapshotKeepsCacheUntilManualRetry() = runBlocking {
         db.inbox().insertRequests(listOf(local()))
         server.rows = listOf(server.row(1), server.row(2))
         server.busyOnce = true
+        assertThrows(MasterServerException::class.java) { runBlocking { connection.refresh() } }
+        assertEquals(listOf(local()), connection.localRequests())
         assertEquals(2, connection.refresh())
         assertEquals(2, server.firstPageReads)
         assertEquals(listOf(2L, 1L), connection.localRequests().map { it.sequence })
@@ -145,9 +152,15 @@ class InitialQuoteConnectionTest {
         var invalidDelete = false
         var offline = false
         val actions = mutableListOf<String>()
+        private val createdAt = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).apply {
+            timeZone = java.util.TimeZone.getTimeZone("UTC")
+        }.format(java.util.Date())
+        private val expiresAt = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).apply {
+            timeZone = java.util.TimeZone.getTimeZone("UTC")
+        }.parse(createdAt)!!.time + 30L * 86_400_000L
         fun row(id: Int) = Gson().toJsonTree(mapOf("requestId" to
             "00000000-0000-4000-8000-%012d".format(id), "sequence" to id,
-            "createdAt" to "2026-10-18T00:00:00.000Z", "customerName" to "견적 고객",
+            "createdAt" to createdAt, "expiresAt" to expiresAt, "customerName" to "견적 고객",
             "customerPhone" to "01000000000", "region" to "옥천", "message" to "",
             "status" to "신규", "receiptNumber" to "NAMU-20261018-%04d".format(id),
             "items" to listOf(mapOf("species" to "가죽나무", "specification" to "", "quantity" to 2)))).asJsonObject
@@ -159,6 +172,9 @@ class InitialQuoteConnectionTest {
             if (action == "save_quote_pricing") return Gson().toJsonTree(mapOf("ok" to true,
                 "updated" to true, "requestId" to if (invalidConfirmation) "wrong-id" else fields["requestId"],
                 "status" to "견적확정")).asJsonObject
+            if (action == "quote_request_states") return Gson().toJsonTree(mapOf("ok" to true,
+                "quoteSyncVersion" to 2, "schemaEpoch" to 1,
+                "states" to (fields["requestIds"] as List<*>).map { mapOf("requestId" to it, "state" to "unknown", "sequence" to 0) })).asJsonObject
             check(action == "snapshot_requests")
             val after = (fields["afterSequence"] as Number).toLong()
             if (after == 0L) firstPageReads++
@@ -166,7 +182,8 @@ class InitialQuoteConnectionTest {
             if (after > 0 && busyOnce) { busyOnce = false; throw MasterServerException("BUSY") }
             val rest = rows.filter { it.get("sequence").asLong > after }
             return Gson().toJsonTree(mapOf("ok" to true, "requests" to rest.take(1),
-                "hasMore" to (rest.size > 1), "snapshotId" to "a".repeat(64),
+                "hasMore" to (rest.size > 1), "quoteSyncVersion" to 2, "schemaEpoch" to 1, "scope" to "active", "requiresSnapshot" to false, "minAvailableSequence" to 0,
+                "snapshotId" to "a".repeat(64),
                 "total" to rows.size + extraTotal, "watermark" to rows.size)).asJsonObject
         }
     }

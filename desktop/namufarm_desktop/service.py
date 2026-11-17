@@ -20,12 +20,14 @@ from .sales_workspace import SalesWorkspace
 from .sold_numbers import SoldNumbers
 from .quote_versions import QuoteVersions, quote_version
 from .server_first import ServerFirst, serialized
+from .quote_receive import QuoteReceive, ReceivedRequests
 
 
-class Manager(ServerFirst, QuoteVersions, SoldNumbers, SalesWorkspace):
+class Manager(ServerFirst, QuoteReceive, QuoteVersions, SoldNumbers, SalesWorkspace):
     def __init__(self, vault, api=None):
         self._server_lock = threading.RLock()
         self.vault = vault
+        self._expire_quote_receive_v2()
         self.credentials = vault.credentials()
         # Keep both legacy credentials and the negotiated common key in the
         # existing Windows-protected vault, without replacing business records.
@@ -35,6 +37,9 @@ class Manager(ServerFirst, QuoteVersions, SoldNumbers, SalesWorkspace):
                                    if self.credentials.get("authMode") == "shared-key-v1"
                                    and self.credentials.get("connectionKeyUrl") == self.credentials.get("url", DEFAULT_URL) else "")
         self.request_snapshot = False
+        self.quote_sync_v2 = False
+        self._quote_deleted_v2 = set()
+        self._quote_rebased_v2 = False
         self.quote_read_mode = None
         self.copy_error = ""
         self._copy_signatures = {}
@@ -305,6 +310,7 @@ class Manager(ServerFirst, QuoteVersions, SoldNumbers, SalesWorkspace):
         require(info.get("requestDeletionSync") is True,
                 "PC 삭제 동기화를 지원하는 서버 코드로 Apps Script 배포를 업데이트해주세요.")
         self.request_snapshot = info.get("requestSnapshot") is True
+        self.quote_sync_v2 = info.get("quoteSyncVersion") == 2
         mode = info.get("quoteReadMode")
         self.quote_read_mode = mode if mode in ("annual-two-tabs", "legacy-storage") else None
         self.sold_reservation_supported = info.get("soldNumberReservation") == 1
@@ -402,7 +408,7 @@ class Manager(ServerFirst, QuoteVersions, SoldNumbers, SalesWorkspace):
         confirmed = {d["id"] for d in (self.vault.preference("confirmed_quotes", []) or [])}
         # Protect legacy confirmed drafts until their one-time Excel migration completes.
         statuses = {r["requestId"]: r.get("status") for r in self.vault.rows("requests")}
-        keep = [d for d in drafts if not isinstance(d, dict) or d.get("id") in confirmed or
+        keep = [d for d in drafts if not isinstance(d, dict) or d.get("sourceRequestId") or d.get("id") in confirmed or
                 d.get("manualStatus") in ("견적확정", "견적발송완료", "입금확인") or
                 statuses.get(d.get("sourceRequestId")) in ("견적확정", "견적발송완료", "입금확인") or
                 d.get("createdAt", now_ms()) > now_ms() - 30 * 86400000]
@@ -1096,6 +1102,8 @@ class Manager(ServerFirst, QuoteVersions, SoldNumbers, SalesWorkspace):
 
     def _pages(self, action, field, inbox_only=False, *, start=0, snapshot=None):
         """Full snapshot from 0, or an incremental page set after ``start`` (snapshot=False)."""
+        if field == "requests" and self.quote_sync_v2:
+            return self._quote_pages_v2(start=start, snapshot=snapshot is not False)
         rows, cursor, references, deleted = [], start, set(), set()
         snapshot_id, total, watermark, received = None, None, None, 0
         snapshot = (field == "requests" and self.request_snapshot) if snapshot is None else snapshot
@@ -1222,21 +1230,42 @@ class Manager(ServerFirst, QuoteVersions, SoldNumbers, SalesWorkspace):
         require(self.credentials.get("paired") is True, "PC를 먼저 연결해주세요.")
         self.verify_server()
         recovery_error = ""
+        if self.quote_sync_v2:
+            self._apply_quote_deleted_v2()
+            # A v1 marker has no bounded-delta contract; rebase once into v2.
+            if self.vault.snapshot_marker().get("quoteSyncVersion") != 2:
+                delta = False
+            self._quote_rebased_v2 = False
         # Pull first. Neither an old write nor a failed deletion may block new requests.
         if delta:
             # Changed rows only. Merged by UUID with the cursor in one transaction; failure keeps the old list.
             marker = self.vault.snapshot_marker()
             requests, cursor, expired = self._pages("list_requests", "requests", start=marker["requests"], snapshot=False)
             self.report_progress("바뀐 견적요청을 PC에 저장하는 중…")
-            self.vault.merge_requests(requests, cursor, expired, quote_read_mode=self.quote_read_mode)
+            if self.quote_sync_v2:
+                self._apply_quote_deleted_v2(self._quote_deleted_v2)
+            if self.quote_sync_v2 and self._quote_rebased_v2:
+                self.vault.replace_requests(requests, cursor, expired, quote_read_mode=self.quote_read_mode,
+                                            authoritative=True, quote_sync_version=2)
+                self.vault.save_preference("request_full_sync_at", now_ms())
+                delta = False
+            else:
+                self.vault.merge_requests(requests, cursor, expired, quote_read_mode=self.quote_read_mode,
+                                          quote_sync_version=2 if self.quote_sync_v2 else None)
         else:
             # Confirmed rows are kept too, so quotes confirmed on a phone reach this PC's list.
             requests, cursor, expired = self._pages("list_requests", "requests")
             self.report_progress("받은 견적요청을 PC에 저장하는 중…")
+            if self.quote_sync_v2:
+                self._apply_quote_deleted_v2(self._quote_deleted_v2)
             self.vault.replace_requests(requests, cursor, expired,
-                                        quote_read_mode=self.quote_read_mode, authoritative=True)
+                                        quote_read_mode=self.quote_read_mode, authoritative=True,
+                                        quote_sync_version=2 if self.quote_sync_v2 else None)
             self.vault.save_preference("request_full_sync_at", now_ms())
-        if settle_pending:
+        if isinstance(requests, ReceivedRequests):
+            requests.discard()
+            self.vault.save_preference("quote_receive_rebase_v2", False)
+        if settle_pending and not self.quote_sync_v2:
             self._park_quote_write("서버 견적 우선 반영 · 미확인 PC 저장은 별도 보관")
             if not delta:
                 closed = [op for op in self.vault.pending() if op["action"] == "close_request"]
@@ -1246,7 +1275,7 @@ class Manager(ServerFirst, QuoteVersions, SoldNumbers, SalesWorkspace):
         self.inbox_requests = [r for r in self.vault.rows("requests") if r.get("status", "신규") == "신규"]
         self.purge_expired_drafts()
         try:
-            recovery_error = " · ".join(filter(None, (recovery_error, self._merge_server_quotes(authoritative=settle_pending and not delta))))
+            recovery_error = " · ".join(filter(None, (recovery_error, self._merge_server_quotes(authoritative=settle_pending and not delta and not self.quote_sync_v2))))
         except OSError:
             recovery_error = " · ".join(filter(None, (recovery_error, "확정견적 엑셀 갱신 대기 · 열린 엑셀을 닫아주세요.")))
         except AuthenticationError:
@@ -1264,7 +1293,8 @@ class Manager(ServerFirst, QuoteVersions, SoldNumbers, SalesWorkspace):
     def _delta_ready(self):
         marker = self.vault.snapshot_marker()
         last = self.vault.preference("request_full_sync_at", 0) or 0
-        return (self.request_snapshot and marker.get("quoteReadMode") == self.quote_read_mode
+        return (self.request_snapshot and (not self.quote_sync_v2 or marker.get("quoteSyncVersion") == 2)
+                and marker.get("quoteReadMode") == self.quote_read_mode
                 and marker["requests"] > 0 and 0 <= now_ms() - last < 86400000)
 
     @serialized

@@ -30,6 +30,8 @@ data class WebQuoteEnvelope(
     val keyRegistered: Boolean? = null, val keyId: String? = null, val encryptionReady: Boolean? = null,
     val closed: Boolean? = null, val updated: Boolean? = null, val hidden: Boolean? = null,
     val requestId: String? = null, val status: String? = null,
+    val quoteSyncVersion: Int? = null, val schemaEpoch: Int? = null, val scope: String? = null,
+    val requiresSnapshot: Boolean? = null, val minAvailableSequence: Long? = null,
     val snapshotId: String? = null, val total: Int? = null, val watermark: Long? = null,
     val sent: Boolean? = null, val recipientPhone: String? = null, val recipientEmail: String? = null,
     val messageId: String? = null, val checked: Boolean? = null, val state: String? = null,

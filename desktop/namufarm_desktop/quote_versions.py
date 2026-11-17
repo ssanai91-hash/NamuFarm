@@ -188,7 +188,8 @@ class QuoteVersions:
         if not rows and not authoritative:
             return ""
         quotes = self._local_quotes()
-        if authoritative:
+        if authoritative and not getattr(self, "quote_sync_v2", False):
+            # V2 snapshots intentionally omit expired quotes. Only explicit state evidence removes history.
             sources = {row["requestId"] for row in rows}
             removed = [q for q in quotes if q.get("serverQuote") and q.get("sourceRequestId") not in sources]
             if removed:

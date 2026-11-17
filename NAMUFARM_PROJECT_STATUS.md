@@ -1,3 +1,51 @@
+## 2026-11-17 만료 견적 누적 정리 4단계 — 승인 후 구현 · 미빌드/미배포/정리 OFF
+
+- 기준 main `b82cae286b461046d427ec00746a087034ded0eb`. 사용자가 4단계 설계 이후 구현을 승인했다. main만 사용하고 `[skip ci]` 커밋으로 코드와 문서를 반영한다. 임의 브랜치·PR·자동 배포·새 트리거를 만들지 않는다. **4단계 코드 구현과 운영 적용은 별개**이며 5·6단계는 진행하지 않았다.
+- 서버 `QuoteCompaction.gs`를 추가했다. 기존 관리 장부 내부의 `견적종료색인` 11열에 UUID·최초 지문·접수시각/번호·순번·종료구분/시각·원래 연도/탭·단계만 보존한다. 이름/전화/주소/품목/메모/견적서 원문은 색인으로 옮기지 않는다. 기존 견적 두 탭/18열·주문 월별 탭/20열은 유지한다. 스키마 문서에 실제 상수를 기록했으며 **운영 색인 생성/헤더 조회는 하지 않았다.**
+- 물리 정리는 소유자 내부 수동 함수이며 **기본 OFF**다. 계획/백업 → planId 확인 후 활성화 → 소량 실행 → 재계획/비활성화 절차를 문서화했다. ScriptLock 아래 색인을 먼저 저장/재조회해 VERIFIED를 확인하고 현재 UUID·식별/본문을 다시 대조한 뒤 한 행씩 삭제한다. 사본도 지문을 확인하며 실제 삭제 최대 40행/약 45초 처리 예산을 둔다. 삭제 직후 중단돼 VERIFIED만 남아도 종료 식별 근거는 유지한다. 기존 hourly 개인정보 만료 처리에 물리 삭제를 붙이지 않았다.
+- 알려진 업무 탭의 안전한 빈 행/미사용 그리드 꼬리도 소량 압축한다. 후보의 전체 열을 확인하고 A:R 밖 값·수식·메모·유효성 검사, 보호·필터·병합·그룹·차트/도형/이미지·이름 범위·밴딩·조건부서식 등 구조가 있으면 건너뛴다. 최소 입력 행·헤더·다른 메모 탭을 보존한다. 연속 대량 deleteRows 최적화 대신 매 행/UUID 재확인을 선택했다.
+- 기존 API/인증에 `quoteSyncVersion:2`를 협상 확장했다. 전체는 유효 견적만, 증분은 유효 변경+최근 종료 표식(90일)을 반환한다. 같은 세션의 fromSequence·snapshotId·watermark·scope·schemaEpoch·total을 고정한다. 너무 오래된 커서는 requiresSnapshot으로 전체 재수신한다. 인증된 `quote_request_states`(50 UUID/배치)로 active/expired/admin_deleted/unknown을 구분한다. 고객 원문 보관 30일은 늘리지 않는다. v1은 종료 색인에서 최소 표식을 재구성해 의미를 유지하며 구 클라이언트 자체의 상한까지 없애지는 않는다.
+- 종료 색인도 UUID 재접수 중복 방지에 포함한다. 같은 지문은 기존 접수 정체성을 돌려주고 다른 지문은 CONFLICT다. 만료 후 관리자 삭제도 새 순번/deleted 표식을 발행한다. 정리된 견적의 기존 주문 상태 갱신은 종료 상태를 유지한다. 판매/입금 잠금·revision·주문견적연결·판매번호 예약·접수 제한의 기존 계약은 바꾸지 않는다. 이미 사라진 가격/입금 증거를 만들어내지 않는다.
+- Android **1.1.44(47) → 1.1.45(48)**. noBackupFilesDir의 독립 임시 SQLite 수신 캐시에 페이지/유일 UUID·순번·토큰·진행을 저장한다. 누적 10,000건/100페이지 제한 대신 단위 20페이지/약 60초와 완료 조건을 분리하며 상태 확인도 나눠 이어받는다. 완료 뒤 Room 요청 캐시만 트랜잭션으로 반영한다. 읽음·복호화 대기 규칙을 유지하고 원문 전체를 메모리에 누적하지 않는다. NamuFarmPrefs의 cache 지문+독립 watermark로 빈 목록 커서/복원 연계를 처리한다. 새 커서에 수동 백업에서 빠진 quote_sync_v1을 사용하지 않는다.
+- Android의 명시 삭제는 journal/기기 원본 보관 후 적용하며 로컬 쓰기 실패를 삼키지 않는다. 미완료 발송/수정/입금 작업이 있으면 원본·삭제 근거를 보존하고 커서 완료를 보류한다. 자연 만료/unknown/단순 목록 부재로 확정 이력·초안·발송 근거를 제거하지 않는다. 만료된 견적의 사용자 관리자 삭제도 서버에 전달하도록 보완했다. 기존 시험 fixture는 새 생성자/v2 응답/수동 BUSY 재시도 계약에 맞춰 수정만 했다.
+- 나피 **0.5.31 → 0.5.32**(패키지·표시 버전 함께). 별도 `.quote-receive-v2.tmp` SQLite에 기존 vault 암호화를 적용하고 디스크 스트림으로 완료 수신을 반영한다. 기존 vault 스키마는 유지하며 요청 캐시+커서는 같은 트랜잭션에 저장한다. v2의 자연 만료와 관리자 삭제를 분리하고 단순 목록 부재로 확정 목록을 제외하지 않는다. 웹 초안의 나이만으로 지우는 기존 정리도 막았다. 미완료 작업/삭제 근거는 journal로 유지하며 관리자의 대기 확인에서도 자연 만료/목록 누락을 명시 삭제 성공으로 간주하지 않는다. 판매 페이징/업로드는 이번 범위 밖이다.
+- 임시 수신은 완료/형식 오류/토큰 변경 때 비우고 1시간 지난 세션은 시작/다음 수신에서 폐기한다. 일시 중단/전송 실패 시 검증된 페이지를 유지하며 오래된 커서의 전체 전환도 영속화한다. 복원한 다른 vault 키의 임시 파일은 다시 시작한다. 여유 공간 32MiB 이하에서는 업무 자료를 유지하며 중단한다. 임시 원문은 업무 백업에 섞지 않는다.
+- **정적 검토 범위:** 변경 diff/공백, 새 호출/응답 필드, 페이지 완료/중단 경로, DB/인증/서명/버전 변경 범위를 소스로 확인했다. 컴파일·자동/단위/기기 시험·Actions·CI 로그 분석·운영 API/Google Sheets 조회/쓰기·정리 계획 실행·실제 정리·전화/문자/메일·실고객 주문 시험은 하지 않았다. 기본 코드 일관성 확인만으로 정상 동작/빌드 성공을 주장하지 않는다.
+- **읽기 전용 영향 점검:** 3단계 주문 SyncManager/OrderSync와 입금 API의 잠금·revision·요청ID는 그대로다. 종료 뒤 주문 연결 조회/상태 갱신 경로만 호환 보완했다. 종료 원본 삭제 전에 검증 색인을 요구하며 v2 총건수는 활성 범위다. 공개 접수 제한/멱등 ticket은 유지하고 종료 UUID의 중복 접수만 기존 번호로 응답한다. 이는 5단계의 별도 체크리스트 작성 완료를 뜻하지 않는다.
+- **운영 적용:** 기존 ID/URL의 Apps Script 새 버전 재배포가 필요하다. Android·나피 빌드/같은 서명 업데이트와 사용자 확인도 필요하다. 홈페이지 게시 없음. 물리 정리 활성화는 배포와 별개이며 이번에는 하지 않았다. 도메인·서버 URL·배포 ID·인증·Android 패키지/고정 인증서·NamuFarm.db v14·견적/문의 DB v1·기존 업무 테이블/자료는 유지한다.
+- **남은 위험/사용자 확인:** 미빌드/미실행 코드다. 실제 운영 버전·행 수·트리거·새 색인 헤더는 미확인이다. Google 장부/종료 색인 스캔 시간·시트 용량, 자주 바뀌는 snapshot의 BUSY 재시작, 큰 로컬 목록/복원/임시 디스크 용량, 보관 prefs/복구 원본 증가가 남는다. 보호/복잡한 시트는 정리가 건너뛰어질 수 있다. 10,000건 초과도 여러 차례 이어받기가 필요할 수 있다. 삭제와 미완료 작업 충돌 시 수동 확인 전 동기화가 완료되지 않는다. 빈 목록/대용량/오래 오프라인/만료 대 삭제/중간 종료/주문 연결·기존 자료 보존을 사용자가 확인한다.
+- 상세 절차는 `docs/EXPIRED_QUOTE_COMPACTION_RUNTIME.md`에 기록했다. **4단계 구현 보고 후 멈춘다. 다음은 5단계 P0 읽기 전용 리뷰 기준 문서화 승인 대기**다. 6단계 clasp 계획도 미착수이며 main 푸시 운영 자동 배포는 제외다.
+
+변경 파일 25개:
+
+- `NAMUFARM_PROJECT_STATUS.md`
+- `app/build.gradle.kts`
+- `app/src/main/java/com/example/namufarm/MainActivity.kt`
+- `app/src/main/java/com/example/namufarm/data/remote/WebQuoteApi.kt`
+- `app/src/main/java/com/example/namufarm/quotation/QuoteWorkflow.kt`
+- `app/src/main/java/com/example/namufarm/quotemode/InitialQuoteConnection.kt`
+- `app/src/main/java/com/example/namufarm/quotemode/InitialQuoteDatabase.kt`
+- `app/src/main/java/com/example/namufarm/quotemode/InitialQuoteViewModel.kt`
+- `app/src/main/java/com/example/namufarm/quotemode/QuoteReceiveCache.kt`
+- `app/src/test/java/com/example/namufarm/quotemode/InitialQuoteConnectionTest.kt`
+- `desktop/namufarm_desktop/__init__.py`
+- `desktop/namufarm_desktop/quote_receive.py`
+- `desktop/namufarm_desktop/quote_versions.py`
+- `desktop/namufarm_desktop/server_first.py`
+- `desktop/namufarm_desktop/service.py`
+- `desktop/namufarm_desktop/store.py`
+- `desktop/pyproject.toml`
+- `docs/EXPIRED_QUOTE_COMPACTION_DESIGN.md`
+- `docs/EXPIRED_QUOTE_COMPACTION_RUNTIME.md`
+- `docs/QUOTE_ORDER_SHEET_SCHEMA.md`
+- `server/quote-requests/Code.gs`
+- `server/quote-requests/QuoteCompaction.gs`
+- `server/quote-requests/SecureCommerce.gs`
+- `server/quote-requests/TwoTabQuotes.gs`
+- `server/quote-requests/tests/fixture.cjs`
+
+---
+
 # 나무팜 프로젝트 현황 · 채팅 인수인계
 
 ## 2026-11-17 만료 견적 정리 4단계 — 현황 분석·설계 보고, 구현 승인 대기

@@ -76,15 +76,29 @@ interface QuoteWorkflowStore {
 
 /** Separate pending journal from results. commit() must succeed before advancing the UI. */
 class AndroidQuoteWorkflowStore(context: Context) : QuoteWorkflowStore {
+    companion object { private val mutationLock = Any() }
     private val prefs = context.applicationContext.getSharedPreferences("quote_workflow_v1", Context.MODE_PRIVATE)
+    private val archive = context.applicationContext.getSharedPreferences("NamuFarmPrefs", Context.MODE_PRIVATE)
     private val gson = Gson()
-    override fun records(): List<QuoteWorkflowRecord> = prefs.all.values.filterIsInstance<String>().map {
-        gson.fromJson(it, QuoteWorkflowRecord::class.java)
+    override fun records(): List<QuoteWorkflowRecord> = synchronized(mutationLock) {
+        prefs.all.values.filterIsInstance<String>().map { gson.fromJson(it, QuoteWorkflowRecord::class.java) }
     }
-    fun remove(id: String) {
+    /** Explicit server deletion only. Keep original evidence before removing a completed local copy. */
+    fun serverDeleted(id: String) = synchronized(mutationLock) {
+        val record = prefs.getString(id, null) ?: return@synchronized
+        val row = gson.fromJson(record, QuoteWorkflowRecord::class.java)
+        check(archive.edit().putString("quote_deleted_v2:" + id + ":" + quoteWorkflowFingerprint(row.draft), record).commit())
+        check(!row.confirmationPending && row.pendingSharedRevision == null && row.pendingConfirmedDelivery == null &&
+            row.sharedDelivery == null && row.sharedPayment?.let { !it.confirmed || !it.orderCreated } != true &&
+            row.delivery.smsState !in setOf("pending", "unknown", "sending")) {
+            "서버에서 삭제한 견적에 미완료 작업이 있습니다. 원본을 보관했습니다. 해당 견적을 확인해주세요."
+        }
+        remove(id)
+    }
+    fun remove(id: String) = synchronized(mutationLock) {
         check(prefs.edit().remove(id).commit()) { "삭제한 견적의 기기 기록을 정리하지 못했습니다." }
     }
-    override fun save(record: QuoteWorkflowRecord) {
+    override fun save(record: QuoteWorkflowRecord) = synchronized(mutationLock) {
         check(prefs.edit().putString(record.request.requestId, gson.toJson(record)).commit()) {
             "견적 기록을 휴대폰에 저장하지 못했습니다. 창을 닫지 말고 다시 시도해주세요."
         }

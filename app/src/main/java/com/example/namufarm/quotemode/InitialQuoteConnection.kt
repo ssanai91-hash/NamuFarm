@@ -11,6 +11,8 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
+private class QuoteRebase : IllegalStateException()
+
 data class InitialQuoteCache(val requests: List<WebQuoteRequestEntity>, val deferredCount: Int)
 
 /**
@@ -20,11 +22,16 @@ data class InitialQuoteCache(val requests: List<WebQuoteRequestEntity>, val defe
 class InitialQuoteConnection(
     private val database: InitialQuoteDatabase,
     private val gateway: OperationsMasterGateway,
-    private val syncPrefs: android.content.SharedPreferences? = null
+    private val syncPrefs: android.content.SharedPreferences,
+    private val receiveFile: java.io.File
 ) {
     private val dao = database.inbox()
     private val mutex = Mutex()
     private val gson = Gson()
+    init {
+        if (receiveFile.exists() && System.currentTimeMillis() - receiveFile.lastModified() !in 0..3_600_000L)
+            android.database.sqlite.SQLiteDatabase.deleteDatabase(receiveFile)
+    }
     /** Last request counter whose changed rows were merged in this process. */
     @Volatile private var syncedHead = -1L
     /** Shared confirmed quote API. Unknown actions on an older deployment keep the legacy path. */
@@ -47,126 +54,226 @@ class InitialQuoteConnection(
     }
     fun read(id: String) = dao.read(id, System.currentTimeMillis())
 
-    suspend fun refresh(): Int = mutex.withLock {
-        repeat(3) { attempt ->
-            try { return@withLock downloadSnapshot().also { fullSyncDone() } }
-            catch (e: CancellationException) { throw e }
-            catch (e: MasterServerException) {
-                if (e.code !in setOf("BUSY", "CONFLICT") || attempt == 2) throw e
-            }
-        }
-        error("서버 목록이 변경되었습니다. 다시 가져와주세요.")
+    @Volatile var knownRequestIds: () -> Set<String> = { emptySet() }
+    @Volatile var onReceiveProgress: (String) -> Unit = {}
+    private val prefix = "quote_receive_v2:"
+    private fun put(key: String, value: String) {
+        check(syncPrefs.edit().putString(prefix + key, value).commit()) { "견적 동기화 기록을 저장하지 못했습니다." }
     }
-    private suspend fun downloadSnapshot(): Int {
-        val rows = mutableListOf<WebQuoteRequestEntity>()
-        val deferred = mutableListOf<DeferredWebRequestEntity>()
-        val ids = mutableSetOf<String>()
-        val deletedIds = mutableSetOf<String>()
-        var cursor = 0L
-        var snapshot: String? = null
-        var total = -1
-        var watermark = 0L
-        repeat(100) {
-            val fields = mutableMapOf<String, Any>("afterSequence" to cursor)
-            snapshot?.let { fields["snapshotId"] = it }
-            val response = gson.fromJson(gateway.request("snapshot_requests", fields), WebQuoteEnvelope::class.java)
-            val page = WebQuoteValidator.checkedPage(response, cursor) { remote ->
-                if (remote.encryptedRequest != null) throw LegacyRequestKeyUnavailable()
-                remote
-            }
-            val token = checkNotNull(response.snapshotId)
-            check(Regex("[a-f0-9]{64}").matches(token))
-            check(response.total != null && response.total in 0..10000 &&
-                response.watermark != null && response.watermark in 0..9_007_199_254_740_991L)
-            if (snapshot == null) {
-                snapshot = token; total = response.total; watermark = response.watermark
-            }
-            check(token == snapshot && total == response.total && watermark == response.watermark) {
-                "견적 목록이 변경되어 기존 기기 자료를 유지합니다. 다시 가져와주세요."
-            }
-            response.requests.orEmpty().forEach { check(ids.add(checkNotNull(it?.requestId))) }
-            check(ids.size <= total)
-            rows += page.rows
-            deferred += page.deferred
-            deletedIds += page.deletedIds
-            cursor = page.cursor
-            if (response.hasMore == false) {
-                check(ids.size == total && cursor <= watermark) { "견적 목록을 전부 받지 못했습니다." }
-                database.withTransaction {
-                    val readTimes = dao.requests().associate { it.requestId to it.readAt }
-                    dao.clearRequests(); dao.clearDeferred()
-                    dao.insertRequests(rows.map { it.copy(readAt = readTimes[it.requestId]) })
-                    dao.insertDeferred(deferred)
+    private fun cacheStamp(): String {
+        val digest = java.security.MessageDigest.getInstance("SHA-256")
+        var after = ""
+        while (true) {
+            val keys = dao.receiveKeys(after)
+            if (keys.isEmpty()) break
+            keys.forEach { digest.update((it.requestId + ":" + it.sequence + "\n").toByteArray(Charsets.UTF_8)) }
+            after = keys.last().requestId
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
+    }
+    private fun checkpoint(): com.google.gson.JsonObject? = syncPrefs.getString(prefix + "checkpoint", null)?.let {
+        gson.fromJson(it, com.google.gson.JsonObject::class.java)
+    }?.takeIf { it.get("stamp")?.asString == cacheStamp() }
+    private fun saveCheckpoint(watermark: Long, full: Boolean) {
+        val state = com.google.gson.JsonObject().apply {
+            addProperty("cursor", watermark); addProperty("stamp", cacheStamp())
+            addProperty("fullSyncAt", if (full) System.currentTimeMillis() else syncPrefs.getString(prefix + "checkpoint", null)?.let { gson.fromJson(it, com.google.gson.JsonObject::class.java).get("fullSyncAt")?.asLong } ?: 0L)
+        }
+        put("checkpoint", state.toString())
+    }
+    private fun replayDeletes() {
+        val pending = syncPrefs.getStringSet(prefix + "deleted", emptySet()).orEmpty().toSet()
+        if (pending.isNotEmpty()) {
+            onServerDeleted(pending) // Must throw on a partial/failed local write.
+            check(syncPrefs.edit().remove(prefix + "deleted").commit())
+        }
+    }
+    private suspend fun checkedStates(extra: Set<String>, stage: QuoteReceiveCache): MutableSet<String> {
+        val ids = knownRequestIds() + extra
+        val sorted = ids.sorted()
+        val key = java.security.MessageDigest.getInstance("SHA-256").digest(sorted.joinToString("\n").toByteArray()).joinToString("") { "%02x".format(it) }
+        if (stage.meta.get("statesKey")?.asString != key) {
+            stage.meta.addProperty("statesKey", key); stage.meta.addProperty("statesAfter", "")
+            // A known deletion/expiry cannot be undone by a changing local candidate set during recovery.
+            if (!stage.meta.has("deleted")) stage.meta.add("deleted", com.google.gson.JsonArray())
+            if (!stage.meta.has("closed")) stage.meta.add("closed", com.google.gson.JsonArray())
+            stage.save()
+        }
+        val deleted = stage.meta.getAsJsonArray("deleted").map { it.asString }.toMutableSet()
+        val closed = stage.meta.getAsJsonArray("closed").map { it.asString }.toMutableSet()
+        val started = android.os.SystemClock.elapsedRealtime()
+        val remaining = sorted.filter { it > stage.meta.get("statesAfter").asString }.chunked(50)
+        remaining.forEachIndexed { index, batch ->
+            val response = gateway.request("quote_request_states", mapOf("quoteSyncVersion" to 2, "requestIds" to batch))
+            check(response.get("quoteSyncVersion")?.asInt == 2 && response.get("schemaEpoch")?.asInt == 1)
+            val states = checkNotNull(response.getAsJsonArray("states"))
+            val seen = mutableSetOf<String>()
+            check(states.size() == batch.size)
+            states.forEach { item ->
+                val row = item.asJsonObject
+                val id = row.get("requestId").asString
+                val sequence = row.get("sequence").asLong
+                check(id in batch && seen.add(id) && sequence in 0..9_007_199_254_740_991L)
+                when (row.get("state").asString) {
+                    "admin_deleted" -> { check(sequence > 0); deleted += id; closed += id }
+                    "expired" -> { check(sequence > 0); closed += id }
+                    "active" -> check(sequence > 0)
+                    "unknown" -> check(sequence == 0L)
+                    else -> error("견적 종료 상태를 확인하지 못했습니다.")
                 }
-                if (deletedIds.isNotEmpty()) onServerDeleted(deletedIds)
-                return rows.size
             }
+            stage.meta.addProperty("statesAfter", batch.last())
+            stage.meta.add("deleted", gson.toJsonTree(deleted)); stage.meta.add("closed", gson.toJsonTree(closed)); stage.save()
+            onReceiveProgress("견적 종료 상태 확인 중… ${sorted.indexOf(batch.last()) + 1}/${sorted.size}")
+            if (index < remaining.lastIndex && (index >= 19 || android.os.SystemClock.elapsedRealtime() - started >= 60_000))
+                throw QuoteReceivePending("견적 종료 상태 확인 중 · 동기화를 다시 누르면 이어받습니다. 기존 자료를 유지합니다.")
         }
-        error("견적 목록을 전부 받지 못해 기존 기기 자료를 유지합니다.")
+        return deleted
     }
-    private fun fullSyncDone() {
-        syncPrefs?.edit()?.putLong("fullSyncAt", System.currentTimeMillis())?.apply()
+    suspend fun refresh(): Int = mutex.withLock { receive(full = true) }
+    private suspend fun receive(full: Boolean): Int = try { receiveBatch(full) }
+    catch (_: QuoteRebase) { receive(true) }
+    private suspend fun receiveBatch(full: Boolean): Int {
+        replayDeletes()
+        if (!full && syncPrefs.getBoolean(prefix + "rebase", false)) return receive(true)
+        val state = checkpoint()
+        if (!full && state == null) return receive(true)
+        val base = if (full) 0L else checkNotNull(state).get("cursor").asLong
+        val scope = (if (full) "full:" else "delta:") + base + ":" + cacheStamp()
+        QuoteReceiveCache(receiveFile, scope).use { stage ->
+            val started = android.os.SystemClock.elapsedRealtime()
+            var pages = 0
+            try {
+                while (stage.meta.get("complete")?.asBoolean != true) {
+                    val after = stage.meta.get("cursor").asLong.coerceAtLeast(base)
+                    val fields = mutableMapOf<String, Any>("quoteSyncVersion" to 2, "afterSequence" to after, "fromSequence" to base,
+                        "snapshot" to full)
+                    stage.meta.get("snapshotId")?.let { fields["snapshotId"] = it.asString }
+                    val response = gson.fromJson(gateway.request(if (full) "snapshot_requests" else "list_requests", fields), WebQuoteEnvelope::class.java)
+                    check(response.quoteSyncVersion == 2 && response.schemaEpoch == 1 && response.scope == (if (full) "active" else "changes")) {
+                        "견적 동기화 v2 서버 배포가 필요합니다. 기존 자료를 유지합니다."
+                    }
+                    if (response.requiresSnapshot == true) {
+                        check(!full)
+                        check(syncPrefs.edit().putBoolean(prefix + "rebase", true).commit())
+                        stage.clear(); throw QuoteRebase()
+                    }
+                    check(response.requiresSnapshot == false)
+                    val token = checkNotNull(response.snapshotId)
+                    val total = checkNotNull(response.total)
+                    val watermark = checkNotNull(response.watermark)
+                    check(Regex("[a-f0-9]{64}").matches(token) && total >= 0 && watermark in base..9_007_199_254_740_991L)
+                    if (stage.meta.get("snapshotId") == null) {
+                        stage.meta.addProperty("snapshotId", token); stage.meta.addProperty("total", total)
+                        stage.meta.addProperty("watermark", watermark)
+                    }
+                    check(stage.meta.get("snapshotId").asString == token && stage.meta.get("total").asInt == total &&
+                        stage.meta.get("watermark").asLong == watermark) { "견적 목록이 변경되었습니다. 다시 가져와주세요." }
+                    response.requests.orEmpty().forEach { remote ->
+                        checkNotNull(remote)
+                        val created = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).apply {
+                            timeZone = java.util.TimeZone.getTimeZone("UTC"); isLenient = false
+                        }.parse(checkNotNull(remote.createdAt))?.time
+                        check(created != null && remote.expiresAt == created + 30L * 86_400_000L)
+                    }
+                    val page = checkedPage(response, after)
+                    check(page.cursor <= watermark)
+                    if (full) check(response.requests.orEmpty().none { it?.expired == true })
+                    stage.append(response.requests.orEmpty(), page.cursor)
+                    check(stage.count() <= total)
+                    if (response.hasMore == false) {
+                        check(stage.count() == total)
+                        stage.meta.addProperty("complete", true); stage.save()
+                    }
+                    onReceiveProgress("견적 ${stage.count()}/$total 건 수신 중…")
+                    pages++
+                    if (stage.meta.get("complete")?.asBoolean != true && (pages >= 20 || android.os.SystemClock.elapsedRealtime() - started >= 60_000))
+                        throw QuoteReceivePending("견적 ${stage.count()}/$total 건 수신 · 동기화를 다시 누르면 이어받습니다. 기존 자료를 유지합니다.")
+                }
+                // Known local UUIDs include confirmed/sent/pending history, not just the active inbox.
+                val localIds = mutableSetOf<String>()
+                var idAfter = ""
+                while (true) {
+                    val keys = dao.receiveKeys(idAfter); if (keys.isEmpty()) break
+                    keys.forEach { localIds += it.requestId }; idAfter = keys.last().requestId
+                }
+                val deleted = checkedStates(localIds, stage)
+                val closed = stage.meta.getAsJsonArray("closed").map { it.asString }.toSet()
+                var cursor = 0L
+                while (true) {
+                    val remote = stage.page(cursor); if (remote.isEmpty()) break
+                    remote.filterNotNull().filter { it.deleted == true }.forEach { deleted += checkNotNull(it.requestId) }
+                    cursor = checkNotNull(remote.last()?.sequence)
+                }
+                if (deleted.isNotEmpty()) {
+                    check(syncPrefs.edit().putStringSet(prefix + "deleted", deleted).commit())
+                    replayDeletes() // Deletion evidence is durable before any cache/cursor change.
+                }
+                var inserted = 0
+                database.withTransaction {
+                    if (full) {
+                        var after = ""
+                        while (true) {
+                            val keys = dao.receiveKeys(after); if (keys.isEmpty()) break
+                            keys.filter { !stage.contains(it.requestId) || it.requestId in deleted }.forEach { dao.deleteRequest(it.requestId) }
+                            after = keys.last().requestId
+                        }
+                        dao.clearDeferred()
+                    }
+                    cursor = 0L
+                    while (true) {
+                        val remote = stage.page(cursor); if (remote.isEmpty()) break
+                        val page = checkedPage(WebQuoteEnvelope(ok = true, requests = remote, hasMore = false), cursor)
+                        page.expiredIds.forEach { dao.deleteRequest(it); dao.deleteDeferred(it) }
+                        val overdue = remote.filterNotNull().filter { (it.expiresAt ?: 0L) <= System.currentTimeMillis() }.mapNotNull { it.requestId }.toSet()
+                        overdue.forEach { dao.deleteRequest(it); dao.deleteDeferred(it) }
+                        val fresh = page.rows.filter { it.requestId !in deleted && it.requestId !in closed && it.requestId !in overdue }.mapNotNull { row ->
+                            val old = dao.request(row.requestId)
+                            if (!full && old != null && old.sequence >= row.sequence) null else row.copy(readAt = old?.readAt)
+                        }
+                        fresh.forEach { dao.deleteDeferred(it.requestId) }
+                        page.deferred.forEach { dao.deleteRequest(it.requestId) }
+                        dao.insertRequests(fresh); dao.insertDeferred(page.deferred.filter { it.requestId !in deleted && it.requestId !in closed && it.requestId !in overdue })
+                        inserted += fresh.size; cursor = page.cursor
+                    }
+                    (deleted + closed).forEach { dao.deleteRequest(it); dao.deleteDeferred(it) }
+                }
+                saveCheckpoint(stage.meta.get("watermark").asLong, full)
+                if (full) check(syncPrefs.edit().remove(prefix + "rebase").commit())
+                syncedHead = stage.meta.get("watermark").asLong
+                stage.clear()
+                return inserted
+            } catch (e: MasterServerException) {
+                if (e.code in setOf("BUSY", "CONFLICT")) stage.clear()
+                throw e
+            } catch (e: QuoteRebase) { throw e }
+            catch (e: QuoteReceivePending) { throw e }
+            catch (e: CancellationException) { throw e }
+            catch (e: java.io.IOException) { throw e } // Retain verified pages across a transport failure.
+            catch (e: retrofit2.HttpException) { throw e }
+            catch (e: Exception) { stage.clear(); throw e }
+        }
+    }
+    private fun checkedPage(response: WebQuoteEnvelope, after: Long) = WebQuoteValidator.checkedPage(response, after) { remote ->
+        if (remote.encryptedRequest != null) throw LegacyRequestKeyUnavailable()
+        remote
     }
     private fun fullSyncDue(): Boolean {
-        val last = syncPrefs?.getLong("fullSyncAt", 0L) ?: 0L
-        val age = System.currentTimeMillis() - last
-        return age < 0 || age > 86_400_000L
+        val last = checkpoint()?.get("fullSyncAt")?.asLong ?: 0L
+        return System.currentTimeMillis() - last !in 0..86_400_000L
     }
-    /**
-     * Launch/resume check. Reads only the change counter (no sheet scan); downloads changed rows when it moved.
-     * Returns null when the server has no counter (older deployment): nothing is downloaded automatically.
-     */
     suspend fun syncIfChanged(): Int? {
-        val head = try {
-            gateway.request("sync_head").get("requestSequence")?.asLong ?: return null
-        } catch (e: MasterServerException) {
-            if (e.code == "INVALID_ACTION") return null
-            throw e
+        val head = try { gateway.request("sync_head").get("requestSequence")?.asLong ?: return null }
+        catch (e: MasterServerException) { if (e.code == "INVALID_ACTION") return null; throw e }
+        return mutex.withLock {
+            replayDeletes()
+            if (fullSyncDue()) receive(true)
+            else if (head == syncedHead || head <= (checkpoint()?.get("cursor")?.asLong ?: -1L)) 0
+            else receive(false)
         }
-        if (fullSyncDue()) return refresh().also { syncedHead = head }
-        // The counter can run ahead of a failed server write: never store it as a cursor.
-        if (head == syncedHead || head <= (dao.maxSequence() ?: 0L)) return 0
-        return mutex.withLock { downloadChanges() }.also { syncedHead = head }
     }
-    /** Rows changed after this phone's newest row, merged by request UUID in one transaction. */
-    private suspend fun downloadChanges(): Int {
-        var cursor = dao.maxSequence() ?: 0L
-        val rows = mutableListOf<WebQuoteRequestEntity>()
-        val deferred = mutableListOf<DeferredWebRequestEntity>()
-        val expiredIds = mutableSetOf<String>()
-        val deletedIds = mutableSetOf<String>()
-        repeat(100) {
-            val response = gson.fromJson(gateway.request("list_requests",
-                mapOf("afterSequence" to cursor, "snapshot" to false)), WebQuoteEnvelope::class.java)
-            val page = WebQuoteValidator.checkedPage(response, cursor) { remote ->
-                if (remote.encryptedRequest != null) throw LegacyRequestKeyUnavailable()
-                remote
-            }
-            rows += page.rows
-            deferred += page.deferred
-            expiredIds += page.expiredIds
-            deletedIds += page.deletedIds
-            cursor = page.cursor
-            if (response.hasMore == false) {
-                database.withTransaction {
-                    val existing = dao.requests().associateBy { it.requestId }
-                    expiredIds.forEach { dao.deleteRequest(it); dao.deleteDeferred(it) }
-                    // An older copy never replaces a newer one; the read mark is kept.
-                    val fresh = rows.filter { (existing[it.requestId]?.sequence ?: -1L) < it.sequence }
-                    fresh.forEach { dao.deleteRequest(it.requestId) }
-                    dao.insertRequests(fresh.map { it.copy(readAt = existing[it.requestId]?.readAt) })
-                    dao.insertDeferred(deferred)
-                }
-                if (deletedIds.isNotEmpty()) onServerDeleted(deletedIds)
-                return rows.size
-            }
-        }
-        error("바뀐 견적이 너무 많습니다. 동기화 버튼으로 전체를 다시 가져와주세요.")
-    }
-    /** Fresh server state for a write decision: changed rows only (a full snapshot when the day's check is due). */
-    suspend fun latestRequest(id: String): WebQuoteRequestEntity? {
-        if (fullSyncDue()) refresh() else mutex.withLock { downloadChanges() }
-        return localRequests().firstOrNull { it.requestId == id }
+    suspend fun latestRequest(id: String): WebQuoteRequestEntity? = mutex.withLock {
+        receive(fullSyncDue()); dao.request(id)
     }
     suspend fun quoteAction(action: String, fields: Map<String, Any>): WebQuoteEnvelope {
         require(action in setOf("send_quote_sms", "quote_sms_status", "send_quote_email"))

@@ -51,7 +51,10 @@ function twoTabRecords_(){
   return records;
 }
 function twoTabRecord_(id){
-  return twoTabRecords_().find(record=>record.row[0]===id)||null;
+  const live=twoTabRecords_().find(record=>record.row[0]===id);
+  const closed=quoteClosedFind_(id);
+  if(live && closed)quoteClosedMatch_(live,closed);
+  return closed && (!live || Number(closed.row[5])>Number(live.row[1]))?quoteClosedRecord_(closed):live||null;
 }
 function twoTabNextSeq_(records){
   const props=PropertiesService.getScriptProperties();
@@ -62,8 +65,10 @@ function twoTabNextSeq_(records){
   return n;
 }
 function twoTabSubmit_(body,stored){
-  const records=twoTabRecords_(),old=records.find(r=>r.row[0]===body.requestId);
+  const records=twoTabRecords_(),closed=quoteClosedFind_(body.requestId),old=records.find(r=>r.row[0]===body.requestId)||
+    (closed?quoteClosedRecord_(closed):null);
   if(old){
+    if(closed && !old.archived)quoteClosedMatch_(old,closed);
     assert_(old.row[11]===body.fingerprint,'CONFLICT');
     return Object.assign(receiptDetails_(old.row),{duplicate:true});
   }
@@ -118,6 +123,8 @@ function twoTabMoveConfirmed_(id,pricing){
 }
 function twoTabSetStatus_(id,status){
   const records=twoTabRecords_(),rec=records.find(record=>record.row[0]===id);
+  // A compacted quote stays closed; order status updates keep their existing binding.
+  if(!rec && quoteClosedFind_(id))return;
   assert_(rec,'INVALID');
   // Completed sale updates must not reopen an expired quote tombstone.
   if(JSON.parse(rec.row[15]).expired===true)return;
@@ -151,10 +158,12 @@ function twoTabPriceConfirm_(body){
 function twoTabClose_(id,deleted,records){
   records=records||twoTabRecords_();
   const rec=records.find(record=>record.row[0]===id);
-  if(!rec || JSON.parse(rec.row[15]).expired===true)return;
+  if(!rec){const closed=quoteClosedFind_(id);if(closed && deleted)quoteClosedDelete_(closed);return;}
+  const raw=JSON.parse(rec.row[15]);
+  if(raw.expired===true && (!deleted || raw.deleted===true))return;
   const next=rec.row.slice();next[1]=twoTabNextSeq_(records);
   for(let i=3;i<=8;i++)next[i]='';
-  next[9]='보관종료';next[10]='STOPPED';next[14]='';next[15]=deleted?'{"expired":true,"deleted":true}':'{"expired":true}';
+  next[9]='보관종료';next[10]='STOPPED';next[14]='';next[15]=JSON.stringify({expired:true,deleted:deleted===true,closedAt:deleted?new Date().toISOString():new Date(Date.parse(String(next[2]))+QUOTE_RETENTION_MS).toISOString()});
   quoteWriteVerified_(rec.sheet,rec.index+2,next);rec.row=next;
 }
 function twoTabPurgeExpired_(){

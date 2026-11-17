@@ -31,7 +31,9 @@ class InitialQuoteViewModel(
     val uiState = mutable.asStateFlow()
     init {
         // A quote the seller deleted on another phone/PC also leaves this phone's confirmed list.
-        connection.onServerDeleted = { ids -> ids.forEach { runCatching { store.remove(it) } } }
+        connection.knownRequestIds = { store.records().map { it.request.requestId }.filter { com.example.namufarm.data.remote.WebQuoteValidator.validId(it) }.toSet() }
+        connection.onServerDeleted = { ids -> ids.forEach { store.serverDeleted(it) } }
+        connection.onReceiveProgress = { text -> mutable.update { it.copy(message = NamuMessage(text)) } }
         viewModelScope.launch(Dispatchers.IO) {
             var firstCache = true
             try {
@@ -56,6 +58,7 @@ class InitialQuoteViewModel(
                 connection.refresh()
                 mutable.update { it.copy(message = NamuMessage("견적 목록을 동기화했습니다."), lastSyncAt = System.currentTimeMillis()) }
             } catch (e: CancellationException) { throw e }
+            catch (e: QuoteReceivePending) { mutable.update { it.copy(message = NamuMessage(e.message.orEmpty())) } }
             catch (e: Exception) {
                 mutable.update { it.copy(message = NamuMessage(e.message ?: "기존 자료를 유지합니다. 다시 가져와주세요.", true)) }
             } finally { mutable.update { it.copy(busy = false) } }
@@ -97,8 +100,8 @@ class InitialQuoteViewModel(
                     "입금확인된 견적은 매매에서 관리하므로 여기서 삭제할 수 없어요."
                 }
                 // Already gone on the server (deleted elsewhere or expired): only this phone's record remains.
-                if (current != null) connection.close(id, admin = true)
-                store.remove(id)
+                connection.close(id, admin = true)
+                store.serverDeleted(id)
                 mutable.update { it.copy(editingRequest = null, deleteFeedback = InitialDeleteFeedback("success", id)) }
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) {

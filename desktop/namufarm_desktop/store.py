@@ -209,6 +209,19 @@ class Vault:
         with self.mutex, self._db() as db:
             return [self._open(blob, kind + ":" + index) for index, blob in db.execute("SELECT id,body FROM cache WHERE kind=?", (kind,))]
 
+    def request_ids(self):
+        with self.mutex, self._db() as db:
+            return {self._open(blob, "requests:" + key)["requestId"] for key, blob in
+                    db.execute("SELECT id,body FROM cache WHERE kind='requests'")}
+
+    def request_stamp(self):
+        digest = hashlib.sha256()
+        with self.mutex, self._db() as db:
+            for key, blob in db.execute("SELECT id,body FROM cache WHERE kind='requests' ORDER BY id"):
+                row = self._open(blob, "requests:" + key)
+                digest.update(canonical([row["requestId"], row["sequence"]]).encode())
+        return digest.hexdigest()
+
     def pending(self):
         with self.mutex, self._db() as db:
             return [self._open(blob, "outbox:" + identifier) for identifier, blob in db.execute("SELECT id,body FROM outbox ORDER BY seq")]
@@ -234,7 +247,7 @@ class Vault:
                     db.execute("INSERT INTO cache VALUES (?,?,?)", (kind, index, self._seal(row, kind + ":" + index)))
             db.execute("INSERT OR REPLACE INTO config VALUES ('snapshot',?)", (self._seal(marker, "snapshot"),))
 
-    def replace_requests(self, requests, cursor, deleted, quote_read_mode=None, authoritative=False):
+    def replace_requests(self, requests, cursor, deleted, quote_read_mode=None, authoritative=False, quote_sync_version=None):
         """Commit an independent inbox snapshot without touching sales or their outbox."""
         with self.mutex, self._db() as db:
             marker = self._read_snapshot_marker(db)
@@ -251,9 +264,11 @@ class Vault:
                 db.execute("INSERT INTO cache VALUES ('requests',?,?)", (index, self._seal(row, "requests:" + index)))
             marker.update(requests=cursor, deletedRequests=sorted(deleted),
                           quoteReadMode=quote_read_mode)
+            if quote_sync_version is not None:
+                marker["quoteSyncVersion"] = quote_sync_version
             db.execute("INSERT OR REPLACE INTO config VALUES ('snapshot',?)", (self._seal(marker, "snapshot"),))
 
-    def merge_requests(self, requests, cursor, removed, quote_read_mode=None):
+    def merge_requests(self, requests, cursor, removed, quote_read_mode=None, quote_sync_version=None):
         """Apply validated incremental pages and the new cursor in one transaction.
 
         Rows are merged by request UUID; an older sequence never replaces a newer copy.
@@ -274,6 +289,8 @@ class Vault:
                 db.execute("DELETE FROM cache WHERE kind='requests' AND id=?", (index,))
                 db.execute("INSERT INTO cache VALUES ('requests',?,?)", (index, self._seal(row, "requests:" + index)))
             marker.update(requests=cursor)
+            if quote_sync_version is not None:
+                marker["quoteSyncVersion"] = quote_sync_version
             db.execute("INSERT OR REPLACE INTO config VALUES ('snapshot',?)", (self._seal(marker, "snapshot"),))
 
     def queue(self, operation, optimistic=None):

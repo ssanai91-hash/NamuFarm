@@ -234,8 +234,12 @@ class ServerFirst:
             else:
                 rows, _, deleted = self._pages("list_requests", "requests")
                 request_id = op["payload"]["requestId"]
-                require(request_id in deleted or not any(r["requestId"] == request_id for r in rows),
-                        "서버에 접수가 남아 있습니다. 기록 보관 후 대기 해제 또는 해당 접수의 삭제를 다시 선택해주세요.")
+                if self.quote_sync_v2:
+                    require(request_id in self._quote_deleted_v2,
+                            "서버의 명시 삭제를 확인하지 못했습니다. 자연 만료/목록 누락만으로 삭제 대기를 해제하지 않습니다.")
+                else:
+                    require(request_id in deleted or not any(r["requestId"] == request_id for r in rows),
+                            "서버에 접수가 남아 있습니다. 기록 보관 후 대기 해제 또는 해당 접수의 삭제를 다시 선택해주세요.")
                 self.vault.archive_and_update("서버 접수 목록 확인 · 이전 삭제 대기 보관", item, operations=[op])
         return self.pending_items()
 
