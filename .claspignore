@@ -1,0 +1,20 @@
+# Paths are relative to .clasp.json rootDir (server/quote-requests).
+# Keep this list in sync when a production .gs file is added or removed.
+**/**
+!appsscript.json
+!AnnualLedgers.gs
+!Code.gs
+!ConfirmedQuotes.gs
+!ContentLibrary.gs
+!CustomerInquiries.gs
+!FarmManagement.gs
+!InventoryManagement.gs
+!MonthlyStorage.gs
+!QuoteCompaction.gs
+!RecoverySetup.gs
+!SecureCommerce.gs
+!ServerMaintenance.gs
+!SoldNumbers.gs
+!SpeciesManagement.gs
+!TwoBookCutover.gs
+!TwoTabQuotes.gs

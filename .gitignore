@@ -32,3 +32,11 @@ desktop/dist/
 
 # Password-protected device key backups belong outside source control.
 NamuFarm-Security-Backup*.json
+
+# clasp targets are tracked; OAuth credentials and private comparisons are not.
+.clasprc*.json
+.clasprc*.json.bak
+client_secret*.json
+clasp-credentials*.json
+clasp-oauth*.json
+/.clasp-private/

@@ -1,3 +1,22 @@
+## 2026-11-19 clasp 연결 6단계 — 로컬 설정·수동 절차 구현, 원격 인증 미완료
+
+- 기준 main `0895c82d186183dc97b24c67425cbf017d8e79e2`. 사용자가 계획에 따른 구현을 승인해 **연결 파일·수동 배포/대조 문서 구현과 가능한 읽기 전용 확인**을 진행했다. main만 사용하고 `[skip ci]`로 커밋한다. 실제 운영 업로드·버전 생성·배포까지 승인된 것으로 해석하지 않았다.
+- 루트 `.clasp.json`에 저장소 기록의 기존 Script ID `1PDZifBX6iBw21fmOyzq-6aI2AqqW-Ib5zpeJz-fdhiu3TeLAtt_m_IaH`, rootDir=server/quote-requests, scriptExtensions=[.gs]를 지정했다. 기존 배포 ID·URL은 문서의 고정 대상으로 유지하고 새 프로젝트/GCP/배포를 만들지 않았다. 기존 manifest·7개 scope·고급 서비스도 수정하지 않았다.
+- `.claspignore`는 rootDir 기준 전체 제외 후 현재 운영 소스 `.gs` 16개+appsscript.json 1개를 명시 허용한다. tests/문서/앱/PC/비밀 파일은 제외한다. 신규 운영 .gs를 추가하면 허용 목록도 갱신해야 한다. `.gitignore`에 clasp OAuth/client secret/인증 백업·비공개 대조 폴더 제외를 추가했고 연결 설정 두 파일은 추적 대상으로 유지했다.
+- CLI는 공식 릴리스 **@google/clasp 3.4.1**을 저장소 밖에 설치했다. --ignore-scripts로 설치 lifecycle script를 끄고 프로젝트 dependency/lockfile은 만들지 않았다. Node v24.22.3·npm 11.9.0에서 실제 --version/help와 show-file-status --json을 확인했다. 업로드 대상이 의도한 17개이며 문서/tests가 제외됨을 확인했다. git ignore 경로·diff/공백도 기본 일관성만 확인했다. 앱 컴파일·자동시험을 실행한 것이 아니다.
+- `docs/CLASP_MANUAL_DEPLOYMENT.md`를 추가했다. 기존 ID/동일 버전 CLI·인증, 3.4.1의 positional clone 버전 인자, 운영 배포 V와 HEAD의 분리 수신/해시·manifest 대조, 기존 ID 수동 버전 갱신, Git SHA↔서버 버전↔배포 ID 증거 기록/복구 절차를 문서화했다. 계획 문서도 현재 구현 상태로 갱신했다. 기본 pull을 운영 버전으로 오인하거나 합친 Code.gs를 함수명만으로 동등 판정하지 않는다.
+- **원격 확인 결과:** 현재 CLI로 기존 프로젝트의 list-deployments 읽기만 시도했으나 종료코드 1 / `No credentials found.`였다. 로그인/인증 파일·계정 탐색/토큰 출력은 하지 않았다. 운영 ID 매핑·접근 권한·HEAD/배포 버전·원문·실행 주체/접근 설정 대조는 **미완료**다. 설정 파일 구현을 운영 연결 성공으로 표현하지 않는다. 인증 후 기존 프로젝트 소유자 계정으로 이어가는 명령/확인 범위를 문서에 남겼다.
+- **P0 자가 점검 — SYNC:** `.clasp.json`은 기존 Script ID만 지정하고 업무 endpoint/기기 인증/ACK·전송 대기 코드는 변경하지 않았다. 실행 코드 영향 없음, 운영 동작 미확인이다.
+- **P0 자가 점검 — PAY:** `.claspignore`에 ConfirmedQuotes.gs·AnnualLedgers.gs·SoldNumbers.gs·SecureCommerce.gs를 포함한다. 기존 잠금·입금/견적-주문 연결·revision 코드는 변경하지 않았으며 초기화 함수를 실행하지 않았다. 운영 동시 처리 확인은 하지 않았다.
+- **P0 자가 점검 — EXP:** QuoteCompaction.gs·TwoTabQuotes.gs·기존 manifest를 포함한다. 물리 정리 기본 OFF·원문/종료 색인/클라이언트 이어받기 코드는 그대로고 정리를 실행하지 않았다. 원격 보유 파일/최초 업로드 차이는 미확인이다.
+- **P0 자가 점검 — INTAKE:** Code.gs·SecureCommerce.gs·ServerMaintenance.gs를 포함하고 기존 접수 제한·재시도 ticket·원문 검증을 수정하지 않았다. 공개 접수 시험·제한 초기화/우회는 하지 않았다. 이는 기능 전수 감사/운영 합격이 아니다.
+- 변경 파일 **6개:** `.clasp.json`, `.claspignore`, `.gitignore`, `docs/CLASP_MANUAL_DEPLOYMENT.md`, `docs/CLASP_CONNECTION_PLAN.md`, `NAMUFARM_PROJECT_STATUS.md`. 앱·나피·서버·홈페이지 실행 코드/workflow, 버전, 기존 도메인/URL/배포 ID/인증/패키지/업무 DB/고정 서명은 유지한다. Android 1.1.45(48)·나피 0.5.32 그대로다.
+- **미실행:** push/pull/clone·로그인·신규 버전/배포 생성·배포 갱신·운영 함수·트리거 설정·시트/속성/고객자료 조회/쓰기·정리·컴파일·자동시험·Actions·실제 주문/전화/문자/메일 시험·홈페이지 게시. 공식 공개 clasp 자료와 로컬 CLI help/파일 목록/ignore는 확인했다. 배포 목록 읽기 시도는 인증 부재로 실패했다.
+- **재배포:** 이번 연결 설정/문서 변경 자체는 불필요하다. 앞선 4단계 서버 코드의 기존 ID 재배포·클라이언트 갱신/사용자 확인은 계속 미완료이며 자동 배포를 만들지 않았다. push가 HEAD/트리거 코드에 영향을 주므로 인증/대조 후 운영 반영 요청 범위에서만 실행한다.
+- **남은 위험/다음 작업:** 소유자 CLI 인증과 운영 ID 매핑·원격 HEAD/배포 코드/manifest 대조가 필요하다. 운영이 과거 합친 Code.gs이거나 원격 전용 코드/설정이 있으면 첫 전체 업로드 전에 차이를 해결해야 한다. 동시 편집·HEAD 트리거 영향·버전/기기 호환은 사용자 확인 대상이다. **6단계 로컬 구현 보고 후 멈춘다.** 원격 인증/대조 미완료를 숨기지 않으며 운영 업로드·버전 생성·배포는 별도 요청을 기다린다.
+
+---
+
 ## 2026-11-18 clasp 연결 6단계 — 착수 전 계획 보고, 구현 승인 대기
 
 - 기준 main `bb1201e026facb7fbe6e1fedfe7b9b20aca7a44f`. 사용자의 6단계 진행 승인에 따라 정해 둔 **착수 전 계획 보고만** 수행했다. `docs/CLASP_CONNECTION_PLAN.md`와 이 현황 문서만 main에 `[skip ci]`로 반영한다. 실제 clasp 연결/운영 반영 완료가 아니다.
